@@ -51,6 +51,7 @@ add_library(cncrypto
   cn_heavy_hash_soft.cpp
   cn_turtle_hash.c
   rx-slow-hash.c
+  cn_monero_slow_hash.c
   tree-hash.c)
 
 target_link_libraries(cncrypto
@@ -73,6 +74,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES Clang OR CMAKE_CXX_COMPILER_ID STREQUAL GNU)
     check_cxx_compiler_flag(-maes COMPILER_SUPPORTS_AES)
     if(COMPILER_SUPPORTS_AES)
       set_source_files_properties(cn_heavy_hash_hard_intel.cpp PROPERTIES COMPILE_FLAGS "-maes -msse2")
+      set_source_files_properties(cn_monero_slow_hash.c PROPERTIES COMPILE_FLAGS "-maes -msse2")
     endif()
   endif()
 endif()
