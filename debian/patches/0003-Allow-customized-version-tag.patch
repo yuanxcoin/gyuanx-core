@@ -1,0 +1,22 @@
+From: Jason Rhinelander <jason@imaginary.ca>
+Date: Sun, 5 May 2019 12:40:15 -0300
+Subject: Allow customized version tag
+
+---
+ cmake/Version.cmake | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/cmake/Version.cmake b/cmake/Version.cmake
+index 5c61005..dbeeccf 100644
+--- a/cmake/Version.cmake
++++ b/cmake/Version.cmake
+@@ -35,6 +35,9 @@ find_package(Git QUIET)
+ if ("$Format:$" STREQUAL "")
+   # We're in a tarball; use hard-coded variables.
+   write_static_version_header("release")
++elseif (LOKI_VERSION_TAG)
++  # Custom version tag (used by debian packaging)
++  write_static_version_header("${LOKI_VERSION_TAG}")
+ elseif (GIT_FOUND OR Git_FOUND)
+   message(STATUS "Found Git: ${GIT_EXECUTABLE}")
+   add_custom_command(

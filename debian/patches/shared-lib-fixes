@@ -4,18 +4,32 @@ Subject: Make loki build and install shared libs
 
 Patch the loki cmake files to properly build and install shared libs.
 ---
+ CMakeLists.txt                             |  2 ++
  cmake/Version.cmake                        |  9 +++++++++
  contrib/epee/CMakeLists.txt                |  5 +++++
  contrib/epee/src/CMakeLists.txt            | 14 ++++++++++++--
  external/CMakeLists.txt                    |  6 ++++++
  external/db_drivers/liblmdb/CMakeLists.txt | 12 ++++++++++--
  external/easylogging++/CMakeLists.txt      | 10 ++++++++--
- src/CMakeLists.txt                         | 22 ++++++++++++++--------
+ src/CMakeLists.txt                         | 23 ++++++++++++++---------
  src/blockchain_db/CMakeLists.txt           |  2 +-
  src/common/CMakeLists.txt                  |  2 +-
  src/wallet/api/CMakeLists.txt              | 11 +++++++----
- 10 files changed, 73 insertions(+), 20 deletions(-)
+ 11 files changed, 75 insertions(+), 21 deletions(-)
 
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 39a2deb..7d11052 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -285,6 +285,8 @@ endif()
+ # elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
+ #   set(BSDI TRUE)
+ 
++include(Version)
++
+ include_directories(external/rapidjson/include external/easylogging++ src contrib/epee/include external)
+ 
+ if(APPLE)
 diff --git a/cmake/Version.cmake b/cmake/Version.cmake
 index 3677e80..5c61005 100644
 --- a/cmake/Version.cmake
@@ -145,7 +159,7 @@ index 78795d5..4b3781b 100644
 +    DESTINATION include${LOKI_INSTALL_INCLUDEDIR_SUFFIX}
 +    COMPONENT development)
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index ada901e..4f1c821 100644
+index ada901e..41bde6d 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -41,13 +41,6 @@ function (loki_private_headers group)
@@ -171,7 +185,7 @@ index ada901e..4f1c821 100644
    source_group("${LOKI_ADD_LIBRARY_NAME}" FILES ${LOKI_ADD_LIBRARY_SOURCES})
  
    # Define a ("virtual") object library and an actual library that links those
-@@ -99,6 +92,14 @@ function (loki_add_library_with_deps)
+@@ -99,9 +92,16 @@ function (loki_add_library_with_deps)
    set_property(TARGET "${LOKI_ADD_LIBRARY_NAME}" PROPERTY FOLDER "libs")
    target_compile_definitions(${objlib}
      PRIVATE $<TARGET_PROPERTY:${LOKI_ADD_LIBRARY_NAME},INTERFACE_COMPILE_DEFINITIONS>)
@@ -185,8 +199,11 @@ index ada901e..4f1c821 100644
 +  endif()
  endfunction ()
  
- include(Version)
-@@ -141,3 +142,8 @@ endif()
+-include(Version)
+ loki_add_library(version SOURCES ${CMAKE_BINARY_DIR}/version.cpp DEPENDS genversion)
+ 
+ add_subdirectory(common)
+@@ -141,3 +141,8 @@ endif()
  
  add_subdirectory(device)
  add_subdirectory(device_trezor)
