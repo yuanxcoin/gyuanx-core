@@ -1,1 +1,3 @@
 /usr/bin/lokid
+debian/loki.conf /etc/loki
+debian/testnet.conf /etc/loki
