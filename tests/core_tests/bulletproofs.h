@@ -83,7 +83,7 @@ struct gen_bp_tx_validation_base : public test_chain_unit_base
   }
 
   bool generate_with(std::vector<test_event_entry>& events,
-      size_t n_txes, const uint64_t *amounts_paid, bool valid, const rct::RCTConfig *rct_config,
+      size_t n_txes, const uint64_t *amounts_paid, bool valid, const rct::RCTConfig *rct_config, uint8_t hf_version,
       const std::function<bool(std::vector<cryptonote::tx_source_entry> &sources, std::vector<cryptonote::tx_destination_entry> &destinations, size_t)> &pre_tx,
       const std::function<bool(cryptonote::transaction &tx, size_t)> &post_tx) const;
 
@@ -94,92 +94,122 @@ private:
   size_t m_invalid_block_index;
 };
 
-struct gen_bp_tx_valid_1 : public gen_bp_tx_validation_base
+template<uint8_t test_version = HF_VERSION_CLSAG>
+struct get_bp_versioned_test_options {
+  const std::vector<std::pair<uint8_t, uint64_t>> hard_forks = {{7, 0}, {test_version, 73}};
+  const cryptonote::test_options test_options = {
+    hard_forks, 0
+  };
+};
+
+template<>
+struct get_test_options<gen_bp_tx_validation_base> : get_bp_versioned_test_options<HF_VERSION_CLSAG-1> {};
+
+// valid
+struct gen_bp_tx_valid_1_before_clsag : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_valid_1>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_valid_1_before_clsag>: public get_bp_versioned_test_options<HF_VERSION_CLSAG-1> {};
+
+struct gen_bp_tx_invalid_1_from_clsag : public gen_bp_tx_validation_base
+{
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+template<> struct get_test_options<gen_bp_tx_invalid_1_from_clsag>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_1_1 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_1_1>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_1_1>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_valid_2 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_valid_2>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_valid_2>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_valid_3 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_valid_3>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_valid_3>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_valid_16 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_valid_16>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_valid_16>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_4_2_1 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_4_2_1>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_4_2_1>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_16_16 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_16_16>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_16_16>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_txs_valid_2_and_2 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_txs_valid_2_and_2>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_txs_valid_2_and_2>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_txs_invalid_2_and_8_2_and_16_16_1 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_txs_invalid_2_and_8_2_and_16_16_1>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_txs_invalid_2_and_8_2_and_16_16_1>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_txs_valid_2_and_3_and_2_and_4 : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_txs_valid_2_and_3_and_2_and_4>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_txs_valid_2_and_3_and_2_and_4>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_not_enough_proofs : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_not_enough_proofs>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_not_enough_proofs>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_empty_proofs : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_empty_proofs>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_empty_proofs>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_too_many_proofs : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_too_many_proofs>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_too_many_proofs>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_wrong_amount : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_wrong_amount>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_wrong_amount>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
 
 struct gen_bp_tx_invalid_borromean_type : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-template<> struct get_test_options<gen_bp_tx_invalid_borromean_type>: public get_test_options<gen_bp_tx_validation_base> {};
+template<> struct get_test_options<gen_bp_tx_invalid_borromean_type>: public get_bp_versioned_test_options<HF_VERSION_CLSAG-1> {};
+
+struct gen_bp_tx_invalid_bulletproof2_type : public gen_bp_tx_validation_base
+{
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+template<> struct get_test_options<gen_bp_tx_invalid_bulletproof2_type>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};
+
+struct gen_rct2_tx_clsag_malleability : public gen_bp_tx_validation_base
+{
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+template<> struct get_test_options<gen_rct2_tx_clsag_malleability>: public get_bp_versioned_test_options<HF_VERSION_CLSAG> {};

@@ -29,8 +29,6 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#ifndef RCT_TYPES_H
-#define RCT_TYPES_H
 
 #include <cstddef>
 #include <vector>
@@ -49,6 +47,7 @@ extern "C" {
 #include "hex.h"
 #include "span.h"
 #include "serialization/variant.h"
+#include "common/util.h"
 
 
 //Define this flag when debugging to get additional info on the console
@@ -110,9 +109,14 @@ namespace rct {
 
     struct multisig_out {
         std::vector<key> c; // for all inputs
+        std::vector<key> mu_p; // for all inputs
+        std::vector<key> c0; // for all inputs
 
         BEGIN_SERIALIZE_OBJECT()
           FIELD(c)
+          FIELD(mu_p)
+          if (!mu_p.empty() && mu_p.size() != c.size())
+            throw std::runtime_error{"Invalid multisig output serialization"};
         END_SERIALIZE()
     };
 
@@ -172,6 +176,8 @@ namespace rct {
         BEGIN_SERIALIZE_OBJECT()
             FIELD(s)
             FIELD(c1)
+            // FIELD(I) - not serialized, it can be reconstructed
+            FIELD(D)
         END_SERIALIZE()
     };
 
@@ -256,6 +262,7 @@ namespace rct {
       RCTTypeSimple = 2,
       RCTTypeBulletproof = 3,
       RCTTypeBulletproof2 = 4,
+      RCTTypeCLSAG = 5,
     };
     enum RangeProofType { RangeProofBorromean, RangeProofBulletproof, RangeProofMultiOutputBulletproof, RangeProofPaddedBulletproof };
     struct RCTConfig {
@@ -278,7 +285,7 @@ namespace rct {
           field(ar, "type", type);
           if (type == RCTTypeNull)
             return;
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2)
+          if (!tools::equals_any(type, RCTTypeFull, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
             throw std::invalid_argument{"invalid ringct type"};
 
           field_varint(ar, "txnFee", txnFee);
@@ -295,7 +302,7 @@ namespace rct {
 
           {
             auto arr = start_array(ar, "ecdhInfo", ecdhInfo, outputs);
-            if (type == RCTTypeBulletproof2)
+            if (tools::equals_any(type, RCTTypeBulletproof2, RCTTypeCLSAG))
             {
               for (auto& e : ecdhInfo) {
                 auto obj = arr.element().begin_object();
@@ -320,6 +327,7 @@ namespace rct {
         std::vector<rangeSig> rangeSigs;
         std::vector<Bulletproof> bulletproofs;
         std::vector<mgSig> MGs; // simple rct has N, full has 1
+        std::vector<clsag> CLSAGs;
         keyV pseudoOuts; //C - for simple rct
 
         // when changing this function, update cryptonote::get_pruned_transaction_weight
@@ -328,12 +336,12 @@ namespace rct {
         {
           if (type == RCTTypeNull)
             return;
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2)
+          if (!tools::equals_any(type, RCTTypeFull, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
             throw std::invalid_argument{"invalid ringct type"};
-          if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2)
+          if (tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
           {
             uint32_t nbp = bulletproofs.size();
-            if (type == RCTTypeBulletproof2)
+            if (tools::equals_any(type, RCTTypeBulletproof2, RCTTypeCLSAG))
               field_varint(ar, "nbp", nbp);
             else
               field(ar, "nbp", nbp);
@@ -354,44 +362,65 @@ namespace rct {
               value(arr.element(), s);
           }
 
-          // we keep a byte for size of MGs, because we don't know whether this is
-          // a simple or full rct signature, and it's starting to annoy the hell out of me
-
-          size_t mg_elements = 1, mg_ss2_elements = inputs + 1;
-          if (type == RCTTypeSimple || type == RCTTypeBulletproof || type == RCTTypeBulletproof2) {
-            mg_elements = inputs;
-            mg_ss2_elements = 2;
-          }
-
+          if (type == RCTTypeCLSAG)
           {
-            auto arr = start_array(ar, "MGs", MGs, mg_elements);
-            for (auto& mg : MGs)
+            auto arr = start_array(ar, "CLSAGs", CLSAGs, inputs);
+
+            for (auto& clsag : CLSAGs)
             {
+              // we save the CLSAGs contents directly, because we want it to save its
+              // arrays without the size prefixes, and the load can't know what size
+              // to expect if it's not in the data
               auto obj = arr.element().begin_object();
-
-              // we save the MGs contents directly, because we want it to save its
-              // arrays and matrices without the size prefixes, and the load can't
-              // know what size to expect if it's not in the data
               {
-                auto arr_ss = start_array(ar, "ss", mg.ss, mixin + 1);
-                for (auto& ss : mg.ss)
-                {
-                  auto arr_ss2 = arr_ss.element().begin_array();
-                  if constexpr (Archive::is_deserializer)
-                    ss.resize(mg_ss2_elements);
-                  else if (ss.size() != mg_ss2_elements)
-                    throw std::invalid_argument{"invalid mg_ss2 size: have " + std::to_string(ss.size()) + ", expected " + std::to_string(mg_ss2_elements)};
-
-                  for (auto& x : ss)
-                    value(arr_ss2.element(), x);
-                }
+                auto arr_s = start_array(ar, "s", clsag.s, mixin + 1);
+                for (auto& x : clsag.s)
+                  value(arr_s.element(), x);
               }
-
-              field(ar, "cc", mg.cc);
-              // MGs[i].II not saved, it can be reconstructed
+              field(ar, "c1", clsag.c1);
+              field(ar, "D", clsag.D);
             }
           }
-          if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2)
+          else
+          {
+            // we keep a byte for size of MGs, because we don't know whether this is
+            // a simple or full rct signature, and it's starting to annoy the hell out of me
+
+            size_t mg_elements = 1, mg_ss2_elements = inputs + 1;
+            if (tools::equals_any(type, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2)) {
+              mg_elements = inputs;
+              mg_ss2_elements = 2;
+            }
+
+            {
+              auto arr = start_array(ar, "MGs", MGs, mg_elements);
+              for (auto& mg : MGs)
+              {
+                auto obj = arr.element().begin_object();
+
+                // we save the MGs contents directly, because we want it to save its
+                // arrays and matrices without the size prefixes, and the load can't
+                // know what size to expect if it's not in the data
+                {
+                  auto arr_ss = start_array(ar, "ss", mg.ss, mixin + 1);
+                  for (auto& ss : mg.ss)
+                  {
+                    auto arr_ss2 = arr_ss.element().begin_array();
+                    if constexpr (Archive::is_deserializer)
+                      ss.resize(mg_ss2_elements);
+                    else if (ss.size() != mg_ss2_elements)
+                      throw std::invalid_argument{"invalid mg_ss2 size: have " + std::to_string(ss.size()) + ", expected " + std::to_string(mg_ss2_elements)};
+
+                    for (auto& x : ss)
+                      value(arr_ss2.element(), x);
+                  }
+                }
+                field(ar, "cc", mg.cc);
+                // MGs[i].II not saved, it can be reconstructed
+              }
+            }
+          }
+          if (tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
           {
             auto arr = start_array(ar, "pseudoOuts", pseudoOuts, inputs);
             for (auto& o : pseudoOuts)
@@ -405,12 +434,12 @@ namespace rct {
 
         keyV& get_pseudo_outs()
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 ? p.pseudoOuts : pseudoOuts;
+          return tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG) ? p.pseudoOuts : pseudoOuts;
         }
 
         keyV const& get_pseudo_outs() const
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 ? p.pseudoOuts : pseudoOuts;
+          return tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG) ? p.pseudoOuts : pseudoOuts;
         }
     };
 
@@ -572,5 +601,4 @@ VARIANT_TAG(rct::rctSig, "rct_rctSig", 0x9b);
 VARIANT_TAG(rct::Bulletproof, "rct_bulletproof", 0x9c);
 VARIANT_TAG(rct::multisig_kLRki, "rct_multisig_kLR", 0x9d);
 VARIANT_TAG(rct::multisig_out, "rct_multisig_out", 0x9e);
-
-#endif  /* RCTTYPES_H */
+VARIANT_TAG(rct::clsag, "rct_clsag", 0x9f);
