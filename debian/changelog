@@ -1,3 +1,10 @@
+loki (4.0.3-4) unstable; urgency=medium
+
+  * removed postrm
+  * Install lmdb download helper script
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Thu, 25 Jul 2019 17:25:10 -0300
+
 loki (4.0.3-3) unstable; urgency=medium
 
   * Fix lokid restart
