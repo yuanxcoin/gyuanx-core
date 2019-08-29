@@ -240,6 +240,9 @@ namespace config
   inline constexpr unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
   inline constexpr unsigned char HASH_KEY_MEMORY = 'k';
   inline constexpr std::string_view HASH_KEY_MULTISIG = "Multisig\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_ROUND = "CLSAG_round"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_0 = "CLSAG_agg_0"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_1 = "CLSAG_agg_1"sv;
 
   namespace testnet
   {
