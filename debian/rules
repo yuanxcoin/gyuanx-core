@@ -8,11 +8,11 @@ include /usr/share/dpkg/pkg-info.mk
 include /usr/share/dpkg/architecture.mk
 
 ifeq ($(DEB_TARGET_ARCH),$(filter $(DEB_TARGET_ARCH),amd64 i386))
-	DEB_CMAKE_ARCH_OPTIONS='-DARCH=westmere -DCMAKE_CXX_FLAGS="-mtune=haswell" -DCMAKE_C_FLAGS="-mtune=haswell"'
+	DEB_CMAKE_ARCH_OPTIONS=-DARCH=westmere -DCMAKE_CXX_FLAGS="-mtune=haswell" -DCMAKE_C_FLAGS="-mtune=haswell"
 else ifeq ($(DEB_TARGET_ARCH),arm64)
-	DEB_CMAKE_ARCH_OPTIONS='-DARCH=armv8-a+crc'
+	DEB_CMAKE_ARCH_OPTIONS=-DARCH=armv8-a+crc
 else
-	DEB_CMAKE_ARCH_OPTIONS=''
+	DEB_CMAKE_ARCH_OPTIONS=
 endif
 
 %:
