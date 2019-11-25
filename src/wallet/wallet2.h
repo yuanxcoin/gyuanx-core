@@ -1013,12 +1013,13 @@ private:
 
     struct get_transfers_args_t
     {
-      bool in = true;
-      bool out = true;
-      bool pending = true;
-      bool failed = true;
-      bool pool = true;
-      bool coinbase = true;
+      bool in = false;
+      bool out = false;
+      bool stake = false;
+      bool pending = false;
+      bool failed = false;
+      bool pool = false;
+      bool coinbase = false;
       bool filter_by_height = false;
       uint64_t min_height = 0;
       uint64_t max_height = CRYPTONOTE_MAX_BLOCK_NUMBER;

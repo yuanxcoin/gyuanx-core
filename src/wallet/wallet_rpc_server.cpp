@@ -2324,12 +2324,13 @@ namespace tools
       return false;
     }
 
-    wallet2::get_transfers_args_t args;
+    wallet2::get_transfers_args_t args = {};
     args.in               = req.in;
     args.out              = req.out;
     args.pending          = req.pending;
     args.failed           = req.failed;
     args.pool             = req.pool;
+    args.stake            = req.stake;
     args.filter_by_height = req.filter_by_height;
     args.min_height       = req.min_height;
     args.max_height       = req.max_height;
@@ -2351,7 +2352,7 @@ namespace tools
       {
         res.in.push_back(entry);
       }
-      else if (entry.pay_type == tools::pay_type::out)
+      else if (entry.pay_type == tools::pay_type::out || entry.pay_type == tools::pay_type::stake)
       {
         res.out.push_back(entry);
       }
@@ -2377,10 +2378,11 @@ namespace tools
     wallet2::get_transfers_args_t args;
     args.in = req.in;
     args.out = req.out;
+    args.stake = req.stake;
     args.pending = req.pending;
     args.failed = req.failed;
     args.pool = req.pool;
-    // args.coinbase = req.coinbase;
+    args.coinbase = req.coinbase;
     args.filter_by_height = req.filter_by_height;
     args.min_height = req.min_height;
     args.max_height = req.max_height;

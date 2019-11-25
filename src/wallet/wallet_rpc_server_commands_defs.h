@@ -1561,16 +1561,18 @@ namespace wallet_rpc
   };
 
   LOKI_RPC_DOC_INTROSPECT
-  // Returns a list of transfers.
+  // Returns a list of transfers, by default all transfer types are included. If all requested type fields are false, then all transfers will be queried.
   struct COMMAND_RPC_GET_TRANSFERS
   {
     struct request_t
     {
       bool in;                            // (Optional) Include incoming transfers.
       bool out;                           // (Optional) Include outgoing transfers.
+      bool stake;                         // (Optional) Include outgoing stakes.
       bool pending;                       // (Optional) Include pending transfers.
       bool failed;                        // (Optional) Include failed transfers.
       bool pool;                          // (Optional) Include transfers from the daemon's transaction pool.
+      bool coinbase;                      // (Optional) Include transfers from the daemon's transaction pool.
 
       bool filter_by_height;              // (Optional) Filter transfers by block height.
       uint64_t min_height;                // (Optional) Minimum block height to scan for transfers, if filtering by height is enabled.
@@ -1580,11 +1582,13 @@ namespace wallet_rpc
       bool all_accounts;                  // If true, return transfers for all accounts, subaddr_indices and account_index are ignored
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(in);
-        KV_SERIALIZE(out);
-        KV_SERIALIZE(pending);
-        KV_SERIALIZE(failed);
-        KV_SERIALIZE(pool);
+        KV_SERIALIZE_OPT(in, true);
+        KV_SERIALIZE_OPT(out, true);
+        KV_SERIALIZE_OPT(stake, true);
+        KV_SERIALIZE_OPT(pending, true);
+        KV_SERIALIZE_OPT(failed, true);
+        KV_SERIALIZE_OPT(pool, true);
+        KV_SERIALIZE_OPT(coinbase, true);
         KV_SERIALIZE(filter_by_height);
         KV_SERIALIZE(min_height);
         KV_SERIALIZE_OPT(max_height, (uint64_t)CRYPTONOTE_MAX_BLOCK_NUMBER);

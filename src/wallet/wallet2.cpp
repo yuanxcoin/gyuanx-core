@@ -6065,6 +6065,9 @@ void wallet2::get_transfers(get_transfers_args_t args, std::vector<transfer_view
     args.max_height = std::min<uint64_t>(args.max_height, CRYPTONOTE_MAX_BLOCK_NUMBER);
   }
 
+  int args_count = args.in + args.out + args.stake + args.pending + args.failed + args.pool + args.coinbase;
+  if (args_count == 0) args.in = args.out = args.stake = args.pending = args.failed = args.pool = args.coinbase = true;
+
   std::list<std::pair<crypto::hash, tools::wallet2::payment_details>> in;
   std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>> out;
   std::list<std::pair<crypto::hash, tools::wallet2::unconfirmed_transfer_details>> pending_or_failed;
@@ -6080,7 +6083,7 @@ void wallet2::get_transfers(get_transfers_args_t args, std::vector<transfer_view
     size += in.size();
   }
 
-  if (args.out)
+  if (args.out || args.stake)
   {
     get_payments_out(out, args.min_height, args.max_height, account_index, args.subaddr_indices);
     size += out.size();
@@ -6103,7 +6106,14 @@ void wallet2::get_transfers(get_transfers_args_t args, std::vector<transfer_view
   for (const auto &i : in)
     transfers.push_back(make_transfer_view(i.second.m_tx_hash, i.first, i.second));
   for (const auto &o : out)
-    transfers.push_back(make_transfer_view(o.first, o.second));
+  {
+    bool add_entry = true;
+    if (args.stake && args_count == 1)
+      add_entry = o.second.m_pay_type == tools::pay_type::stake;
+
+    if (add_entry)
+      transfers.push_back(make_transfer_view(o.first, o.second));
+  }
   for (const auto &pof : pending_or_failed)
   {
     bool is_failed = pof.second.m_state == tools::wallet2::unconfirmed_transfer_details::failed;
