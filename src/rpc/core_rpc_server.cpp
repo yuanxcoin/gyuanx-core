@@ -2696,7 +2696,7 @@ namespace cryptonote
     for (size_t height = start; height != end;)
     {
       uint8_t hf_version = m_core.get_hard_fork_version(height);
-      if (hf_version != HardFork::INVALID_HF_VERSION_FOR_HEIGHT)
+      if (hf_version != HardFork::INVALID_HF_VERSION)
       {
         auto start_quorum_iterator = static_cast<service_nodes::quorum_type>(0);
         auto end_quorum_iterator   = service_nodes::max_quorum_type_for_hf(hf_version);

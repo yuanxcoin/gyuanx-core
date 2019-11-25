@@ -568,7 +568,8 @@ namespace service_nodes
     crypto::secret_key                             tx_key;
     std::vector<service_node_info::contribution_t> locked_contributions;
   };
-  bool tx_get_staking_components(cryptonote::network_type nettype, uint8_t hf_version, cryptonote::transaction const &tx, uint64_t block_height, staking_components *contribution);
+  bool tx_get_staking_components            (cryptonote::transaction_prefix const &tx_prefix, staking_components *contribution);
+  bool tx_get_staking_components_and_amounts(cryptonote::network_type nettype, uint8_t hf_version, cryptonote::transaction const &tx, uint64_t block_height, staking_components *contribution);
 
   struct converted_registration_args
   {

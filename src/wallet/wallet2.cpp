@@ -51,6 +51,7 @@ using namespace epee;
 #include "rpc/core_rpc_server.h"
 #include "misc_language.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
+#include "cryptonote_basic/hardfork.h"
 #include "multisig/multisig.h"
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
@@ -2425,7 +2426,11 @@ void wallet2::process_unconfirmed(const crypto::hash &txid, const cryptonote::tr
   if(unconf_it != m_unconfirmed_txs.end()) {
     if (store_tx_info()) {
       try {
-        m_confirmed_txs.emplace(txid, confirmed_transfer_details(unconf_it->second, height));
+        // TODO(doyle): LNS introduces tx type stake, we can use this to quickly determine if a transaction is staking
+        // transaction without having to parse tx_extra.
+        bool stake = service_nodes::tx_get_staking_components(tx, nullptr /*stake*/);
+        tools::pay_type pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
+        m_confirmed_txs.insert(std::make_pair(txid, confirmed_transfer_details(unconf_it->second, height)));
       }
       catch (...) {
         // can fail if the tx has unexpected input types
@@ -2462,6 +2467,9 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
     }
     entry.first->second.m_subaddr_account = subaddr_account;
     entry.first->second.m_subaddr_indices = subaddr_indices;
+
+    bool stake = service_nodes::tx_get_staking_components(tx, nullptr /*stake*/);
+    entry.first->second.m_pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
   }
 
   entry.first->second.m_rings.clear();
@@ -5973,7 +5981,7 @@ transfer_view wallet2::wallet2::make_transfer_view(const crypto::hash &txid, con
     td.address = d.original.empty() ? get_account_address_as_str(nettype(), d.is_subaddress, d.addr) : d.original;
   }
 
-  result.pay_type = pay_type::out;
+  result.pay_type = pd.m_pay_type;
   result.subaddr_index = { pd.m_subaddr_account, 0 };
   for (uint32_t i: pd.m_subaddr_indices)
     result.subaddr_indices.push_back({pd.m_subaddr_account, i});
@@ -6008,7 +6016,7 @@ transfer_view wallet2::make_transfer_view(const crypto::hash &txid, const tools:
     td.address = d.original.empty() ? get_account_address_as_str(nettype(), d.is_subaddress, d.addr) : d.original;
   }
 
-  result.pay_type = pay_type::unspecified;
+  result.pay_type = pd.m_pay_type;
   result.type = is_failed ? "failed" : "pending";
   result.subaddr_index = { pd.m_subaddr_account, 0 };
   for (uint32_t i: pd.m_subaddr_indices)
@@ -6634,6 +6642,8 @@ void wallet2::add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t amo
   utd.m_timestamp = time(NULL);
   utd.m_subaddr_account = subaddr_account;
   utd.m_subaddr_indices = subaddr_indices;
+  bool stake = service_nodes::tx_get_staking_components(tx, nullptr /*stake*/);
+  utd.m_pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
   for (const auto &in: tx.vin)
   {
     if (in.type() != typeid(cryptonote::txin_to_key))
@@ -13389,10 +13399,12 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     {
       const transfer_details& td = m_transfers[n];
       confirmed_transfer_details pd;
-      pd.m_change = (uint64_t)-1;                             // change is unknown
-      pd.m_amount_in = pd.m_amount_out = td.amount();         // fee is unknown
-      pd.m_block_height = 0;  // spent block height is unknown
-      const crypto::hash &spent_txid = crypto::null_hash; // spent txid is unknown
+      pd.m_change    = (uint64_t)-1;                        // change is unknown
+      pd.m_amount_in = pd.m_amount_out = td.amount();       // fee is unknown
+      pd.m_block_height                = 0;                 // spent block height is unknown
+      const crypto::hash &spent_txid   = crypto::null_hash; // spent txid is unknown
+      bool stake                       = service_nodes::tx_get_staking_components(td.m_tx, nullptr /*stake*/);
+      pd.m_pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
       m_confirmed_txs.insert(std::make_pair(spent_txid, pd));
     }
     PERF_TIMER_STOP(import_key_images_G);
