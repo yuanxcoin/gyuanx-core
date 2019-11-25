@@ -560,6 +560,16 @@ namespace service_nodes
   bool     reg_tx_extract_fields(const cryptonote::transaction& tx, std::vector<cryptonote::account_public_address>& addresses, uint64_t& portions_for_operator, std::vector<uint64_t>& portions, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature, crypto::public_key& tx_pub_key);
   uint64_t offset_testing_quorum_height(quorum_type type, uint64_t height);
 
+  struct staking_components
+  {
+    crypto::public_key                             service_node_pubkey;
+    cryptonote::account_public_address             address;
+    uint64_t                                       transferred;
+    crypto::secret_key                             tx_key;
+    std::vector<service_node_info::contribution_t> locked_contributions;
+  };
+  bool tx_get_staking_components(cryptonote::network_type nettype, uint8_t hf_version, cryptonote::transaction const &tx, uint64_t block_height, staking_components *contribution);
+
   struct converted_registration_args
   {
     bool                                            success;
