@@ -1,3 +1,9 @@
+loki (6.0.0+git20191216-2) unstable; urgency=medium
+
+  * Rediff patches
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Mon, 16 Dec 2019 23:57:10 -0400
+
 loki (6.0.0+git20191216-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
