@@ -1,3 +1,9 @@
+loki (6.1.4-3) unstable; urgency=medium
+
+  * Bump lokinet-router version for SN metapackage
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Mon, 20 Jan 2020 14:37:56 -0400
+
 loki (6.1.4-2) unstable; urgency=medium
 
   * add missing libsystem-dev dependency
