@@ -9,8 +9,8 @@ Patch the loki cmake files to properly build and install shared libs.
  contrib/epee/CMakeLists.txt     |  5 +++++
  contrib/epee/src/CMakeLists.txt |  2 +-
  external/CMakeLists.txt         |  6 ++++++
- src/CMakeLists.txt              |  5 +++++
- 6 files changed, 38 insertions(+), 1 deletion(-)
+ src/CMakeLists.txt              |  6 +++++-
+ 6 files changed, 38 insertions(+), 2 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index b6975a6..096b47c 100644
@@ -100,10 +100,18 @@ index 75fbae8..b30f29f 100644
 +  COMPONENT   development
 +  FILES_MATCHING PATTERN "*.hpp")
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 339d7ab..dc0271a 100644
+index 339d7ab..57fe031 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
-@@ -97,3 +97,8 @@ endif()
+@@ -54,7 +54,6 @@ function (loki_add_executable target binary)
+   install(TARGETS "${target}" DESTINATION bin)
+ endfunction ()
+ 
+-include(Version)
+ add_library(version ${CMAKE_BINARY_DIR}/version.cpp)
+ add_dependencies(version genversion)
+ 
+@@ -97,3 +96,8 @@ endif()
  
  add_subdirectory(device)
  add_subdirectory(device_trezor)
