@@ -131,14 +131,6 @@ namespace tools
   std::string get_special_folder_path(int nfolder, bool iscreate);
 #endif
 
-  /*! \brief Returns the OS version string
-   *
-   * \details This is a wrapper around the primitives
-   * get_windows_version_display_string() and
-   * get_nix_version_display_string()
-   */
-  std::string get_os_version_string();
-
   /*! \brief creates directories for a path
    *
    *  wrapper around boost::filesyste::create_directories.  
