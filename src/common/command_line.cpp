@@ -29,55 +29,11 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "command_line.h"
-#include <boost/algorithm/string/compare.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include "common/i18n.h"
+#include "common/string_util.h"
 
 namespace command_line
 {
-  namespace
-  {
-    const char* tr(const char* str)
-    {
-      return i18n_translate(str, "command_line");
-    }
-  }
-
-  static bool str_compare_with_boost(const std::string &str, char const *check_str)
-  {
-    boost::algorithm::is_iequal ignore_case{};
-    if (boost::algorithm::equals(check_str, str, ignore_case))
-      return true;
-    if (boost::algorithm::equals(command_line::tr(check_str), str, ignore_case))
-      return true;
-
-    return false;
-  }
-
-  bool is_yes(const std::string& str)
-  {
-    bool result = (str == "y" || str == "Y") || str_compare_with_boost(str, "yes");
-    return result;
-  }
-
-  bool is_no(const std::string& str)
-  {
-    bool result = (str == "n" || str == "N") || str_compare_with_boost(str, "no");
-    return result;
-  }
-
-  bool is_cancel(const std::string& str)
-  {
-    bool result = (str == "c" || str == "C") || str_compare_with_boost(str, "cancel");
-    return result;
-  }
-
-  bool is_back(const std::string& str)
-  {
-    bool result = (str == "b" || str == "B") || str_compare_with_boost(str, "back");
-    return result;
-  }
-
   const arg_descriptor<bool> arg_help = {"help", "Produce help message"};
   const arg_descriptor<bool> arg_version = {"version", "Output version information"};
 }

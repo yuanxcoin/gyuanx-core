@@ -60,6 +60,7 @@
 #include "common/base58.h"
 #include "common/scoped_message_writer.h"
 #include "common/loki_integration_test_hooks.h"
+#include "common/string_util.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "cryptonote_core/service_node_voting.h"
 #include "cryptonote_core/service_node_list.h"
@@ -399,29 +400,16 @@ namespace
 
   bool parse_bool(const std::string& s, bool& result)
   {
-    if (s == "1" || command_line::is_yes(s))
+    if (command_line::is_yes(s, "1", "true", simple_wallet::tr("true")))
     {
       result = true;
       return true;
     }
-    if (s == "0" || command_line::is_no(s))
+    if (command_line::is_no(s, "0", "false", simple_wallet::tr("false")))
     {
       result = false;
       return true;
     }
-
-    boost::algorithm::is_iequal ignore_case{};
-    if (boost::algorithm::equals("true", s, ignore_case) || boost::algorithm::equals(simple_wallet::tr("true"), s, ignore_case))
-    {
-      result = true;
-      return true;
-    }
-    if (boost::algorithm::equals("false", s, ignore_case) || boost::algorithm::equals(simple_wallet::tr("false"), s, ignore_case))
-    {
-      result = false;
-      return true;
-    }
-
     return false;
   }
 
