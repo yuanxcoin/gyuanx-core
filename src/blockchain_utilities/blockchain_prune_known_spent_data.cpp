@@ -267,7 +267,7 @@ int main(int argc, char* argv[])
     uint64_t num_outputs = db->get_num_outputs(i->first);
     num_total_outputs += num_outputs;
     num_known_spent_outputs += i->second;
-    if (i->first == 0 || is_valid_decomposed_amount(i->first))
+    if (i->first == 0)
     {
       if (opt_verbose)
         MINFO("Ignoring output value " << i->first << ", with " << num_outputs << " outputs");
