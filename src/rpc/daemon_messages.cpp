@@ -315,8 +315,6 @@ rapidjson::Value StartMining::Request::toJson(rapidjson::Document& doc) const
 
   INSERT_INTO_JSON_OBJECT(val, doc, miner_address, miner_address);
   INSERT_INTO_JSON_OBJECT(val, doc, threads_count, threads_count);
-  INSERT_INTO_JSON_OBJECT(val, doc, do_background_mining, do_background_mining);
-  INSERT_INTO_JSON_OBJECT(val, doc, ignore_battery, ignore_battery);
 
   return val;
 }
@@ -325,8 +323,6 @@ void StartMining::Request::fromJson(rapidjson::Value& val)
 {
   GET_FROM_JSON_OBJECT(val, miner_address, miner_address);
   GET_FROM_JSON_OBJECT(val, threads_count, threads_count);
-  GET_FROM_JSON_OBJECT(val, do_background_mining, do_background_mining);
-  GET_FROM_JSON_OBJECT(val, ignore_battery, ignore_battery);
 }
 
 rapidjson::Value StartMining::Response::toJson(rapidjson::Document& doc) const
@@ -375,7 +371,6 @@ rapidjson::Value MiningStatus::Response::toJson(rapidjson::Document& doc) const
   INSERT_INTO_JSON_OBJECT(val, doc, speed, speed);
   INSERT_INTO_JSON_OBJECT(val, doc, threads_count, threads_count);
   INSERT_INTO_JSON_OBJECT(val, doc, address, address);
-  INSERT_INTO_JSON_OBJECT(val, doc, is_background_mining_enabled, is_background_mining_enabled);
 
   return val;
 }
@@ -386,7 +381,6 @@ void MiningStatus::Response::fromJson(rapidjson::Value& val)
   GET_FROM_JSON_OBJECT(val, speed, speed);
   GET_FROM_JSON_OBJECT(val, threads_count, threads_count);
   GET_FROM_JSON_OBJECT(val, address, address);
-  GET_FROM_JSON_OBJECT(val, is_background_mining_enabled, is_background_mining_enabled);
 }
 
 

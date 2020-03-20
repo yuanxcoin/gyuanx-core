@@ -277,60 +277,6 @@ namespace tools
     );
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  void wallet_rpc_server::check_background_mining()
-  {
-    if (!m_wallet)
-      return;
-
-    tools::wallet2::BackgroundMiningSetupType setup = m_wallet->setup_background_mining();
-    if (setup == tools::wallet2::BackgroundMiningNo)
-    {
-      MLOG_RED(el::Level::Warning, "Background mining not enabled. Run \"set setup-background-mining 1\" in loki-wallet-cli to change.");
-      return;
-    }
-
-    if (!m_wallet->is_trusted_daemon())
-    {
-      MDEBUG("Using an untrusted daemon, skipping background mining check");
-      return;
-    }
-
-    cryptonote::COMMAND_RPC_MINING_STATUS::request req;
-    cryptonote::COMMAND_RPC_MINING_STATUS::response res;
-    bool r = m_wallet->invoke_http_json("/mining_status", req, res);
-    if (!r || res.status != CORE_RPC_STATUS_OK)
-    {
-      MERROR("Failed to query mining status: " << (r ? res.status : "No connection to daemon"));
-      return;
-    }
-    if (res.active || res.is_background_mining_enabled)
-      return;
-
-    if (setup == tools::wallet2::BackgroundMiningMaybe)
-    {
-      MINFO("The daemon is not set up to background mine.");
-      MINFO("With background mining enabled, the daemon will mine when idle and not on batttery.");
-      MINFO("Enabling this supports the network you are using, and makes you eligible for receiving new Loki");
-      MINFO("Set setup-background-mining to 1 in loki-wallet-cli to change.");
-      return;
-    }
-
-    cryptonote::COMMAND_RPC_START_MINING::request req2;
-    cryptonote::COMMAND_RPC_START_MINING::response res2;
-    req2.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
-    req2.threads_count = 1;
-    req2.do_background_mining = true;
-    req2.ignore_battery = false;
-    r = m_wallet->invoke_http_json("/start_mining", req2, res);
-    if (!r || res2.status != CORE_RPC_STATUS_OK)
-    {
-      MERROR("Failed to setup background mining: " << (r ? res.status : "No connection to daemon"));
-      return;
-    }
-
-    MINFO("Background mining enabled. The daemon will mine when idle and not on batttery.");
-  }
-  //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::not_open(epee::json_rpc::error& er)
   {
       er.code = WALLET_RPC_ERROR_CODE_NOT_OPEN;
@@ -2882,8 +2828,6 @@ namespace tools
     cryptonote::COMMAND_RPC_START_MINING::request daemon_req{}; 
     daemon_req.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
     daemon_req.threads_count        = req.threads_count;
-    daemon_req.do_background_mining = req.do_background_mining;
-    daemon_req.ignore_battery       = req.ignore_battery;
 
     cryptonote::COMMAND_RPC_START_MINING::response daemon_res;
     bool r = m_wallet->invoke_http_json("/start_mining", daemon_req, daemon_res);

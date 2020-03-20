@@ -749,16 +749,12 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     {
       std::string miner_address;        // Account address to mine to.
       uint64_t    threads_count;        // Number of mining thread to run.
-      bool        do_background_mining; // States if the mining should run in background (`true`) or foreground (`false`).
-      bool        ignore_battery;       // States if battery state (on laptop) should be ignored (`true`) or not (`false`).
       uint64_t    num_blocks;           // Mine until the blockchain has this many new blocks, then stop (no limit if 0, the default)
       bool        slow_mining;          // Do slow mining (i.e. don't allocate RandomX cache); primarily intended for testing
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(miner_address)
         KV_SERIALIZE(threads_count)
-        KV_SERIALIZE(do_background_mining)
-        KV_SERIALIZE(ignore_battery)
         KV_SERIALIZE_OPT(num_blocks, uint64_t{0})
         KV_SERIALIZE_OPT(slow_mining, false)
       END_KV_SERIALIZE_MAP()
@@ -946,11 +942,6 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint32_t threads_count;            // Number of running mining threads.
       std::string address;               // Account address daemon is mining to. Empty if not mining.
       std::string pow_algorithm;         // Current hashing algorithm name
-      bool is_background_mining_enabled; // States if the mining is running in background (`true`) or foreground (`false`).
-      uint8_t bg_idle_threshold;         // Background mining, the minimum amount of time in average the CPU should idle in percentage.
-      uint8_t bg_min_idle_seconds;       // Background mining, how long the minimum amount of time is for the idle threshold.
-      bool bg_ignore_battery;            // Background mining, if true mining does not adjust power depending on battery percentage remaining.
-      uint8_t bg_target;                 // Background mining, how much percentage of CPU(?) to consume, default 40%.
       uint32_t block_target;             // The expected time to solve per block, i.e. DIFFICULTY_TARGET_V2
       uint64_t block_reward;             // Block reward for the current block being mined.
       uint64_t difficulty;               // The difficulty for the current block being mined.
@@ -962,11 +953,6 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
         KV_SERIALIZE(threads_count)
         KV_SERIALIZE(address)
         KV_SERIALIZE(pow_algorithm)
-        KV_SERIALIZE(is_background_mining_enabled)
-        KV_SERIALIZE(bg_idle_threshold)
-        KV_SERIALIZE(bg_min_idle_seconds)
-        KV_SERIALIZE(bg_ignore_battery)
-        KV_SERIALIZE(bg_target)
         KV_SERIALIZE(block_target)
         KV_SERIALIZE(block_reward)
         KV_SERIALIZE(difficulty)

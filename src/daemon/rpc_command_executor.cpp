@@ -720,7 +720,7 @@ bool t_rpc_command_executor::show_status() {
     % get_sync_percentage(ires)
     % (ires.testnet ? " ON TESTNET" : ires.stagenet ? " ON STAGENET" : ""/*mainnet*/)
     % bootstrap_msg
-    % (!has_mining_info ? ", mining info unavailable" : mining_busy ? ", syncing" : mres.active ? ( ( mres.is_background_mining_enabled ? ", smart " : ", " ) + std::string("mining at ") + get_mining_speed(mres.speed)) : ""/*not mining*/)
+    % (!has_mining_info ? ", mining info unavailable" : mining_busy ? ", syncing" : mres.active ? ( ", mining at " + get_mining_speed(mres.speed)) : ""/*not mining*/)
     % get_mining_speed(ires.difficulty / ires.target)
     % (ires.version.empty() ? "?.?.?" : ires.version)
     % (unsigned)hfres.version
@@ -819,29 +819,16 @@ bool t_rpc_command_executor::mining_status() {
     tools::msg_writer() << "Mining at " << get_mining_speed(mres.speed) << " with " << mres.threads_count << " threads";
   }
 
-  if (mres.active || mres.is_background_mining_enabled)
+  if (mres.active)
   {
     tools::msg_writer() << "PoW algorithm: " << mres.pow_algorithm;
     tools::msg_writer() << "Mining address: " << mres.address;
   }
 
-  if (mres.is_background_mining_enabled)
-  {
-    tools::msg_writer() << "Smart mining enabled:";
-    tools::msg_writer() << "  Target: " << (unsigned)mres.bg_target << "% CPU";
-    tools::msg_writer() << "  Idle threshold: " << (unsigned)mres.bg_idle_threshold << "% CPU";
-    tools::msg_writer() << "  Min idle time: " << (unsigned)mres.bg_min_idle_seconds << " seconds";
-    tools::msg_writer() << "  Ignore battery: " << (mres.bg_ignore_battery ? "yes" : "no");
-  }
-
   if (!mining_busy && mres.active && mres.speed > 0 && mres.block_target > 0 && mres.difficulty > 0)
   {
-    double ratio = mres.speed * mres.block_target / (double)mres.difficulty;
-    uint64_t daily = 86400ull / mres.block_target * mres.block_reward * ratio;
-    uint64_t monthly = 86400ull / mres.block_target * 30.5 * mres.block_reward * ratio;
-    uint64_t yearly = 86400ull / mres.block_target * 356 * mres.block_reward * ratio;
-    tools::msg_writer() << "Expected: " << cryptonote::print_money(daily) << " LOKI daily, "
-        << cryptonote::print_money(monthly) << " monthly, " << cryptonote::print_money(yearly) << " yearly";
+    uint64_t daily = 86400 / (double)mres.difficulty * mres.speed * mres.block_reward;
+    tools::msg_writer() << "Expected: " << cryptonote::print_money(daily) << " LOKI daily, " << cryptonote::print_money(7*daily) << " weekly";
   }
 
   return true;
@@ -1549,13 +1536,11 @@ bool t_rpc_command_executor::print_transaction_pool_stats() {
   return true;
 }
 
-bool t_rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype, bool do_background_mining, bool ignore_battery) {
+bool t_rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype) {
   cryptonote::COMMAND_RPC_START_MINING::request req;
   cryptonote::COMMAND_RPC_START_MINING::response res;
   req.miner_address = cryptonote::get_account_address_as_str(nettype, false, address);
   req.threads_count = num_threads;
-  req.do_background_mining = do_background_mining;
-  req.ignore_battery = ignore_battery;
 
   std::string fail_message = "Mining did not start";
 
