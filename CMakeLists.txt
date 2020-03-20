@@ -56,6 +56,10 @@ if(NOT DEFINED LOKI_RELEASE_SUFFIX)
   set(LOKI_RELEASE_SUFFIX "-dev")
 endif()
 
+if(POLICY CMP0079)
+  cmake_policy(SET CMP0079 NEW)
+endif()
+
 function (add_c_flag_if_supported flag var)
   string(REPLACE "-" "_" supported ${flag}_c)
   check_c_compiler_flag(${flag} ${supported})
@@ -416,9 +420,6 @@ ExternalProject_Add(generate_translations_header
   CMAKE_ARGS -DLRELEASE_PATH=${LRELEASE_PATH}
   INSTALL_COMMAND cmake -E echo "")
 
-if(POLICY CMP0079)
-  cmake_policy(SET CMP0079 NEW)
-endif()
 add_library(libunbound INTERFACE)
 add_library(miniupnpc INTERFACE)
 
