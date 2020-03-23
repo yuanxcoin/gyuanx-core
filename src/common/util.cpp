@@ -722,25 +722,6 @@ namespace tools
     }
   }
 
-  std::string glob_to_regex(const std::string &val)
-  {
-    std::string newval;
-
-    bool escape = false;
-    for (char c: val)
-    {
-      if (c == '*')
-        newval += escape ? "*" : ".*";
-      else if (c == '?')
-        newval += escape ? "?" : ".";
-      else if (c == '\\')
-        newval += '\\', escape = !escape;
-      else
-        newval += c;
-    }
-    return newval;
-  }
-  
 #ifdef _WIN32
   std::string input_line_win()
   {

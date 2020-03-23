@@ -94,7 +94,7 @@ int main(int argc, char** argv)
   if (!r)
     return 1;
 
-  const std::string filter = tools::glob_to_regex(command_line::get_arg(vm, arg_filter));
+  const std::string filter = command_line::get_arg(vm, arg_filter);
   const std::string timings_database = command_line::get_arg(vm, arg_timings_database);
   Params p;
   if (!timings_database.empty())
