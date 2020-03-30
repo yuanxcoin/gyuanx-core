@@ -556,10 +556,6 @@ namespace service_nodes
     state_t m_state; // NOTE: Not in m_transient due to the non-trivial constructor. We can't blanket initialise using = {}; needs to be reset in ::reset(...) manually
   };
 
-  bool     is_registration_tx   (cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction& tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key& key, service_node_info& info);
-  bool     reg_tx_extract_fields(const cryptonote::transaction& tx, std::vector<cryptonote::account_public_address>& addresses, uint64_t& portions_for_operator, std::vector<uint64_t>& portions, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature, crypto::public_key& tx_pub_key);
-  uint64_t offset_testing_quorum_height(quorum_type type, uint64_t height);
-
   struct staking_components
   {
     crypto::public_key                             service_node_pubkey;
@@ -572,7 +568,7 @@ namespace service_nodes
   bool tx_get_staking_components            (cryptonote::transaction const &tx, staking_components *contribution);
   bool tx_get_staking_components_and_amounts(cryptonote::network_type nettype, uint8_t hf_version, cryptonote::transaction const &tx, uint64_t block_height, staking_components *contribution);
 
-  struct converted_registration_args
+  struct contributor_args_t
   {
     bool                                            success;
     std::vector<cryptonote::account_public_address> addresses;
@@ -580,10 +576,30 @@ namespace service_nodes
     uint64_t                                        portions_for_operator;
     std::string                                     err_msg; // if (success == false), this is set to the err msg otherwise empty
   };
-  converted_registration_args convert_registration_args(cryptonote::network_type nettype,
-                                                        const std::vector<std::string>& args,
-                                                        uint64_t staking_requirement,
-                                                        uint8_t hf_version);
+
+  bool     is_registration_tx   (cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction& tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key& key, service_node_info& info);
+  bool     reg_tx_extract_fields(const cryptonote::transaction& tx, contributor_args_t &contributor_args, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature, crypto::public_key& tx_pub_key);
+  uint64_t offset_testing_quorum_height(quorum_type type, uint64_t height);
+
+  contributor_args_t convert_registration_args(cryptonote::network_type nettype,
+                                               const std::vector<std::string> &args,
+                                               uint64_t staking_requirement,
+                                               uint8_t hf_version);
+
+  enum struct validate_contributor_args_result
+  {
+    success,
+    portions_mismatch,
+    incorrect_portions,
+    operator_portions_too_much,
+    registration_hash_failed,
+    invalid_service_node_key,
+    invalid_signature,
+  };
+
+  // expiration_timestamp, service_node_key, signature: (Optional): If given, verify the signature with the registration hash using contributor args
+  validate_contributor_args_result validate_contributor_args(uint8_t hf_version, contributor_args_t const &contributor_args, uint64_t const *expiration_timestamp, crypto::public_key const *service_node_key, crypto::signature const *signature);
+  std::string                      validate_contributor_args_result_string(validate_contributor_args_result error, contributor_args_t const *context, crypto::public_key const *service_node_key, crypto::signature const *signature);
 
   bool make_registration_cmd(cryptonote::network_type nettype,
       uint8_t hf_version,

@@ -1527,6 +1527,7 @@ private:
       convert_registration_args_failed,
       registration_timestamp_expired,
       registration_timestamp_parse_fail,
+      validate_contributor_args_fail,
       service_node_key_parse_fail,
       service_node_signature_parse_fail,
       service_node_register_serialize_to_tx_extra_fail,
