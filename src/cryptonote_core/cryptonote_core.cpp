@@ -234,13 +234,11 @@ namespace cryptonote
   static const command_line::arg_descriptor<std::string> arg_block_rate_notify = {
     "block-rate-notify"
   , "Run a program when the block rate undergoes large fluctuations. This might "
-    "be a sign of large amounts of hash rate going on and off the Monero network, "
-    "and thus be of potential interest in predicting attacks. %t will be replaced "
+    "be a sign of large amounts of hash rate going on and off the Loki network, "
+    "or could be a sign that lokid is not properly synchronizing with the network. %t will be replaced "
     "by the number of minutes for the observation window, %b by the number of "
     "blocks observed within that window, and %e by the number of blocks that was "
-    "expected in that window. It is suggested that this notification is used to "
-    "automatically increase the number of confirmations required before a payment "
-    "is acted upon."
+    "expected in that window."
   , ""
   };
   static const command_line::arg_descriptor<bool> arg_keep_alt_blocks  = {
