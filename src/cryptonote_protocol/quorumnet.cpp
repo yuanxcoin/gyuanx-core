@@ -517,7 +517,7 @@ void relay_obligation_votes(void *obj, const std::vector<service_nodes::quorum_v
             continue;
         }
 
-        pinfo.relay_to_peers("vote_ob", serialize_vote(vote));
+        pinfo.relay_to_peers("quorum.vote_ob", serialize_vote(vote));
         relayed_votes.push_back(vote);
     }
     MDEBUG("Relayed " << relayed_votes.size() << " votes");
@@ -781,17 +781,17 @@ void process_blink_signatures(SNNWrapper &snw, const std::shared_ptr<blink_tx> &
         {"s", std::move(s_list)},
     };
 
-    pinfo.relay_to_peers("blink_sign", blink_sign_data);
+    pinfo.relay_to_peers("quorum.blink_sign", blink_sign_data);
 
     MTRACE("Done blink signature relay");
 
     if (reply_tag && reply_conn) {
         if (became_approved) {
             MINFO("Blink tx became approved; sending result back to originating node");
-            snw.lmq.send(reply_conn, "bl_good", bt_serialize(bt_dict{{"!", reply_tag}}), send_option::optional{});
+            qnet.lmq.send(reply_conn, "bl.good", bt_serialize(bt_dict{{"!", reply_tag}}), send_option::optional{});
         } else if (became_rejected) {
             MINFO("Blink tx became rejected; sending result back to originating node");
-            snw.lmq.send(reply_conn, "bl_bad", bt_serialize(bt_dict{{"!", reply_tag}}), send_option::optional{});
+            qnet.lmq.send(reply_conn, "bl.bad", bt_serialize(bt_dict{{"!", reply_tag}}), send_option::optional{});
         }
     }
 }
@@ -847,7 +847,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
     if (hf_version < HF_VERSION_BLINK) {
         MWARNING("Rejecting blink message: blink is not available for hardfork " << (int) hf_version);
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid blink authorization height"_sv}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid blink authorization height"_sv}}));
         return;
     }
 
@@ -858,14 +858,14 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
     if (blink_height < local_height - 2) {
         MINFO("Rejecting blink tx because blink auth height is too low (" << blink_height << " vs. " << local_height << ")");
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid blink authorization height"_sv}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid blink authorization height"_sv}}));
         return;
     } else if (blink_height > local_height + 2) {
         // TODO: if within some threshold (maybe 5-10?) we could hold it and process it once we are
         // within 2.
         MINFO("Rejecting blink tx because blink auth height is too high (" << blink_height << " vs. " << local_height << ")");
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid blink authorization height"_sv}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid blink authorization height"_sv}}));
         return;
     }
     MTRACE("Blink tx auth height " << blink_height << " is valid (local height is " << local_height << ")");
@@ -874,7 +874,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
     if (t_it == data.end()) {
         MINFO("Rejecting blink tx: no tx data included in request");
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "No transaction included in blink request"_sv}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "No transaction included in blink request"_sv}}));
         return;
     }
     const std::string &tx_data = t_it->second.get<std::string>();
@@ -901,7 +901,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
                     already_rejected = !already_approved && it->second.btxptr->rejected();
                     if (already_approved || already_rejected) {
                         // Quorum approved/rejected the tx before we received the submitted blink,
-                        // reply with a bl_good/bl_bad immediately (done below, outside the lock).
+                        // reply with a bl.good/bl.bad immediately (done below, outside the lock).
                         MINFO("Submitted blink tx already " << (already_approved ? "approved" : "rejected") <<
                                 "; sending result back to originating node");
                     } else {
@@ -923,12 +923,12 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
     } else {
         MINFO("Rejecting blink tx: invalid tx hash included in request");
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid transaction hash"s}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid transaction hash"s}}));
         return;
     }
 
     if (already_approved || already_rejected) {
-        m.send_back(already_approved ? "bl_good" : "bl_bad", bt_serialize(bt_dict{{"!", tag}}), send_option::optional{});
+        m.send_back(already_approved ? "bl.good" : "bl.bad", bt_serialize(bt_dict{{"!", tag}}), send_option::optional{});
         return;
     }
 
@@ -939,7 +939,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
     } catch (const std::runtime_error &e) {
         MINFO("Rejecting blink tx: " << e.what());
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Unable to retrieve blink quorum: "s + e.what()}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Unable to retrieve blink quorum: "s + e.what()}}));
         return;
     }
 
@@ -952,7 +952,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
     else {
         MINFO("Rejecting blink tx: this service node is not a member of the blink quorum!");
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Blink tx relayed to non-blink quorum member"_sv}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Blink tx relayed to non-blink quorum member"_sv}}));
         return;
     }
 
@@ -969,7 +969,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
         if (!cryptonote::parse_and_validate_tx_from_blob(tx_data, tx, tx_hash_actual)) {
             MINFO("Rejecting blink tx: failed to parse transaction data");
             if (tag)
-                m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Failed to parse transaction data"_sv}}));
+                m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Failed to parse transaction data"_sv}}));
             return;
         }
         MTRACE("Successfully parsed transaction data");
@@ -977,7 +977,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
         if (tx_hash != tx_hash_actual) {
             MINFO("Rejecting blink tx: submitted tx hash " << tx_hash << " did not match actual tx hash " << tx_hash_actual);
             if (tag)
-                m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid transaction hash"_sv}}));
+                m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "Invalid transaction hash"_sv}}));
             return;
         } else {
             MTRACE("Pre-computed tx hash matches actual tx hash");
@@ -989,7 +989,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
     if (!pinfo.strong_peers) {
         MWARNING("Could not find connection info for any blink quorum peers.  Aborting blink tx");
         if (tag)
-            m.send_back("bl_nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "No quorum peers are currently reachable"_sv}}));
+            m.send_back("bl.nostart", bt_serialize(bt_dict{{"!", tag}, {"e", "No quorum peers are currently reachable"_sv}}));
         return;
     }
 
@@ -1032,7 +1032,7 @@ void handle_blink(lokimq::Message& m, SNNWrapper& snw) {
             {"#", tx_hash_str},
         };
         MDEBUG("Relaying blink tx to " << pinfo.strong_peers << " strong and " << (pinfo.peers.size() - pinfo.strong_peers) << " opportunistic blink peers");
-        pinfo.relay_to_peers("blink", blink_data);
+        pinfo.relay_to_peers("blink.submit", blink_data);
     }
 
     // Anything past this point always results in a success or failure signature getting sent to peers
@@ -1338,7 +1338,7 @@ std::future<std::pair<cryptonote::blink_result, std::string>> send_blink(void *o
 
         for (size_t i : indices) {
             MINFO("Relaying blink tx to " << to_hex(remotes[i].first) << " @ " << remotes[i].second);
-            snw.lmq.send(remotes[i].first, "blink", data, send_option::hint{remotes[i].second});
+            snw.lmq.send(remotes[i].first, "blink.submit", data, send_option::hint{remotes[i].second});
         }
     } catch (...) {
         auto lock = tools::unique_lock(pending_blink_result_mutex);
@@ -1364,12 +1364,12 @@ void common_blink_response(uint64_t tag, cryptonote::blink_result res, std::stri
         auto &pbr = it->second;
         bool forward_response;
         if (nostart) {
-            // On a bl_nostart response wait until we have confirmation from a majority of the nodes
+            // On a bl.nostart response wait until we have confirmation from a majority of the nodes
             // we sent to because it could be a local blink quorum node error.
             int count = ++pbr.nostart_count;
             forward_response = count > pbr.remote_count / 2;
         } else {
-            // Otherwise on bl_good or bl_bad response we immediately send it back.  In theory a
+            // Otherwise on bl.good or bl.bad response we immediately send it back.  In theory a
             // service node could lie about this, but there's nothing actually at risk other than a
             // false confirmation message returned to the sender which will get resolved at the next
             // refresh (the recipient verifies blink signatures and isn't affected).
@@ -1389,7 +1389,7 @@ void common_blink_response(uint64_t tag, cryptonote::blink_result res, std::stri
     }
 }
 
-/// bl_nostart is sent back to the submitter when the tx doesn't get far enough to be distributed
+/// bl.nostart is sent back to the submitter when the tx doesn't get far enough to be distributed
 /// among the quorum because of some failure (bad height, parse failure, etc.)  It includes:
 ///
 ///     ! - the tag as included in the submission
@@ -1410,7 +1410,7 @@ void handle_blink_not_started(Message& m) {
 
     common_blink_response(tag, cryptonote::blink_result::rejected, std::move(error), true /*nostart*/);
 }
-/// bl_bad gets returned once we know enough of the blink quorum has rejected the result to make it
+/// bl.bad gets returned once we know enough of the blink quorum has rejected the result to make it
 /// unequivocal that it has been rejected.  We require a failure response from a majority of the
 /// remotes before setting the promise.
 ///
@@ -1426,7 +1426,7 @@ void handle_blink_failure(Message &m) {
 
     // TODO - we ought to be able to signal an error message *sometimes*, e.g. if one of the remotes
     // we sent it to rejected it then that remote can reply with a message.  That gets a bit
-    // complicated, though, in terms of maintaining internal state (since the bl_bad is sent on
+    // complicated, though, in terms of maintaining internal state (since the bl.bad is sent on
     // signature receipt, not at rejection time), so for now we don't include it.
     //auto &error = boost::get<std::string>(data.at("e"));
 
@@ -1435,7 +1435,7 @@ void handle_blink_failure(Message &m) {
     common_blink_response(tag, cryptonote::blink_result::rejected, "Transaction rejected by quorum"s);
 }
 
-/// bl_good gets returned once we know enough of the blink quorum has accepted the result to make it
+/// bl.good gets returned once we know enough of the blink quorum has accepted the result to make it
 /// valid.  We require a good response from a majority of the remotes before setting the promise.
 ///
 ///     ! - the tag as included in the submission
@@ -1525,11 +1525,13 @@ void setup_endpoints(SNNWrapper& snw) {
         .add_command("pong", handle_pong)
         ;
 
-    // Compatibility aliases.  Transition plan:
-    // 7.x: keep the aliases and use them, since we need 6.x nodes to understand
-    // 8.x: keep the aliases (so the 7.x nodes still using them can talk to 8.x), but don't use them
-    // anymore.
-    // 8.x.1 (i.e. the first release after the 8.x hard fork): remove the aliases
+    // Compatibility aliases.  No longer used since 7.1.4, but can still be received from previous
+    // 7.1.x nodes.
+    // Transition plan:
+    // 8.1.0: keep the aliases (so the 7.1.x nodes still using them can talk to 8.x), but don't use
+    // them anymore.
+    // 8.x.1 (i.e. the first post-hard-fork release): remove the aliases since no 7.1.x nodes will
+    // be left.
 
     lmq.add_command_alias("vote_ob", "quorum.vote_ob");
     lmq.add_command_alias("blink_sign", "quorum.blink_sign");
