@@ -311,4 +311,13 @@ namespace command_line
 
   extern const arg_descriptor<bool> arg_help;
   extern const arg_descriptor<bool> arg_version;
+
+  /// Returns the terminal width and height (in characters), if supported on this system and
+  /// available.  Returns {0,0} if not available or could not be determined.
+  std::pair<unsigned, unsigned> terminal_size();
+
+  /// Returns the ideal line width and description width values for
+  /// boost::program_options::options_description, using the terminal width (if available).  Returns
+  /// the boost defaults if terminal width isn't available.
+  std::pair<unsigned, unsigned> boost_option_sizes();
 }

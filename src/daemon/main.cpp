@@ -33,6 +33,7 @@
 #include "common/scoped_message_writer.h"
 #include "common/password.h"
 #include "common/util.h"
+#include "common/termsize.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_core/miner.h"
 #include "daemon/command_server.h"
@@ -118,11 +119,13 @@ int main(int argc, char const * argv[])
 
     epee::string_tools::set_module_name_and_folder(argv[0]);
 
+    auto opt_size = command_line::boost_option_sizes();
+
     // Build argument description
-    po::options_description all_options("All");
+    po::options_description all_options("All", opt_size.first, opt_size.second);
     po::options_description hidden_options("Hidden");
-    po::options_description visible_options("Options");
-    po::options_description core_settings("Settings");
+    po::options_description visible_options("Options", opt_size.first, opt_size.second);
+    po::options_description core_settings("Settings", opt_size.first, opt_size.second);
     po::positional_options_description positional_options;
     {
       // Misc Options

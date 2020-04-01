@@ -34,6 +34,44 @@
 
 namespace command_line
 {
-  const arg_descriptor<bool> arg_help = {"help", "Produce help message"};
-  const arg_descriptor<bool> arg_version = {"version", "Output version information"};
+const arg_descriptor<bool> arg_help = {"help", "Produce help message"};
+const arg_descriptor<bool> arg_version = {"version", "Output version information"};
+
+// Terminal sizing.
+//
+// Currently only linux is supported.
+
+#ifdef __linux__
+
+extern "C" {
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <unistd.h>
+}
+std::pair<unsigned, unsigned> terminal_size() {
+    struct winsize w;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1)
+      return {w.ws_col, w.ws_row};
+    return {0, 0};
+}
+
+#else
+
+std::pair<unsigned, unsigned> terminal_size() { return {0, 0}; }
+
+#endif
+
+
+std::pair<unsigned, unsigned> boost_option_sizes() {
+  std::pair<unsigned, unsigned> result;
+
+  result.first = std::max(
+      terminal_size().first,
+      boost::program_options::options_description::m_default_line_length);
+
+  result.second = result.first - boost::program_options::options_description::m_default_line_length / 2;
+
+  return result;
+}
+
 }

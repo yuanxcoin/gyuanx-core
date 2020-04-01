@@ -4623,9 +4623,11 @@ int main(int argc, char **argv)
   const auto arg_wallet_file = wallet_args::arg_wallet_file();
   const auto arg_from_json = wallet_args::arg_generate_from_json();
 
+  auto opt_size = command_line::boost_option_sizes();
+
   po::options_description hidden_options("Hidden");
 
-  po::options_description desc_params(wallet_args::tr("Wallet options"));
+  po::options_description desc_params(wallet_args::tr("Wallet options"), opt_size.first, opt_size.second);
   tools::wallet2::init_options(desc_params);
   command_line::add_arg(desc_params, arg_rpc_bind_port);
   command_line::add_arg(desc_params, arg_disable_rpc_login);

@@ -9590,7 +9590,9 @@ int main(int argc, char* argv[])
   boost::filesystem::path::imbue(std::locale());
 #endif
 
-  po::options_description desc_params(wallet_args::tr("Wallet options"));
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_params(wallet_args::tr("Wallet options"), opt_size.first, opt_size.second);
   tools::wallet2::init_options(desc_params);
   command_line::add_arg(desc_params, arg_wallet_file);
   command_line::add_arg(desc_params, arg_generate_new_wallet);
