@@ -1,13 +1,5 @@
-/**
-@file
-@details
-
-@image html images/other/runtime-commands.png
-
-*/
-
+// Copyright (c) 2018-2020, The Loki Project
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
 // 
 // All rights reserved.
 // 
@@ -52,23 +44,22 @@
 
 namespace daemonize {
 
-class t_rpc_command_executor final {
+class rpc_command_executor final {
 private:
-  tools::t_rpc_client* m_rpc_client;
-  cryptonote::core_rpc_server* m_rpc_server;
-  bool m_is_rpc;
+  std::unique_ptr<tools::t_rpc_client> m_rpc_client;
+  cryptonote::core_rpc_server* m_rpc_server = nullptr;
 
 public:
-  t_rpc_command_executor(
+  /// Executor for remote connection RPC
+  rpc_command_executor(
       uint32_t ip
     , uint16_t port
     , const boost::optional<tools::login>& user
     , const epee::net_utils::ssl_options_t& ssl_options
-    , bool is_rpc = true
-    , cryptonote::core_rpc_server* rpc_server = NULL
     );
-
-  ~t_rpc_command_executor();
+  /// Executor for local daemon RPC
+  rpc_command_executor(cryptonote::core_rpc_server& rpc_server)
+    : m_rpc_server{&rpc_server} {}
 
   bool print_checkpoints(uint64_t start_height, uint64_t end_height, bool print_json);
 

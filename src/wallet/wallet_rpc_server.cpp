@@ -36,7 +36,6 @@
 #include <cstdint>
 #include "include_base_utils.h"
 #include <chrono>
-using namespace epee;
 
 #include "wallet_rpc_server.h"
 #include "wallet/wallet_args.h"
@@ -91,24 +90,17 @@ namespace tools
   }
 
   //------------------------------------------------------------------------------------------------------------------------------
-  wallet_rpc_server::wallet_rpc_server(boost::program_options::variables_map const *vm)
-  : m_wallet(NULL)
-  , rpc_login_file()
+  wallet_rpc_server::wallet_rpc_server(boost::program_options::variables_map vm)
+  : rpc_login_file()
   , m_stop(false)
   , m_restricted(false)
-  , m_vm(vm)
+  , m_vm(std::move(vm))
   {
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  wallet_rpc_server::~wallet_rpc_server()
+  void wallet_rpc_server::set_wallet(std::unique_ptr<wallet2> cr)
   {
-    if (m_wallet)
-      delete m_wallet;
-  }
-  //------------------------------------------------------------------------------------------------------------------------------
-  void wallet_rpc_server::set_wallet(wallet2 *cr)
-  {
-    m_wallet = cr;
+    m_wallet = std::move(cr);
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::run_server_threads()
@@ -177,29 +169,28 @@ namespace tools
     if (m_wallet)
     {
       m_wallet->store();
-      delete m_wallet;
-      m_wallet = NULL;
+      m_wallet.reset();
     }
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::init()
   {
-    auto rpc_config = cryptonote::rpc_args::process(*m_vm);
+    auto rpc_config = cryptonote::rpc_args::process(m_vm);
     if (!rpc_config)
       return false;
 
     boost::optional<epee::net_utils::http::login> http_login{};
-    std::string bind_port = command_line::get_arg(*m_vm, arg_rpc_bind_port);
-    const bool disable_auth = command_line::get_arg(*m_vm, arg_disable_rpc_login);
-    m_restricted = command_line::get_arg(*m_vm, arg_restricted);
-    if (!command_line::is_arg_defaulted(*m_vm, arg_wallet_dir))
+    std::string bind_port = command_line::get_arg(m_vm, arg_rpc_bind_port);
+    const bool disable_auth = command_line::get_arg(m_vm, arg_disable_rpc_login);
+    m_restricted = command_line::get_arg(m_vm, arg_restricted);
+    if (!command_line::is_arg_defaulted(m_vm, arg_wallet_dir))
     {
-      if (!command_line::is_arg_defaulted(*m_vm, wallet_args::arg_wallet_file()))
+      if (!command_line::is_arg_defaulted(m_vm, wallet_args::arg_wallet_file()))
       {
         MERROR(arg_wallet_dir.name << " and " << wallet_args::arg_wallet_file().name << " are incompatible, use only one of them");
         return false;
       }
-      m_wallet_dir = command_line::get_arg(*m_vm, arg_wallet_dir);
+      m_wallet_dir = command_line::get_arg(m_vm, arg_wallet_dir);
 #ifdef _WIN32
 #define MKDIR(path, mode)    mkdir(path)
 #else
@@ -1202,7 +1193,7 @@ namespace tools
     std::vector<tools::wallet2::pending_tx> ptx_vector;
     try
     {
-      bool r = m_wallet->parse_tx_from_str(blob, ptx_vector, NULL);
+      bool r = m_wallet->parse_tx_from_str(blob, ptx_vector, nullptr);
       if (!r)
       {
         er.code = WALLET_RPC_ERROR_CODE_BAD_SIGNED_TX_DATA;
@@ -2913,8 +2904,8 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
-      vm2 = *m_vm;
+      argv[3] = nullptr;
+      vm2 = m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
     }
@@ -2959,9 +2950,8 @@ namespace tools
         handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR);
         return false;
       }
-      delete m_wallet;
     }
-    m_wallet = wal.release();
+    m_wallet = std::move(wal);
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -3010,8 +3000,8 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
-      vm2 = *m_vm;
+      argv[3] = nullptr;
+      vm2 = m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
     }
@@ -3030,9 +3020,7 @@ namespace tools
       return false;
     }
 
-    if (m_wallet)
-      delete m_wallet;
-    m_wallet = wal.release();
+    m_wallet = std::move(wal);
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -3052,8 +3040,7 @@ namespace tools
         return false;
       }
     }
-    delete m_wallet;
-    m_wallet = NULL;
+    m_wallet.reset();
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -3238,8 +3225,8 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
-      vm2 = *m_vm;
+      argv[3] = nullptr;
+      vm2 = m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
     }
@@ -3333,9 +3320,7 @@ namespace tools
       return false;
     }
 
-    if (m_wallet)
-      delete m_wallet;
-    m_wallet = wal.release();
+    m_wallet = std::move(wal);
     res.address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
     return true;
   }
@@ -3428,8 +3413,8 @@ namespace tools
       argv[0] = "wallet-rpc";
       argv[1] = "--password";
       argv[2] = req.password.c_str();
-      argv[3] = NULL;
-      vm2 = *m_vm;
+      argv[3] = nullptr;
+      vm2 = m_vm;
       command_line::add_arg(desc, arg_password);
       po::store(po::parse_command_line(argc, argv, desc), vm2);
     }
@@ -3521,9 +3506,7 @@ namespace tools
       return false;
     }
 
-    if (m_wallet)
-      delete m_wallet;
-    m_wallet = wal.release();
+    m_wallet = std::move(wal);
     res.address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
     res.info = "Wallet has been restored successfully.";
     return true;
@@ -3845,7 +3828,7 @@ namespace tools
     }
 
     tools::wallet2::multisig_tx_set txs;
-    bool r = m_wallet->load_multisig_tx(blob, txs, NULL);
+    bool r = m_wallet->load_multisig_tx(blob, txs, nullptr);
     if (!r)
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_MULTISIG_TX_DATA;
@@ -3914,7 +3897,7 @@ namespace tools
     }
 
     tools::wallet2::multisig_tx_set txs;
-    bool r = m_wallet->load_multisig_tx(blob, txs, NULL);
+    bool r = m_wallet->load_multisig_tx(blob, txs, nullptr);
     if (!r)
     {
       er.code = WALLET_RPC_ERROR_CODE_BAD_MULTISIG_TX_DATA;
@@ -4495,13 +4478,13 @@ namespace tools
     return true;
   }
 
-  bool wallet_rpc_server::run()
+  bool wallet_rpc_server::run(bool)
   {
     std::unique_ptr<tools::wallet2> wal;
     try
     {
-      const bool testnet = tools::wallet2::has_testnet_option(*m_vm);
-      const bool stagenet = tools::wallet2::has_stagenet_option(*m_vm);
+      const bool testnet = tools::wallet2::has_testnet_option(m_vm);
+      const bool stagenet = tools::wallet2::has_stagenet_option(m_vm);
       if (testnet && stagenet)
       {
         MERROR(tools::wallet_rpc_server::tr("Can't specify more than one of --testnet and --stagenet"));
@@ -4511,10 +4494,10 @@ namespace tools
       const auto arg_wallet_file = wallet_args::arg_wallet_file();
       const auto arg_from_json = wallet_args::arg_generate_from_json();
 
-      const auto wallet_file = command_line::get_arg(*m_vm, arg_wallet_file);
-      const auto from_json = command_line::get_arg(*m_vm, arg_from_json);
-      const auto wallet_dir = command_line::get_arg(*m_vm, arg_wallet_dir);
-      const auto prompt_for_password = command_line::get_arg(*m_vm, arg_prompt_for_password);
+      const auto wallet_file = command_line::get_arg(m_vm, arg_wallet_file);
+      const auto from_json = command_line::get_arg(m_vm, arg_from_json);
+      const auto wallet_dir = command_line::get_arg(m_vm, arg_wallet_dir);
+      const auto prompt_for_password = command_line::get_arg(m_vm, arg_prompt_for_password);
       const auto password_prompt = prompt_for_password ? password_prompter : nullptr;
 
       if(!wallet_file.empty() && !from_json.empty())
@@ -4525,7 +4508,7 @@ namespace tools
 
       if (!wallet_dir.empty())
       {
-        wal = NULL;
+        wal = nullptr;
         goto just_dir;
       }
 
@@ -4538,13 +4521,13 @@ namespace tools
       LOG_PRINT_L0(tools::wallet_rpc_server::tr("Loading wallet..."));
       if(!wallet_file.empty())
       {
-        wal = tools::wallet2::make_from_file(*m_vm, true, wallet_file, password_prompt).first;
+        wal = tools::wallet2::make_from_file(m_vm, true, wallet_file, password_prompt).first;
       }
       else
       {
         try
         {
-          auto rc = tools::wallet2::make_from_json(*m_vm, true, from_json, password_prompt);
+          auto rc = tools::wallet2::make_from_json(m_vm, true, from_json, password_prompt);
           wal = std::move(rc.first);
         }
         catch (const std::exception &e)
@@ -4583,7 +4566,7 @@ namespace tools
     }
 
   just_dir:
-    if (wal) set_wallet(wal.release());
+    if (wal) set_wallet(std::move(wal));
     bool r = init();
     CHECK_AND_ASSERT_MES(r, false, tools::wallet_rpc_server::tr("Failed to initialize wallet RPC server"));
     tools::signal_handler::install([this](int) { send_stop_signal(); });
@@ -4625,8 +4608,6 @@ int main(int argc, char **argv)
 
   auto opt_size = command_line::boost_option_sizes();
 
-  po::options_description hidden_options("Hidden");
-
   po::options_description desc_params(wallet_args::tr("Wallet options"), opt_size.first, opt_size.second);
   tools::wallet2::init_options(desc_params);
   command_line::add_arg(desc_params, arg_rpc_bind_port);
@@ -4638,8 +4619,8 @@ int main(int argc, char **argv)
   command_line::add_arg(desc_params, arg_wallet_dir);
   command_line::add_arg(desc_params, arg_prompt_for_password);
 
-  daemonizer::init_options(hidden_options, desc_params);
-  desc_params.add(hidden_options);
+  po::options_description hidden_params("Hidden");
+  daemonizer::init_options(hidden_params, desc_params);
 
   boost::optional<po::variables_map> vm;
   bool should_terminate = false;
@@ -4647,30 +4628,19 @@ int main(int argc, char **argv)
     argc, argv,
     "loki-wallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
     tools::wallet_rpc_server::tr("This is the RPC loki wallet. It needs to connect to a loki\ndaemon to work correctly."),
-    desc_params,
+    desc_params, hidden_params,
     po::positional_options_description(),
     [](const std::string &s, bool emphasis){ epee::set_console_color(emphasis ? epee::console_color_white : epee::console_color_default, emphasis); std::cout << s << std::endl; if (emphasis) epee::reset_console_color(); },
     "loki-wallet-rpc.log",
     true
   );
   if (!vm)
-  {
     return 1;
-  }
   if (should_terminate)
-  {
     return 0;
-  }
 
-  daemonizer::run_type run_type = daemonizer::setup_run_environment<tools::wallet_rpc_server>("Wallet RPC Daemon", argc, const_cast<const char **>(argv), *vm);
-  if (run_type == daemonizer::run_type::terminate)
-      return 0;
-  else if (run_type == daemonizer::run_type::terminate_with_error)
-      return -1;
-
-  tools::wallet_rpc_server server(&(*vm));
-  bool result = server.run();
-  return !result;
+  return daemonizer::daemonize<tools::wallet_rpc_server>("Wallet RPC Daemon", argc, const_cast<const char**>(argv), std::move(*vm))
+      ? 0 : 1;
 
   CATCH_ENTRY_L0("main", 1);
 }

@@ -45,15 +45,11 @@ namespace daemonizer
       boost::program_options::variables_map const & vm
     );
 
-  enum struct run_type
-  {
-      non_interactive,
-      interactive,
-      terminate,
-      terminate_with_error,
-  };
-  template <typename Application>
-  run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm);
+  template <typename Application, typename... Args>
+  bool daemonize(
+      const char* name, int argc, char const* argv[],
+      boost::program_options::variables_map vm,
+      Args&&... args);
 }
 
 #ifdef WIN32

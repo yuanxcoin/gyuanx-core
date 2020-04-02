@@ -97,6 +97,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_restricted_rpc);
     command_line::add_arg(desc, arg_bootstrap_daemon_address);
     command_line::add_arg(desc, arg_bootstrap_daemon_login);
+    command_line::add_arg(desc, arg_public_node);
     command_line::add_arg(desc, arg_rpc_long_poll_connections);
     cryptonote::rpc_args::init_options(desc, true);
   }
@@ -1004,7 +1005,7 @@ namespace cryptonote
     if ( lMiner.is_mining() ) {
       res.speed = lMiner.get_speed();
       res.threads_count = lMiner.get_threads_count();
-      res.block_reward = lMiner.get_block_reward();
+      //res.block_reward = lMiner.get_block_reward();
     }
     const account_public_address& lMiningAdr = lMiner.get_mining_address();
     res.address = get_account_address_as_str(nettype(), false, lMiningAdr);
@@ -2617,6 +2618,12 @@ namespace cryptonote
       "bootstrap-daemon-address"
     , "URL of a 'bootstrap' remote daemon that the connected wallets can use while this daemon is still not fully synced"
     , ""
+    };
+
+  const command_line::arg_descriptor<bool> core_rpc_server::arg_public_node = {
+      "public-node"
+    , "Allow other users to use the node as a remote (restricted RPC mode, view-only commands) and advertise it over P2P"
+    , false
     };
 
   //

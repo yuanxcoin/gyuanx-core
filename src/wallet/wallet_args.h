@@ -53,6 +53,7 @@ namespace wallet_args
     const char* const usage,
     const char* const notice,
     boost::program_options::options_description desc_params,
+    boost::program_options::options_description hidden_params,
     const boost::program_options::positional_options_description& positional_options,
     const std::function<void(const std::string&, bool)> &print,
     const char *default_log_name, bool log_to_console = false);
