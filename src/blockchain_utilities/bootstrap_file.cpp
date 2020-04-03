@@ -39,7 +39,6 @@
 namespace po = boost::program_options;
 
 using namespace cryptonote;
-using namespace epee;
 
 namespace
 {
@@ -315,7 +314,7 @@ bool BootstrapFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_mem
   }
   // print message for last block, which may not have been printed yet due to progress_interval
   std::cout << refresh_string;
-  std::cout << "block " << m_cur_height-1 << "/" << block_stop << ENDL;
+  std::cout << "block " << m_cur_height-1 << "/" << block_stop << "\n";
 
   MINFO("Number of blocks exported: " << num_blocks_written);
   if (num_blocks_written > 0)
@@ -489,13 +488,12 @@ uint64_t BootstrapFile::count_blocks(const std::string& import_file_path, std::s
 
   import_file.close();
 
-  std::cout << ENDL;
-  std::cout << "Done scanning bootstrap file" << ENDL;
-  std::cout << "Full header length: " << full_header_size << " bytes" << ENDL;
-  std::cout << "Scanned for blocks: " << bytes_read << " bytes" << ENDL;
-  std::cout << "Total:              " << full_header_size + bytes_read << " bytes" << ENDL;
-  std::cout << "Number of blocks: " << h << ENDL;
-  std::cout << ENDL;
+  std::cout << "\nDone scanning bootstrap file";
+  std::cout << "\nFull header length: " << full_header_size << " bytes";
+  std::cout << "\nScanned for blocks: " << bytes_read << " bytes";
+  std::cout << "\nTotal:              " << full_header_size + bytes_read << " bytes";
+  std::cout << "\nNumber of blocks: " << h;
+  std::cout << std::endl;
 
   // NOTE: h is the number of blocks.
   // Note that a block's stored height is zero-based, but parts of the code use

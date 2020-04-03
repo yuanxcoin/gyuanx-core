@@ -60,8 +60,6 @@
 #include "file_io_utils.h"
 #include "wipeable_string.h"
 #include "misc_os_dependent.h"
-using namespace epee;
-
 #include "crypto/crypto.h"
 #include "util.h"
 #include "stack_trace.h"
@@ -775,7 +773,7 @@ namespace tools
       return "<unknown>";
     time_t tt = ts;
     struct tm tm;
-    misc_utils::get_gmt_time(tt, tm);
+    epee::misc_utils::get_gmt_time(tt, tm);
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S UTC", &tm);
     return std::string(buffer);
   }

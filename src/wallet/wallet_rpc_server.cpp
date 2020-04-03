@@ -224,7 +224,7 @@ namespace tools
         crypto::rand(rand_128bit.size(), rand_128bit.data());
         http_login.emplace(
           default_rpc_username,
-          string_encoding::base64_encode(rand_128bit.data(), rand_128bit.size())
+          epee::string_encoding::base64_encode(rand_128bit.data(), rand_128bit.size())
         );
 
         std::string temp = "loki-wallet-rpc." + bind_port + ".login";

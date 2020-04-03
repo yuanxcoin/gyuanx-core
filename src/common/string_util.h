@@ -28,4 +28,20 @@ bool string_iequal_any(const S1& s1, const S2& s2, const S&... s) {
 }
 #endif
 
+/// Returns a string_view that views the data of the given object; this is not something you want to
+/// do unless the struct is specifically design to be used this way.  The value must be a standard
+/// layout type; it should really require is_trivial, too, but we have classes (like crypto keys)
+/// that aren't C++-trivial but are still designed to be accessed this way.
+template <typename T>
+lokimq::string_view view_guts(const T& val) {
+    static_assert(std::is_standard_layout<T>(), "cannot safely access non-trivial class as string_view");
+    return {reinterpret_cast<const char *>(&val), sizeof(val)};
+}
+
+/// Convenience wrapper around the above that also copies the result into a new string
+template <typename T>
+std::string copy_guts(const T& val) {
+  return std::string{view_guts(val)};
+}
+
 }

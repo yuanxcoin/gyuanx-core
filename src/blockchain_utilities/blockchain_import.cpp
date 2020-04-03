@@ -79,7 +79,6 @@ std::string refresh_string = "\r                                    \r";
 namespace po = boost::program_options;
 
 using namespace cryptonote;
-using namespace epee;
 
 // db_mode: safe, fast, fastest
 int get_db_flags_from_mode(const std::string& db_mode)
@@ -107,7 +106,7 @@ int parse_db_arguments(const std::string& db_arg_str, std::string& db_type, int&
   }
   else if (db_args.size() > 2)
   {
-    std::cerr << "unrecognized database argument format: " << db_arg_str << ENDL;
+    std::cerr << "unrecognized database argument format: " << db_arg_str << std::endl;
     return 1;
   }
 
@@ -273,9 +272,7 @@ int import_from_file(cryptonote::core& core, const std::string& import_file_path
     return false;
   }
 
-  std::cout << ENDL;
-  std::cout << "Preparing to read blocks..." << ENDL;
-  std::cout << ENDL;
+  std::cout << "\nPreparing to read blocks...\n\n";
 
   std::ifstream import_file;
   import_file.open(import_file_path, std::ios_base::binary | std::ifstream::in);
@@ -315,7 +312,7 @@ int import_from_file(cryptonote::core& core, const std::string& import_file_path
   bool use_batch = opt_batch && !opt_verify;
 
   MINFO("Reading blockchain from bootstrap file...");
-  std::cout << ENDL;
+  std::cout << "\n";
 
   std::vector<block_complete_entry> blocks;
 
@@ -399,8 +396,7 @@ int import_from_file(cryptonote::core& core, const std::string& import_file_path
     {
       std::cout << refresh_string << "block " << h-1
         << " / " << block_stop
-        << "\r" << std::flush;
-      std::cout << ENDL << ENDL;
+        << "\n" << std::endl;
       MINFO("Specified block number reached - stopping.  block: " << h-1 << "  total blocks: " << h);
       quit = 1;
       break;
@@ -429,7 +425,7 @@ int import_from_file(cryptonote::core& core, const std::string& import_file_path
           MDEBUG("loading block number " << h-1);
         }
         b = bp.block;
-        MDEBUG("block prev_id: " << b.prev_id << ENDL);
+        MDEBUG("block prev_id: " << b.prev_id << "\n");
 
         if ((h-1) % progress_interval == 0)
         {
@@ -507,13 +503,13 @@ int import_from_file(cryptonote::core& core, const std::string& import_file_path
               bool q2;
               std::cout << refresh_string;
               // zero-based height
-              std::cout << ENDL << "[- batch commit at height " << h-1 << " -]" << ENDL;
+              std::cout << "\n[- batch commit at height " << h-1 << " -]\n";
               core.get_blockchain_storage().get_db().batch_stop();
               pos = import_file.tellg();
               bytes = bootstrap.count_bytes(import_file, db_batch_size, h2, q2);
               import_file.seekg(pos);
               core.get_blockchain_storage().get_db().batch_start(db_batch_size, bytes);
-              std::cout << ENDL;
+              std::cout << "\n";
               core.get_blockchain_storage().get_db().show_stats();
             }
           }
@@ -558,7 +554,7 @@ quitting:
     // TODO: if there was an error, the last added block is probably at zero-based height h-2
     MINFO("Finished at block: " << h-1 << "  total blocks: " << h);
 
-  std::cout << ENDL;
+  std::cout << "\n";
   return 0;
 }
 
@@ -651,19 +647,19 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
 
   if (! opt_batch && !command_line::is_arg_defaulted(vm, arg_batch_size))
   {
-    std::cerr << "Error: batch-size set, but batch option not enabled" << ENDL;
+    std::cerr << "Error: batch-size set, but batch option not enabled\n";
     return 1;
   }
   if (! db_batch_size)
   {
-    std::cerr << "Error: batch-size must be > 0" << ENDL;
+    std::cerr << "Error: batch-size must be > 0\n";
     return 1;
   }
   if (opt_verify && command_line::is_arg_defaulted(vm, arg_batch_size))
@@ -683,7 +679,7 @@ int main(int argc, char* argv[])
   opt_stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
   if (opt_testnet && opt_stagenet)
   {
-    std::cerr << "Error: Can't specify more than one of --testnet and --stagenet" << ENDL;
+    std::cerr << "Error: Can't specify more than one of --testnet and --stagenet\n";
     return 1;
   }
   m_config_folder = command_line::get_arg(vm, cryptonote::arg_data_dir);
@@ -720,7 +716,7 @@ int main(int argc, char* argv[])
   res = parse_db_arguments(db_arg_str, db_type, db_flags);
   if (res)
   {
-    std::cerr << "Error parsing database argument(s)" << ENDL;
+    std::cerr << "Error parsing database argument(s)\n";
     return 1;
   }
 
@@ -773,7 +769,7 @@ int main(int argc, char* argv[])
 #endif
   if (!core.init(vm, nullptr, get_checkpoints))
   {
-    std::cerr << "Failed to initialize core" << ENDL;
+    std::cerr << "Failed to initialize core\n";
     return 1;
   }
   core.get_blockchain_storage().get_db().set_batch_transactions(true);
@@ -815,7 +811,7 @@ int main(int argc, char* argv[])
   }
   catch (const DB_ERROR& e)
   {
-    std::cout << std::string("Error loading blockchain db: ") + e.what() + " -- shutting down now" << ENDL;
+    std::cout << std::string("Error loading blockchain db: ") + e.what() + " -- shutting down now\n";
     core.deinit();
     return 1;
   }

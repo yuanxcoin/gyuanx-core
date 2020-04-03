@@ -1135,7 +1135,7 @@ bool rpc_command_executor::print_block_by_hash(crypto::hash block_hash, bool inc
   if (include_hex)
     tools::success_msg_writer() << res.blob << std::endl;
   print_block_header(res.block_header);
-  tools::success_msg_writer() << res.json << ENDL;
+  tools::success_msg_writer() << res.json << "\n";
 
   return true;
 }
@@ -1167,9 +1167,9 @@ bool rpc_command_executor::print_block_by_height(uint64_t height, bool include_h
   }
 
   if (include_hex)
-    tools::success_msg_writer() << res.blob << std::endl;
+    tools::success_msg_writer() << res.blob << "\n";
   print_block_header(res.block_header);
-  tools::success_msg_writer() << res.json << ENDL;
+  tools::success_msg_writer() << res.json << "\n";
 
   return true;
 }
@@ -1238,7 +1238,7 @@ bool rpc_command_executor::print_transaction(crypto::hash transaction_hash,
       cryptonote::blobdata blob;
       std::string source = as_hex.empty() ? pruned_as_hex + prunable_as_hex : as_hex;
       bool pruned = !pruned_as_hex.empty() && prunable_as_hex.empty();
-      if (!string_tools::parse_hexstr_to_binbuff(source, blob))
+      if (!epee::string_tools::parse_hexstr_to_binbuff(source, blob))
       {
         tools::fail_msg_writer() << "Failed to parse tx to get json format";
       }

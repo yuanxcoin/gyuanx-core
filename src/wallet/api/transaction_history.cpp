@@ -40,8 +40,6 @@
 #include <string>
 #include <list>
 
-using namespace epee;
-
 namespace Monero {
 
 TransactionHistory::~TransactionHistory() {}

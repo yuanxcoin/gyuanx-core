@@ -33,10 +33,10 @@
 #include <boost/endian/conversion.hpp>
 
 #include "string_tools.h"
-using namespace epee;
 
 #include <unordered_set>
 #include <iomanip>
+#include <lokimq/hex.h>
 
 extern "C" {
 #include <sodium.h>
@@ -49,6 +49,7 @@ extern "C" {
 
 #include "cryptonote_core.h"
 #include "common/util.h"
+#include "common/base32z.h"
 #include "common/updates.h"
 #include "common/download.h"
 #include "common/threadpool.h"
@@ -2102,15 +2103,15 @@ namespace cryptonote
         main_message = "The daemon is running offline and will not attempt to sync to the Loki network.";
       else
         main_message = "The daemon will start synchronizing with the network. This may take a long time to complete.";
-      MGINFO_YELLOW(ENDL << "**********************************************************************" << ENDL
-        << main_message << ENDL
-        << ENDL
-        << "You can set the level of process detailization through \"set_log <level|categories>\" command," << ENDL
-        << "where <level> is between 0 (no details) and 4 (very verbose), or custom category based levels (eg, *:WARNING)." << ENDL
-        << ENDL
-        << "Use the \"help\" command to see the list of available commands." << ENDL
-        << "Use \"help <command>\" to see a command's documentation." << ENDL
-        << "**********************************************************************" << ENDL);
+      MGINFO_YELLOW("\n**********************************************************************\n"
+        << main_message << "\n"
+        << "\n"
+        << "You can set the level of process detailization through \"set_log <level|categories>\" command,\n"
+        << "where <level> is between 0 (no details) and 4 (very verbose), or custom category based levels (eg, *:WARNING).\n"
+        << "\n"
+        << "Use the \"help\" command to see the list of available commands.\n"
+        << "Use \"help <command>\" to see a command's documentation.\n"
+        << "**********************************************************************\n");
       m_starter_message_showed = true;
     }
 

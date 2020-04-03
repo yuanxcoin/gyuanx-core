@@ -45,8 +45,6 @@
 #include "cryptonote_core/service_node_voting.h"
 #include "cryptonote_core/loki_name_system.h"
 
-using namespace epee;
-
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "cn"
 
@@ -392,7 +390,7 @@ namespace cryptonote
       str_amount.append(default_decimal_point - fraction_size, '0');
     }
 
-    return string_tools::get_xtype_from_string(amount, str_amount);
+    return epee::string_tools::get_xtype_from_string(amount, str_amount);
   }
   //---------------------------------------------------------------
   uint64_t get_transaction_weight(const transaction &tx, size_t blob_size)
@@ -483,14 +481,14 @@ namespace cryptonote
     {
       tx_extra_field field;
       bool r = ::do_serialize(ar, field);
-      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize extra field. extra = " << to_hex(lokimq::ustring_view{tx_extra.data(), tx_extra.size()}));
       tx_extra_fields.push_back(field);
 
       std::ios_base::iostate state = iss.rdstate();
       eof = (EOF == iss.peek());
       iss.clear(state);
     }
-    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize extra field. extra = " << to_hex(lokimq::ustring_view{tx_extra.data(), tx_extra.size()}));
 
     return true;
   }
@@ -531,7 +529,7 @@ namespace cryptonote
       bool r = ::do_serialize(ar, field);
       if (!r)
       {
-        MWARNING("failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+        MWARNING("failed to deserialize extra field. extra = " << to_hex(lokimq::ustring_view{tx_extra.data(), tx_extra.size()}));
         if (!allow_partial)
           return false;
         break;
@@ -545,7 +543,7 @@ namespace cryptonote
     }
     if (!::serialization::check_stream_state(ar))
     {
-      MWARNING("failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+      MWARNING("failed to deserialize extra field. extra = " << to_hex(lokimq::ustring_view{tx_extra.data(), tx_extra.size()}));
       if (!allow_partial)
         return false;
     }
@@ -911,7 +909,7 @@ namespace cryptonote
     {
       tx_extra_field field;
       bool r = ::do_serialize(ar, field);
-      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+      CHECK_AND_NO_ASSERT_MES_L1(r, false, "failed to deserialize extra field. extra = " << to_hex(lokimq::ustring_view{tx_extra.data(), tx_extra.size()}));
       if (field.type() != type)
         ::do_serialize(newar, field);
 
@@ -919,7 +917,7 @@ namespace cryptonote
       eof = (EOF == iss.peek());
       iss.clear(state);
     }
-    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize extra field. extra = " << string_tools::buff_to_hex_nodelimer(std::string(reinterpret_cast<const char*>(tx_extra.data()), tx_extra.size())));
+    CHECK_AND_NO_ASSERT_MES_L1(::serialization::check_stream_state(ar), false, "failed to deserialize extra field. extra = " << to_hex(lokimq::ustring_view{tx_extra.data(), tx_extra.size()}));
     tx_extra.clear();
     std::string s = oss.str();
     tx_extra.reserve(s.size());
@@ -1081,7 +1079,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   std::string short_hash_str(const crypto::hash& h)
   {
-    std::string res = string_tools::pod_to_hex(h);
+    std::string res = epee::string_tools::pod_to_hex(h);
     CHECK_AND_ASSERT_MES(res.size() == 64, res, "wrong hash256 with string_tools::pod_to_hex conversion");
     auto erased_pos = res.erase(8, 48);
     res.insert(8, "....");

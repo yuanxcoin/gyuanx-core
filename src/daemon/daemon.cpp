@@ -50,8 +50,6 @@
 #include "command_server.h"
 #include "daemon.h"
 
-using namespace epee;
-
 #include <functional>
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
@@ -118,7 +116,7 @@ static uint16_t parse_public_rpc_port(const boost::program_options::variables_ma
     throw std::runtime_error("restricted RPC mode is required for --" + std::string{public_node_arg.name});
 
   uint16_t rpc_port;
-  if (!string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
+  if (!epee::string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
     throw std::runtime_error("invalid RPC port " + rpc_port_str);
 
   const auto rpc_bind_address = command_line::get_arg(vm, cryptonote::rpc_args::descriptors().rpc_bind_ip);

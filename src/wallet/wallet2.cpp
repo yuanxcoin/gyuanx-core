@@ -41,8 +41,6 @@
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/preprocessor/stringize.hpp>
 #include "include_base_utils.h"
-using namespace epee;
-
 #include "common/rules.h"
 #include "cryptonote_config.h"
 #include "wallet2.h"
@@ -95,9 +93,10 @@ extern "C"
 #include <sodium.h>
 }
 
-using namespace std;
 using namespace crypto;
 using namespace cryptonote;
+
+namespace string_tools = epee::string_tools;
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "wallet.wallet2"
@@ -1627,7 +1626,7 @@ void wallet2::scan_output(const cryptonote::transaction &tx, bool miner_tx, cons
   // if keys are encrypted, ask for password
   if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_multisig_rescan_k)
   {
-    static critical_section password_lock;
+    static epee::critical_section password_lock;
     CRITICAL_REGION_LOCAL(password_lock);
     if (!m_encrypt_keys_after_refresh)
     {
@@ -4403,7 +4402,7 @@ void wallet2::create_keys_file(const std::string &wallet_, bool watch_only, cons
 
     if (create_address_file)
     {
-      r = file_io_utils::save_string_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype));
+      r = epee::file_io_utils::save_string_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype));
       if(!r) MERROR("String with address text not saved");
     }
   }
@@ -4974,7 +4973,7 @@ std::string wallet2::exchange_multisig_keys(const epee::wipeable_string &passwor
 
       if (boost::filesystem::exists(m_wallet_file + ".address.txt"))
       {
-        r = file_io_utils::save_string_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype));
+        r = epee::file_io_utils::save_string_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype));
         if(!r) MERROR("String with address text not saved");
       }
     }
@@ -5734,7 +5733,7 @@ void wallet2::store_to(const std::string &path, const epee::wipeable_string &pas
     {
       // save address to the new file
       const std::string address_file = m_wallet_file + ".address.txt";
-      r = file_io_utils::save_string_to_file(address_file, m_account.get_public_address_str(m_nettype));
+      r = epee::file_io_utils::save_string_to_file(address_file, m_account.get_public_address_str(m_nettype));
       THROW_WALLET_EXCEPTION_IF(!r, error::file_save_error, m_wallet_file);
     }
     // remove old wallet file
@@ -8029,7 +8028,7 @@ wallet2::stake_result wallet2::create_stake_tx(const crypto::public_key& service
   add_service_node_pubkey_to_tx_extra(extra, service_node_key);
   add_service_node_contributor_to_tx_extra(extra, address);
 
-  vector<cryptonote::tx_destination_entry> dsts;
+  std::vector<cryptonote::tx_destination_entry> dsts;
   cryptonote::tx_destination_entry de = {};
   de.addr = address;
   de.is_subaddress = false;
@@ -8306,7 +8305,7 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
         amount_payable_by_operator += amount_left;
     }
 
-    vector<cryptonote::tx_destination_entry> dsts;
+    std::vector<cryptonote::tx_destination_entry> dsts;
     cryptonote::tx_destination_entry de;
     de.addr = address;
     de.is_subaddress = false;
@@ -10728,7 +10727,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
     preferred_inputs = pick_preferred_rct_inputs(needed_money + estimated_fee, subaddr_account, subaddr_indices);
     if (!preferred_inputs.empty())
     {
-      string s;
+      std::string s;
       for (auto i: preferred_inputs) s += boost::lexical_cast<std::string>(i) + " (" + print_money(m_transfers[i].amount()) + ") ";
       LOG_PRINT_L1("Found preferred rct inputs for rct tx: " << s);
 
@@ -12752,7 +12751,7 @@ std::string wallet2::get_daemon_address() const
   return m_daemon_address;
 }
 
-uint64_t wallet2::get_daemon_blockchain_height(string &err) const
+uint64_t wallet2::get_daemon_blockchain_height(std::string& err) const
 {
   uint64_t height;
 
@@ -12770,7 +12769,7 @@ uint64_t wallet2::get_daemon_blockchain_height(string &err) const
   return height;
 }
 
-uint64_t wallet2::get_daemon_blockchain_target_height(string &err)
+uint64_t wallet2::get_daemon_blockchain_target_height(std::string& err)
 {
   err = "";
   uint64_t target_height = 0;
@@ -14292,7 +14291,7 @@ uint64_t wallet2::get_blockchain_height_by_date(uint16_t year, uint8_t month, ui
       oss << "failed to get blocks by heights: ";
       for (auto height : req.heights)
         oss << height << ' ';
-      oss << endl << "reason: ";
+      oss << std::endl << "reason: ";
       if (!r)
         oss << "possibly lost connection to daemon";
       else if (res.status == CORE_RPC_STATUS_BUSY)

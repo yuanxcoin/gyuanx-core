@@ -50,8 +50,6 @@
 #define AUTODETECT_WINDOW 10 // seconds
 #define AUTODETECT_GAIN_THRESHOLD 1.02f  // 2%
 
-using namespace epee;
-
 #include "miner.h"
 
 extern "C" void rx_slow_hash_allocate_state();
@@ -166,7 +164,7 @@ namespace cryptonote
   {
     if(m_last_hr_merge_time && is_mining())
     {
-      m_current_hash_rate = m_hashes * 1000 / ((misc_utils::get_tick_count() - m_last_hr_merge_time + 1));
+      m_current_hash_rate = m_hashes * 1000 / ((epee::misc_utils::get_tick_count() - m_last_hr_merge_time + 1));
       CRITICAL_REGION_LOCAL(m_last_hash_rates_lock);
       m_last_hash_rates.push_back(m_current_hash_rate);
       if(m_last_hash_rates.size() > 19)
@@ -177,10 +175,10 @@ namespace cryptonote
         float hr = static_cast<float>(total_hr)/static_cast<float>(m_last_hash_rates.size());
         const auto flags = std::cout.flags();
         const auto precision = std::cout.precision();
-        std::cout << "hashrate: " << std::setprecision(4) << std::fixed << hr << std::setiosflags(flags) << std::setprecision(precision) << ENDL;
+        std::cout << "hashrate: " << std::setprecision(4) << std::fixed << hr << std::setiosflags(flags) << std::setprecision(precision) << std::endl;
       }
     }
-    m_last_hr_merge_time = misc_utils::get_tick_count();
+    m_last_hr_merge_time = epee::misc_utils::get_tick_count();
     m_hashes = 0;
   }
   //-----------------------------------------------------------------------------------------------------
@@ -229,7 +227,7 @@ namespace cryptonote
       CRITICAL_REGION_LOCAL(m_threads_lock);
       m_stop = true;
       while (m_threads_active > 0)
-        misc_utils::sleep_no_w(100);
+        epee::misc_utils::sleep_no_w(100);
       m_threads.clear();
     }
     m_stop = false;
@@ -250,17 +248,17 @@ namespace cryptonote
     if(command_line::has_arg(vm, arg_extra_messages))
     {
       std::string buff;
-      bool r = file_io_utils::load_file_to_string(command_line::get_arg(vm, arg_extra_messages), buff);
+      bool r = epee::file_io_utils::load_file_to_string(command_line::get_arg(vm, arg_extra_messages), buff);
       CHECK_AND_ASSERT_MES(r, false, "Failed to load file with extra messages: " << command_line::get_arg(vm, arg_extra_messages));
       std::vector<std::string> extra_vec;
       boost::split(extra_vec, buff, boost::is_any_of("\n"), boost::token_compress_on );
       m_extra_messages.resize(extra_vec.size());
       for(size_t i = 0; i != extra_vec.size(); i++)
       {
-        string_tools::trim(extra_vec[i]);
+        epee::string_tools::trim(extra_vec[i]);
         if(!extra_vec[i].size())
           continue;
-        std::string buff = string_encoding::base64_decode(extra_vec[i]);
+        std::string buff = epee::string_encoding::base64_decode(extra_vec[i]);
         if(buff != "0")
           m_extra_messages[i] = buff;
       }
@@ -456,7 +454,7 @@ namespace cryptonote
     {
       if(m_pausers_count)//anti split workaround
       {
-        misc_utils::sleep_no_w(100);
+        epee::misc_utils::sleep_no_w(100);
         continue;
       }
 

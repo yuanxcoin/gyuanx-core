@@ -35,8 +35,6 @@
 #include <cstring>
 #include "include_base_utils.h"
 #include "string_tools.h"
-using namespace epee;
-
 #include "core_rpc_server.h"
 #include "common/command_line.h"
 #include "common/updates.h"
@@ -86,6 +84,8 @@ struct hash<lns::generic_owner>
   std::size_t operator()(const lns::generic_owner &v) const { return reinterpret_cast<const std::size_t &>(v); }
 };
 } // namespace std
+
+namespace string_tools = epee::string_tools;
 
 namespace cryptonote
 {
@@ -857,7 +857,6 @@ namespace cryptonote
 
     if (req.blink)
     {
-      using namespace std::chrono_literals;
       auto future = m_core.handle_blink_tx(tx_blob);
       auto status = future.wait_for(10s);
       if (status != std::future_status::ready) {
@@ -1625,7 +1624,7 @@ namespace cryptonote
       json_req.id = epee::serialization::storage_entry(0);
       json_req.method = command_name;
       json_req.params = req;
-      r = net_utils::invoke_http_json("/json_rpc", json_req, json_resp, m_http_client);
+      r = epee::net_utils::invoke_http_json("/json_rpc", json_req, json_resp, m_http_client);
       if (r)
         res = json_resp.result;
     }

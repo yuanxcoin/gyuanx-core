@@ -223,7 +223,7 @@ namespace cryptonote
       << std::setw(14) << "Down(now)"
       << std::setw(10) << "Up (kB/s)"
       << std::setw(13) << "Up(now)"
-      << ENDL;
+      << "\n";
 
     m_p2p->for_each_connection([&](const connection_context& cntxt, nodetool::peerid_type peer_id, uint32_t support_flags)
     {
@@ -242,7 +242,7 @@ namespace cryptonote
         << std::setw(13) << std::fixed << cntxt.m_current_speed_up / 1024
         << (local_ip ? "[LAN]" : "")
         << std::left << (cntxt.m_remote_address.is_loopback() ? "[LOCALHOST]" : "") // 127.0.0.1
-        << ENDL;
+        << "\n";
 
       if (connection_time > 1)
       {
@@ -255,14 +255,14 @@ namespace cryptonote
 
       return true;
     });
-    ss << ENDL
+    ss << "\n"
       << std::setw(125) << " "
       << std::setw(12) << down_sum
       << std::setw(14) << down_curr_sum
       << std::setw(10) << up_sum
       << std::setw(13) << up_curr_sum
-      << ENDL;
-    LOG_PRINT_L0("Connections: " << ENDL << ss.str());
+      << "\n";
+    LOG_PRINT_L0("Connections:\n" << ss.str());
   }
   //------------------------------------------------------------------------------------------------------------------------
   // Returns a list of connection_info objects describing each open p2p connection
@@ -476,7 +476,7 @@ namespace cryptonote
     MCLOG(is_inital ? el::Level::Info : el::Level::Debug, "global", context <<  "Sync data returned a new top block candidate: " << curr_height << " -> " << hshd.current_height
       << " [Your node is " << abs_diff << " blocks (" << (abs_diff / (24 * 60 * 60 / DIFFICULTY_TARGET_V2)) << " days) "
       << (0 <= diff ? std::string("behind") : std::string("ahead"))
-      << "] " << ENDL << "SYNCHRONIZATION started");
+      << "]\nSYNCHRONIZATION started");
       if (hshd.current_height >= curr_height + 5) // don't switch to unsafe mode just for a few blocks
       {
         m_core.safesyncmode(false);
@@ -2255,10 +2255,10 @@ skip:
     bool val_expected = false;
     if(m_synchronized.compare_exchange_strong(val_expected, true))
     {
-      MGINFO_YELLOW(ENDL << "**********************************************************************" << ENDL
-        << "You are now synchronized with the network. You may now start loki-wallet-cli." << ENDL
-        << ENDL
-        << "Use the \"help\" command to see the list of available commands." << ENDL
+      MGINFO_YELLOW("\n**********************************************************************\n"
+        << "You are now synchronized with the network. You may now start loki-wallet-cli.\n"
+        << "\n"
+        << "Use the \"help\" command to see the list of available commands.\n"
         << "**********************************************************************");
       m_sync_timer.pause();
       if (ELPP->vRegistry()->allowed(el::Level::Info, "sync-info"))
