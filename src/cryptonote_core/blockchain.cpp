@@ -2178,10 +2178,14 @@ bool Blockchain::handle_get_blocks(NOTIFY_REQUEST_GET_BLOCKS::request& arg, NOTI
 
     if (missed_tx_ids.size() != 0)
     {
-      LOG_ERROR("Error retrieving blocks, missed " << missed_tx_ids.size()
-          << " transactions for block with hash: " << get_block_hash(block)
-          << std::endl
-      );
+      // do not display an error if the peer asked for an unpruned block which we are not meant to have
+      if (tools::has_unpruned_block(get_block_height(block), get_current_blockchain_height(), get_blockchain_pruning_seed()))
+      {
+        LOG_ERROR("Error retrieving blocks, missed " << missed_tx_ids.size()
+            << " transactions for block with hash: " << get_block_hash(block)
+            << std::endl
+        );
+      }
 
       rsp.missed_ids.insert(rsp.missed_ids.end(), missed_tx_ids.begin(), missed_tx_ids.end());
       return false;
