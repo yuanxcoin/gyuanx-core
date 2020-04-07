@@ -918,7 +918,16 @@ add_subdirectory(contrib)
 add_subdirectory(src)
 
 if(BUILD_TESTS)
+  message(STATUS "Building tests")
   add_subdirectory(tests)
+else()
+  message(STATUS "Not building tests")
+endif()
+
+if(BUILD_DEBUG_UTILITIES)
+  message(STATUS "Building debug utilities")
+else()
+  message(STATUS "Not building debug utilities")
 endif()
 
 if(BUILD_DOCUMENTATION)
