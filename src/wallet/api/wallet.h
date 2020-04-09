@@ -168,6 +168,8 @@ public:
     Subaddress * subaddress() override;
     SubaddressAccount * subaddressAccount() override;
     void setListener(WalletListener * l) override;
+    bool setCacheAttribute(const std::string &key, const std::string &val) override;
+    std::string getCacheAttribute(const std::string &key) const override;
     bool setUserNote(const std::string &txid, const std::string &note) override;
     std::string getUserNote(const std::string &txid) const override;
     std::string getTxKey(const std::string &txid) const override;
