@@ -1767,6 +1767,7 @@ private:
     uint64_t m_device_last_key_image_sync;
     bool m_offline;
     uint64_t m_immutable_height;
+    uint32_t m_rpc_version;
 
     // Aux transaction data from device
     std::unordered_map<crypto::hash, std::string> m_tx_device;

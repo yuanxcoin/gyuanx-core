@@ -1093,7 +1093,8 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended):
   m_unattended(unattended),
   m_devices_registered(false),
   m_device_last_key_image_sync(0),
-  m_offline(false)
+  m_offline(false),
+  m_rpc_version(0)
 {
 }
 
@@ -5374,6 +5375,7 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
 
   if (m_offline)
   {
+    m_rpc_version = 0;
     if (version)
       *version = 0;
     if (ssl)
@@ -5383,6 +5385,7 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
 
   // TODO: Add light wallet version check.
   if(m_light_wallet) {
+      m_rpc_version = 0;
       if (version)
         *version = 0;
       if (ssl)
@@ -5394,6 +5397,7 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
     std::lock_guard <decltype(m_daemon_rpc_mutex)> lock(m_daemon_rpc_mutex);
     if(!m_http_client.is_connected(ssl))
     {
+      m_rpc_version = 0;
       m_node_rpc_proxy.invalidate();
       if (!m_http_client.connect(std::chrono::milliseconds(timeout)))
         return false;
@@ -5402,20 +5406,21 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
     }
   }
 
-  if (version)
+  if (!m_rpc_version)
   {
     cryptonote::COMMAND_RPC_GET_VERSION::request req_t{};
     cryptonote::COMMAND_RPC_GET_VERSION::response resp_t{};
     bool r = invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t);
     if(!r) {
-      *version = 0;
+      if(version)
+        *version = 0;
       return false;
     }
-    if (resp_t.status != CORE_RPC_STATUS_OK)
-      *version = 0;
-    else
-      *version = resp_t.version;
+    if (resp_t.status == CORE_RPC_STATUS_OK)
+      m_rpc_version = resp_t.version;
   }
+  if (version)
+    *version = m_rpc_version;
 
   return true;
 }
