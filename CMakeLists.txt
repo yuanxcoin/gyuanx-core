@@ -924,12 +924,6 @@ else()
   message(STATUS "Not building tests")
 endif()
 
-if(BUILD_DEBUG_UTILITIES)
-  message(STATUS "Building debug utilities")
-else()
-  message(STATUS "Not building debug utilities")
-endif()
-
 if(BUILD_DOCUMENTATION)
   set(DOC_GRAPHS "YES" CACHE STRING "Create dependency graphs (needs graphviz)")
   set(DOC_FULLGRAPHS "NO" CACHE STRING "Create call/callee graphs (large)")
