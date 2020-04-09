@@ -11407,6 +11407,9 @@ void wallet2::cold_sign_tx(const std::vector<pending_tx>& ptx_vector, signed_tx_
   setup_shim(&wallet_shim, this);
   aux_data.tx_recipients = dsts_info;
   aux_data.bp_version = 2;
+  boost::optional<uint8_t> hf_version = get_hard_fork_version();
+  CHECK_AND_ASSERT_THROW_MES(hf_version, "Failed to query hard fork");
+  aux_data.hard_fork = *hf_version;
   dev_cold->tx_sign(&wallet_shim, txs, exported_txs, aux_data);
   tx_device_aux = aux_data.tx_device_aux;
 
@@ -11432,6 +11435,17 @@ uint64_t wallet2::cold_key_image_sync(uint64_t &spent, uint64_t &unspent) {
   m_device_last_key_image_sync = time(NULL);
 
   return import_res;
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::device_show_address(uint32_t account_index, uint32_t address_index, const boost::optional<crypto::hash8> &payment_id)
+{
+  if (!key_on_device())
+  {
+    return;
+  }
+
+  auto & hwdev = get_account().get_device();
+  hwdev.display_address(subaddress_index{account_index, address_index}, payment_id);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::get_hard_fork_info(uint8_t version, uint64_t &earliest_height) const

@@ -203,6 +203,7 @@ public:
     bool unlockKeysFile() override;
     bool isKeysFileLocked() override;
     uint64_t coldKeyImageSync(uint64_t &spent, uint64_t &unspent) override;
+    void deviceShowAddress(uint32_t accountIndex, uint32_t addressIndex, const std::string &paymentId) override;
 
 private:
     void clearStatus() const;

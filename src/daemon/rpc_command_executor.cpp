@@ -56,7 +56,6 @@
 namespace daemonize {
 
 namespace {
-
   enum class input_line_result { yes, no, cancel, back, };
 
   std::string input_line(std::string const &prompt)
@@ -109,6 +108,19 @@ namespace {
     if (command_line::is_back(input))   return input_line_result::back;
     if (command_line::is_cancel(input)) return input_line_result::cancel;
     return input_line_result::yes;
+  }
+
+  const char *get_address_type_name(epee::net_utils::address_type address_type)
+  {
+    switch (address_type)
+    {
+      default:
+      case epee::net_utils::address_type::invalid: return "invalid";
+      case epee::net_utils::address_type::ipv4: return "IPv4";
+      case epee::net_utils::address_type::ipv6: return "IPv6";
+      case epee::net_utils::address_type::i2p: return "I2P";
+      case epee::net_utils::address_type::tor: return "Tor";
+    }
   }
 
   void print_peer(std::string const & prefix, cryptonote::peer const & peer)
@@ -859,6 +871,7 @@ bool t_rpc_command_executor::print_connections() {
   }
 
   tools::msg_writer() << std::setw(30) << std::left << "Remote Host"
+      << std::setw(8) << "Type"
       << std::setw(6) << "SSL"
       << std::setw(20) << "Peer id"
       << std::setw(20) << "Support Flags"
@@ -879,6 +892,7 @@ bool t_rpc_command_executor::print_connections() {
     tools::msg_writer()
      //<< std::setw(30) << std::left << in_out
      << std::setw(30) << std::left << address
+     << std::setw(8) << (get_address_type_name((epee::net_utils::address_type)info.address_type))
      << std::setw(6) << (info.ssl ? "yes" : "no")
      << std::setw(20) << epee::string_tools::pad_string(info.peer_id, 16, '0', true)
      << std::setw(20) << info.support_flags
