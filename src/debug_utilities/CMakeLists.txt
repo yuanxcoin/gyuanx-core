@@ -61,4 +61,4 @@ target_link_libraries(dns_checks
     version
     Boost::program_options
     Boost::system
-    ${CMAKE_THREAD_LIBS_INIT})
+    Boost::thread)
