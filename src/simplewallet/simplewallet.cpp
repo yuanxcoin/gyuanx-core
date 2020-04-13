@@ -114,8 +114,6 @@ typedef cryptonote::simple_wallet sw;
 
 #define OUTPUT_EXPORT_FILE_MAGIC "Loki output export\003"
 
-#define OLD_AGE_WARN_THRESHOLD (30 * 86400 / DIFFICULTY_TARGET_V2) // 30 days
-
 #define LOCK_IDLE_SCOPE() \
   bool auto_refresh_enabled = m_auto_refresh_enabled.load(std::memory_order_relaxed); \
   m_auto_refresh_enabled.store(false, std::memory_order_relaxed); \
@@ -5537,43 +5535,6 @@ bool simple_wallet::print_ring_members(const std::vector<tools::wallet2::pending
 }
 
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::prompt_if_old(const std::vector<tools::wallet2::pending_tx> &ptx_vector)
-{
-  // count the number of old outputs
-  std::string err;
-  uint64_t bc_height = get_daemon_blockchain_height(err);
-  if (!err.empty())
-    return true;
-
-  int max_n_old = 0;
-  for (const auto &ptx: ptx_vector)
-  {
-    int n_old = 0;
-    for (const auto i: ptx.selected_transfers)
-    {
-      const tools::wallet2::transfer_details &td = m_wallet->get_transfer_details(i);
-      uint64_t age = bc_height - td.m_block_height;
-      if (age > OLD_AGE_WARN_THRESHOLD)
-        ++n_old;
-    }
-    max_n_old = std::max(max_n_old, n_old);
-  }
-  if (max_n_old > 1)
-  {
-    std::stringstream prompt;
-    prompt << tr("Transaction spends more than one very old output. Privacy would be better if they were sent separately.");
-    prompt << ENDL << tr("Spend them now anyway?");
-    std::string accepted = input_line(prompt.str(), true);
-    if (std::cin.eof())
-      return false;
-    if (!command_line::is_yes(accepted))
-    {
-      return false;
-    }
-  }
-  return true;
-}
-//----------------------------------------------------------------------------------------------------
 static bool locked_blocks_arg_valid(const std::string& arg, uint64_t& duration)
 {
   try
@@ -5617,12 +5578,6 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
 {
   if (ptx_vector.empty())
     return false;
-
-  if (!prompt_if_old(ptx_vector))
-  {
-    fail_msg_writer() << tr("transaction cancelled.");
-    return false;
-  }
 
   // if more than one tx necessary, prompt user to confirm
   if (m_wallet->always_confirm_transfers() || ptx_vector.size() > 1)
@@ -6857,12 +6812,6 @@ bool simple_wallet::sweep_main_internal(sweep_type_t sweep_type, std::vector<too
   if (ptx_vector.empty())
   {
     fail_msg_writer() << tr("No outputs found, or daemon is not ready");
-    return false;
-  }
-
-  if (!prompt_if_old(ptx_vector))
-  {
-    fail_msg_writer() << tr("transaction cancelled.");
     return false;
   }
 
