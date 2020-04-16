@@ -9269,7 +9269,7 @@ bool simple_wallet::export_key_images(const std::vector<std::string> &args)
   {
     /// whether to export requested key images only
     bool requested_only = (args.size() == 2 && args[1] == "requested-only");
-    if (!m_wallet->export_key_images(filename, requested_only))
+    if (!m_wallet->export_key_images_to_file(filename, requested_only))
     {
       fail_msg_writer() << tr("failed to save file ") << filename;
       return true;
@@ -9304,13 +9304,13 @@ bool simple_wallet::import_key_images(const std::vector<std::string> &args)
     PRINT_USAGE(USAGE_IMPORT_KEY_IMAGES);
     return true;
   }
-  std::string filename = args[0];
 
+  std::string const &filename = args[0];
   LOCK_IDLE_SCOPE();
   try
   {
     uint64_t spent = 0, unspent = 0;
-    uint64_t height = m_wallet->import_key_images(filename, spent, unspent);
+    uint64_t height = m_wallet->import_key_images_from_file(filename, spent, unspent);
     success_msg_writer() << "Signed key images imported to height " << height << ", "
         << print_money(spent) << " spent, " << print_money(unspent) << " unspent"; 
   }
