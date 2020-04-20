@@ -96,13 +96,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
-<<<<<<< HEAD
 #define CORE_RPC_VERSION_MAJOR 3
-#define CORE_RPC_VERSION_MINOR 4
-=======
-#define CORE_RPC_VERSION_MAJOR 2
-#define CORE_RPC_VERSION_MINOR 7
->>>>>>> 880ebfdeeaceab5e1ca40b748516987e9c6cecb7
+#define CORE_RPC_VERSION_MINOR 5
 #define MAKE_CORE_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define CORE_RPC_VERSION MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR)
 
@@ -1379,6 +1374,57 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
   LOKI_RPC_DOC_INTROSPECT
+  struct public_node
+  {
+    std::string host;
+    uint64_t last_seen;
+    uint16_t rpc_port;
+
+    public_node() = delete;
+
+    public_node(const peer &peer)
+      : host(peer.host), last_seen(peer.last_seen), rpc_port(peer.rpc_port)
+    {}
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(host)
+      KV_SERIALIZE(last_seen)
+      KV_SERIALIZE(rpc_port)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
+  // Query the daemon's peerlist and retrieve peers who have set their public rpc port.
+  struct COMMAND_RPC_GET_PUBLIC_NODES
+  {
+    struct request_t
+    {
+      bool gray; // Get peers that have recently gone offline.
+      bool white; // Get peers that are online
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_OPT(gray, false)
+        KV_SERIALIZE_OPT(white, true)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
+      std::vector<public_node> gray; // Graylist peers
+      std::vector<public_node> white; // Whitelist peers
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(gray)
+        KV_SERIALIZE(white)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
   // Set the log hash rate display mode.
   struct COMMAND_RPC_SET_LOG_HASH_RATE
   {
@@ -2287,13 +2333,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
     struct response_t
     {
-<<<<<<< HEAD
-      std::string status;           // General RPC error code. "OK" means everything looks good.
-      std::list<chain_info> chains; // Array of Chains.
-=======
-      std::string status;
-      std::vector<chain_info> chains;
->>>>>>> 880ebfdeeaceab5e1ca40b748516987e9c6cecb7
+      std::string status;             // General RPC error code. "OK" means everything looks good.
+      std::vector<chain_info> chains; // Array of Chains.
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)

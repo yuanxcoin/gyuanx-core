@@ -2231,10 +2231,10 @@ bool t_rpc_command_executor::alt_chain_info(const std::string &tip, size_t above
       }
       const uint64_t dt = t1 - t0;
       const uint64_t age = std::max(dt, t0 < now ? now - t0 : 0);
-      tools::msg_writer() << "Age: " << tools::get_human_readable_timespan(age);
+      tools::msg_writer() << "Age: " << tools::get_human_readable_timespan(std::chrono::seconds(age));
       if (chain.length > 1)
       {
-        tools::msg_writer() << "Time span: " << tools::get_human_readable_timespan(dt);
+        tools::msg_writer() << "Time span: " << tools::get_human_readable_timespan(std::chrono::seconds(dt));
         cryptonote::difficulty_type start_difficulty = bhres.block_headers.back().difficulty;
         if (start_difficulty > 0)
           tools::msg_writer() << "Approximated " << 100.f * DIFFICULTY_TARGET_V2 * chain.length / dt << "% of network hash rate";
