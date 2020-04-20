@@ -1259,6 +1259,7 @@ namespace cryptonote
     if (tvc.m_double_spend)              os << "Double spend TX, ";
     if (tvc.m_invalid_input)             os << "Invalid inputs, ";
     if (tvc.m_invalid_output)            os << "Invalid outputs, ";
+    if (tvc.m_too_few_outputs)           os << "Need atleast 2 outputs, ";
     if (tvc.m_too_big)                   os << "TX too big, ";
     if (tvc.m_overspend)                 os << "Overspend, ";
     if (tvc.m_fee_too_low)               os << "Fee too low, ";

@@ -3090,6 +3090,13 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
 
   const auto hf_version = m_hardfork->get_current_version();
 
+  if (hf_version >= HF_VERSION_MIN_2_OUTPUTS && tx.vout.size() < 2)
+  {
+    MERROR_VER("Tx " << get_transaction_hash(tx) << " has fewer than two outputs");
+    tvc.m_too_few_outputs = true;
+    return false;
+  }
+
   // Min/Max Type/Version Check
   {
     txtype max_type       = transaction::get_max_type_for_hf(hf_version);
