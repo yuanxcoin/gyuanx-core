@@ -1758,6 +1758,35 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
   LOKI_RPC_DOC_INTROSPECT
+  // Set the bootstrap daemon to use for data on the blockchain whilst syncing the chain.
+  struct COMMAND_RPC_SET_BOOTSTRAP_DAEMON
+  {
+    struct request_t
+    {
+      std::string address;
+      std::string username;
+      std::string password;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(address)
+        KV_SERIALIZE(username)
+        KV_SERIALIZE(password)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t
+    {
+      std::string status;  // General RPC error code. "OK" means everything looks good.
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
   // Send a command to the daemon to safely disconnect and shut down.
   struct COMMAND_RPC_STOP_DAEMON
   {
