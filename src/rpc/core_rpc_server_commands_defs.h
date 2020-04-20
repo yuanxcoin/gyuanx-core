@@ -96,8 +96,13 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
+<<<<<<< HEAD
 #define CORE_RPC_VERSION_MAJOR 3
 #define CORE_RPC_VERSION_MINOR 4
+=======
+#define CORE_RPC_VERSION_MAJOR 2
+#define CORE_RPC_VERSION_MINOR 7
+>>>>>>> 880ebfdeeaceab5e1ca40b748516987e9c6cecb7
 #define MAKE_CORE_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define CORE_RPC_VERSION MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR)
 
@@ -1212,10 +1217,12 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     struct request_t
     {
       std::string hash;   // The block's SHA256 hash.
+      std::vector<std::string> hashes; // Request multiple blocks via an array of hashes
       bool fill_pow_hash; // Tell the daemon if it should fill out pow_hash field.
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(hash)
+        KV_SERIALIZE(hashes)
         KV_SERIALIZE_OPT(fill_pow_hash, false);
       END_KV_SERIALIZE_MAP()
     };
@@ -1225,10 +1232,12 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information.
+      std::vector<block_header_response> block_headers; // Result of multiple blocks requested via hashes
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(block_header)
+        KV_SERIALIZE(block_headers)
         KV_SERIALIZE(status)
         KV_SERIALIZE(untrusted)
       END_KV_SERIALIZE_MAP()
@@ -2278,8 +2287,13 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
     struct response_t
     {
+<<<<<<< HEAD
       std::string status;           // General RPC error code. "OK" means everything looks good.
       std::list<chain_info> chains; // Array of Chains.
+=======
+      std::string status;
+      std::vector<chain_info> chains;
+>>>>>>> 880ebfdeeaceab5e1ca40b748516987e9c6cecb7
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)
