@@ -794,7 +794,6 @@ block Blockchain::pop_block_from_blockchain()
   m_blocks_longhash_table.clear();
   m_scan_table.clear();
   m_blocks_txs_check.clear();
-  m_check_txin_table.clear();
 
   CHECK_AND_ASSERT_THROW_MES(update_next_cumulative_weight_limit(), "Error updating next cumulative weight limit");
   m_tx_pool.on_blockchain_dec();
@@ -2914,7 +2913,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, uint64_t& max_used_block_heigh
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context &tvc)
+bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context &tvc) const
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   auto lock = tools::unique_lock(*this);
@@ -3005,7 +3004,7 @@ bool Blockchain::have_tx_keyimges_as_spent(const transaction &tx) const
   }
   return false;
 }
-bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys)
+bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys) const
 {
   PERF_TIMER(expand_transaction_2);
   CHECK_AND_ASSERT_MES(tx.version >= txversion::v2_ringct, false, "Transaction version is not 2 or greater");
@@ -3116,14 +3115,6 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
   {
     crypto::hash tx_prefix_hash = get_transaction_prefix_hash(tx);
 
-    auto it = m_check_txin_table.find(tx_prefix_hash);
-    if(it == m_check_txin_table.end())
-    {
-      m_check_txin_table.emplace(tx_prefix_hash, std::unordered_map<crypto::key_image, bool>());
-      it = m_check_txin_table.find(tx_prefix_hash);
-      assert(it != m_check_txin_table.end());
-    }
-
     std::vector<std::vector<rct::ctkey>> pubkeys(tx.vin.size());
     size_t sig_index = 0;
     const crypto::key_image *last_key_image = NULL;
@@ -3176,7 +3167,6 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         // signature spending it.
         if (!check_tx_input(in_to_key, tx_prefix_hash, pubkeys[sig_index], pmax_used_block_height))
         {
-          it->second[in_to_key.k_image] = false;
           MERROR_VER("Failed to check ring signature for tx " << get_transaction_hash(tx) << "  vin key with k_image: " << in_to_key.k_image << "  sig_index: " << sig_index);
           if (pmax_used_block_height) // a default value of NULL is used when called from Blockchain::handle_block_to_main_chain()
           {
@@ -3481,7 +3471,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
 }
 
 //------------------------------------------------------------------
-void Blockchain::check_ring_signature(const crypto::hash &tx_prefix_hash, const crypto::key_image &key_image, const std::vector<rct::ctkey> &pubkeys, const std::vector<crypto::signature>& sig, uint64_t &result)
+void Blockchain::check_ring_signature(const crypto::hash &tx_prefix_hash, const crypto::key_image &key_image, const std::vector<rct::ctkey> &pubkeys, const std::vector<crypto::signature>& sig, uint64_t &result) const
 {
   std::vector<const crypto::public_key *> p_output_keys;
   p_output_keys.reserve(pubkeys.size());
@@ -4564,7 +4554,6 @@ bool Blockchain::cleanup_handle_incoming_blocks(bool force_sync)
   m_blocks_longhash_table.clear();
   m_scan_table.clear();
   m_blocks_txs_check.clear();
-  m_check_txin_table.clear();
 
   // when we're well clear of the precomputed hashes, free the memory
   if (!m_blocks_hash_check.empty() && m_db->height() > m_blocks_hash_check.size() + 4096)
@@ -4909,7 +4898,6 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
   m_fake_pow_calc_time = 0;
 
   m_scan_table.clear();
-  m_check_txin_table.clear();
 
   TIME_MEASURE_FINISH(prepare);
   m_fake_pow_calc_time = prepare / blocks_entry.size();
