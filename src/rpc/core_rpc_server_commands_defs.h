@@ -1037,11 +1037,13 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t reserve_size;      // Max 255 bytes
       std::string wallet_address; // Address of wallet to receive coinbase transactions if block is successfully mined.
       std::string prev_block;
+      std::string extra_nonce;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(reserve_size)
         KV_SERIALIZE(wallet_address)
         KV_SERIALIZE(prev_block)
+        KV_SERIALIZE(extra_nonce)
       END_KV_SERIALIZE_MAP()
     };
     typedef epee::misc_utils::struct_init<request_t> request;
