@@ -1,3 +1,9 @@
+loki (7.1.5-2) unstable; urgency=medium
+
+  * Rebuild for lokimq 1.1.2 update
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Tue, 21 Apr 2020 17:19:14 -0300
+
 loki (7.1.5-1.1) unstable; urgency=medium
 
   * Fix unbound dependency - debian sid libunbound-dev package has an
