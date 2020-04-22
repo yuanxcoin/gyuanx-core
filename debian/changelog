@@ -1,4 +1,4 @@
-loki (7.1.6-2.1) unstable; urgency=medium
+loki (7.1.6-2) unstable; urgency=medium
 
   * Fix unbound dependency - debian sid libunbound-dev package has an
     undeclared dependency on nettle-dev
