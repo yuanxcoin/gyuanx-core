@@ -35,8 +35,6 @@
 
 namespace daemon_args
 {
-  std::string const WINDOWS_SERVICE_NAME = "Monero Daemon";
-
   const command_line::arg_descriptor<std::string, false, true, 2> arg_config_file = {
     "config-file"
   , "Specify configuration file"
@@ -85,10 +83,6 @@ namespace daemon_args
   const command_line::arg_descriptor<std::vector<std::string>> arg_command = {
     "daemon_command"
   , "Hidden"
-  };
-  const command_line::arg_descriptor<bool> arg_os_version = {
-    "os-version"
-  , "OS for which this executable was compiled"
   };
   const command_line::arg_descriptor<unsigned> arg_max_concurrency = {
     "max-concurrency"
