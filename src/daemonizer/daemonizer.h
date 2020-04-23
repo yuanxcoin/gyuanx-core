@@ -63,7 +63,6 @@ namespace daemonizer
   {
       non_interactive,
       interactive,
-      service,
       terminate,
       terminate_with_error,
   };
