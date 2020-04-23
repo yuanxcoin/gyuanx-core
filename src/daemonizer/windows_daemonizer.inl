@@ -142,9 +142,15 @@ namespace daemonizer
   {
     std::string arguments = get_argument_string(argc, argv);
 
+#if 0
     if (command_line::has_arg(vm, arg_is_service))
     {
       // TODO - Set the service status here for return codes
+      static t_service_runner<T_handler> runner = {};
+      runner.name    = executor.name();
+      runner.handler = executor.create_daemon();
+      runner.run_();
+
       windows::t_service_runner<typename T_executor::t_daemon>::run(
         executor.name()
       , executor.create_daemon(vm)
@@ -188,7 +194,59 @@ namespace daemonizer
       else
         return executor.run_interactive(vm);
     }
-
+#endif
     return false;
+  }
+
+  template <typename Application>
+  inline run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm)
+  {
+    std::string arguments = get_argument_string(argc, argv);
+
+    if (command_line::has_arg(vm, arg_is_service))
+    {
+      Application app(&vm);
+      windows::service_runner<Application> runner(name, &app);
+      runner.run();
+      return run_type::terminate;
+    }
+    else if (command_line::has_arg(vm, arg_install_service))
+    {
+      if (windows::ensure_admin(arguments))
+      {
+        arguments += " --run-as-service";
+        bool result = windows::install_service(name, arguments);
+        return result ? run_type::terminate : run_type::terminate_with_error;
+      }
+    }
+    else if (command_line::has_arg(vm, arg_uninstall_service))
+    {
+      if (windows::ensure_admin(arguments))
+      {
+        bool result = windows::uninstall_service(name);
+        return result ? run_type::terminate : run_type::terminate_with_error;
+      }
+    }
+    else if (command_line::has_arg(vm, arg_start_service))
+    {
+      if (windows::ensure_admin(arguments))
+      {
+        bool result = windows::start_service(name);
+        return result ? run_type::terminate : run_type::terminate_with_error;
+      }
+    }
+    else if (command_line::has_arg(vm, arg_stop_service))
+    {
+      if (windows::ensure_admin(arguments))
+      {
+        bool result = windows::stop_service(name);
+        return result ? run_type::terminate : run_type::terminate_with_error;
+      }
+    }
+
+    if (command_line::has_arg(vm, arg_non_interactive))
+      return run_type::non_interactive;
+    else
+      return run_type::interactive;
   }
 }

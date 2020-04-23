@@ -92,8 +92,7 @@ namespace daemonizer
         pidfile = command_line::get_arg(vm, arg_pidfile);
       }
       posix::fork(pidfile);
-      auto daemon = executor.create_daemon(vm);
-      return daemon.run();
+      return executor.run_non_interactive(vm);
     }
     else if (command_line::has_arg(vm, arg_non_interactive))
     {
@@ -104,5 +103,26 @@ namespace daemonizer
       //LOG_PRINT_L0("Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL);
       return executor.run_interactive(vm);
     }
+  }
+
+  template <typename Application>
+  inline run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm)
+  {
+    (void)name; (void)argc; (void)argv;
+    if (command_line::has_arg(vm, arg_detach))
+    {
+      tools::success_msg_writer() << "Forking to background...";
+      std::string pidfile;
+      if (command_line::has_arg(vm, arg_pidfile))
+      {
+        pidfile = command_line::get_arg(vm, arg_pidfile);
+      }
+      posix::fork(pidfile);
+      return run_type::non_interactive;
+    }
+    else if (command_line::has_arg(vm, arg_non_interactive))
+      return run_type::non_interactive;
+
+    return run_type::interactive;
   }
 }

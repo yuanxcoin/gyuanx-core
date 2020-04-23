@@ -57,10 +57,22 @@ namespace daemonizer
     , T_executor && executor // universal ref
     , boost::program_options::variables_map const & vm
     );
+
+
+  enum struct run_type
+  {
+      non_interactive,
+      interactive,
+      service,
+      terminate,
+      terminate_with_error,
+  };
+  template <typename Application>
+  run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm);
 }
 
 #ifdef WIN32
-#  include "daemonizer/windows_daemonizer.inl"
+  #include "daemonizer/windows_daemonizer.inl"
 #else
-#  include "daemonizer/posix_daemonizer.inl"
+  #include "daemonizer/posix_daemonizer.inl"
 #endif
