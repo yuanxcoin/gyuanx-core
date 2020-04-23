@@ -281,25 +281,25 @@ namespace cryptonote
   bool init_core_callback_complete = init_core_callback_stubs();
 
   //-----------------------------------------------------------------------------------------------
-  core::core(i_cryptonote_protocol* pprotocol):
-              m_mempool(m_blockchain_storage),
-              m_service_node_list(m_blockchain_storage),
-              m_blockchain_storage(m_mempool, m_service_node_list),
-              m_quorum_cop(*this),
-              m_miner(this, &m_blockchain_storage),
-              m_starter_message_showed(false),
-              m_target_blockchain_height(0),
-              m_checkpoints_path(""),
-              m_last_json_checkpoints_update(0),
-              m_update_download(0),
-              m_nettype(UNDEFINED),
-              m_update_available(false),
-              m_last_storage_server_ping(0),
-              m_last_lokinet_ping(0),
-              m_pad_transactions(false)
+  core::core()
+  : m_mempool(m_blockchain_storage)
+  , m_service_node_list(m_blockchain_storage)
+  , m_blockchain_storage(m_mempool, m_service_node_list)
+  , m_quorum_cop(*this)
+  , m_miner(this, &m_blockchain_storage)
+  , m_pprotocol(&m_protocol_stub)
+  , m_starter_message_showed(false)
+  , m_target_blockchain_height(0)
+  , m_checkpoints_path("")
+  , m_last_json_checkpoints_update(0)
+  , m_update_download(0)
+  , m_nettype(UNDEFINED)
+  , m_update_available(false)
+  , m_last_storage_server_ping(0)
+  , m_last_lokinet_ping(0)
+  , m_pad_transactions(false)
   {
     m_checkpoints_updating.clear();
-    set_cryptonote_protocol(pprotocol);
   }
   void core::set_cryptonote_protocol(i_cryptonote_protocol* pprotocol)
   {

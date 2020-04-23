@@ -114,8 +114,7 @@ daemon::daemon(boost::program_options::variables_map const &vm, uint16_t public_
 , public_rpc_port(public_rpc_port)
 , zmq_rpc_bind_port(command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_port))
 , zmq_rpc_bind_address(command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_ip))
-, core(nullptr)
-, protocol(core, nullptr /*p_net_layout*/, command_line::get_arg(vm, cryptonote::arg_offline))
+, protocol(core, command_line::get_arg(vm, cryptonote::arg_offline))
 , p2p(protocol)
 {
   MGINFO("Initializing cryptonote protocol...");
