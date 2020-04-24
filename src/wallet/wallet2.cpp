@@ -8155,7 +8155,7 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
   }
 
   uint64_t staking_requirement = 0, bc_height = 0;
-  service_nodes::converted_registration_args converted_args = {};
+  service_nodes::contributor_args_t contributor_args = {};
   {
     std::string err, err2;
     bc_height = std::max(get_daemon_blockchain_height(err),
@@ -8178,18 +8178,18 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
     }
 
     staking_requirement = service_nodes::get_staking_requirement(nettype(), bc_height, *hf_version);
-    std::vector<std::string> const registration_args(local_args.begin(), local_args.begin() + local_args.size() - 3);
-    converted_args = service_nodes::convert_registration_args(nettype(), registration_args, staking_requirement, *hf_version);
+    std::vector<std::string> const args(local_args.begin(), local_args.begin() + local_args.size() - 3);
+    contributor_args = service_nodes::convert_registration_args(nettype(), args, staking_requirement, *hf_version);
 
-    if (!converted_args.success)
+    if (!contributor_args.success)
     {
       result.status = register_service_node_result_status::convert_registration_args_failed;
-      result.msg = tr("Could not convert registration args, reason: ") + converted_args.err_msg;
+      result.msg = tr("Could not convert registration args, reason: ") + contributor_args.err_msg;
       return result;
     }
   }
 
-  cryptonote::account_public_address address = converted_args.addresses[0];
+  cryptonote::account_public_address address = contributor_args.addresses[0];
   if (!contains_address(address))
   {
     result.status = register_service_node_result_status::first_address_must_be_primary_address;
@@ -8243,13 +8243,24 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
       result.msg = tr("Failed to parse service node signature");
       return result;
     }
+  }
 
+  try
+  {
+      service_nodes::validate_contributor_args(*hf_version, contributor_args);
+      service_nodes::validate_contributor_args_signature(contributor_args, expiration_timestamp, service_node_key, signature);
+  }
+  catch(const service_nodes::invalid_contributions &e)
+  {
+    result.status = register_service_node_result_status::validate_contributor_args_fail;
+    result.msg    = e.what();
+    return result;
   }
 
   std::vector<uint8_t> extra;
   add_service_node_contributor_to_tx_extra(extra, address);
   add_service_node_pubkey_to_tx_extra(extra, service_node_key);
-  if (!add_service_node_register_to_tx_extra(extra, converted_args.addresses, converted_args.portions_for_operator, converted_args.portions, expiration_timestamp, signature))
+  if (!add_service_node_register_to_tx_extra(extra, contributor_args.addresses, contributor_args.portions_for_operator, contributor_args.portions, expiration_timestamp, signature))
   {
     result.status = register_service_node_result_status::service_node_register_serialize_to_tx_extra_fail;
     result.msg    = tr("Failed to serialize service node registration tx extra");
@@ -8286,9 +8297,9 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
     {
       const uint64_t DUST                 = MAX_NUMBER_OF_CONTRIBUTORS;
       uint64_t amount_left                = staking_requirement;
-      for (size_t i = 0; i < converted_args.portions.size(); i++)
+      for (size_t i = 0; i < contributor_args.portions.size(); i++)
       {
-        uint64_t amount = service_nodes::portions_to_amount(staking_requirement, converted_args.portions[i]);
+        uint64_t amount = service_nodes::portions_to_amount(staking_requirement, contributor_args.portions[i]);
         if (i == 0) amount_payable_by_operator += amount;
         amount_left -= amount;
       }

@@ -292,7 +292,7 @@ namespace service_nodes
     return false;
   }
 
-  bool reg_tx_extract_fields(const cryptonote::transaction& tx, std::vector<cryptonote::account_public_address>& addresses, uint64_t& portions_for_operator, std::vector<uint64_t>& portions, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature)
+  bool reg_tx_extract_fields(const cryptonote::transaction& tx, contributor_args_t &contributor_args, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature)
   {
     cryptonote::tx_extra_service_node_register registration;
     if (!get_service_node_register_from_tx_extra(tx.extra, registration))
@@ -300,18 +300,20 @@ namespace service_nodes
     if (!cryptonote::get_service_node_pubkey_from_tx_extra(tx.extra, service_node_key))
       return false;
 
-    addresses.clear();
-    addresses.reserve(registration.m_public_spend_keys.size());
+    contributor_args.addresses.clear();
+    contributor_args.addresses.reserve(registration.m_public_spend_keys.size());
     for (size_t i = 0; i < registration.m_public_spend_keys.size(); i++) {
-      addresses.emplace_back();
-      addresses.back().m_spend_public_key = registration.m_public_spend_keys[i];
-      addresses.back().m_view_public_key = registration.m_public_view_keys[i];
+      contributor_args.addresses.emplace_back();
+      contributor_args.addresses.back().m_spend_public_key = registration.m_public_spend_keys[i];
+      contributor_args.addresses.back().m_view_public_key  = registration.m_public_view_keys[i];
     }
 
-    portions_for_operator = registration.m_portions_for_operator;
-    portions = registration.m_portions;
+    contributor_args.portions_for_operator = registration.m_portions_for_operator;
+    contributor_args.portions              = registration.m_portions;
+    contributor_args.success               = true;
+
     expiration_timestamp = registration.m_expiration_timestamp;
-    signature = registration.m_service_node_signature;
+    signature            = registration.m_service_node_signature;
     return true;
   }
 
@@ -326,6 +328,50 @@ namespace service_nodes
     }
     return result;
   }
+
+  void validate_contributor_args(uint8_t hf_version, contributor_args_t const &contributor_args)
+  {
+    if (contributor_args.portions.empty())
+      throw invalid_contributions{"No portions given"};
+    if (contributor_args.portions.size() != contributor_args.addresses.size())
+      throw invalid_contributions{"Number of portions (" + std::to_string(contributor_args.portions.size()) + ") doesn't match the number of addresses (" + std::to_string(contributor_args.portions.size()) + ")"};
+    if (contributor_args.portions.size() > MAX_NUMBER_OF_CONTRIBUTORS)
+      throw invalid_contributions{"Too many contributors"};
+    if (contributor_args.portions_for_operator > STAKING_PORTIONS)
+      throw invalid_contributions{"Operator portions are too high"};
+
+    if (!check_service_node_portions(hf_version, contributor_args.portions))
+    {
+        std::stringstream stream;
+        for (size_t i = 0; i < contributor_args.portions.size(); i++)
+        {
+            if (i) stream << ", ";
+            stream << contributor_args.portions[i];
+        }
+        throw invalid_contributions{"Invalid portions: {" + stream.str() + "}"};
+    }
+  }
+
+  void validate_contributor_args_signature(contributor_args_t const &contributor_args, uint64_t const expiration_timestamp, crypto::public_key const &service_node_key, crypto::signature const &signature)
+  {
+    crypto::hash hash = {};
+    if (!get_registration_hash(contributor_args.addresses, contributor_args.portions_for_operator, contributor_args.portions, expiration_timestamp, hash))
+      throw invalid_contributions{"Failed to generate registration hash"};
+
+    if (!crypto::check_key(service_node_key))
+      throw invalid_contributions{"Service Node Key was not a valid crypto key" + epee::string_tools::pod_to_hex(service_node_key)};
+
+    if (!crypto::check_signature(hash, service_node_key, signature))
+      throw invalid_contributions{"Failed to validate service node with key:" + epee::string_tools::pod_to_hex(service_node_key) + " and hash: " + epee::string_tools::pod_to_hex(hash)};
+  }
+
+  struct parsed_tx_contribution
+  {
+    cryptonote::account_public_address address;
+    uint64_t transferred;
+    crypto::secret_key tx_key;
+    std::vector<service_node_info::contribution_t> locked_contributions;
+  };
 
   static uint64_t get_staking_output_contribution(const cryptonote::transaction& tx, int i, crypto::key_derivation const &derivation, hw::device& hwdev)
   {
@@ -805,48 +851,22 @@ namespace service_nodes
 
   bool is_registration_tx(cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction& tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key& key, service_node_info& info)
   {
+    contributor_args_t contributor_args = {};
     crypto::public_key service_node_key;
-    std::vector<cryptonote::account_public_address> service_node_addresses;
-    std::vector<uint64_t> service_node_portions;
-    uint64_t portions_for_operator;
     uint64_t expiration_timestamp;
     crypto::signature signature;
 
-    if (!reg_tx_extract_fields(tx, service_node_addresses, portions_for_operator, service_node_portions, expiration_timestamp, service_node_key, signature))
+    if (!reg_tx_extract_fields(tx, contributor_args, expiration_timestamp, service_node_key, signature))
       return false;
 
-    if (service_node_portions.size() != service_node_addresses.size() || service_node_portions.empty())
+    try
     {
-      LOG_PRINT_L1("Register TX: Extracted portions size: (" << service_node_portions.size() <<
-                   ") was empty or did not match address size: (" << service_node_addresses.size() <<
-                   ") on height: " << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx));
-      return false;
+      validate_contributor_args(hf_version, contributor_args);
+      validate_contributor_args_signature(contributor_args, expiration_timestamp, service_node_key, signature);
     }
-
-    if (!check_service_node_portions(hf_version, service_node_portions)) return false;
-
-    if (portions_for_operator > STAKING_PORTIONS)
+    catch (const invalid_contributions &e)
     {
-      LOG_PRINT_L1("Register TX: Operator portions: " << portions_for_operator <<
-                   " exceeded staking portions: " << STAKING_PORTIONS <<
-                   " on height: " << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx));
-      return false;
-    }
-
-    // check the signature is all good
-
-    crypto::hash hash;
-    if (!get_registration_hash(service_node_addresses, portions_for_operator, service_node_portions, expiration_timestamp, hash))
-    {
-      LOG_PRINT_L1("Register TX: Failed to extract registration hash, on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
-      return false;
-    }
-
-    if (!crypto::check_key(service_node_key) || !crypto::check_signature(hash, service_node_key, signature))
-    {
-      LOG_PRINT_L1("Register TX: Has invalid key and/or signature, on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("Register TX: " << cryptonote::get_transaction_hash(tx) << ", Height: " << block_height << ". " << e.what());
       return false;
     }
 
@@ -878,8 +898,8 @@ namespace service_nodes
       return false;
     }
 
-    size_t total_num_of_addr = service_node_addresses.size();
-    if (std::find(service_node_addresses.begin(), service_node_addresses.end(), stake.address) == service_node_addresses.end())
+    size_t total_num_of_addr = contributor_args.addresses.size();
+    if (std::find(contributor_args.addresses.begin(), contributor_args.addresses.end(), stake.address) == contributor_args.addresses.end())
       total_num_of_addr++;
 
     if (total_num_of_addr > MAX_NUMBER_OF_CONTRIBUTORS)
@@ -896,8 +916,8 @@ namespace service_nodes
     key = service_node_key;
 
     info.staking_requirement           = staking_requirement;
-    info.operator_address              = service_node_addresses[0];
-    info.portions_for_operator         = portions_for_operator;
+    info.operator_address              = contributor_args.addresses[0];
+    info.portions_for_operator         = contributor_args.portions_for_operator;
     info.registration_height           = block_height;
     info.registration_hf_version       = hf_version;
     info.last_reward_block_height      = block_height;
@@ -906,24 +926,24 @@ namespace service_nodes
     info.last_ip_change_height         = block_height;
     info.version                       = get_min_service_node_info_version_for_hf(hf_version);
 
-    for (size_t i = 0; i < service_node_addresses.size(); i++)
+    for (size_t i = 0; i < contributor_args.addresses.size(); i++)
     {
       // Check for duplicates
-      auto iter = std::find(service_node_addresses.begin(), service_node_addresses.begin() + i, service_node_addresses[i]);
-      if (iter != service_node_addresses.begin() + i)
+      auto iter = std::find(contributor_args.addresses.begin(), contributor_args.addresses.begin() + i, contributor_args.addresses[i]);
+      if (iter != contributor_args.addresses.begin() + i)
       {
         LOG_PRINT_L1("Register TX: There was a duplicate participant for service node on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
         return false;
       }
 
       uint64_t hi, lo, resulthi, resultlo;
-      lo = mul128(info.staking_requirement, service_node_portions[i], &hi);
+      lo = mul128(info.staking_requirement, contributor_args.portions[i], &hi);
       div128_64(hi, lo, STAKING_PORTIONS, &resulthi, &resultlo);
 
       info.contributors.emplace_back();
       auto &contributor = info.contributors.back();
       contributor.reserved                         = resultlo;
-      contributor.address                          = service_node_addresses[i];
+      contributor.address                          = contributor_args.addresses[i];
       info.total_reserved += resultlo;
     }
 
@@ -2434,12 +2454,12 @@ namespace service_nodes
     return result;
   }
 
-  converted_registration_args convert_registration_args(cryptonote::network_type nettype,
-                                                        const std::vector<std::string>& args,
-                                                        uint64_t staking_requirement,
-                                                        uint8_t hf_version)
+  contributor_args_t convert_registration_args(cryptonote::network_type nettype,
+                                               const std::vector<std::string> &args,
+                                               uint64_t staking_requirement,
+                                               uint8_t hf_version)
   {
-    converted_registration_args result = {};
+    contributor_args_t result = {};
     if (args.size() % 2 == 0 || args.size() < 3)
     {
       result.err_msg = tr("Usage: <operator cut> <address> <fraction> [<address> <fraction> [...]]]");
@@ -2612,17 +2632,17 @@ namespace service_nodes
       boost::optional<std::string&> err_msg)
   {
 
-    converted_registration_args converted_args = convert_registration_args(nettype, args, staking_requirement, hf_version);
-    if (!converted_args.success)
+    contributor_args_t contributor_args = convert_registration_args(nettype, args, staking_requirement, hf_version);
+    if (!contributor_args.success)
     {
-      MERROR(tr("Could not convert registration args, reason: ") << converted_args.err_msg);
+      MERROR(tr("Could not convert registration args, reason: ") << contributor_args.err_msg);
       return false;
     }
 
     uint64_t exp_timestamp = time(nullptr) + STAKING_AUTHORIZATION_EXPIRATION_WINDOW;
 
     crypto::hash hash;
-    bool hashed = cryptonote::get_registration_hash(converted_args.addresses, converted_args.portions_for_operator, converted_args.portions, exp_timestamp, hash);
+    bool hashed = cryptonote::get_registration_hash(contributor_args.addresses, contributor_args.portions_for_operator, contributor_args.portions, exp_timestamp, hash);
     if (!hashed)
     {
       MERROR(tr("Could not make registration hash from addresses and portions"));
