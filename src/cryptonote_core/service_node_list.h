@@ -586,20 +586,10 @@ namespace service_nodes
                                                uint64_t staking_requirement,
                                                uint8_t hf_version);
 
-  enum struct validate_contributor_args_result
-  {
-    success,
-    portions_mismatch,
-    incorrect_portions,
-    operator_portions_too_much,
-    registration_hash_failed,
-    invalid_service_node_key,
-    invalid_signature,
-  };
-
-  // expiration_timestamp, service_node_key, signature: (Optional): If given, verify the signature with the registration hash using contributor args
-  validate_contributor_args_result validate_contributor_args(uint8_t hf_version, contributor_args_t const &contributor_args, uint64_t const *expiration_timestamp, crypto::public_key const *service_node_key, crypto::signature const *signature);
-  std::string                      validate_contributor_args_result_string(validate_contributor_args_result error, contributor_args_t const *context, crypto::public_key const *service_node_key, crypto::signature const *signature);
+  // validate_contributors_* functions throws invalid_contributions exception
+  struct invalid_contributions : std::invalid_argument { using std::invalid_argument::invalid_argument; };
+  void validate_contributor_args(uint8_t hf_version, contributor_args_t const &contributor_args);
+  void validate_contributor_args_signature(contributor_args_t const &contributor_args, uint64_t const expiration_timestamp, crypto::public_key const &service_node_key, crypto::signature const &signature);
 
   bool make_registration_cmd(cryptonote::network_type nettype,
       uint8_t hf_version,

@@ -8245,11 +8245,15 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
     }
   }
 
-  auto validate_result = service_nodes::validate_contributor_args(*hf_version, contributor_args, &expiration_timestamp, &service_node_key, &signature); // Client side signature/contributor check
-  if (validate_result != service_nodes::validate_contributor_args_result::success)
+  try
+  {
+      service_nodes::validate_contributor_args(*hf_version, contributor_args);
+      service_nodes::validate_contributor_args_signature(contributor_args, expiration_timestamp, service_node_key, signature);
+  }
+  catch(const service_nodes::invalid_contributions &e)
   {
     result.status = register_service_node_result_status::validate_contributor_args_fail;
-    result.msg    = validate_contributor_args_result_string(validate_result, &contributor_args, &service_node_key, &signature);
+    result.msg    = e.what();
     return result;
   }
 

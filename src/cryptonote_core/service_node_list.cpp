@@ -329,119 +329,41 @@ namespace service_nodes
     return result;
   }
 
-  validate_contributor_args_result validate_contributor_args(uint8_t hf_version, contributor_args_t const &contributor_args, uint64_t const *expiration_timestamp, crypto::public_key const *service_node_key, crypto::signature const *signature)
+  void validate_contributor_args(uint8_t hf_version, contributor_args_t const &contributor_args)
   {
-    using result_code = validate_contributor_args_result;
-    if (contributor_args.portions.size() != contributor_args.addresses.size() ||
-        contributor_args.portions.empty() ||
-        contributor_args.portions.size() > MAX_NUMBER_OF_CONTRIBUTORS)
-    {
-      return result_code::portions_mismatch;
-    }
+    if (contributor_args.portions.empty())
+      throw invalid_contributions{"No portions given"};
+    if (contributor_args.portions.size() != contributor_args.addresses.size())
+      throw invalid_contributions{"Number of portions (" + std::to_string(contributor_args.portions.size()) + ") doesn't match the number of addresses (" + std::to_string(contributor_args.portions.size()) + ")"};
+    if (contributor_args.portions.size() > MAX_NUMBER_OF_CONTRIBUTORS)
+      throw invalid_contributions{"Too many contributors"};
+    if (contributor_args.portions_for_operator > STAKING_PORTIONS)
+      throw invalid_contributions{"Operator portions are too high"};
 
     if (!check_service_node_portions(hf_version, contributor_args.portions))
-      return result_code::incorrect_portions;
-
-    if (contributor_args.portions_for_operator > STAKING_PORTIONS)
-      return result_code::operator_portions_too_much;
-
-    //
-    // Signature Check
-    //
-    crypto::hash hash = {};
-    if (expiration_timestamp && service_node_key && signature)
     {
-      if (!get_registration_hash(contributor_args.addresses, contributor_args.portions_for_operator, contributor_args.portions, *expiration_timestamp, hash))
-        return result_code::registration_hash_failed;
-
-      if (!crypto::check_key(*service_node_key))
-        return result_code::invalid_service_node_key;
-
-      if (!crypto::check_key(*service_node_key) || !crypto::check_signature(hash, *service_node_key, *signature))
-        return result_code::invalid_signature;
-    }
-
-    return result_code::success;
-  }
-
-  std::string validate_contributor_args_result_string(validate_contributor_args_result error, contributor_args_t const *context, crypto::public_key const *service_node_key, crypto::signature const *signature)
-  {
-    auto report_portions = [](std::stringstream &stream, contributor_args_t const *context) -> void
-    {
-      if (context)
-      {
-        stream << ". Portions: {";
-        for (size_t i = 0; i < context->portions.size(); i++)
+        std::stringstream stream;
+        for (size_t i = 0; i < contributor_args.portions.size(); i++)
         {
-          if (i) stream << ",";
-          stream << context->portions[i];
+            if (i) stream << ", ";
+            stream << contributor_args.portions[i];
         }
-        stream << "}";
-      }
-    };
-
-    auto report_portion_and_address_sizes = [](std::stringstream &stream, contributor_args_t const *context) -> void
-    {
-      if (context) stream << ". Size: (" << context->portions.size() << "), Addresses Size: (" << context->addresses.size() << ")";
-    };
-
-    std::stringstream stream;
-    using result_code = validate_contributor_args_result;
-    switch(error)
-    {
-      case result_code::portions_mismatch:
-      {
-        stream << "Contribution portions array has an invalid or mismatching size with the contributor addresses";
-        report_portion_and_address_sizes(stream, context);
-      }
-      break;
-
-      case result_code::incorrect_portions:
-      {
-        stream << "One or more contribution portions values were incorrect";
-        report_portions(stream, context);
-      }
-      break;
-
-      case result_code::operator_portions_too_much:
-      {
-        stream << "Operator portions exceeded maximum portions: " << STAKING_PORTIONS;
-        if (context) stream << "Given portions: "<< context->portions_for_operator;
-      }
-      break;
-
-      case result_code::registration_hash_failed:
-      {
-        stream << "Failed to generate the registration hash, possible reasons: portions/addresses array sizes don't match or portions specified incorrect";
-        report_portion_and_address_sizes(stream, context);
-        report_portions(stream, context);
-      }
-      break;
-
-      case result_code::invalid_service_node_key:
-      {
-        stream << "Service Node Key was not a valid public key";
-        if (service_node_key) stream << ". " << *service_node_key;
-      }
-      break;
-
-      case result_code::invalid_signature:
-      {
-        stream << "Signature could not be verified with service node key";
-        if (service_node_key) stream << ". Service Node Key " << *service_node_key;
-        if (signature) stream << ". Signature " << *signature;
-      }
-      break;
-
-      case result_code::success: stream << "Validated successfully"; break;
-      default: stream << "xx: Unhandled error code: " << static_cast<int>(error);
-      break;
+        throw invalid_contributions{"Invalid portions: {" + stream.str() + "}"};
     }
-
-    stream << ". ";
-    return stream.str();
   }
 
+  void validate_contributor_args_signature(contributor_args_t const &contributor_args, uint64_t const expiration_timestamp, crypto::public_key const &service_node_key, crypto::signature const &signature)
+  {
+    crypto::hash hash = {};
+    if (!get_registration_hash(contributor_args.addresses, contributor_args.portions_for_operator, contributor_args.portions, expiration_timestamp, hash))
+      throw invalid_contributions{"Failed to generate registration hash"};
+
+    if (!crypto::check_key(service_node_key))
+      throw invalid_contributions{"Service Node Key was not a valid crypto key" + epee::string_tools::pod_to_hex(service_node_key)};
+
+    if (!crypto::check_signature(hash, service_node_key, signature))
+      throw invalid_contributions{"Failed to validate service node with key:" + epee::string_tools::pod_to_hex(service_node_key) + " and hash: " + epee::string_tools::pod_to_hex(hash)};
+  }
 
   struct parsed_tx_contribution
   {
@@ -937,12 +859,14 @@ namespace service_nodes
     if (!reg_tx_extract_fields(tx, contributor_args, expiration_timestamp, service_node_key, signature))
       return false;
 
-    validate_contributor_args_result validate_result = service_nodes::validate_contributor_args(hf_version, contributor_args, &expiration_timestamp, &service_node_key, &signature);
-    if (validate_result != validate_contributor_args_result::success)
+    try
     {
-      LOG_PRINT_L1("Register TX: " << cryptonote::get_transaction_hash(tx) <<
-                   ", Height: " << block_height << ". " <<
-                   validate_contributor_args_result_string(validate_result, &contributor_args, &service_node_key, &signature));
+      validate_contributor_args(hf_version, contributor_args);
+      validate_contributor_args_signature(contributor_args, expiration_timestamp, service_node_key, signature);
+    }
+    catch (const invalid_contributions &e)
+    {
+      LOG_PRINT_L1("Register TX: " << cryptonote::get_transaction_hash(tx) << ", Height: " << block_height << ". " << e.what());
       return false;
     }
 
