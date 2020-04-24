@@ -13010,13 +13010,10 @@ bool wallet2::export_key_images_to_file(const std::string &filename, bool reques
   std::string magic(KEY_IMAGE_EXPORT_FILE_MAGIC, strlen(KEY_IMAGE_EXPORT_FILE_MAGIC));
   const cryptonote::account_public_address &keys = get_account().get_keys().m_account_address;
   std::string data;
-  const uint32_t offset = ski.first;
+  const uint32_t offset = boost::endian::native_to_little(ski.first);
   data.reserve(sizeof(offset) + ski.second.size() * (sizeof(crypto::key_image) + sizeof(crypto::signature)) + 2 * sizeof(crypto::public_key));
   data.resize(sizeof(offset));
-  data[0] = offset & 0xff;
-  data[1] = (offset >> 8) & 0xff;
-  data[2] = (offset >> 16) & 0xff;
-  data[3] = (offset >> 24) & 0xff;
+  std::memcpy(&data[0], &offset, sizeof(offset));
   data += std::string((const char *)&keys.m_spend_public_key, sizeof(crypto::public_key));
   data += std::string((const char *)&keys.m_view_public_key, sizeof(crypto::public_key));
   for (const auto &i: ski.second)
@@ -13119,15 +13116,16 @@ uint64_t wallet2::import_key_images_from_file(const std::string &filename, uint6
   const size_t headerlen = 4 + 2 * sizeof(crypto::public_key);
   THROW_WALLET_EXCEPTION_IF(data.size() < headerlen, error::wallet_internal_error, std::string("Bad data size from file ") + filename);
 
-  const uint32_t offset = (uint8_t)data[0] | (((uint8_t)data[1]) << 8) | (((uint8_t)data[2]) << 16) | (((uint8_t)data[3]) << 24);
+  uint32_t offset;
+  std::memcpy(&offset, &data[0], sizeof(offset));
+  boost::endian::little_to_native_inplace(offset);
   THROW_WALLET_EXCEPTION_IF(offset > m_transfers.size(), error::wallet_internal_error, "Offset larger than known outputs");
 
   // Validate embedded spend/view public keys
   {
-    crypto::public_key public_spend_key = {};
-    crypto::public_key public_view_key  = {};
-    memcpy(&public_spend_key, &data[sizeof(offset)], sizeof(public_spend_key));
-    memcpy(&public_view_key, &data[sizeof(offset) + sizeof(public_spend_key)], sizeof(public_view_key));
+    crypto::public_key public_spend_key, public_view_key;
+    std::memcpy(&public_spend_key, &data[sizeof(offset)], sizeof(public_spend_key));
+    std::memcpy(&public_view_key, &data[sizeof(offset) + sizeof(public_spend_key)], sizeof(public_view_key));
 
     const cryptonote::account_public_address &keys = get_account().get_keys().m_account_address;
     if (public_spend_key != keys.m_spend_public_key || public_view_key != keys.m_view_public_key)
@@ -13147,8 +13145,8 @@ uint64_t wallet2::import_key_images_from_file(const std::string &filename, uint6
     size_t const key_image_offset = n * record_size;
     size_t const signature_offset = key_image_offset + sizeof(key_image);
     std::pair<crypto::key_image, crypto::signature> &pair = ski[n];
-    memcpy(&pair.first,  &data[headerlen + key_image_offset], sizeof(key_image));
-    memcpy(&pair.second, &data[headerlen + signature_offset], sizeof(signature));
+    std::memcpy(&pair.first,  &data[headerlen + key_image_offset], sizeof(key_image));
+    std::memcpy(&pair.second, &data[headerlen + signature_offset], sizeof(signature));
   }
   
   return import_key_images(ski, offset, spent, unspent);
