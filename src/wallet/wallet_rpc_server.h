@@ -55,15 +55,16 @@ namespace tools
 
     static const char* tr(const char* str);
 
-    wallet_rpc_server();
+    wallet_rpc_server(const boost::program_options::variables_map *vm);
     ~wallet_rpc_server();
 
-    bool init(const boost::program_options::variables_map *vm);
+    bool init();
     bool run();
     void stop();
     void set_wallet(wallet2 *cr);
 
   private:
+    bool run_server_threads();
 
     CHAIN_HTTP_TO_MAP2(connection_context); //forward http requests to uri map
 

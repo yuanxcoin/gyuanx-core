@@ -117,7 +117,7 @@ namespace cryptonote
        *
        * @param pprotocol pre-constructed protocol object to store and use
        */
-     explicit core(i_cryptonote_protocol* pprotocol);
+     explicit core();
 
      // Non-copyable:
      core(const core &) = delete;
@@ -1107,6 +1107,7 @@ namespace cryptonote
      service_nodes::quorum_cop        m_quorum_cop;
 
      i_cryptonote_protocol* m_pprotocol; //!< cryptonote protocol instance
+     cryptonote_protocol_stub m_protocol_stub; //!< cryptonote protocol stub instance
 
      boost::recursive_mutex m_incoming_tx_lock; //!< incoming transaction lock
 
@@ -1115,7 +1116,6 @@ namespace cryptonote
 
      std::string m_config_folder; //!< folder to look in for configs and other files
 
-     cryptonote_protocol_stub m_protocol_stub; //!< cryptonote protocol stub instance
 
      epee::math_helper::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
      epee::math_helper::periodic_task m_fork_moaner{2h}; //!< interval for checking HardFork status

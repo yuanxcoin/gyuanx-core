@@ -758,8 +758,8 @@ int main(int argc, char* argv[])
     sleep(90);
   }
 
-  cryptonote::cryptonote_protocol_stub pr; //TODO: stub only for this kind of test, make real validation of relayed objects
-  cryptonote::core core(&pr);
+  //TODO: currently using cryptonote_protocol stub for this kind of test, use real validation of relayed objects
+  cryptonote::core core;
 
   try
   {

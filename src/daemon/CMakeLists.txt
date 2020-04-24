@@ -31,7 +31,6 @@ loki_add_executable(daemon "lokid"
   command_parser_executor.cpp
   command_server.cpp
   daemon.cpp
-  executor.cpp
   main.cpp
   rpc_command_executor.cpp
   )

@@ -30,33 +30,51 @@
 #pragma once
 #include <boost/program_options.hpp>
 
+#include "blocks/blocks.h"
+#include "rpc/core_rpc_server.h"
+#include "cryptonote_core/cryptonote_core.h"
+#include "cryptonote_protocol/cryptonote_protocol_handler.h"
+#include "misc_log_ex.h"
+
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "daemon"
 
-namespace daemonize {
+namespace daemonize
+{
+struct rpc_server
+{
+  rpc_server(boost::program_options::variables_map const &vm,
+             cryptonote::core &core,
+             nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>> &p2p,
+             const bool restricted,
+             const std::string &port,
+             const std::string &description);
+  void run();
+  void stop();
+  ~rpc_server();
 
-struct t_internals;
+  cryptonote::core_rpc_server m_server;
+  std::string m_description;
+};
 
-class t_daemon final {
-public:
+struct daemon
+{
   static void init_options(boost::program_options::options_description & option_spec);
-private:
+
+  daemon(boost::program_options::variables_map const &vm, uint16_t public_rpc_port = 0);
+  ~daemon();
+  bool run(bool interactive = false);
   void stop_p2p();
-private:
-  std::unique_ptr<t_internals> mp_internals;
-  uint16_t public_rpc_port;
+  void stop();
+
+  boost::program_options::variables_map vm;
+  uint16_t    public_rpc_port;
   std::string zmq_rpc_bind_address;
   std::string zmq_rpc_bind_port;
-public:
-  t_daemon(
-      boost::program_options::variables_map const & vm,
-      uint16_t public_rpc_port = 0
-    );
-  t_daemon(t_daemon && other);
-  t_daemon & operator=(t_daemon && other);
-  ~t_daemon();
 
-  bool run(bool interactive = false);
-  void stop();
+  cryptonote::core core;
+  cryptonote::t_cryptonote_protocol_handler<cryptonote::core> protocol;
+  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>> p2p;
+  std::vector<std::unique_ptr<rpc_server>> rpc_servers;
 };
-}
+} // namespace daemonize
