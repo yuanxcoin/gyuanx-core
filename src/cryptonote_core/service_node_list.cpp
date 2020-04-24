@@ -365,7 +365,7 @@ namespace service_nodes
     return money_transferred;
   }
 
-  bool tx_get_staking_components(cryptonote::transaction_prefix const &tx, staking_components *contribution)
+  bool tx_get_staking_components(cryptonote::transaction_prefix const &tx, staking_components *contribution, crypto::hash const &txid)
   {
     staking_components contribution_unused_ = {};
     if (!contribution) contribution = &contribution_unused_;
@@ -377,11 +377,17 @@ namespace service_nodes
 
     if (!cryptonote::get_tx_secret_key_from_tx_extra(tx.extra, contribution->tx_key))
     {
-      LOG_PRINT_L1("TX: There was a service node contributor but no secret key in the tx extra");
+      LOG_PRINT_L1("TX: There was a service node contributor but no secret key in the tx extra for tx: " << txid);
       return false;
     }
 
     return true;
+  }
+
+  bool tx_get_staking_components(cryptonote::transaction const &tx, staking_components *contribution)
+  {
+      bool result = tx_get_staking_components(tx, contribution, cryptonote::get_transaction_hash(tx));
+      return result;
   }
 
   bool tx_get_staking_components_and_amounts(cryptonote::network_type nettype,

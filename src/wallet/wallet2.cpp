@@ -13413,7 +13413,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       pd.m_amount_in = pd.m_amount_out = td.amount();       // fee is unknown
       pd.m_block_height                = 0;                 // spent block height is unknown
       const crypto::hash &spent_txid   = crypto::null_hash; // spent txid is unknown
-      bool stake                       = service_nodes::tx_get_staking_components(td.m_tx, nullptr /*stake*/);
+      bool stake                       = service_nodes::tx_get_staking_components(td.m_tx, nullptr /*stake*/, td.m_txid);
       pd.m_pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
       m_confirmed_txs.insert(std::make_pair(spent_txid, pd));
     }
