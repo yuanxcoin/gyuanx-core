@@ -168,6 +168,8 @@ public:
     Subaddress * subaddress() override;
     SubaddressAccount * subaddressAccount() override;
     void setListener(WalletListener * l) override;
+    bool setCacheAttribute(const std::string &key, const std::string &val) override;
+    std::string getCacheAttribute(const std::string &key) const override;
     bool setUserNote(const std::string &txid, const std::string &note) override;
     std::string getUserNote(const std::string &txid) const override;
     std::string getTxKey(const std::string &txid) const override;
@@ -201,6 +203,7 @@ public:
     bool unlockKeysFile() override;
     bool isKeysFileLocked() override;
     uint64_t coldKeyImageSync(uint64_t &spent, uint64_t &unspent) override;
+    void deviceShowAddress(uint32_t accountIndex, uint32_t addressIndex, const std::string &paymentId) override;
 
 private:
     void clearStatus() const;

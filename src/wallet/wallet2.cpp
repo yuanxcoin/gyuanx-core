@@ -1094,7 +1094,8 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended):
   m_unattended(unattended),
   m_devices_registered(false),
   m_device_last_key_image_sync(0),
-  m_offline(false)
+  m_offline(false),
+  m_rpc_version(0)
 {
 }
 
@@ -5390,6 +5391,7 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
 
   if (m_offline)
   {
+    m_rpc_version = 0;
     if (version)
       *version = 0;
     if (ssl)
@@ -5399,6 +5401,7 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
 
   // TODO: Add light wallet version check.
   if(m_light_wallet) {
+      m_rpc_version = 0;
       if (version)
         *version = 0;
       if (ssl)
@@ -5410,6 +5413,7 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
     std::lock_guard <decltype(m_daemon_rpc_mutex)> lock(m_daemon_rpc_mutex);
     if(!m_http_client.is_connected(ssl))
     {
+      m_rpc_version = 0;
       m_node_rpc_proxy.invalidate();
       if (!m_http_client.connect(std::chrono::milliseconds(timeout)))
         return false;
@@ -5418,20 +5422,21 @@ bool wallet2::check_connection(uint32_t *version, bool *ssl, uint32_t timeout)
     }
   }
 
-  if (version)
+  if (!m_rpc_version)
   {
     cryptonote::COMMAND_RPC_GET_VERSION::request req_t{};
     cryptonote::COMMAND_RPC_GET_VERSION::response resp_t{};
     bool r = invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t);
     if(!r) {
-      *version = 0;
+      if(version)
+        *version = 0;
       return false;
     }
-    if (resp_t.status != CORE_RPC_STATUS_OK)
-      *version = 0;
-    else
-      *version = resp_t.version;
+    if (resp_t.status == CORE_RPC_STATUS_OK)
+      m_rpc_version = resp_t.version;
   }
+  if (version)
+    *version = m_rpc_version;
 
   return true;
 }
@@ -11455,6 +11460,9 @@ void wallet2::cold_sign_tx(const std::vector<pending_tx>& ptx_vector, signed_tx_
   setup_shim(&wallet_shim, this);
   aux_data.tx_recipients = dsts_info;
   aux_data.bp_version = 2;
+  boost::optional<uint8_t> hf_version = get_hard_fork_version();
+  CHECK_AND_ASSERT_THROW_MES(hf_version, "Failed to query hard fork");
+  aux_data.hard_fork = *hf_version;
   dev_cold->tx_sign(&wallet_shim, txs, exported_txs, aux_data);
   tx_device_aux = aux_data.tx_device_aux;
 
@@ -11480,6 +11488,17 @@ uint64_t wallet2::cold_key_image_sync(uint64_t &spent, uint64_t &unspent) {
   m_device_last_key_image_sync = time(NULL);
 
   return import_res;
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::device_show_address(uint32_t account_index, uint32_t address_index, const boost::optional<crypto::hash8> &payment_id)
+{
+  if (!key_on_device())
+  {
+    return;
+  }
+
+  auto & hwdev = get_account().get_device();
+  hwdev.display_address(subaddress_index{account_index, address_index}, payment_id);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::get_hard_fork_info(uint8_t version, uint64_t &earliest_height) const
@@ -12815,12 +12834,13 @@ void wallet2::set_attribute(const std::string &key, const std::string &value)
   m_attributes[key] = value;
 }
 
-std::string wallet2::get_attribute(const std::string &key) const
+bool wallet2::get_attribute(const std::string &key, std::string &value) const
 {
   std::unordered_map<std::string, std::string>::const_iterator i = m_attributes.find(key);
   if (i == m_attributes.end())
-    return std::string();
-  return i->second;
+    return false;
+  value = i->second;
+  return true;
 }
 
 void wallet2::set_description(const std::string &description)
@@ -12830,7 +12850,10 @@ void wallet2::set_description(const std::string &description)
 
 std::string wallet2::get_description() const
 {
-  return get_attribute(ATTRIBUTE_DESCRIPTION);
+  std::string s;
+  if (get_attribute(ATTRIBUTE_DESCRIPTION, s))
+    return s;
+  return "";
 }
 
 const std::pair<std::map<std::string, std::string>, std::vector<std::string>>& wallet2::get_account_tags()

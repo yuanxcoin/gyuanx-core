@@ -1841,8 +1841,10 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   {
     struct request_t
     {
-	  uint64_t out_peers; // Max number of outgoing peers
+      bool set; // If true, set the number of outgoing peers, otherwise the response returns the current limit of outgoing peers. (Defaults to true)
+      uint32_t out_peers; // Max number of outgoing peers
       BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_OPT(set, true)
         KV_SERIALIZE(out_peers)
       END_KV_SERIALIZE_MAP()
     };
@@ -1850,9 +1852,11 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     
     struct response_t
     {
+      uint32_t out_peers; // The limit set for outgoing peers
       std::string status; // General RPC error code. "OK" means everything looks good.
 
       BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(out_peers)
         KV_SERIALIZE(status)
       END_KV_SERIALIZE_MAP()
     };
@@ -1865,8 +1869,10 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   {
     struct request_t
     {
-      uint64_t in_peers;
+      bool set; // If true, set the number of incoming peers, otherwise the response returns the current limit of incoming peers. (Defaults to true)
+      uint32_t in_peers; // Max number of incoming peers
       BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_OPT(set, true)
         KV_SERIALIZE(in_peers)
       END_KV_SERIALIZE_MAP()
     };
@@ -1874,9 +1880,11 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
     struct response_t
     {
+      uint32_t in_peers; // The limit set for incoming peers
       std::string status; // General RPC error code. "OK" means everything looks good.
 
       BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(in_peers)
         KV_SERIALIZE(status)
       END_KV_SERIALIZE_MAP()
     };

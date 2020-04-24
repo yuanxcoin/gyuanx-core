@@ -287,7 +287,6 @@ namespace cryptonote
               m_blockchain_storage(m_mempool, m_service_node_list),
               m_quorum_cop(*this),
               m_miner(this, &m_blockchain_storage),
-              m_miner_address{},
               m_starter_message_showed(false),
               m_target_blockchain_height(0),
               m_checkpoints_path(""),
@@ -912,7 +911,7 @@ namespace cryptonote
     if (prune_blockchain)
     {
       // display a message if the blockchain is not pruned yet
-      if (m_blockchain_storage.get_current_blockchain_height() > 1 && !m_blockchain_storage.get_blockchain_pruning_seed())
+      if (!m_blockchain_storage.get_blockchain_pruning_seed())
       {
         MGINFO("Pruning blockchain...");
         CHECK_AND_ASSERT_MES(m_blockchain_storage.prune_blockchain(), false, "Failed to prune blockchain");

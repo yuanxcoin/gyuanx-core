@@ -94,6 +94,8 @@ namespace cryptonote
 
     uint32_t pruning_seed;
 
+    uint8_t address_type;
+
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(incoming)
       KV_SERIALIZE(localhost)
@@ -118,6 +120,7 @@ namespace cryptonote
       KV_SERIALIZE(connection_id)
       KV_SERIALIZE(height)
       KV_SERIALIZE(pruning_seed)
+      KV_SERIALIZE(address_type)
     END_KV_SERIALIZE_MAP()
   };
 
@@ -190,7 +193,6 @@ namespace cryptonote
     struct request
     {
       std::vector<crypto::hash> blocks;
-
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE_CONTAINER_POD_AS_BLOB(blocks)
       END_KV_SERIALIZE_MAP()
