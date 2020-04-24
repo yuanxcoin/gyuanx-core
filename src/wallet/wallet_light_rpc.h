@@ -83,6 +83,8 @@ namespace tools
         bool mempool;                           // States if the transaction is sitting in the mempool. `true if the transaction is, `false` if not.
         uint32_t mixin;                         // The number of other signatures (aside from yours) in the ring signature that authorises the transaction.
 
+        // TODO(loki): Also the pay type, is it a stake? But since this is undocumented and not used, not implemented yet
+
         BEGIN_KV_SERIALIZE_MAP()
           KV_SERIALIZE(id)
           KV_SERIALIZE(hash)

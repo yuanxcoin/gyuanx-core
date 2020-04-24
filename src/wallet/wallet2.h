@@ -511,6 +511,7 @@ private:
       uint32_t m_subaddr_account;   // subaddress account of your wallet to be used in this transfer
       std::set<uint32_t> m_subaddr_indices;  // set of address indices used as inputs in this transfer
       std::vector<std::pair<crypto::key_image, std::vector<uint64_t>>> m_rings; // relative
+      tools::pay_type m_pay_type = tools::pay_type::out;
     };
 
     struct confirmed_transfer_details
@@ -527,10 +528,25 @@ private:
       uint32_t m_subaddr_account;   // subaddress account of your wallet to be used in this transfer
       std::set<uint32_t> m_subaddr_indices;  // set of address indices used as inputs in this transfer
       std::vector<std::pair<crypto::key_image, std::vector<uint64_t>>> m_rings; // relative
+      tools::pay_type m_pay_type = tools::pay_type::out;
 
       confirmed_transfer_details(): m_amount_in(0), m_amount_out(0), m_change((uint64_t)-1), m_block_height(0), m_payment_id(crypto::null_hash), m_timestamp(0), m_unlock_time(0), m_subaddr_account((uint32_t)-1) {}
-      confirmed_transfer_details(const unconfirmed_transfer_details &utd, uint64_t height):
-        m_amount_in(utd.m_amount_in), m_amount_out(utd.m_amount_out), m_change(utd.m_change), m_block_height(height), m_dests(utd.m_dests), m_payment_id(utd.m_payment_id), m_timestamp(utd.m_timestamp), m_unlock_time(utd.m_tx.unlock_time), m_unlock_times(utd.m_tx.output_unlock_times), m_subaddr_account(utd.m_subaddr_account), m_subaddr_indices(utd.m_subaddr_indices), m_rings(utd.m_rings) {}
+      confirmed_transfer_details(const unconfirmed_transfer_details &utd, uint64_t height)
+      : m_amount_in(utd.m_amount_in)
+      , m_amount_out(utd.m_amount_out)
+      , m_change(utd.m_change)
+      , m_block_height(height)
+      , m_dests(utd.m_dests)
+      , m_payment_id(utd.m_payment_id)
+      , m_timestamp(utd.m_timestamp)
+      , m_unlock_time(utd.m_tx.unlock_time)
+      , m_unlock_times(utd.m_tx.output_unlock_times)
+      , m_subaddr_account(utd.m_subaddr_account)
+      , m_subaddr_indices(utd.m_subaddr_indices)
+      , m_rings(utd.m_rings)
+      , m_pay_type(utd.m_pay_type)
+      {
+      }
     };
 
     struct tx_construction_data
@@ -997,12 +1013,13 @@ private:
 
     struct get_transfers_args_t
     {
-      bool in = true;
-      bool out = true;
-      bool pending = true;
-      bool failed = true;
-      bool pool = true;
-      bool coinbase = true;
+      bool in = false;
+      bool out = false;
+      bool stake = false;
+      bool pending = false;
+      bool failed = false;
+      bool pool = false;
+      bool coinbase = false;
       bool filter_by_height = false;
       uint64_t min_height = 0;
       uint64_t max_height = CRYPTONOTE_MAX_BLOCK_NUMBER;
@@ -1828,8 +1845,8 @@ BOOST_CLASS_VERSION(tools::wallet2::multisig_info::LR, 0)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_tx_set, 1)
 BOOST_CLASS_VERSION(tools::wallet2::payment_details, 6)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
-BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 8)
-BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 7)
+BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 9)
+BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 8)
 BOOST_CLASS_VERSION(tools::wallet2::address_book_row, 17)
 BOOST_CLASS_VERSION(tools::wallet2::reserve_proof_entry, 0)
 BOOST_CLASS_VERSION(tools::wallet2::unsigned_tx_set, 0)
@@ -1934,6 +1951,8 @@ namespace boost
       {
         a & x.m_tx;
       }
+      if (ver < 9)
+       x.m_pay_type = tools::pay_type::out;
       if (ver < 1)
         return;
       a & x.m_dests;
@@ -1966,6 +1985,9 @@ namespace boost
       if (ver < 8)
         return;
       a & x.m_rings;
+      if (ver < 9)
+        return;
+      a & x.m_pay_type;
     }
 
     template <class Archive>
@@ -1975,6 +1997,8 @@ namespace boost
       a & x.m_amount_out;
       a & x.m_change;
       a & x.m_block_height;
+      if (ver < 8)
+        x.m_pay_type = tools::pay_type::out;
       if (ver < 1)
         return;
       a & x.m_dests;
@@ -2017,6 +2041,9 @@ namespace boost
       if (ver < 7)
         return;
       a & x.m_unlock_times;
+      if (ver < 8)
+        return;
+      a & x.m_pay_type;
     }
 
     template <class Archive>
@@ -2035,11 +2062,12 @@ namespace boost
       if (ver < 3)
         x.m_fee = 0;
       if (ver < 4)
-        x.m_type = tools::pay_type::unspecified;
+        x.m_type = tools::pay_type::in;
       if (ver < 5)
         x.m_unmined_blink = false;
       if (ver < 6)
         x.m_was_blink = false;
+
 
       if (ver < 1) return;
       a & x.m_timestamp;

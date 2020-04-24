@@ -205,7 +205,7 @@ namespace
   const char* USAGE_CHECK_SPEND_PROOF("check_spend_proof <txid> <signature_file> [<message>]");
   const char* USAGE_GET_RESERVE_PROOF("get_reserve_proof (all|<amount>) [<message>]");
   const char* USAGE_CHECK_RESERVE_PROOF("check_reserve_proof <address> <signature_file> [<message>]");
-  const char* USAGE_SHOW_TRANSFERS("show_transfers [in|out|all|pending|failed|coinbase] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
+  const char* USAGE_SHOW_TRANSFERS("show_transfers [in] [out] [stake] [all] [pending] [failed] [coinbase] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
   const char* USAGE_EXPORT_TRANSFERS("export_transfers [in|out|all|pending|failed] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]] [output=<path>]");
   const char* USAGE_UNSPENT_OUTPUTS("unspent_outputs [index=<N1>[,<N2>,...]] [<min_amount> [<max_amount>]]");
   const char* USAGE_RESCAN_BC("rescan_bc [hard|soft|keep_ki] [start_height=0]");
@@ -2813,10 +2813,10 @@ simple_wallet::simple_wallet()
                            tr(R"(Show the incoming/outgoing transfers within an optional height range.
 
 Output format:
-In or Coinbase:    Block Number, "block"|"in", Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note
-Out:               Block Number,        "out", Time, Amount*, Transaction Hash, Payment ID, Fee, Destinations, Input addresses**, "-", Note
-Pool:              "pool",               "in", Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note, Double Spend Note
-Pending or Failed: "failed"|"pending",  "out", Time, Amount*, Transaction Hash, Payment ID, Fee, Input addresses**,               "-", Note
+In or Coinbase:    Block Number, "block"|"in", Lock, Checkpointed, Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note
+Out:               Block Number,        "out", Lock, Checkpointed, Time, Amount*, Transaction Hash, Payment ID, Fee, Destinations, Input addresses**, "-", Note
+Pool:              "pool",               "in", Lock, Checkpointed, Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note, Double Spend Note
+Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*, Transaction Hash, Payment ID, Fee, Input addresses**,               "-", Note
 
 * Excluding change and fee.
 ** Set of address indices used as inputs in this transfer.)"));
@@ -8048,34 +8048,43 @@ bool simple_wallet::check_reserve_proof(const std::vector<std::string> &args)
 static bool parse_get_transfers_args(std::vector<std::string>& local_args, tools::wallet2::get_transfers_args_t& args)
 {
   // optional in/out selector
-  if (local_args.size() > 0) {
+  while (local_args.size() > 0)
+  {
     if (local_args[0] == "in" || local_args[0] == "incoming") {
-      args.out = args.pending = args.failed = false;
+      args.in = args.coinbase = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "out" || local_args[0] == "outgoing") {
-      args.in = args.pool = args.coinbase = false;
+      args.out = args.stake = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "pending") {
-      args.in = args.out = args.failed = args.coinbase = false;
+      args.pending = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "failed") {
-      args.in = args.out = args.pending = args.pool = args.coinbase = false;
+      args.failed = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "pool") {
-      args.in = args.out = args.pending = args.failed = args.coinbase = false;
+      args.pool = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "coinbase") {
-      args.in = args.out = args.pending = args.failed = args.pool = false;
       args.coinbase = true;
       local_args.erase(local_args.begin());
     }
-    else if (local_args[0] == "all" || local_args[0] == "both") {
+    else if (local_args[0] == "stake") {
+      args.stake = true;
       local_args.erase(local_args.begin());
+    }
+    else if (local_args[0] == "all" || local_args[0] == "both") {
+      args.in = args.out = args.stake = args.pending = args.failed = args.pool = args.coinbase = true;
+      local_args.erase(local_args.begin());
+    }
+    else
+    {
+      break;
     }
   }
 
@@ -8120,7 +8129,7 @@ static bool parse_get_transfers_args(std::vector<std::string>& local_args, tools
 // mutates local_args as it parses and consumes arguments
 bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vector<tools::transfer_view>& transfers)
 {
-  tools::wallet2::get_transfers_args_t args;
+  tools::wallet2::get_transfers_args_t args = {};
   if (!parse_get_transfers_args(local_args, args))
   {
     return false;

@@ -412,7 +412,7 @@ uint8_t HardFork::get(uint64_t height) const
   CRITICAL_REGION_LOCAL(lock);
   if (height > db.height()) {
     assert(false);
-    return INVALID_HF_VERSION_FOR_HEIGHT;
+    return INVALID_HF_VERSION;
   }
   if (height == db.height()) {
     return get_current_version();

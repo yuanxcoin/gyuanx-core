@@ -41,6 +41,7 @@ extern "C" {
 #include "wallet/wallet2.h"
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_basic/tx_extra.h"
+#include "cryptonote_basic/hardfork.h"
 #include "int-util.h"
 #include "common/scoped_message_writer.h"
 #include "common/i18n.h"
@@ -326,15 +327,7 @@ namespace service_nodes
     return result;
   }
 
-  struct parsed_tx_contribution
-  {
-    cryptonote::account_public_address address;
-    uint64_t transferred;
-    crypto::secret_key tx_key;
-    std::vector<service_node_info::contribution_t> locked_contributions;
-  };
-
-  static uint64_t get_tx_output_amount(const cryptonote::transaction& tx, int i, crypto::key_derivation const &derivation, hw::device& hwdev)
+  static uint64_t get_staking_output_contribution(const cryptonote::transaction& tx, int i, crypto::key_derivation const &derivation, hw::device& hwdev)
   {
     if (tx.vout[i].target.type() != typeid(cryptonote::txout_to_key))
     {
@@ -370,6 +363,177 @@ namespace service_nodes
     }
 
     return money_transferred;
+  }
+
+  bool tx_get_staking_components(cryptonote::transaction_prefix const &tx, staking_components *contribution, crypto::hash const &txid)
+  {
+    staking_components contribution_unused_ = {};
+    if (!contribution) contribution = &contribution_unused_;
+    if (!cryptonote::get_service_node_pubkey_from_tx_extra(tx.extra, contribution->service_node_pubkey))
+      return false; // Is not a contribution TX don't need to check it.
+
+    if (!cryptonote::get_service_node_contributor_from_tx_extra(tx.extra, contribution->address))
+      return false;
+
+    if (!cryptonote::get_tx_secret_key_from_tx_extra(tx.extra, contribution->tx_key))
+    {
+      LOG_PRINT_L1("TX: There was a service node contributor but no secret key in the tx extra for tx: " << txid);
+      return false;
+    }
+
+    return true;
+  }
+
+  bool tx_get_staking_components(cryptonote::transaction const &tx, staking_components *contribution)
+  {
+      bool result = tx_get_staking_components(tx, contribution, cryptonote::get_transaction_hash(tx));
+      return result;
+  }
+
+  bool tx_get_staking_components_and_amounts(cryptonote::network_type nettype,
+                                             uint8_t hf_version,
+                                             cryptonote::transaction const &tx,
+                                             uint64_t block_height,
+                                             staking_components *contribution)
+  {
+    staking_components contribution_unused_ = {};
+    if (!contribution) contribution = &contribution_unused_;
+
+    if (!tx_get_staking_components(tx, contribution))
+      return false;
+
+    // A cryptonote transaction is constructed as follows
+    // P = Hs(aR)G + B
+
+    // P := Stealth Address
+    // a := Receiver's secret view key
+    // B := Receiver's public spend key
+    // R := TX Public Key
+    // G := Elliptic Curve
+
+    // In Loki we pack into the tx extra information to reveal information about the TX
+    // A := Public View Key (we pack contributor into tx extra, 'parsed_contribution.address')
+    // r := TX Secret Key   (we pack secret key into tx extra,  'parsed_contribution.tx_key`)
+
+    // Calulate 'Derivation := Hs(Ar)G'
+    crypto::key_derivation derivation;
+    if (!crypto::generate_key_derivation(contribution->address.m_view_public_key, contribution->tx_key, derivation))
+    {
+      LOG_PRINT_L1("TX: Failed to generate key derivation on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
+      return false;
+    }
+
+    hw::device &hwdev         = hw::get_device("default");
+    contribution->transferred = 0;
+    bool stake_decoded        = true;
+    if (hf_version >= cryptonote::network_version_11_infinite_staking || hf_version == cryptonote::HardFork::INVALID_HF_VERSION)
+    {
+      // In Infinite Staking, we lock the key image that would be generated if
+      // you tried to send your stake and prevent it from being transacted on
+      // the network whilst you are a Service Node. To do this, we calculate
+      // the future key image that would be generated when they user tries to
+      // spend the staked funds. A key image is derived from the ephemeral, one
+      // time transaction private key, 'x' in the Cryptonote Whitepaper.
+
+      // This is only possible to generate if they are the staking to themselves
+      // as you need the recipients private keys to generate the key image that
+      // would be generated, when they want to spend it in the future.
+
+      cryptonote::tx_extra_tx_key_image_proofs key_image_proofs;
+      if (!get_tx_key_image_proofs_from_tx_extra(tx.extra, key_image_proofs))
+      {
+        LOG_PRINT_L1("TX: Didn't have key image proofs in the tx_extra, rejected on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
+        stake_decoded = false;
+      }
+
+      for (size_t output_index = 0; stake_decoded && output_index < tx.vout.size(); ++output_index)
+      {
+        uint64_t transferred = get_staking_output_contribution(tx, output_index, derivation, hwdev);
+        if (transferred == 0)
+          continue;
+
+        // So prove that the destination stealth address can be decoded using the
+        // staker's packed address, which means that the recipient of the
+        // contribution is themselves (and hence they have the necessary secrets
+        // to generate the future key image).
+
+        // i.e Verify the packed information is valid by computing the stealth
+        // address P' (which should equal P if matching) using
+
+        // 'Derivation := Hs(Ar)G' (we calculated earlier) instead of 'Hs(aR)G'
+        // P' = Hs(Ar)G + B
+        //    = Hs(aR)G + B
+        //    = Derivation + B
+        //    = P
+
+        crypto::public_key ephemeral_pub_key;
+        {
+          // P' := Derivation + B
+          if (!hwdev.derive_public_key(derivation, output_index, contribution->address.m_spend_public_key, ephemeral_pub_key))
+          {
+            LOG_PRINT_L1("TX: Could not derive TX ephemeral key on height: " << block_height << " for tx: " << get_transaction_hash(tx) << " for output: " << output_index);
+            continue;
+          }
+
+          // Stealth address public key should match the public key referenced in the TX only if valid information is given.
+          const auto& out_to_key = boost::get<cryptonote::txout_to_key>(tx.vout[output_index].target);
+          if (out_to_key.key != ephemeral_pub_key)
+          {
+            LOG_PRINT_L1("TX: Derived TX ephemeral key did not match tx stored key on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx) << " for output: " << output_index);
+            continue;
+          }
+        }
+
+        // To prevent the staker locking any arbitrary key image, the provided
+        // key image is included and verified in a ring signature which
+        // guarantees that 'the staker proves that he knows such 'x' (one time
+        // ephemeral secret key) and that (the future key image) P = xG'.
+        // Consequently the key image is not falsified and actually the future
+        // key image.
+
+        // The signer can try falsify the key image, but the equation used to
+        // construct the key image is re-derived by the verifier, false key
+        // images will not match the re-derived key image.
+        crypto::public_key const *ephemeral_pub_key_ptr = &ephemeral_pub_key;
+        for (auto proof = key_image_proofs.proofs.begin(); proof != key_image_proofs.proofs.end(); proof++)
+        {
+          if (!crypto::check_ring_signature((const crypto::hash &)(proof->key_image), proof->key_image, &ephemeral_pub_key_ptr, 1, &proof->signature))
+            continue;
+
+          contribution->locked_contributions.emplace_back(service_node_info::contribution_t::version_t::v0, ephemeral_pub_key, proof->key_image, transferred);
+          contribution->transferred += transferred;
+          key_image_proofs.proofs.erase(proof);
+          break;
+        }
+      }
+    }
+
+    if (hf_version < cryptonote::network_version_11_infinite_staking || (hf_version == cryptonote::HardFork::INVALID_HF_VERSION && !stake_decoded))
+    {
+      // Pre Infinite Staking, we only need to prove the amount sent is
+      // sufficient to become a contributor to the Service Node and that there
+      // is sufficient lock time on the staking output.
+      for (size_t i = 0; i < tx.vout.size(); i++)
+      {
+        bool has_correct_unlock_time = false;
+        {
+          uint64_t unlock_time = tx.unlock_time;
+          if (tx.version >= cryptonote::txversion::v3_per_output_unlock_times)
+            unlock_time = tx.output_unlock_times[i];
+
+          uint64_t min_height = block_height + staking_num_lock_blocks(nettype);
+          has_correct_unlock_time = unlock_time < CRYPTONOTE_MAX_BLOCK_NUMBER && unlock_time >= min_height;
+        }
+
+        if (has_correct_unlock_time)
+        {
+          contribution->transferred += get_staking_output_contribution(tx, i, derivation, hwdev);
+          stake_decoded = true;
+        }
+      }
+    }
+
+    return stake_decoded;
   }
 
   /// Makes a copy of the given service_node_info and replaces the shared_ptr with a pointer to the copy.
@@ -639,153 +803,6 @@ namespace service_nodes
     return false;
   }
 
-  static bool get_contribution(cryptonote::network_type nettype, int hf_version, const cryptonote::transaction& tx, uint64_t block_height, parsed_tx_contribution &parsed_contribution)
-  {
-    if (!cryptonote::get_service_node_contributor_from_tx_extra(tx.extra, parsed_contribution.address))
-      return false;
-
-    if (!cryptonote::get_tx_secret_key_from_tx_extra(tx.extra, parsed_contribution.tx_key))
-    {
-      LOG_PRINT_L1("TX: There was a service node contributor but no secret key in the tx extra on height: " << block_height << " for tx: " << get_transaction_hash(tx));
-      return false;
-    }
-
-    // A cryptonote transaction is constructed as follows
-    // P = Hs(aR)G + B
-
-    // P := Stealth Address
-    // a := Receiver's secret view key
-    // B := Receiver's public spend key
-    // R := TX Public Key
-    // G := Elliptic Curve
-
-    // In Loki we pack into the tx extra information to reveal information about the TX
-    // A := Public View Key (we pack contributor into tx extra, 'parsed_contribution.address')
-    // r := TX Secret Key   (we pack secret key into tx extra,  'parsed_contribution.tx_key`)
-
-    // Calulate 'Derivation := Hs(Ar)G'
-    crypto::key_derivation derivation;
-    if (!crypto::generate_key_derivation(parsed_contribution.address.m_view_public_key, parsed_contribution.tx_key, derivation))
-    {
-      LOG_PRINT_L1("TX: Failed to generate key derivation on height: " << block_height << " for tx: " << get_transaction_hash(tx));
-      return false;
-    }
-
-    hw::device& hwdev               = hw::get_device("default");
-    parsed_contribution.transferred = 0;
-
-    if (hf_version >= cryptonote::network_version_11_infinite_staking)
-    {
-      // In Infinite Staking, we lock the key image that would be generated if
-      // you tried to send your stake and prevent it from being transacted on
-      // the network whilst you are a Service Node. To do this, we calculate
-      // the future key image that would be generated when they user tries to
-      // spend the staked funds. A key image is derived from the ephemeral, one
-      // time transaction private key, 'x' in the Cryptonote Whitepaper.
-
-      // This is only possible to generate if they are the staking to themselves
-      // as you need the recipients private keys to generate the key image that
-      // would be generated, when they want to spend it in the future.
-
-      cryptonote::tx_extra_tx_key_image_proofs key_image_proofs;
-      if (!get_tx_key_image_proofs_from_tx_extra(tx.extra, key_image_proofs))
-      {
-        LOG_PRINT_L1("TX: Didn't have key image proofs in the tx_extra, rejected on height: " << block_height << " for tx: " << get_transaction_hash(tx));
-        return false;
-      }
-
-      for (size_t output_index = 0; output_index < tx.vout.size(); ++output_index)
-      {
-        uint64_t transferred = get_tx_output_amount(tx, output_index, derivation, hwdev);
-        if (transferred == 0)
-          continue;
-
-        // So prove that the destination stealth address can be decoded using the
-        // staker's packed address, which means that the recipient of the
-        // contribution is themselves (and hence they have the necessary secrets
-        // to generate the future key image).
-
-        // i.e Verify the packed information is valid by computing the stealth
-        // address P' (which should equal P if matching) using
-
-        // 'Derivation := Hs(Ar)G' (we calculated earlier) instead of 'Hs(aR)G'
-        // P' = Hs(Ar)G + B
-        //    = Hs(aR)G + B
-        //    = Derivation + B
-        //    = P
-
-        crypto::public_key ephemeral_pub_key;
-        {
-          // P' := Derivation + B
-          if (!hwdev.derive_public_key(derivation, output_index, parsed_contribution.address.m_spend_public_key, ephemeral_pub_key))
-          {
-            LOG_PRINT_L1("TX: Could not derive TX ephemeral key on height: " << block_height << " for tx: " << get_transaction_hash(tx) << " for output: " << output_index);
-            continue;
-          }
-
-          // Stealth address public key should match the public key referenced in the TX only if valid information is given.
-          const auto& out_to_key = boost::get<cryptonote::txout_to_key>(tx.vout[output_index].target);
-          if (out_to_key.key != ephemeral_pub_key)
-          {
-            LOG_PRINT_L1("TX: Derived TX ephemeral key did not match tx stored key on height: " << block_height << " for tx: " << get_transaction_hash(tx) << " for output: " << output_index);
-            continue;
-          }
-        }
-
-        // To prevent the staker locking any arbitrary key image, the provided
-        // key image is included and verified in a ring signature which
-        // guarantees that 'the staker proves that he knows such 'x' (one time
-        // ephemeral secret key) and that (the future key image) P = xG'.
-        // Consequently the key image is not falsified and actually the future
-        // key image.
-
-        // The signer can try falsify the key image, but the equation used to
-        // construct the key image is re-derived by the verifier, false key
-        // images will not match the re-derived key image.
-        crypto::public_key const *ephemeral_pub_key_ptr = &ephemeral_pub_key;
-        for (auto proof = key_image_proofs.proofs.begin(); proof != key_image_proofs.proofs.end(); proof++)
-        {
-          if (!crypto::check_ring_signature((const crypto::hash &)(proof->key_image), proof->key_image, &ephemeral_pub_key_ptr, 1, &proof->signature))
-            continue;
-
-          parsed_contribution.locked_contributions.emplace_back(
-              service_node_info::contribution_t::version_t::v0,
-              ephemeral_pub_key,
-              proof->key_image,
-              transferred
-          );
-
-          parsed_contribution.transferred += transferred;
-          key_image_proofs.proofs.erase(proof);
-          break;
-        }
-      }
-    }
-    else
-    {
-      // Pre Infinite Staking, we only need to prove the amount sent is
-      // sufficient to become a contributor to the Service Node and that there
-      // is sufficient lock time on the staking output.
-      for (size_t i = 0; i < tx.vout.size(); i++)
-      {
-        bool has_correct_unlock_time = false;
-        {
-          uint64_t unlock_time = tx.unlock_time;
-          if (tx.version >= cryptonote::txversion::v3_per_output_unlock_times)
-            unlock_time = tx.output_unlock_times[i];
-
-          uint64_t min_height = block_height + staking_num_lock_blocks(nettype);
-          has_correct_unlock_time = unlock_time < CRYPTONOTE_MAX_BLOCK_NUMBER && unlock_time >= min_height;
-        }
-
-        if (has_correct_unlock_time)
-          parsed_contribution.transferred += get_tx_output_amount(tx, i, derivation, hwdev);
-      }
-    }
-
-    return true;
-  }
-
   bool is_registration_tx(cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction& tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key& key, service_node_info& info)
   {
     crypto::public_key service_node_key;
@@ -847,22 +864,22 @@ namespace service_nodes
     uint64_t staking_requirement = get_staking_requirement(nettype, block_height, hf_version);
     cryptonote::account_public_address address;
 
-    parsed_tx_contribution parsed_contribution = {};
-    if (!get_contribution(nettype, hf_version, tx, block_height, parsed_contribution))
+    staking_components stake = {};
+    if (!tx_get_staking_components_and_amounts(nettype, hf_version, tx, block_height, &stake))
     {
       LOG_PRINT_L1("Register TX: Had service node registration fields, but could not decode contribution on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
     const uint64_t min_transfer = get_min_node_contribution(hf_version, staking_requirement, info.total_reserved, info.total_num_locked_contributions());
-    if (parsed_contribution.transferred < min_transfer)
+    if (stake.transferred < min_transfer)
     {
-      LOG_PRINT_L1("Register TX: Contribution transferred: " << parsed_contribution.transferred << " didn't meet the minimum transfer requirement: " << min_transfer << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("Register TX: Contribution transferred: " << stake.transferred << " didn't meet the minimum transfer requirement: " << min_transfer << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
     size_t total_num_of_addr = service_node_addresses.size();
-    if (std::find(service_node_addresses.begin(), service_node_addresses.end(), parsed_contribution.address) == service_node_addresses.end())
+    if (std::find(service_node_addresses.begin(), service_node_addresses.end(), stake.address) == service_node_addresses.end())
       total_num_of_addr++;
 
     if (total_num_of_addr > MAX_NUMBER_OF_CONTRIBUTORS)
@@ -996,38 +1013,34 @@ namespace service_nodes
     uint64_t const block_height = cryptonote::get_block_height(block);
     uint8_t const hf_version    = block.major_version;
 
-    crypto::public_key pubkey;
-
-    if (!cryptonote::get_service_node_pubkey_from_tx_extra(tx.extra, pubkey))
-      return false; // Is not a contribution TX don't need to check it.
-
-    parsed_tx_contribution parsed_contribution = {};
-    if (!get_contribution(nettype, hf_version, tx, block_height, parsed_contribution))
+    staking_components stake = {};
+    if (!tx_get_staking_components_and_amounts(nettype, hf_version, tx, block_height, &stake))
     {
-      LOG_PRINT_L1("TX: Could not decode contribution for service node: " << pubkey << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("TX: Could not decode contribution for service node: " << stake.service_node_pubkey << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
-    auto iter = service_nodes_infos.find(pubkey);
+    auto iter = service_nodes_infos.find(stake.service_node_pubkey);
     if (iter == service_nodes_infos.end())
     {
-      LOG_PRINT_L1("TX: Contribution received for service node: " << pubkey <<
-                   ", but could not be found in the service node list on height: " << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx )<< "\n"
-                   "This could mean that the service node was deregistered before the contribution was processed.");
+      LOG_PRINT_L1("TX: Contribution received for service node: "
+                   << stake.service_node_pubkey << ", but could not be found in the service node list on height: "
+                   << block_height << " for tx: " << cryptonote::get_transaction_hash(tx)
+                   << "\n"
+                      "This could mean that the service node was deregistered before the contribution was processed.");
       return false;
     }
 
     const service_node_info& curinfo = *iter->second;
     if (curinfo.is_fully_funded())
     {
-      LOG_PRINT_L1("TX: Service node: " << pubkey <<
-                   " is already fully funded, but contribution received on height: "  << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("TX: Service node: " << stake.service_node_pubkey
+                                        << " is already fully funded, but contribution received on height: "
+                                        << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
-    if (!cryptonote::get_tx_secret_key_from_tx_extra(tx.extra, parsed_contribution.tx_key))
+    if (!cryptonote::get_tx_secret_key_from_tx_extra(tx.extra, stake.tx_key))
     {
       LOG_PRINT_L1("TX: Failed to get tx secret key from contribution received on height: "  << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
@@ -1037,7 +1050,7 @@ namespace service_nodes
     bool new_contributor = true;
     size_t contributor_position = 0;
     for (size_t i = 0; i < contributors.size(); i++)
-      if (contributors[i].address == parsed_contribution.address){
+      if (contributors[i].address == stake.address){
         contributor_position = i;
         new_contributor = false;
         break;
@@ -1048,17 +1061,17 @@ namespace service_nodes
       bool too_many_contributions = false;
       if (hf_version >= cryptonote::network_version_11_infinite_staking)
         // As of HF11 we allow up to 4 stakes total.
-        too_many_contributions = curinfo.total_num_locked_contributions() + parsed_contribution.locked_contributions.size() > MAX_NUMBER_OF_CONTRIBUTORS;
+        too_many_contributions = curinfo.total_num_locked_contributions() + stake.locked_contributions.size() > MAX_NUMBER_OF_CONTRIBUTORS;
       else
         // Before HF11 we allowed up to 4 contributors, but each can contribute multiple times
         too_many_contributions = new_contributor && contributors.size() >= MAX_NUMBER_OF_CONTRIBUTORS;
 
       if (too_many_contributions)
       {
-        LOG_PRINT_L1("TX: Already hit the max number of contributions: " << MAX_NUMBER_OF_CONTRIBUTORS <<
-                     " for contributor: " << cryptonote::get_account_address_as_str(nettype, false, parsed_contribution.address) <<
-                     " on height: "  << block_height <<
-                     " for tx: " << cryptonote::get_transaction_hash(tx));
+        LOG_PRINT_L1("TX: Already hit the max number of contributions: "
+                     << MAX_NUMBER_OF_CONTRIBUTORS
+                     << " for contributor: " << cryptonote::get_account_address_as_str(nettype, false, stake.address)
+                     << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
         return false;
       }
     }
@@ -1070,13 +1083,11 @@ namespace service_nodes
         ? 1 // Follow-up contributions from an existing contributor could be any size before HF11
         : get_min_node_contribution(hf_version, curinfo.staking_requirement, curinfo.total_reserved, curinfo.total_num_locked_contributions());
 
-      if (parsed_contribution.transferred < min_contribution)
+      if (stake.transferred < min_contribution)
       {
-        LOG_PRINT_L1("TX: Amount " << parsed_contribution.transferred <<
-                     " did not meet min " << min_contribution <<
-                     " for service node: " << pubkey <<
-                     " on height: "  << block_height <<
-                     " for tx: " << cryptonote::get_transaction_hash(tx));
+        LOG_PRINT_L1("TX: Amount " << stake.transferred << " did not meet min " << min_contribution
+                                   << " for service node: " << stake.service_node_pubkey << " on height: "
+                                   << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
         return false;
       }
     }
@@ -1090,7 +1101,7 @@ namespace service_nodes
     {
       contributor_position = info.contributors.size();
       info.contributors.emplace_back();
-      info.contributors.back().address = parsed_contribution.address;
+      info.contributors.back().address = stake.address;
     }
     service_node_info::contributor_t& contributor = info.contributors[contributor_position];
 
@@ -1098,10 +1109,10 @@ namespace service_nodes
     // increase total_reserved so much that it is >= staking_requirement
     uint64_t can_increase_reserved_by = info.staking_requirement - info.total_reserved;
     uint64_t max_amount               = contributor.reserved + can_increase_reserved_by;
-    parsed_contribution.transferred = std::min(max_amount - contributor.amount, parsed_contribution.transferred);
+    stake.transferred = std::min(max_amount - contributor.amount, stake.transferred);
 
-    contributor.amount     += parsed_contribution.transferred;
-    info.total_contributed += parsed_contribution.transferred;
+    contributor.amount     += stake.transferred;
+    info.total_contributed += stake.transferred;
 
     if (contributor.amount > contributor.reserved)
     {
@@ -1113,10 +1124,10 @@ namespace service_nodes
     info.last_reward_transaction_index = index;
 
     if (hf_version >= cryptonote::network_version_11_infinite_staking)
-      for (const auto &contribution : parsed_contribution.locked_contributions)
+      for (const auto &contribution : stake.locked_contributions)
         contributor.locked_contributions.push_back(contribution);
 
-    LOG_PRINT_L1("Contribution of " << parsed_contribution.transferred << " received for service node " << pubkey);
+    LOG_PRINT_L1("Contribution of " << stake.transferred << " received for service node " << stake.service_node_pubkey);
     if (info.is_fully_funded()) {
       info.active_since_height = block_height;
       return true;
