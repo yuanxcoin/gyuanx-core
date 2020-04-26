@@ -75,7 +75,6 @@ add_executable(unit_tests
   service_nodes.cpp
   service_nodes_swarm.cpp
   sha256.cpp
-  slow_memmem.cpp
   subaddress.cpp
   test_tx_utils.cpp
   test_peerlist.cpp
