@@ -74,16 +74,6 @@ namespace
   }
 }
 
-namespace std
-{
-template <>
-struct hash<lns::generic_owner>
-{
-  static_assert(sizeof(lns::generic_owner) >= sizeof(std::size_t) && alignof(lns::generic_owner) >= alignof(std::size_t),
-                "Size and alignment of hash must be at least that of size_t");
-  std::size_t operator()(const lns::generic_owner &v) const { return reinterpret_cast<const std::size_t &>(v); }
-};
-} // namespace std
 
 namespace string_tools = epee::string_tools;
 
