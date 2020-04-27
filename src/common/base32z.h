@@ -57,7 +57,6 @@ const char *encode(epee::span<const uint8_t> src, stack_t &stack)
 template <typename stack_t>
 const char *encode(std::string const &src, stack_t &stack)
 {
-    char *result = encode(epee::strspan<uint8_t>(src), stack);
-    return result;
+    return encode(epee::strspan<uint8_t>(src), stack);
 }
 };

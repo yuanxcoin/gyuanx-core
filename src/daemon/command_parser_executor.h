@@ -52,7 +52,7 @@ public:
     );
 
   /// Invokes via local daemon
-  command_parser_executor(cryptonote::core_rpc_server& rpc_server);
+  command_parser_executor(cryptonote::rpc::core_rpc_server& rpc_server);
 
   bool print_checkpoints(const std::vector<std::string>& args);
 

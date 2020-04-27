@@ -108,7 +108,7 @@ namespace epee
       req_t.id = req_id;
       req_t.method = std::move(method_name);
       req_t.params = out_struct;
-      epee::json_rpc::response<t_response, epee::json_rpc::error> resp_t{};
+      epee::json_rpc::response<t_response, true> resp_t{};
       if(!epee::net_utils::invoke_http_json(uri, req_t, resp_t, transport, timeout, http_method))
       {
         return false;

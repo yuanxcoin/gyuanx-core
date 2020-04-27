@@ -1935,8 +1935,10 @@ namespace service_nodes
   }
 
   cryptonote::NOTIFY_UPTIME_PROOF::request service_node_list::generate_uptime_proof(
-      const service_node_keys &keys, uint32_t public_ip, uint16_t storage_port, uint16_t storage_lmq_port, uint16_t quorumnet_port) const
+      uint32_t public_ip, uint16_t storage_port, uint16_t storage_lmq_port, uint16_t quorumnet_port) const
   {
+    assert(m_service_node_keys);
+    const auto& keys = *m_service_node_keys;
     cryptonote::NOTIFY_UPTIME_PROOF::request result = {};
     result.snode_version                            = LOKI_VERSION;
     result.timestamp                                = time(nullptr);
@@ -2167,6 +2169,39 @@ namespace service_nodes
       if (const auto &x2_pk = it->second.pubkey_x25519)
         x25519_to_pub.emplace(x2_pk, std::make_pair(pk_info.first, now));
     }
+  }
+
+  std::string service_node_list::remote_lookup(lokimq::string_view xpk) {
+    if (xpk.size() != sizeof(crypto::x25519_public_key))
+      return "";
+    crypto::x25519_public_key x25519_pub;
+    std::memcpy(x25519_pub.data, xpk.data(), xpk.size());
+
+    auto pubkey = get_pubkey_from_x25519(x25519_pub);
+    if (!pubkey) {
+      MDEBUG("no connection available: could not find primary pubkey from x25519 pubkey " << x25519_pub);
+      return "";
+    }
+
+    bool found = false;
+    uint32_t ip = 0;
+    uint16_t port = 0;
+    for_each_service_node_info_and_proof(&pubkey, &pubkey + 1, [&](auto&, auto&, auto& proof) {
+        found = true;
+        ip = proof.public_ip;
+        port = proof.quorumnet_port;
+    });
+
+    if (!found) {
+      MDEBUG("no connection available: primary pubkey " << pubkey << " is not registered");
+      return "";
+    }
+    if (!(ip && port)) {
+      MDEBUG("no connection available: service node " << pubkey << " has no associated ip and/or port");
+      return "";
+    }
+
+    return "tcp://" + epee::string_tools::get_ip_string_from_int32(ip) + ":" + std::to_string(port);
   }
 
   void service_node_list::record_checkpoint_vote(crypto::public_key const &pubkey, uint64_t height, bool voted)

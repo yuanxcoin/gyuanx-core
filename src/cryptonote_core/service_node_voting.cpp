@@ -681,5 +681,28 @@ namespace service_nodes
       std::memcpy(&st, &blob[86], 2); vote.state_change.state = static_cast<new_state>(boost::endian::little_to_native(st));
     }
   }
-}; // namespace service_nodes
 
+    KV_SERIALIZE_MAP_CODE_BEGIN(quorum_vote_t)
+      KV_SERIALIZE(version)
+      KV_SERIALIZE_ENUM(type)
+      KV_SERIALIZE(block_height)
+      KV_SERIALIZE_ENUM(group)
+      KV_SERIALIZE(index_in_group)
+      KV_SERIALIZE_VAL_POD_AS_BLOB(signature)
+      if (this_ref.type == quorum_type::checkpointing)
+      {
+        KV_SERIALIZE_VAL_POD_AS_BLOB_N(checkpoint.block_hash, "checkpoint")
+      }
+      else
+      {
+        KV_SERIALIZE(state_change.worker_index)
+        KV_SERIALIZE_ENUM(state_change.state)
+      }
+    KV_SERIALIZE_MAP_CODE_END()
+} // namespace service_nodes
+
+namespace cryptonote {
+  KV_SERIALIZE_MAP_CODE_BEGIN(NOTIFY_NEW_SERVICE_NODE_VOTE::request)
+    KV_SERIALIZE(votes)
+  KV_SERIALIZE_MAP_CODE_END()
+}

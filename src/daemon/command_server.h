@@ -44,7 +44,7 @@ private:
   epee::console_handlers_binder m_command_lookup;
 
 public:
-  /// Remote RPC constructor
+  /// Remote HTTP RPC constructor
   command_server(
       uint32_t ip
     , uint16_t port
@@ -52,19 +52,18 @@ public:
     , const epee::net_utils::ssl_options_t& ssl_options
     );
 
-  /// Non-remote RPC constructor
-  command_server(cryptonote::core_rpc_server& rpc_server);
+  /// Non-remote constructor
+  command_server(cryptonote::rpc::core_rpc_server& rpc_server);
 
-  bool process_command(const std::string& cmd);
-
-  bool process_command(const std::vector<std::string>& cmd);
+  template <typename... T>
+  bool process_command(T&&... args) { return m_command_lookup.process_command(std::forward<T>(args)...); }
 
   bool start_handling(std::function<void(void)> exit_handler = {});
 
   void stop_handling();
 
 private:
-  void init_commands(cryptonote::core_rpc_server* rpc_server = nullptr);
+  void init_commands(cryptonote::rpc::core_rpc_server* rpc_server = nullptr);
   bool help(const std::vector<std::string>& args);
 
   std::string get_commands_str();

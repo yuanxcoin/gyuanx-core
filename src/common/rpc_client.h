@@ -103,7 +103,7 @@ namespace tools
         return false;
       }
       ok = epee::net_utils::invoke_http_json_rpc("/json_rpc", method_name, req, res, m_http_client, t_http_connection::TIMEOUT());
-      if (!ok || res.status != CORE_RPC_STATUS_OK) // TODO - handle CORE_RPC_STATUS_BUSY ?
+      if (!ok || res.status != cryptonote::rpc::STATUS_OK) // TODO - handle cryptonote::rpc::STATUS_BUSY ?
       {
         fail_msg_writer() << fail_msg << " -- json_rpc_request: " << res.status;
         return false;
@@ -131,7 +131,7 @@ namespace tools
         return false;
       }
       ok = epee::net_utils::invoke_http_json(relative_url, req, res, m_http_client, t_http_connection::TIMEOUT());
-      if (!ok || res.status != CORE_RPC_STATUS_OK) // TODO - handle CORE_RPC_STATUS_BUSY ?
+      if (!ok || res.status != cryptonote::rpc::STATUS_OK) // TODO - handle cryptonote::rpc::STATUS_BUSY ?
       {
         fail_msg_writer() << fail_msg << "-- rpc_request: " << res.status;
         return false;

@@ -60,7 +60,8 @@ private:
   bool cancelled = false;
 public:
   deferred(lambda_t lambda) : lambda(lambda) {}
-  void cancel() { cancelled = true; }
+  void invoke() { lambda(); cancelled = true; } // Invoke early instead of at destruction
+  void cancel() { cancelled = true; } // Cancel invocation at destruction
   ~deferred() { if (!cancelled) lambda(); }
 };
 

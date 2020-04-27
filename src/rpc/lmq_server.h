@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2019, The Monero Project
+// Copyright (c) 2020, The Loki Project
 // 
 // All rights reserved.
 // 
@@ -26,28 +26,48 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
-// Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
-#include "serialization/keyvalue_serialization.h"
 
+#include "core_rpc_server.h"
+#include "cryptonote_core/blockchain.h"
+#include "lokimq/connections.h"
 
-namespace cryptonote
-{
-  struct core_stat_info
-  {
-    uint64_t tx_pool_size;
-    uint64_t blockchain_height;
-    uint64_t mining_speed;
-    uint64_t alternative_blocks;
-    std::string top_block_id_str;
-    
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(tx_pool_size)
-      KV_SERIALIZE(blockchain_height)
-      KV_SERIALIZE(mining_speed)
-      KV_SERIALIZE(alternative_blocks)
-      KV_SERIALIZE(top_block_id_str)
-    END_KV_SERIALIZE_MAP()
+namespace lokimq { class LokiMQ; }
+
+namespace cryptonote { namespace rpc {
+
+void init_lmq_options(boost::program_options::options_description& desc);
+
+/**
+ * LMQ RPC server class.  This doesn't actually hold the LokiMQ instance--that's in
+ * cryptonote_core--but it works with it to add RPC endpoints, make it listen on RPC ports, and
+ * handles RPC requests.
+ */
+class lmq_rpc : public cryptonote::BlockAddedHook {
+
+  enum class mempool_sub_type { all, blink };
+  struct mempool_sub {
+    std::chrono::steady_clock::time_point expiry;
+    mempool_sub_type type;
   };
-}
+
+  struct block_sub {
+    std::chrono::steady_clock::time_point expiry;
+  };
+
+  cryptonote::core& core_;
+  core_rpc_server& rpc_;
+  std::shared_timed_mutex subs_mutex_;
+  std::unordered_map<lokimq::ConnectionID, mempool_sub> mempool_subs_;
+  std::unordered_map<lokimq::ConnectionID, block_sub> block_subs_;
+
+public:
+  lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::program_options::variables_map& vm);
+
+  bool block_added(const block& block, const std::vector<transaction>& txs, const checkpoint_t *) override;
+
+  void send_mempool_notifications(const crypto::hash& id, const transaction& tx, const std::string& blob, const tx_pool_options& opts);
+};
+
+}} // namespace cryptonote::rpc

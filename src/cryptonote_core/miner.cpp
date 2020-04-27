@@ -83,7 +83,8 @@ namespace cryptonote
     m_total_hashes(0),
     m_do_print_hashrate(false),
     m_do_mining(false),
-    m_current_hash_rate(0)
+    m_current_hash_rate(0),
+    m_block_reward(0)
   {
     m_attrs.set_stack_size(THREAD_STACK_SIZE);
   }
@@ -94,12 +95,13 @@ namespace cryptonote
     catch (...) { /* ignore */ }
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::set_block_template(const block& bl, const difficulty_type& di, uint64_t height)
+  bool miner::set_block_template(const block& bl, const difficulty_type& di, uint64_t height, uint64_t block_reward)
   {
     CRITICAL_REGION_LOCAL(m_template_lock);
     m_template = bl;
     m_diffic = di;
     m_height = height;
+    m_block_reward = block_reward;
     ++m_template_no;
     m_starter_nonce = crypto::rand<uint32_t>();
     return true;
@@ -131,7 +133,7 @@ namespace cryptonote
       LOG_ERROR("Failed to get_block_template(), stopping mining");
       return false;
     }
-    set_block_template(bl, di, height);
+    set_block_template(bl, di, height, expected_reward);
     return true;
   }
   //-----------------------------------------------------------------------------------------------------

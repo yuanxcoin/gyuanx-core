@@ -49,7 +49,7 @@ command_parser_executor::command_parser_executor(
   : m_executor{ip, port, login, ssl_options}
 {}
 
-command_parser_executor::command_parser_executor(cryptonote::core_rpc_server& rpc_server)
+command_parser_executor::command_parser_executor(cryptonote::rpc::core_rpc_server& rpc_server)
   : m_executor{rpc_server}
 {}
 
@@ -71,8 +71,8 @@ static bool parse_if_present(std::forward_list<std::string> &list, T &var, const
 
 bool command_parser_executor::print_checkpoints(const std::vector<std::string> &args)
 {
-  uint64_t start_height = cryptonote::COMMAND_RPC_GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE;
-  uint64_t end_height   = cryptonote::COMMAND_RPC_GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE;
+  uint64_t start_height = cryptonote::rpc::GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE;
+  uint64_t end_height   = cryptonote::rpc::GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE;
 
   std::forward_list<std::string> args_list(args.begin(), args.end());
   bool print_json = !args_list.empty() && args_list.front() == "+json";
@@ -89,7 +89,7 @@ bool command_parser_executor::print_checkpoints(const std::vector<std::string> &
   {
     std::cout << "use: print_checkpoints [+json] [start height] [end height]\n"
               << "(omit arguments to print the last "
-              << cryptonote::COMMAND_RPC_GET_CHECKPOINTS::NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT << " checkpoints) "
+              << cryptonote::rpc::GET_CHECKPOINTS::NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT << " checkpoints) "
               << std::endl;
     return false;
   }
@@ -100,7 +100,7 @@ bool command_parser_executor::print_checkpoints(const std::vector<std::string> &
 bool command_parser_executor::print_sn_state_changes(const std::vector<std::string> &args)
 {
   uint64_t start_height;
-  uint64_t end_height = cryptonote::COMMAND_RPC_GET_SN_STATE_CHANGES::HEIGHT_SENTINEL_VALUE;
+  uint64_t end_height = cryptonote::rpc::GET_SN_STATE_CHANGES::HEIGHT_SENTINEL_VALUE;
 
   if (args.empty()) {
     std::cout << "Missing first argument start_height" << std::endl;
@@ -243,8 +243,8 @@ bool command_parser_executor::print_blockchain_info(const std::vector<std::strin
 
 bool command_parser_executor::print_quorum_state(const std::vector<std::string>& args)
 {
-  uint64_t start_height = cryptonote::COMMAND_RPC_GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE;
-  uint64_t end_height   = cryptonote::COMMAND_RPC_GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE;
+  uint64_t start_height = cryptonote::rpc::GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE;
+  uint64_t end_height   = cryptonote::rpc::GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE;
 
   std::forward_list<std::string> args_list(args.begin(), args.end());
   if (!parse_if_present(args_list, start_height, "start height"))
@@ -583,7 +583,7 @@ bool command_parser_executor::set_limit_up(const std::vector<std::string>& args)
 {
   if(args.size()>1) return false;
   if(args.size()==0) {
-    return m_executor.get_limit_up();
+    return m_executor.get_limit(true, false);
   }
   int64_t limit;
   try {
@@ -601,7 +601,7 @@ bool command_parser_executor::set_limit_down(const std::vector<std::string>& arg
 {
   if(args.size()>1) return false;
   if(args.size()==0) {
-    return m_executor.get_limit_down();
+    return m_executor.get_limit(false, true);
   }
   int64_t limit;
   try {
@@ -735,7 +735,7 @@ bool command_parser_executor::flush_txpool(const std::vector<std::string>& args)
     }
     txid = args[0];
   }
-  return m_executor.flush_txpool(txid);
+  return m_executor.flush_txpool(std::move(txid));
 }
 
 bool command_parser_executor::output_histogram(const std::vector<std::string>& args)

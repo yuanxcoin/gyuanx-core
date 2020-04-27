@@ -135,12 +135,12 @@ bool make_tx(blockchain_storage& bch)
     std::cout << "transaction construction failed" << std::endl;
   }
 
-  COMMAND_RPC_SEND_RAW_TX::request req;
+  rpc::SEND_RAW_TX::request req;
   req.tx_as_hex = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(tx));
-  COMMAND_RPC_SEND_RAW_TX::response daemon_send_resp;
+  rpc::SEND_RAW_TX::response daemon_send_resp;
   r = net_utils::http::invoke_http_json_remote_command(m_daemon_address + "/sendrawtransaction", req, daemon_send_resp, m_http_client);
   CHECK_AND_ASSERT_MES(r, false, "failed to send transaction");
-  if(daemon_send_resp.status != CORE_RPC_STATUS_OK)
+  if(daemon_send_resp.status != rpc::STATUS_OK)
   {
     std::cout << "daemon failed to accept generated transaction" << std::endl;
     return false;

@@ -31,12 +31,17 @@
 
 #include <memory>
 #include <stdexcept>
+#include <boost/algorithm/string/split.hpp>
+#include <lokimq/lokimq.h>
+
 #include "misc_log_ex.h"
 #if defined(PER_BLOCK_CHECKPOINT)
 #include "blocks/blocks.h"
 #endif
 #include "rpc/daemon_handler.h"
 #include "rpc/rpc_args.h"
+#include "rpc/http_server.h"
+#include "rpc/lmq_server.h"
 #include "cryptonote_protocol/quorumnet.h"
 
 #include "common/password.h"
@@ -52,19 +57,25 @@
 
 #include <functional>
 
+#ifdef ENABLE_SYSTEMD
+extern "C" {
+#  include <systemd/sd-daemon.h>
+}
+#endif
+
+
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "daemon"
 
 namespace daemonize {
 
 http_rpc_server::http_rpc_server(boost::program_options::variables_map const &vm,
-                       cryptonote::core &core,
-                       nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>> &p2p,
+                       cryptonote::rpc::core_rpc_server &corerpc,
                        const bool restricted,
                        const std::string &port,
-                       const std::string &description)
-: m_server{core, p2p}
-, m_description{description}
+                       std::string description)
+: m_server{corerpc}
+, m_description{std::move(description)}
 {
   if (!m_server.init(vm, restricted, port))
   {
@@ -74,7 +85,7 @@ http_rpc_server::http_rpc_server(boost::program_options::variables_map const &vm
 
 void http_rpc_server::run()
 {
-  if (!m_server.run(m_server.m_max_long_poll_connections + cryptonote::core_rpc_server::DEFAULT_RPC_THREADS,
+  if (!m_server.run(m_server.m_max_long_poll_connections + cryptonote::rpc::http_server::DEFAULT_RPC_THREADS,
                     false /*wait - for all threads in the pool to exit when terminating*/))
   {
     throw std::runtime_error("Failed to start " + m_description + " HTTP RPC server.");
@@ -101,17 +112,17 @@ http_rpc_server::~http_rpc_server()
 
 static uint16_t parse_public_rpc_port(const boost::program_options::variables_map& vm)
 {
-  const auto& public_node_arg = cryptonote::core_rpc_server::arg_public_node;
+  const auto& public_node_arg = cryptonote::rpc::http_server::arg_public_node;
   const bool public_node = command_line::get_arg(vm, public_node_arg);
   if (!public_node)
     return 0;
 
   std::string rpc_port_str;
-  const auto &restricted_rpc_port = cryptonote::core_rpc_server::arg_rpc_restricted_bind_port;
+  const auto &restricted_rpc_port = cryptonote::rpc::http_server::arg_rpc_restricted_bind_port;
   if (!command_line::is_arg_defaulted(vm, restricted_rpc_port))
     rpc_port_str = command_line::get_arg(vm, restricted_rpc_port);
-  else if (command_line::get_arg(vm, cryptonote::core_rpc_server::arg_restricted_rpc))
-    rpc_port_str = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_bind_port);
+  else if (command_line::get_arg(vm, cryptonote::rpc::http_server::arg_restricted_rpc))
+    rpc_port_str = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_bind_port);
   else
     throw std::runtime_error("restricted RPC mode is required for --" + std::string{public_node_arg.name});
 
@@ -140,7 +151,8 @@ daemon::daemon(boost::program_options::variables_map vm_) :
     vm{std::move(vm_)},
     core{std::make_unique<cryptonote::core>()},
     protocol{std::make_unique<protocol_handler>(*core, command_line::get_arg(vm, cryptonote::arg_offline))},
-    p2p{std::make_unique<node_server>(*protocol)}
+    p2p{std::make_unique<node_server>(*protocol)},
+    rpc{std::make_unique<cryptonote::rpc::core_rpc_server>(*core, *p2p)}
 {
   MGINFO_BLUE("Initializing daemon objects...");
 
@@ -155,20 +167,19 @@ daemon::daemon(boost::program_options::variables_map vm_) :
   // Handle circular dependencies
   protocol->set_p2p_endpoint(p2p.get());
   core->set_cryptonote_protocol(protocol.get());
-  quorumnet::init_core_callbacks();
 
   {
-    const auto restricted = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_restricted_rpc);
-    const auto main_rpc_port = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_bind_port);
+    const auto restricted = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_restricted_rpc);
+    const auto main_rpc_port = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_bind_port);
     MGINFO("- core HTTP RPC server");
-    http_rpcs.emplace_back(vm, *core, *p2p, restricted, main_rpc_port, "core");
+    http_rpcs.emplace_back(vm, *rpc, restricted, main_rpc_port, "core");
   }
 
-  if (!command_line::is_arg_defaulted(vm, cryptonote::core_rpc_server::arg_rpc_restricted_bind_port))
+  if (!command_line::is_arg_defaulted(vm, cryptonote::rpc::http_server::arg_rpc_restricted_bind_port))
   {
-    auto restricted_rpc_port = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_restricted_bind_port);
+    auto restricted_rpc_port = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_restricted_bind_port);
     MGINFO("- restricted HTTP RPC server");
-    http_rpcs.emplace_back(vm, *core, *p2p, true, restricted_rpc_port, "restricted");
+    http_rpcs.emplace_back(vm, *rpc, true, restricted_rpc_port, "restricted");
   }
 
   MGINFO_BLUE("Done daemon object initialization");
@@ -210,9 +221,17 @@ daemon::~daemon()
 
 void daemon::init_options(boost::program_options::options_description& option_spec)
 {
+  static bool called = false;
+  if (called)
+    throw std::logic_error("daemon::init_options must only be called once");
+  else
+    called = true;
   cryptonote::core::init_options(option_spec);
   node_server::init_options(option_spec);
-  cryptonote::core_rpc_server::init_options(option_spec);
+  cryptonote::rpc::core_rpc_server::init_options(option_spec);
+  cryptonote::rpc::http_server::init_options(option_spec);
+  cryptonote::rpc::init_lmq_options(option_spec);
+  quorumnet::init_core_callbacks();
 }
 
 bool daemon::run(bool interactive)
@@ -253,17 +272,6 @@ bool daemon::run(bool interactive)
       rpc.run();
     }
 
-    // FIXME: this is wonky and needs fixing: if we have no RPC server, then we also get no ability
-    // to process commands, even in the interactive daemon.  It also means a core RPC server needs
-    // to be usable without having a bound port.
-    std::unique_ptr<daemonize::command_server> rpc_commands;
-    if (interactive && http_rpcs.size())
-    {
-      MGINFO("Starting command-line processor");
-      rpc_commands = std::make_unique<daemonize::command_server>(http_rpcs.front().m_server);
-      rpc_commands->start_handling([this] { stop(); });
-    }
-
     MGINFO("Starting RPC daemon handler");
     cryptonote::rpc::DaemonHandler rpc_daemon_handler(*core, *p2p);
 
@@ -273,7 +281,24 @@ bool daemon::run(bool interactive)
       p2p->set_rpc_port(public_rpc_port);
     }
 
+    MGINFO("Starting LokiMQ");
+    lmq_rpc = std::make_unique<cryptonote::rpc::lmq_rpc>(*core, *rpc, vm);
+    core->start_lokimq();
+
+    std::unique_ptr<daemonize::command_server> rpc_commands;
+    if (interactive)
+    {
+      MGINFO("Starting command-line processor");
+      rpc_commands = std::make_unique<daemonize::command_server>(*rpc);
+      rpc_commands->start_handling([this] { stop(); });
+    }
+
     MGINFO_GREEN("Starting up main network");
+
+#ifdef ENABLE_SYSTEMD
+    sd_notify(0, ("READY=1\nSTATUS=" + core->get_status_string()).c_str());
+#endif
+
     p2p->run(); // blocks until p2p goes down
     MGINFO_YELLOW("Main network stopped");
 

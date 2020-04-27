@@ -61,6 +61,8 @@
 
 #define DEFAULT_AUTO_REFRESH_PERIOD 20 // seconds
 
+namespace rpc = cryptonote::rpc;
+
 namespace
 {
   const command_line::arg_descriptor<std::string, true> arg_rpc_bind_port = {"rpc-bind-port", "Sets bind port for server"};
@@ -2816,13 +2818,13 @@ namespace tools
       return false;
     }
 
-    cryptonote::COMMAND_RPC_START_MINING::request daemon_req{}; 
+    rpc::START_MINING::request daemon_req{}; 
     daemon_req.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
     daemon_req.threads_count        = req.threads_count;
 
-    cryptonote::COMMAND_RPC_START_MINING::response daemon_res;
+    rpc::START_MINING::response daemon_res{};
     bool r = m_wallet->invoke_http_json("/start_mining", daemon_req, daemon_res);
-    if (!r || daemon_res.status != CORE_RPC_STATUS_OK)
+    if (!r || daemon_res.status != rpc::STATUS_OK)
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Couldn't start mining due to unknown error.";
@@ -2834,10 +2836,10 @@ namespace tools
   bool wallet_rpc_server::on_stop_mining(const wallet_rpc::COMMAND_RPC_STOP_MINING::request& req, wallet_rpc::COMMAND_RPC_STOP_MINING::response& res, epee::json_rpc::error& er, const connection_context *ctx)
   {
     if (!m_wallet) return not_open(er);
-    cryptonote::COMMAND_RPC_STOP_MINING::request daemon_req;
-    cryptonote::COMMAND_RPC_STOP_MINING::response daemon_res;
+    rpc::STOP_MINING::request daemon_req{};
+    rpc::STOP_MINING::response daemon_res{};
     bool r = m_wallet->invoke_http_json("/stop_mining", daemon_req, daemon_res);
-    if (!r || daemon_res.status != CORE_RPC_STATUS_OK)
+    if (!r || daemon_res.status != rpc::STATUS_OK)
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "Couldn't stop mining due to unknown error.";
@@ -2917,8 +2919,8 @@ namespace tools
       return false;
     }
     wal->set_seed_language(req.language);
-    cryptonote::COMMAND_RPC_GET_HEIGHT::request hreq;
-    cryptonote::COMMAND_RPC_GET_HEIGHT::response hres;
+    rpc::GET_HEIGHT::request hreq{};
+    rpc::GET_HEIGHT::response hres{};
     hres.height = 0;
     bool r = wal->invoke_http_json("/getheight", hreq, hres);
     if (r)

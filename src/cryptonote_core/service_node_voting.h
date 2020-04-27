@@ -96,23 +96,7 @@ namespace service_nodes
       checkpoint_vote   checkpoint;
     };
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(version)
-      KV_SERIALIZE_ENUM(type)
-      KV_SERIALIZE(block_height)
-      KV_SERIALIZE_ENUM(group)
-      KV_SERIALIZE(index_in_group)
-      KV_SERIALIZE_VAL_POD_AS_BLOB(signature)
-      if (this_ref.type == quorum_type::checkpointing)
-      {
-        KV_SERIALIZE_VAL_POD_AS_BLOB_N(checkpoint.block_hash, "checkpoint")
-      }
-      else
-      {
-        KV_SERIALIZE(state_change.worker_index)
-        KV_SERIALIZE_ENUM(state_change.state)
-      }
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
 
    // TODO(loki): idk exactly if I want to implement this, but need for core tests to compile. Not sure I care about serializing for core tests at all.
    private:

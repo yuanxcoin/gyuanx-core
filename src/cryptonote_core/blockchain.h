@@ -514,7 +514,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res) const;
+    bool get_outs(const rpc::GET_OUTPUTS_BIN::request& req, rpc::GET_OUTPUTS_BIN::response& res) const;
 
     /**
      * @brief gets an output's key and unlocked state
@@ -1028,6 +1028,8 @@ namespace cryptonote
 
     /**
      * @brief add a hook for processing new blocks and rollbacks for reorgs
+     *
+     * TODO: replace these with more versatile std::functions
      */
     void hook_block_added        (BlockAddedHook& hook)         { m_block_added_hooks.push_back(&hook); }
     void hook_blockchain_detached(BlockchainDetachedHook& hook) { m_blockchain_detached_hooks.push_back(&hook); }

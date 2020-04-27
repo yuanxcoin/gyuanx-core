@@ -132,19 +132,12 @@ namespace nodetool
     struct network_zone;
     using connect_func = boost::optional<p2p_connection_context>(network_zone&, epee::net_utils::network_address const&, epee::net_utils::ssl_support_t);
 
-    struct config_t
+    struct config
     {
-      config_t()
-        : m_net_config(),
-          m_peer_id(crypto::rand<uint64_t>()),
-          m_support_flags(0)
-      {}
-
-      network_config m_net_config;
-      uint64_t m_peer_id;
-      uint32_t m_support_flags;
+      network_config m_net_config{};
+      uint64_t m_peer_id{crypto::rand<uint64_t>()};
+      uint32_t m_support_flags{0};
     };
-    typedef epee::misc_utils::struct_init<config_t> config;
 
     struct network_zone
     {

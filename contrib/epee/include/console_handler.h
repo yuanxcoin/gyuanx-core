@@ -489,15 +489,16 @@ eof:
 #endif
     }
 
+    /// Throws std::out_of_range on bad command with what() set to the command name, otherwise
+    /// returns the result of the command (true generally means success, false means failure).
     bool process_command(const std::vector<std::string>& cmd)
     {
       if(!cmd.size())
-        return false;
+        throw std::out_of_range{"(empty)"};
       auto it = m_command_handlers.find(cmd.front());
-      if(it == m_command_handlers.end())
-        return false;
-      std::vector<std::string> cmd_local(cmd.begin()+1, cmd.end());
-      return it->second.first(cmd_local);
+      if (it == m_command_handlers.end())
+        throw std::out_of_range{cmd.front()};
+      return it->second.first(std::vector<std::string>{cmd.begin()+1, cmd.end()});
     }
 
     bool process_command(const std::string& cmd)

@@ -230,7 +230,7 @@ int main(int argc, char const * argv[])
       {
         const cryptonote::rpc_args::descriptors arg{};
         auto rpc_ip_str = command_line::get_arg(vm, arg.rpc_bind_ip);
-        auto rpc_port_str = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_bind_port);
+        auto rpc_port_str = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_bind_port);
 
         uint32_t rpc_ip;
         uint16_t rpc_port;
@@ -254,7 +254,7 @@ int main(int argc, char const * argv[])
           login = tools::login::parse(
             has_rpc_arg ? command_line::get_arg(vm, arg.rpc_login) : std::string(env_rpc_login), false, [](bool verify) {
 #ifdef HAVE_READLINE
-        rdln::suspend_readline pause_readline;
+              rdln::suspend_readline pause_readline;
 #endif
               return tools::password_container::prompt(verify, "Daemon client password");
             }
@@ -271,18 +271,17 @@ int main(int argc, char const * argv[])
           return 1;
 
         daemonize::command_server rpc_commands{rpc_ip, rpc_port, std::move(login), std::move(*ssl_options)};
-        if (rpc_commands.process_command(command))
-        {
-          return 0;
-        }
-        else
-        {
+
+        try {
+          if (rpc_commands.process_command(command))
+            return 0;
+        } catch (const std::out_of_range& e) {
 #ifdef HAVE_READLINE
           rdln::suspend_readline pause_readline;
 #endif
-          std::cerr << "Unknown command: " << command.front() << std::endl;
-          return 1;
+          std::cout << "Unknown command: " << e.what() << ".  Try 'help' for available commands\n";
         }
+        return 1;
       }
     }
 

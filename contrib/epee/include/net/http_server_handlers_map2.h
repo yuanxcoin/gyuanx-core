@@ -56,8 +56,6 @@
 
 #define MAP_URI2(pattern, callback)  else if(std::string::npos != query_info.m_URI.find(pattern)) return callback(query_info, response_info, &m_conn_context);
 
-#define MAP_URI_AUTO_XML2(s_pattern, callback_f, command_type) //TODO: don't think i ever again will use xml - ambiguous and "overtagged" format
-
 #define MAP_URI_AUTO_JON2_IF(s_pattern, callback_f, command_type, cond) \
     else if((query_info.m_URI == s_pattern) && (cond)) \
     { \
@@ -160,7 +158,7 @@
     return true; \
   } \
   uint64_t ticks1 = epee::misc_utils::get_tick_count(); \
-  epee::json_rpc::response<command_type::response, epee::json_rpc::dummy_error> resp{}; \
+  epee::json_rpc::response<command_type::response> resp{}; \
   resp.jsonrpc = "2.0"; \
   resp.id = req.id;
 

@@ -392,10 +392,10 @@ namespace cryptonote
     crypto::hash max_used_block_id = null_hash;
     uint64_t max_used_block_height = 0;
     cryptonote::txpool_tx_meta_t meta;
-    bool ch_inp_res = check_tx_inputs([&tx]()->cryptonote::transaction&{ return tx; }, id, max_used_block_height, max_used_block_id, tvc, opts.kept_by_block,
+    bool inputs_okay = check_tx_inputs([&tx]()->cryptonote::transaction&{ return tx; }, id, max_used_block_height, max_used_block_id, tvc, opts.kept_by_block,
         opts.approved_blink ? blink_rollback_height : nullptr);
     const bool non_standard_tx = !tx.is_transfer();
-    if(!ch_inp_res)
+    if (!inputs_okay)
     {
       // if the transaction was valid before (kept_by_block), then it
       // may become valid again, so ignore the failed inputs check.
@@ -440,7 +440,8 @@ namespace cryptonote
         tvc.m_invalid_input = true;
         return false;
       }
-    }else
+    }
+    else
     {
       //update transactions container
       meta.weight = tx_weight;
@@ -488,6 +489,10 @@ namespace cryptonote
     ++m_cookie;
 
     MINFO("Transaction added to pool: txid " << id << " weight: " << tx_weight << " fee/byte: " << (fee / (double)tx_weight));
+
+    if (!opts.kept_by_block && !opts.do_not_relay && !m_tx_notify.empty())
+      for (auto& notify : m_tx_notify)
+        notify(id, tx, blob, opts);
 
     prune(id);
 
@@ -957,6 +962,13 @@ namespace cryptonote
   {
     m_remove_stuck_tx_interval.do_call([this](){return remove_stuck_transactions();});
   }
+
+  void tx_memory_pool::add_notify(std::function<void(const crypto::hash&, const transaction&, const std::string&, const tx_pool_options&)> notify)
+  {
+    auto lock = tools::unique_lock(m_transactions_lock);
+    m_tx_notify.push_back(std::move(notify));
+  }
+
   //---------------------------------------------------------------------------------
   sorted_tx_container::iterator tx_memory_pool::find_tx_in_sorted_container(const crypto::hash& id) const
   {
@@ -1171,7 +1183,7 @@ namespace cryptonote
     }, false, include_unrelayed_txes);
   }
   //------------------------------------------------------------------
-  void tx_memory_pool::get_transaction_backlog(std::vector<tx_backlog_entry>& backlog, bool include_unrelayed_txes) const
+  void tx_memory_pool::get_transaction_backlog(std::vector<rpc::tx_backlog_entry>& backlog, bool include_unrelayed_txes) const
   {
     auto locks = tools::unique_locks(m_transactions_lock, m_blockchain);
 
@@ -1183,12 +1195,12 @@ namespace cryptonote
     }, false, include_unrelayed_txes);
   }
   //------------------------------------------------------------------
-  void tx_memory_pool::get_transaction_stats(struct txpool_stats& stats, bool include_unrelayed_txes) const
+  void tx_memory_pool::get_transaction_stats(struct rpc::txpool_stats& stats, bool include_unrelayed_txes) const
   {
     auto locks = tools::unique_locks(m_transactions_lock, m_blockchain);
 
     const uint64_t now = time(NULL);
-    std::map<uint64_t, txpool_histo> agebytes;
+    std::map<uint64_t, rpc::txpool_histo> agebytes;
     stats.txs_total = m_blockchain.get_txpool_tx_count(include_unrelayed_txes);
     std::vector<uint32_t> weights;
     weights.reserve(stats.txs_total);
@@ -1221,7 +1233,7 @@ namespace cryptonote
       /* looking for 98th percentile */
       size_t end = stats.txs_total * 0.02;
       uint64_t delta, factor;
-      std::map<uint64_t, txpool_histo>::iterator it, i2;
+      std::map<uint64_t, rpc::txpool_histo>::iterator it, i2;
       if (end)
       {
         /* If enough txs, spread the first 98% of results across
@@ -1261,7 +1273,7 @@ namespace cryptonote
   }
   //------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::get_transactions_and_spent_keys_info(std::vector<tx_info>& tx_infos, std::vector<spent_key_image_info>& key_image_infos, bool include_sensitive_data) const
+  bool tx_memory_pool::get_transactions_and_spent_keys_info(std::vector<rpc::tx_info>& tx_infos, std::vector<rpc::spent_key_image_info>& key_image_infos, bool include_sensitive_data) const
   {
     auto tx_lock = tools::unique_lock(m_transactions_lock, std::defer_lock);
     auto bc_lock = tools::unique_lock(m_blockchain, std::defer_lock);
@@ -1280,7 +1292,7 @@ namespace cryptonote
         return true;
       }
       tx_infos.emplace_back();
-      tx_info &txi = tx_infos.back();
+      auto& txi = tx_infos.back();
       txi.id_hash = epee::string_tools::pod_to_hex(txid);
       txi.tx_blob = *bd;
       tx.set_hash(txid);
@@ -1308,7 +1320,7 @@ namespace cryptonote
     for (const key_images_container::value_type& kee : m_spent_key_images) {
       const crypto::key_image& k_image = kee.first;
       const std::unordered_set<crypto::hash>& kei_image_set = kee.second;
-      spent_key_image_info ki;
+      rpc::spent_key_image_info ki{};
       ki.id_hash = epee::string_tools::pod_to_hex(k_image);
       for (const crypto::hash& tx_id_hash : kei_image_set)
       {
@@ -1694,7 +1706,7 @@ end:
         return false;//we already sure that this tx is broken for this height
 
       tx_verification_context tvc;
-      if(!check_tx_inputs([&lazy_tx]()->cryptonote::transaction&{ return lazy_tx(); }, txid, txd.max_used_block_height, txd.max_used_block_id, tvc))
+      if(!check_tx_inputs(lazy_tx, txid, txd.max_used_block_height, txd.max_used_block_id, tvc))
       {
         txd.last_failed_height = m_blockchain.get_current_blockchain_height()-1;
         txd.last_failed_id = m_blockchain.get_block_id_by_height(txd.last_failed_height);
@@ -1711,7 +1723,7 @@ end:
           return false;
         //check ring signature again, it is possible (with very small chance) that this transaction become again valid
         tx_verification_context tvc;
-        if(!check_tx_inputs([&lazy_tx]()->cryptonote::transaction&{ return lazy_tx(); }, txid, txd.max_used_block_height, txd.max_used_block_id, tvc))
+        if(!check_tx_inputs(lazy_tx, txid, txd.max_used_block_height, txd.max_used_block_id, tvc))
         {
           txd.last_failed_height = m_blockchain.get_current_blockchain_height()-1;
           txd.last_failed_id = m_blockchain.get_block_id_by_height(txd.last_failed_height);
@@ -1998,7 +2010,7 @@ end:
     {
       const bool kept = pass == 1;
       bool r = m_blockchain.for_all_txpool_txes([this, &remove, kept](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata *bd) {
-        if (!!kept != !!meta.kept_by_block)
+        if (kept != (bool)meta.kept_by_block)
           return true;
         cryptonote::transaction_prefix tx;
         if (!parse_and_validate_tx_prefix_from_blob(*bd, tx))

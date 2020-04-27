@@ -35,12 +35,14 @@
 
 #include "common/loki_integration_test_hooks.h"
 
+#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#include <thread>
+#endif
+
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "daemon"
 
 namespace daemonize {
-
-namespace p = std::placeholders;
 
 command_server::command_server(
     uint32_t ip
@@ -53,13 +55,13 @@ command_server::command_server(
   init_commands();
 }
 
-command_server::command_server(cryptonote::core_rpc_server& rpc)
+command_server::command_server(cryptonote::rpc::core_rpc_server& rpc)
   : m_is_rpc{false}, m_parser{rpc}
 {
   init_commands(&rpc);
 }
 
-void command_server::init_commands(cryptonote::core_rpc_server* rpc_server)
+void command_server::init_commands(cryptonote::rpc::core_rpc_server* rpc_server)
 {
   m_command_lookup.set_handler(
       "help"
@@ -431,25 +433,6 @@ void command_server::init_commands(cryptonote::core_rpc_server* rpc_server)
     );
 #endif
 }
-
-bool command_server::process_command(const std::string& cmd)
-{
-  return m_command_lookup.process_command(cmd);
-}
-
-bool command_server::process_command(const std::vector<std::string>& cmd)
-{
-  bool result = m_command_lookup.process_command(cmd);
-  if (!result)
-  {
-    help(std::vector<std::string>());
-  }
-  return result;
-}
-
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-#include <thread>
-#endif
 
 bool command_server::start_handling(std::function<void(void)> exit_handler)
 {

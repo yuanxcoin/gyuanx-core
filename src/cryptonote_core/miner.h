@@ -66,7 +66,7 @@ namespace cryptonote
     ~miner();
     bool init(const boost::program_options::variables_map& vm, network_type nettype);
     static void init_options(boost::program_options::options_description& desc);
-    bool set_block_template(const block& bl, const difficulty_type& diffic, uint64_t height);
+    bool set_block_template(const block& bl, const difficulty_type& diffic, uint64_t height, uint64_t block_reward);
     bool on_block_chain_update();
     bool start(const account_public_address& adr, size_t threads_count, uint64_t stop_after = 0, bool slow_mining = false);
     uint64_t get_speed() const;
@@ -82,6 +82,7 @@ namespace cryptonote
     void pause();
     void resume();
     void do_print_hashrate(bool do_hr);
+    uint64_t get_block_reward() const { return m_block_reward; }
 
 #if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
     std::atomic<bool> m_debug_mine_singular_block;
@@ -146,5 +147,6 @@ namespace cryptonote
     bool m_do_mining;
     std::vector<std::pair<uint64_t, uint64_t>> m_threads_autodetect;
     boost::thread::attributes m_attrs;
+    std::atomic<uint64_t> m_block_reward;
   };
 }

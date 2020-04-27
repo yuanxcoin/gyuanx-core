@@ -47,7 +47,8 @@ namespace daemonize {
 class rpc_command_executor final {
 private:
   std::unique_ptr<tools::t_rpc_client> m_rpc_client;
-  cryptonote::core_rpc_server* m_rpc_server = nullptr;
+  cryptonote::rpc::core_rpc_server* m_rpc_server = nullptr;
+  const cryptonote::rpc::rpc_context m_server_context{true};
 
 public:
   /// Executor for remote connection RPC
@@ -58,8 +59,38 @@ public:
     , const epee::net_utils::ssl_options_t& ssl_options
     );
   /// Executor for local daemon RPC
-  rpc_command_executor(cryptonote::core_rpc_server& rpc_server)
+  rpc_command_executor(cryptonote::rpc::core_rpc_server& rpc_server)
     : m_rpc_server{&rpc_server} {}
+
+  /// Runs some RPC command either via json_rpc or a direct core rpc call.
+  ///
+  /// @param req the request object (rvalue reference)
+  /// @param res the response object (lvalue reference)
+  /// @param error print this (and, on exception, the exception message) on failure.  If empty then
+  /// nothing is printed on failure.
+  /// @param check_status_ok whether we require res.status == STATUS_OK to consider the request
+  /// successful
+  template <typename RPC>
+  bool invoke(typename RPC::request&& req, typename RPC::response& res, const std::string& error, bool check_status_ok = true)
+  {
+    try {
+      if (m_rpc_client) {
+        if (!m_rpc_client->json_rpc_request(req, res, std::string{RPC::names()[0]}, error))
+          return false;
+      } else {
+        res = m_rpc_server->invoke(std::move(req), m_server_context);
+      }
+      if (!check_status_ok || res.status == cryptonote::rpc::STATUS_OK)
+        return true;
+    } catch (const std::exception& e) {
+      if (!error.empty())
+        tools::fail_msg_writer() << error << ": " << e.what();
+      return true;
+    } catch (...) {}
+    if (!error.empty())
+      tools::fail_msg_writer() << error;
+    return false;
+  }
 
   bool print_checkpoints(uint64_t start_height, uint64_t end_height, bool print_json);
 
@@ -87,10 +118,14 @@ public:
 
   bool set_log_level(int8_t level);
 
-  bool set_log_categories(const std::string &categories);
+  bool set_log_categories(std::string categories);
 
   bool print_height();
 
+private:
+  bool print_block(cryptonote::rpc::GET_BLOCK::request&& req, bool include_hdex);
+
+public:
   bool print_block_by_hash(crypto::hash block_hash, bool include_hex);
 
   bool print_block_by_height(uint64_t height, bool include_hex);
@@ -115,11 +150,7 @@ public:
 
   bool print_status();
 
-  bool get_limit();
-
-  bool get_limit_up();
-
-  bool get_limit_down();
+  bool get_limit(bool up = true, bool down = true);
 
   bool set_limit(int64_t limit_down, int64_t limit_up);
 
@@ -131,13 +162,13 @@ public:
 
   bool print_bans();
 
-  bool ban(const std::string &address, time_t seconds);
+  bool ban(const std::string &address, time_t seconds, bool clear_ban = false);
 
   bool unban(const std::string &address);
 
   bool banned(const std::string &address);
 
-  bool flush_txpool(const std::string &txid);
+  bool flush_txpool(std::string txid);
 
   bool output_histogram(const std::vector<uint64_t> &amounts, uint64_t min_count, uint64_t max_count);
 
@@ -157,7 +188,7 @@ public:
 
   bool print_sn_key();
 
-  bool print_sn_status(const std::vector<std::string>& args);
+  bool print_sn_status(std::vector<std::string> args);
 
   bool print_sr(uint64_t height);
 

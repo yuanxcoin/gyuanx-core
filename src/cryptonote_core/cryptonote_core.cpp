@@ -215,6 +215,11 @@ namespace cryptonote
              val;
     }
   };
+  static const command_line::arg_descriptor<bool> arg_lmq_quorumnet_public{
+    "lmq-public-quorumnet",
+    "Allow the curve-enabled quorumnet address (for a Service Node) to be used for public RPC commands as if passed to --lmq-curve-public. "
+      "Note that even without this option the quorumnet port can be used for RPC commands by --lmq-admin and --lmq-user pubkeys.",
+    false};
   static const command_line::arg_descriptor<std::string> arg_block_notify = {
     "block-notify"
   , "Run a program for each new block, '%s' will be replaced by the block hash"
@@ -264,17 +269,15 @@ namespace cryptonote
   [[noreturn]] static void need_core_init() {
       throw std::logic_error("Internal error: quorumnet::init_core_callbacks() should have been called");
   }
-  void *(*quorumnet_new)(core &, const std::string &bind);
-  void (*quorumnet_delete)(void *&self);
-  void (*quorumnet_refresh_sns)(void *self);
-  void (*quorumnet_relay_obligation_votes)(void *self, const std::vector<service_nodes::quorum_vote_t> &);
-  std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(void *self, const std::string &tx_blob);
+  void *(*quorumnet_new)(core&);
+  void (*quorumnet_delete)(void*&self);
+  void (*quorumnet_relay_obligation_votes)(void* self, const std::vector<service_nodes::quorum_vote_t>&);
+  std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(core& core, const std::string& tx_blob);
   static bool init_core_callback_stubs() {
-    quorumnet_new = [](core &, const std::string &) -> void * { need_core_init(); };
-    quorumnet_delete = [](void *&) { need_core_init(); };
-    quorumnet_refresh_sns = [](void *) { need_core_init(); };
-    quorumnet_relay_obligation_votes = [](void *, const std::vector<service_nodes::quorum_vote_t> &) { need_core_init(); };
-    quorumnet_send_blink = [](void *, const std::string &) -> std::future<std::pair<blink_result, std::string>> { need_core_init(); };
+    quorumnet_new = [](core&) -> void* { need_core_init(); };
+    quorumnet_delete = [](void*&) { need_core_init(); };
+    quorumnet_relay_obligation_votes = [](void*, const std::vector<service_nodes::quorum_vote_t>&) { need_core_init(); };
+    quorumnet_send_blink = [](core&, const std::string&) -> std::future<std::pair<blink_result, std::string>> { need_core_init(); };
     return false;
   }
   bool init_core_callback_complete = init_core_callback_stubs();
@@ -369,6 +372,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_public_ip);
     command_line::add_arg(desc, arg_storage_server_port);
     command_line::add_arg(desc, arg_quorumnet_port);
+
     command_line::add_arg(desc, arg_pad_transactions);
     command_line::add_arg(desc, arg_block_notify);
 #if 0 // TODO(loki): Pruning not supported because of Service Node List
@@ -410,11 +414,9 @@ namespace cryptonote
     if (command_line::get_arg(vm, arg_dev_allow_local))
       m_service_node_list.debug_allow_local_ips = true;
 
-    bool service_node = command_line::get_arg(vm, arg_service_node);
+    m_service_node = command_line::get_arg(vm, arg_service_node);
 
-    if (service_node) {
-      m_service_node_keys = std::make_unique<service_node_keys>(); // Will be updated or generated later, in init()
-
+    if (m_service_node) {
       /// TODO: parse these options early, before we start p2p server etc?
       m_storage_port = command_line::get_arg(vm, arg_storage_server_port);
 
@@ -525,7 +527,6 @@ namespace cryptonote
     return m_blockchain_storage.get_alternative_blocks_count();
   }
 
-#ifdef ENABLE_SYSTEMD
   static std::string time_ago_str(time_t now, time_t then) {
     if (then >= now)
       return "now"s;
@@ -539,21 +540,21 @@ namespace cryptonote
 
   // Returns a string for systemd status notifications such as:
   // Height: 1234567, SN: active, proof: 55m12s, storage: 4m48s, lokinet: 47s
-  static std::string get_systemd_status_string(const core &c)
+  std::string core::get_status_string() const
   {
     std::string s;
     s.reserve(128);
     s += 'v'; s += LOKI_VERSION_STR;
     s += "; Height: ";
-    s += std::to_string(c.get_blockchain_storage().get_current_blockchain_height());
+    s += std::to_string(get_blockchain_storage().get_current_blockchain_height());
     s += ", SN: ";
-    auto keys = c.get_service_node_keys();
-    if (!keys)
+    if (!service_node())
       s += "no";
     else
     {
-      auto &snl = c.get_service_node_list();
-      auto states = snl.get_service_node_list_state({ keys->pub });
+      auto& snl = get_service_node_list();
+      const auto& pubkey = get_service_keys().pub;
+      auto states = snl.get_service_node_list_state({ pubkey });
       if (states.empty())
         s += "not registered";
       else
@@ -567,19 +568,18 @@ namespace cryptonote
           s += "decomm.";
 
         uint64_t last_proof = 0;
-        snl.access_proof(keys->pub, [&](auto &proof) { last_proof = proof.timestamp; });
+        snl.access_proof(pubkey, [&](auto& proof) { last_proof = proof.timestamp; });
         s += ", proof: ";
         time_t now = std::time(nullptr);
         s += time_ago_str(now, last_proof);
         s += ", storage: ";
-        s += time_ago_str(now, c.m_last_storage_server_ping);
+        s += time_ago_str(now, m_last_storage_server_ping);
         s += ", lokinet: ";
-        s += time_ago_str(now, c.m_last_lokinet_ping);
+        s += time_ago_str(now, m_last_lokinet_ping);
       }
     }
     return s;
   }
-#endif
 
   //-----------------------------------------------------------------------------------------------
   bool core::init(const boost::program_options::variables_map& vm, const cryptonote::test_options *test_options, const GetCheckpointsCallback& get_checkpoints/* = nullptr */)
@@ -641,11 +641,12 @@ namespace cryptonote
     bool const prune_blockchain = false; /* command_line::get_arg(vm, arg_prune_blockchain); */
     bool keep_alt_blocks = command_line::get_arg(vm, arg_keep_alt_blocks);
 
-    if (m_service_node_keys)
+    r = init_service_keys();
+    CHECK_AND_ASSERT_MES(r, false, "Failed to create or load service keys");
+    if (m_service_node)
     {
-      r = init_service_node_keys();
-      CHECK_AND_ASSERT_MES(r, false, "Failed to create or load service node key");
-      m_service_node_list.set_my_service_node_keys(m_service_node_keys.get());
+      // Only use our service keys for our service node if we are running in SN mode:
+      m_service_node_list.set_my_service_node_keys(&m_service_keys);
     }
 
     boost::filesystem::path folder(m_config_folder);
@@ -905,22 +906,7 @@ namespace cryptonote
       }
     }
 
-    if (m_service_node_keys)
-    {
-      std::lock_guard<std::mutex> lock{m_quorumnet_init_mutex};
-      // quorumnet_new takes a zmq bind string, e.g. "tcp://1.2.3.4:5678"
-      std::string listen_ip = vm["p2p-bind-ip"].as<std::string>();
-      if (listen_ip.empty())
-        listen_ip = "0.0.0.0";
-      std::string qnet_listen = "tcp://" + listen_ip + ":" + std::to_string(m_quorumnet_port);
-      m_quorumnet_obj = quorumnet_new(*this, qnet_listen);
-    }
-    // Otherwise we may still need quorumnet in remote-only mode, but we construct it on demand
-
-
-#ifdef ENABLE_SYSTEMD
-    sd_notify(0, ("READY=1\nSTATUS=" + get_systemd_status_string(*this)).c_str());
-#endif
+    init_lokimq(vm);
 
     return true;
   }
@@ -962,9 +948,9 @@ namespace cryptonote
   }
 
   //-----------------------------------------------------------------------------------------------
-  bool core::init_service_node_keys()
+  bool core::init_service_keys()
   {
-    auto &keys = *m_service_node_keys;
+    auto& keys = m_service_keys;
     // Primary SN pubkey (monero NIH curve25519 algo)
     if (!init_key(m_config_folder + "/key", keys.key, keys.pub,
           crypto::secret_key_to_public_key,
@@ -975,8 +961,6 @@ namespace cryptonote
           })
         )
       return false;
-
-    MGINFO_YELLOW("Service node primary pubkey is " << epee::string_tools::pod_to_hex(keys.pub));
 
     static_assert(
         sizeof(crypto::ed25519_public_key) == crypto_sign_ed25519_PUBLICKEYBYTES &&
@@ -998,36 +982,142 @@ namespace cryptonote
        )
       return false;
 
-    MGINFO_YELLOW("Service node ed25519 pubkey is " << epee::string_tools::pod_to_hex(keys.pub_ed25519));
-
     // Standard x25519 keys generated from the ed25519 keypair, used for encrypted communication between SNs
     int rc = crypto_sign_ed25519_pk_to_curve25519(keys.pub_x25519.data, keys.pub_ed25519.data);
     CHECK_AND_ASSERT_MES(rc == 0, false, "failed to convert ed25519 pubkey to x25519");
     crypto_sign_ed25519_sk_to_curve25519(keys.key_x25519.data, keys.key_ed25519.data);
 
-    MGINFO_YELLOW("Service node x25519 pubkey is " << epee::string_tools::pod_to_hex(keys.pub_x25519));
+    if (m_service_node) {
+      MGINFO_YELLOW("Service node public keys:");
+      MGINFO_YELLOW("- primary: " << epee::string_tools::pod_to_hex(keys.pub));
+      MGINFO_YELLOW("- ed25519: " << epee::string_tools::pod_to_hex(keys.pub_ed25519));
+      // Same as ed25519, but encoded with base32z:
+      char b32z[52] = {};
+      base32z::encode(std::string{reinterpret_cast<const char*>(keys.pub_ed25519.data), 32}, b32z);
+      MGINFO_YELLOW("- lokinet: " << lokimq::string_view(b32z, sizeof(b32z)) << ".snode");
+      MGINFO_YELLOW("-  x25519: " << epee::string_tools::pod_to_hex(keys.pub_x25519));
+    } else {
+      MGINFO_YELLOW("x25519 public key: " << epee::string_tools::pod_to_hex(keys.pub_x25519));
+    }
 
     return true;
   }
+
+  static constexpr el::Level easylogging_level(lokimq::LogLevel level) {
+    using namespace lokimq;
+    switch (level) {
+        case LogLevel::fatal: return el::Level::Fatal;
+        case LogLevel::error: return el::Level::Error;
+        case LogLevel::warn:  return el::Level::Warning;
+        case LogLevel::info:  return el::Level::Info;
+        case LogLevel::debug: return el::Level::Debug;
+        case LogLevel::trace: return el::Level::Trace;
+        default:              return el::Level::Unknown;
+    }
+  }
+
+  lokimq::AuthLevel core::lmq_check_access(const crypto::x25519_public_key& pubkey) const {
+    auto it = m_lmq_auth.find(pubkey);
+    if (it != m_lmq_auth.end())
+      return it->second;
+    return lokimq::AuthLevel::denied;
+  }
+
+  // Builds an allow function; takes `*this`, the default auth level, and whether this connection
+  // should allow incoming SN connections.
+  //
+  // default_auth should be AuthLevel::denied if only pre-approved connections may connect,
+  // AuthLevel::basic for public RPC, AuthLevel::admin for a (presumably localhost) unrestricted
+  // port, and AuthLevel::none for a super restricted mode (generally this is useful when there are
+  // also SN-restrictions on commands, i.e. for quorumnet).
+  //
+  // check_sn is whether we check an incoming key against known service nodes (and thus return
+  // "true" for the service node access if it checks out).
+  //
+  lokimq::AuthLevel core::lmq_allow(lokimq::string_view ip, lokimq::string_view x25519_pubkey_str, lokimq::AuthLevel default_auth) {
+    using namespace lokimq;
+    AuthLevel auth = default_auth;
+    if (x25519_pubkey_str.size() == sizeof(crypto::x25519_public_key)) {
+      crypto::x25519_public_key x25519_pubkey;
+      std::memcpy(x25519_pubkey.data, x25519_pubkey_str.data(), x25519_pubkey_str.size());
+      auto user_auth = lmq_check_access(x25519_pubkey);
+      if (user_auth >= AuthLevel::basic) {
+        if (user_auth > auth)
+          auth = user_auth;
+        MCINFO("lmq", "Incoming " << auth << "-authenticated connection");
+      }
+
+      MCINFO("lmq", "Incoming [" << auth << "] curve connection from " << ip << "/" << x25519_pubkey);
+    }
+    else {
+      MCINFO("lmq", "Incoming [" << auth << "] plain connection from " << ip);
+    }
+    return auth;
+  }
+
+  void core::init_lokimq(const boost::program_options::variables_map& vm) {
+    using namespace lokimq;
+    MGINFO("Starting lokimq");
+    m_lmq = std::make_unique<LokiMQ>(
+        tools::copy_guts(m_service_keys.pub_x25519),
+        tools::copy_guts(m_service_keys.key_x25519),
+        m_service_node,
+        [this](string_view x25519_pk) { return m_service_node_list.remote_lookup(x25519_pk); },
+        [](LogLevel level, const char *file, int line, std::string msg) {
+          // What a lovely interface (<-- sarcasm)
+          if (ELPP->vRegistry()->allowed(easylogging_level(level), "lmq"))
+            el::base::Writer(easylogging_level(level), file, line, ELPP_FUNC, el::base::DispatchAction::NormalLog).construct("lmq") << msg;
+        },
+        lokimq::LogLevel::trace
+    );
+
+    // ping.ping: a simple debugging target for pinging the lmq listener
+    m_lmq->add_category("ping", Access{AuthLevel::none})
+        .add_request_command("ping", [](Message& m) {
+            MCINFO("lmq", "Received ping from " << m.conn);
+            m.send_reply("pong");
+        })
+    ;
+
+    if (m_service_node)
+    {
+      // Service nodes always listen for quorumnet data on the p2p IP, quorumnet port
+      std::string listen_ip = vm["p2p-bind-ip"].as<std::string>();
+      if (listen_ip.empty())
+        listen_ip = "0.0.0.0";
+      std::string qnet_listen = "tcp://" + listen_ip + ":" + std::to_string(m_quorumnet_port);
+      MGINFO("- listening on " << qnet_listen << " (quorumnet)");
+      m_lmq->listen_curve(qnet_listen,
+          [this, public_=command_line::get_arg(vm, arg_lmq_quorumnet_public)](string_view ip, string_view pk, bool) {
+            return lmq_allow(ip, pk, public_ ? AuthLevel::basic : AuthLevel::none);
+          });
+
+      m_quorumnet_state = quorumnet_new(*this);
+    }
+
+  }
+
+  void core::start_lokimq() { m_lmq->start(); }
+
   //-----------------------------------------------------------------------------------------------
   bool core::set_genesis_block(const block& b)
   {
     return m_blockchain_storage.reset_and_set_genesis_block(b);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::deinit()
+  void core::deinit()
   {
 #ifdef ENABLE_SYSTEMD
     sd_notify(0, "STOPPING=1\nSTATUS=Shutting down");
 #endif
-    if (m_quorumnet_obj)
-      quorumnet_delete(m_quorumnet_obj);
+    if (m_quorumnet_state)
+      quorumnet_delete(m_quorumnet_state);
+    m_lmq.reset();
     m_long_poll_wake_up_clients.notify_all();
     m_service_node_list.store();
     m_miner.stop();
     m_mempool.deinit();
     m_blockchain_storage.deinit();
-    return true;
   }
   //-----------------------------------------------------------------------------------------------
   void core::test_drop_download()
@@ -1470,13 +1560,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   std::future<std::pair<blink_result, std::string>> core::handle_blink_tx(const std::string &tx_blob)
   {
-    if (!m_quorumnet_obj) {
-      assert(!m_service_node_keys);
-      std::lock_guard<std::mutex> lock{m_quorumnet_init_mutex};
-      if (!m_quorumnet_obj)
-        m_quorumnet_obj = quorumnet_new(*this, "" /* don't listen */);
-    }
-    return quorumnet_send_blink(m_quorumnet_obj, tx_blob);
+    return quorumnet_send_blink(*this, tx_blob);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_stat_info(core_stat_info& st_inf) const
@@ -1691,7 +1775,7 @@ namespace cryptonote
     {
       cryptonote_connection_context fake_context{};
       tx_verification_context tvc{};
-      NOTIFY_NEW_TRANSACTIONS::request r;
+      NOTIFY_NEW_TRANSACTIONS::request r{};
       for (auto it = txs.begin(); it != txs.end(); ++it)
       {
         r.txs.push_back(it->second);
@@ -1704,15 +1788,15 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::submit_uptime_proof()
   {
-    if (!m_service_node_keys)
+    if (!m_service_node)
       return true;
 
-    NOTIFY_UPTIME_PROOF::request req = m_service_node_list.generate_uptime_proof(*m_service_node_keys, m_sn_public_ip, m_storage_port, m_storage_lmq_port, m_quorumnet_port);
+    NOTIFY_UPTIME_PROOF::request req = m_service_node_list.generate_uptime_proof(m_sn_public_ip, m_storage_port, m_storage_lmq_port, m_quorumnet_port);
 
     cryptonote_connection_context fake_context{};
     bool relayed = get_protocol()->relay_uptime_proof(req, fake_context);
     if (relayed)
-      MGINFO("Submitted uptime-proof for Service Node (yours): " << m_service_node_keys->pub);
+      MGINFO("Submitted uptime-proof for Service Node (yours): " << m_service_keys.pub);
 
     return true;
   }
@@ -1744,8 +1828,8 @@ namespace cryptonote
 
     auto quorum_votes = m_quorum_cop.get_relayable_votes(height, hf_version, true);
     auto p2p_votes    = m_quorum_cop.get_relayable_votes(height, hf_version, false);
-    if (!quorum_votes.empty() && m_quorumnet_obj && m_service_node_keys)
-      quorumnet_relay_obligation_votes(m_quorumnet_obj, quorum_votes);
+    if (!quorum_votes.empty() && m_quorumnet_state && m_service_node)
+      quorumnet_relay_obligation_votes(m_quorumnet_state, quorum_votes);
 
     if (!p2p_votes.empty())
     {
@@ -1782,7 +1866,7 @@ namespace cryptonote
     return m_blockchain_storage.find_blockchain_supplement(req_start_block, qblock_ids, blocks, total_height, start_height, pruned, get_miner_tx_hash, max_count);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res) const
+  bool core::get_outs(const rpc::GET_OUTPUTS_BIN::request& req, rpc::GET_OUTPUTS_BIN::response& res) const
   {
     return m_blockchain_storage.get_outs(req, res);
   }
@@ -1981,8 +2065,10 @@ namespace cryptonote
 
   void core::update_lmq_sns()
   {
-    if (m_quorumnet_obj)
-      quorumnet_refresh_sns(m_quorumnet_obj);
+    // TODO: let callers (e.g. lokinet, ss) subscribe to callbacks when this fires
+    lokimq::pubkey_set active_sns;
+    m_service_node_list.copy_active_x25519_pubkeys(std::inserter(active_sns, active_sns.end()));
+    m_lmq->set_active_sns(std::move(active_sns));
   }
   //-----------------------------------------------------------------------------------------------
   crypto::hash core::get_tail_id() const
@@ -2034,7 +2120,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   void core::do_uptime_proof_call()
   {
-    std::vector<service_nodes::service_node_pubkey_info> const states = get_service_node_list_state({ m_service_node_keys->pub });
+    std::vector<service_nodes::service_node_pubkey_info> const states = get_service_node_list_state({ m_service_keys.pub });
 
     // wait one block before starting uptime proofs.
     if (!states.empty() && (states[0].info->registration_height + 1) < get_current_blockchain_height())
@@ -2044,14 +2130,14 @@ namespace cryptonote
         // proof if we are within half a tick of the target time.  (Essentially our target proof
         // window becomes the first time this triggers in the 57.5-62.5 minute window).
         uint64_t next_proof_time = 0;
-        m_service_node_list.access_proof(m_service_node_keys->pub, [&](auto &proof) { next_proof_time = proof.timestamp; });
+        m_service_node_list.access_proof(m_service_keys.pub, [&](auto &proof) { next_proof_time = proof.timestamp; });
         next_proof_time += UPTIME_PROOF_FREQUENCY_IN_SECONDS - UPTIME_PROOF_TIMER_SECONDS/2;
 
         if ((uint64_t) std::time(nullptr) < next_proof_time)
           return;
 
-        auto pubkey = m_service_node_list.get_pubkey_from_x25519(m_service_node_keys->pub_x25519);
-        if (pubkey != crypto::null_pkey && pubkey != m_service_node_keys->pub)
+        auto pubkey = m_service_node_list.get_pubkey_from_x25519(m_service_keys.pub_x25519);
+        if (pubkey != crypto::null_pkey && pubkey != m_service_keys.pub)
         {
           MGINFO_RED(
               "Failed to submit uptime proof: another service node on the network is using the same ed/x25519 keys as "
@@ -2125,7 +2211,7 @@ namespace cryptonote
 
     time_t const lifetime = time(nullptr) - get_start_time();
     int proof_delay = m_nettype == FAKECHAIN ? 5 : UPTIME_PROOF_INITIAL_DELAY_SECONDS;
-    if (m_service_node_keys && lifetime > proof_delay) // Give us some time to connect to peers before sending uptimes
+    if (m_service_node && lifetime > proof_delay) // Give us some time to connect to peers before sending uptimes
     {
       do_uptime_proof_call();
     }
@@ -2139,7 +2225,7 @@ namespace cryptonote
 #endif
 
 #ifdef ENABLE_SYSTEMD
-    m_systemd_notify_interval.do_call([this] { sd_notify(0, ("WATCHDOG=1\nSTATUS=" + get_systemd_status_string(*this)).c_str()); });
+    m_systemd_notify_interval.do_call([this] { sd_notify(0, ("WATCHDOG=1\nSTATUS=" + get_status_string()).c_str()); });
 #endif
 
     return true;
@@ -2469,10 +2555,6 @@ namespace cryptonote
     return m_quorum_cop.handle_vote(vote, vvc);
   }
   //-----------------------------------------------------------------------------------------------
-  const core::service_node_keys* core::get_service_node_keys() const
-  {
-    return m_service_node_keys.get();
-  }
   uint32_t core::get_blockchain_pruning_seed() const
   {
     return get_blockchain_storage().get_blockchain_pruning_seed();

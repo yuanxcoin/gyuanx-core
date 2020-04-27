@@ -39,6 +39,8 @@ add_library(wallet
 target_link_libraries(wallet
   PUBLIC
     multisig
+    rpc_commands
+    rpc_args
     cryptonote_core
     mnemonics
     device_trezor
@@ -59,7 +61,6 @@ loki_add_executable(wallet_rpc_server "loki-wallet-rpc"
 target_link_libraries(wallet_rpc_server
   PRIVATE
     wallet
-    rpc_base
     daemonizer
     epee_readline
     Boost::program_options

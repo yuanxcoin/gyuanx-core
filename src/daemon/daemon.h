@@ -33,6 +33,8 @@
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "p2p/net_node.h"
 #include "rpc/core_rpc_server.h"
+#include "rpc/http_server.h"
+#include "rpc/lmq_server.h"
 
 #include "blocks/blocks.h"
 #include "rpc/core_rpc_server.h"
@@ -49,17 +51,15 @@ class http_rpc_server
 {
 public:
   http_rpc_server(boost::program_options::variables_map const &vm,
-             cryptonote::core &core,
-             nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>> &p2p,
+             cryptonote::rpc::core_rpc_server &corerpc,
              const bool restricted,
              const std::string &port,
-             const std::string &description);
+             std::string description);
   void run();
   void stop();
   ~http_rpc_server();
 
-  // FIXME - replace with rpc::http_server
-  cryptonote::core_rpc_server m_server;
+  cryptonote::rpc::http_server m_server;
   std::string m_description;
 };
 
@@ -86,7 +86,9 @@ private:
   std::unique_ptr<cryptonote::core> core;
   std::unique_ptr<protocol_handler> protocol;
   std::unique_ptr<node_server> p2p;
+  std::unique_ptr<cryptonote::rpc::core_rpc_server> rpc;
   std::list<http_rpc_server> http_rpcs;
+  std::unique_ptr<cryptonote::rpc::lmq_rpc> lmq_rpc;
 };
 
 } // namespace daemonize
