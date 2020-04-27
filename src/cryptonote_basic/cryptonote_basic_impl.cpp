@@ -58,11 +58,6 @@ namespace cryptonote {
       FIELD(adr)
       FIELD(payment_id)
     END_SERIALIZE()
-
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(adr)
-      KV_SERIALIZE(payment_id)
-    END_KV_SERIALIZE_MAP()
   };
 
   /************************************************************************/
