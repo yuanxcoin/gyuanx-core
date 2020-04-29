@@ -2739,6 +2739,7 @@ namespace cryptonote { namespace rpc {
       auto &new_entry = res.blacklist.back();
       new_entry.key_image     = epee::string_tools::pod_to_hex(entry.key_image);
       new_entry.unlock_height = entry.unlock_height;
+      new_entry.amount = entry.amount;
     }
     return res;
   }
