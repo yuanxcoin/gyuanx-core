@@ -43,7 +43,10 @@ endif()
 cmake_minimum_required(VERSION 3.7)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
-project(loki)
+project(loki
+    VERSION 7.1.8
+    LANGUAGES CXX C)
+set(LOKI_RELEASE_CODENAME "Valiant Vidar")
 
 function (add_c_flag_if_supported flag var)
   string(REPLACE "-" "_" supported ${flag}_c)
