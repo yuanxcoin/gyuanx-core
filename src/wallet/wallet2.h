@@ -797,6 +797,16 @@ private:
     auto lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request) const { return m_node_rpc_proxy.lns_owners_to_names(request); }
     auto lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request) const { return m_node_rpc_proxy.lns_names_to_owners(request); }
 
+    //TODO(sean)
+    struct lns_detail
+    {
+      lns::mapping_type type;
+      std::string name;
+      std::string value;
+      std::string owner;
+      std::string backup_owner;
+    };
+
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
     void rescan_blockchain(bool hard, bool refresh = true, bool keep_key_images = false);
@@ -829,6 +839,7 @@ private:
       a & m_transfers;
       a & m_account_public_address;
       a & m_key_images;
+      a & lns_records_cache;
       if(ver < 6)
         return;
       a & m_unconfirmed_txs;
@@ -1536,6 +1547,7 @@ private:
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> m_subaddresses;
     std::vector<std::vector<std::string>> m_subaddress_labels;
     std::unordered_map<crypto::hash, std::string> m_tx_notes;
+    std::vector<lns_detail> lns_records_cache;
     std::unordered_map<std::string, std::string> m_attributes;
     std::vector<tools::wallet2::address_book_row> m_address_book;
     std::pair<std::map<std::string, std::string>, std::vector<std::string>> m_account_tags;
@@ -1667,6 +1679,16 @@ BOOST_CLASS_VERSION(tools::wallet2::reserve_proof_entry, 0)
 
 namespace boost::serialization
 {
+    template <class Archive>
+    inline void serialize(Archive &a, tools::wallet2::lns_detail &x, const boost::serialization::version_type ver)
+    {
+      a & x.type;
+      a & x.name;
+      a & x.value;
+      a & x.owner;
+      a & x.backup_owner;
+    }
+
     template <class Archive>
     void serialize(Archive &a, tools::wallet2::unconfirmed_transfer_details &x, const unsigned int ver)
     {
