@@ -32,10 +32,7 @@ function (write_static_version_header hash)
 endfunction ()
 
 find_package(Git QUIET)
-if ("$Format:$" STREQUAL "")
-  # We're in a tarball; use hard-coded variables.
-  write_static_version_header("release")
-elseif (GIT_FOUND OR Git_FOUND)
+if (GIT_FOUND OR Git_FOUND)
   message(STATUS "Found Git: ${GIT_EXECUTABLE}")
   add_custom_command(
     OUTPUT            "${CMAKE_BINARY_DIR}/version.cpp"
