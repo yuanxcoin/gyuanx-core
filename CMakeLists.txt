@@ -48,6 +48,14 @@ project(loki
     LANGUAGES CXX C)
 set(LOKI_RELEASE_CODENAME "Valiant Vidar")
 
+# String value to append to the full version string; this is intended to easily identify whether a
+# binary was build from the release or development branches.  This should be permanently set to an
+# empty string on `master`, "-dev" on the `dev` branch, and can be set externally (via cmake
+# arguments) where it makes sense to take some other branch release with an extra value.
+if(NOT DEFINED LOKI_RELEASE_SUFFIX)
+  set(LOKI_RELEASE_SUFFIX "-dev")
+endif()
+
 function (add_c_flag_if_supported flag var)
   string(REPLACE "-" "_" supported ${flag}_c)
   check_c_compiler_flag(${flag} ${supported})
