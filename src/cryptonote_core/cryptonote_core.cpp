@@ -267,11 +267,13 @@ namespace cryptonote
   }
   void *(*quorumnet_new)(core &, const std::string &bind);
   void (*quorumnet_delete)(void *&self);
+  void (*quorumnet_refresh_sns)(void *self);
   void (*quorumnet_relay_obligation_votes)(void *self, const std::vector<service_nodes::quorum_vote_t> &);
   std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(void *self, const std::string &tx_blob);
   static bool init_core_callback_stubs() {
     quorumnet_new = [](core &, const std::string &) -> void * { need_core_init(); };
     quorumnet_delete = [](void *&) { need_core_init(); };
+    quorumnet_refresh_sns = [](void *) { need_core_init(); };
     quorumnet_relay_obligation_votes = [](void *, const std::vector<service_nodes::quorum_vote_t> &) { need_core_init(); };
     quorumnet_send_blink = [](void *, const std::string &) -> std::future<std::pair<blink_result, std::string>> { need_core_init(); };
     return false;
@@ -279,25 +281,25 @@ namespace cryptonote
   bool init_core_callback_complete = init_core_callback_stubs();
 
   //-----------------------------------------------------------------------------------------------
-  core::core(i_cryptonote_protocol* pprotocol):
-              m_mempool(m_blockchain_storage),
-              m_service_node_list(m_blockchain_storage),
-              m_blockchain_storage(m_mempool, m_service_node_list),
-              m_quorum_cop(*this),
-              m_miner(this, &m_blockchain_storage),
-              m_starter_message_showed(false),
-              m_target_blockchain_height(0),
-              m_checkpoints_path(""),
-              m_last_json_checkpoints_update(0),
-              m_update_download(0),
-              m_nettype(UNDEFINED),
-              m_update_available(false),
-              m_last_storage_server_ping(0),
-              m_last_lokinet_ping(0),
-              m_pad_transactions(false)
+  core::core()
+  : m_mempool(m_blockchain_storage)
+  , m_service_node_list(m_blockchain_storage)
+  , m_blockchain_storage(m_mempool, m_service_node_list)
+  , m_quorum_cop(*this)
+  , m_miner(this, &m_blockchain_storage)
+  , m_pprotocol(&m_protocol_stub)
+  , m_starter_message_showed(false)
+  , m_target_blockchain_height(0)
+  , m_checkpoints_path("")
+  , m_last_json_checkpoints_update(0)
+  , m_update_download(0)
+  , m_nettype(UNDEFINED)
+  , m_update_available(false)
+  , m_last_storage_server_ping(0)
+  , m_last_lokinet_ping(0)
+  , m_pad_transactions(false)
   {
     m_checkpoints_updating.clear();
-    set_cryptonote_protocol(pprotocol);
   }
   void core::set_cryptonote_protocol(i_cryptonote_protocol* pprotocol)
   {
@@ -1993,6 +1995,12 @@ namespace cryptonote
     }
     return true;
   }
+
+  void core::update_lmq_sns()
+  {
+    if (m_quorumnet_obj)
+      quorumnet_refresh_sns(m_quorumnet_obj);
+  }
   //-----------------------------------------------------------------------------------------------
   crypto::hash core::get_tail_id() const
   {
@@ -2058,6 +2066,15 @@ namespace cryptonote
 
         if ((uint64_t) std::time(nullptr) < next_proof_time)
           return;
+
+        auto pubkey = m_service_node_list.get_pubkey_from_x25519(m_service_node_keys->pub_x25519);
+        if (pubkey != crypto::null_pkey && pubkey != m_service_node_keys->pub)
+        {
+          MGINFO_RED(
+              "Failed to submit uptime proof: another service node on the network is using the same ed/x25519 keys as "
+              "this service node. This typically means both have the same 'key_ed25519' private key file.");
+          return;
+        }
 
         if (!check_external_ping(m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, "the storage server"))
         {

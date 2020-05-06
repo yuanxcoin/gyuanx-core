@@ -51,6 +51,7 @@ using namespace epee;
 #include "rpc/core_rpc_server.h"
 #include "misc_language.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
+#include "cryptonote_basic/hardfork.h"
 #include "multisig/multisig.h"
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
@@ -2426,7 +2427,11 @@ void wallet2::process_unconfirmed(const crypto::hash &txid, const cryptonote::tr
   if(unconf_it != m_unconfirmed_txs.end()) {
     if (store_tx_info()) {
       try {
-        m_confirmed_txs.emplace(txid, confirmed_transfer_details(unconf_it->second, height));
+        // TODO(doyle): LNS introduces tx type stake, we can use this to quickly determine if a transaction is staking
+        // transaction without having to parse tx_extra.
+        bool stake = service_nodes::tx_get_staking_components(tx, nullptr /*stake*/);
+        tools::pay_type pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
+        m_confirmed_txs.insert(std::make_pair(txid, confirmed_transfer_details(unconf_it->second, height)));
       }
       catch (...) {
         // can fail if the tx has unexpected input types
@@ -2463,6 +2468,9 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
     }
     entry.first->second.m_subaddr_account = subaddr_account;
     entry.first->second.m_subaddr_indices = subaddr_indices;
+
+    bool stake = service_nodes::tx_get_staking_components(tx, nullptr /*stake*/);
+    entry.first->second.m_pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
   }
 
   entry.first->second.m_rings.clear();
@@ -2863,6 +2871,8 @@ bool wallet2::long_poll_pool_state()
 {
   // Update daemon address for long polling here instead of in set_daemon which
   // could block on the long polling connection thread.
+  static bool local_address               = true;
+  std::chrono::milliseconds local_timeout = 500ms;
   {
     std::string new_host;
     boost::optional<epee::net_utils::http::login> login;
@@ -2878,6 +2888,7 @@ bool wallet2::long_poll_pool_state()
       if(m_long_poll_client.is_connected())
         m_long_poll_client.disconnect();
       m_long_poll_client.set_server(new_host, login, m_long_poll_ssl_options);
+      local_address = tools::is_local_address(new_host);
     }
   }
 
@@ -2888,14 +2899,19 @@ bool wallet2::long_poll_pool_state()
   bool r               = false;
   {
     std::lock_guard<decltype(m_long_poll_mutex)> lock(m_long_poll_mutex);
-    r = epee::net_utils::invoke_http_json("/get_transaction_pool_hashes.bin", req, res, m_long_poll_client, cryptonote::rpc_long_poll_timeout, "GET");
+    r = epee::net_utils::invoke_http_json("/get_transaction_pool_hashes.bin",
+                                          req,
+                                          res,
+                                          m_long_poll_client,
+                                          local_address ? local_timeout : cryptonote::rpc_long_poll_timeout,
+                                          "GET");
   }
 
   bool maxed_out_connections = res.status == CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS;
   bool timed_out             = res.status == CORE_RPC_STATUS_TX_LONG_POLL_TIMED_OUT;
   if (maxed_out_connections || timed_out)
   {
-    if (maxed_out_connections) std::this_thread::sleep_for(30s);
+    if (maxed_out_connections) std::this_thread::sleep_for(local_address ? local_timeout : cryptonote::rpc_long_poll_timeout);
     return false;
   }
 
@@ -5970,7 +5986,7 @@ transfer_view wallet2::wallet2::make_transfer_view(const crypto::hash &txid, con
     td.address = d.original.empty() ? get_account_address_as_str(nettype(), d.is_subaddress, d.addr) : d.original;
   }
 
-  result.pay_type = pay_type::out;
+  result.pay_type = pd.m_pay_type;
   result.subaddr_index = { pd.m_subaddr_account, 0 };
   for (uint32_t i: pd.m_subaddr_indices)
     result.subaddr_indices.push_back({pd.m_subaddr_account, i});
@@ -6005,7 +6021,7 @@ transfer_view wallet2::make_transfer_view(const crypto::hash &txid, const tools:
     td.address = d.original.empty() ? get_account_address_as_str(nettype(), d.is_subaddress, d.addr) : d.original;
   }
 
-  result.pay_type = pay_type::unspecified;
+  result.pay_type = pd.m_pay_type;
   result.type = is_failed ? "failed" : "pending";
   result.subaddr_index = { pd.m_subaddr_account, 0 };
   for (uint32_t i: pd.m_subaddr_indices)
@@ -6054,6 +6070,9 @@ void wallet2::get_transfers(get_transfers_args_t args, std::vector<transfer_view
     args.max_height = std::min<uint64_t>(args.max_height, CRYPTONOTE_MAX_BLOCK_NUMBER);
   }
 
+  int args_count = args.in + args.out + args.stake + args.pending + args.failed + args.pool + args.coinbase;
+  if (args_count == 0) args.in = args.out = args.stake = args.pending = args.failed = args.pool = args.coinbase = true;
+
   std::list<std::pair<crypto::hash, tools::wallet2::payment_details>> in;
   std::list<std::pair<crypto::hash, tools::wallet2::confirmed_transfer_details>> out;
   std::list<std::pair<crypto::hash, tools::wallet2::unconfirmed_transfer_details>> pending_or_failed;
@@ -6069,7 +6088,7 @@ void wallet2::get_transfers(get_transfers_args_t args, std::vector<transfer_view
     size += in.size();
   }
 
-  if (args.out)
+  if (args.out || args.stake)
   {
     get_payments_out(out, args.min_height, args.max_height, account_index, args.subaddr_indices);
     size += out.size();
@@ -6092,7 +6111,14 @@ void wallet2::get_transfers(get_transfers_args_t args, std::vector<transfer_view
   for (const auto &i : in)
     transfers.push_back(make_transfer_view(i.second.m_tx_hash, i.first, i.second));
   for (const auto &o : out)
-    transfers.push_back(make_transfer_view(o.first, o.second));
+  {
+    bool add_entry = true;
+    if (args.stake && args_count == 1)
+      add_entry = o.second.m_pay_type == tools::pay_type::stake;
+
+    if (add_entry)
+      transfers.push_back(make_transfer_view(o.first, o.second));
+  }
   for (const auto &pof : pending_or_failed)
   {
     bool is_failed = pof.second.m_state == tools::wallet2::unconfirmed_transfer_details::failed;
@@ -6631,6 +6657,8 @@ void wallet2::add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t amo
   utd.m_timestamp = time(NULL);
   utd.m_subaddr_account = subaddr_account;
   utd.m_subaddr_indices = subaddr_indices;
+  bool stake = service_nodes::tx_get_staking_components(tx, nullptr /*stake*/);
+  utd.m_pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
   for (const auto &in: tx.vin)
   {
     if (in.type() != typeid(cryptonote::txin_to_key))
@@ -8132,7 +8160,7 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
   }
 
   uint64_t staking_requirement = 0, bc_height = 0;
-  service_nodes::converted_registration_args converted_args = {};
+  service_nodes::contributor_args_t contributor_args = {};
   {
     std::string err, err2;
     bc_height = std::max(get_daemon_blockchain_height(err),
@@ -8155,18 +8183,18 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
     }
 
     staking_requirement = service_nodes::get_staking_requirement(nettype(), bc_height, *hf_version);
-    std::vector<std::string> const registration_args(local_args.begin(), local_args.begin() + local_args.size() - 3);
-    converted_args = service_nodes::convert_registration_args(nettype(), registration_args, staking_requirement, *hf_version);
+    std::vector<std::string> const args(local_args.begin(), local_args.begin() + local_args.size() - 3);
+    contributor_args = service_nodes::convert_registration_args(nettype(), args, staking_requirement, *hf_version);
 
-    if (!converted_args.success)
+    if (!contributor_args.success)
     {
       result.status = register_service_node_result_status::convert_registration_args_failed;
-      result.msg = tr("Could not convert registration args, reason: ") + converted_args.err_msg;
+      result.msg = tr("Could not convert registration args, reason: ") + contributor_args.err_msg;
       return result;
     }
   }
 
-  cryptonote::account_public_address address = converted_args.addresses[0];
+  cryptonote::account_public_address address = contributor_args.addresses[0];
   if (!contains_address(address))
   {
     result.status = register_service_node_result_status::first_address_must_be_primary_address;
@@ -8220,13 +8248,24 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
       result.msg = tr("Failed to parse service node signature");
       return result;
     }
+  }
 
+  try
+  {
+      service_nodes::validate_contributor_args(*hf_version, contributor_args);
+      service_nodes::validate_contributor_args_signature(contributor_args, expiration_timestamp, service_node_key, signature);
+  }
+  catch(const service_nodes::invalid_contributions &e)
+  {
+    result.status = register_service_node_result_status::validate_contributor_args_fail;
+    result.msg    = e.what();
+    return result;
   }
 
   std::vector<uint8_t> extra;
   add_service_node_contributor_to_tx_extra(extra, address);
   add_service_node_pubkey_to_tx_extra(extra, service_node_key);
-  if (!add_service_node_register_to_tx_extra(extra, converted_args.addresses, converted_args.portions_for_operator, converted_args.portions, expiration_timestamp, signature))
+  if (!add_service_node_register_to_tx_extra(extra, contributor_args.addresses, contributor_args.portions_for_operator, contributor_args.portions, expiration_timestamp, signature))
   {
     result.status = register_service_node_result_status::service_node_register_serialize_to_tx_extra_fail;
     result.msg    = tr("Failed to serialize service node registration tx extra");
@@ -8263,9 +8302,9 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
     {
       const uint64_t DUST                 = MAX_NUMBER_OF_CONTRIBUTORS;
       uint64_t amount_left                = staking_requirement;
-      for (size_t i = 0; i < converted_args.portions.size(); i++)
+      for (size_t i = 0; i < contributor_args.portions.size(); i++)
       {
-        uint64_t amount = service_nodes::portions_to_amount(staking_requirement, converted_args.portions[i]);
+        uint64_t amount = service_nodes::portions_to_amount(staking_requirement, contributor_args.portions[i]);
         if (i == 0) amount_payable_by_operator += amount;
         amount_left -= amount;
       }
@@ -8483,7 +8522,8 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
                                                                   std::string const *backup_owner,
                                                                   bool make_signature,
                                                                   uint32_t account_index,
-                                                                  std::string *reason)
+                                                                  std::string *reason,
+                                                                  std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> *response)
 {
   lns_prepared_args result = {};
   if (priority == tools::tx_priority_blink)
@@ -8526,25 +8566,29 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
     }
 
     boost::optional<std::string> failed;
-    std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> response = wallet.lns_names_to_owners(request, failed);
+    std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> response_;
+    if (!response) {
+      response = &response_;
+    } 
+    *response = wallet.lns_names_to_owners(request, failed);
     if (failed)
     {
       if (reason) *reason = "Failed to query previous owner for LNS entry, reason=" + *failed;
       return result;
     }
 
-    if (response.size())
+    if (response->size())
     {
-      if (!epee::string_tools::hex_to_pod(response[0].txid, result.prev_txid))
+      if (!epee::string_tools::hex_to_pod((*response)[0].txid, result.prev_txid))
       {
-        if (reason) *reason = "Failed to convert response txid=" + response[0].txid + " from the daemon into a 32 byte hash, it must be a 64 char hex string";
+        if (reason) *reason = "Failed to convert response txid=" + (*response)[0].txid + " from the daemon into a 32 byte hash, it must be a 64 char hex string";
         return result;
       }
     }
 
     if (make_signature)
     {
-      if (response.empty())
+      if (response->empty())
       {
         if (reason) *reason = "Signature requested when preparing LNS TX but record to update does not exist";
         return result;
@@ -8552,16 +8596,16 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
 
       cryptonote::address_parse_info curr_owner_parsed        = {};
       cryptonote::address_parse_info curr_backup_owner_parsed = {};
-      bool curr_owner        = cryptonote::get_account_address_from_str(curr_owner_parsed, wallet.nettype(), response[0].owner);
-      bool curr_backup_owner = cryptonote::get_account_address_from_str(curr_backup_owner_parsed, wallet.nettype(), response[0].backup_owner);
-      if (!try_generate_lns_signature(wallet, response[0].owner, owner, backup_owner, result))
+      bool curr_owner        = cryptonote::get_account_address_from_str(curr_owner_parsed, wallet.nettype(), (*response)[0].owner);
+      bool curr_backup_owner = cryptonote::get_account_address_from_str(curr_backup_owner_parsed, wallet.nettype(), (*response)[0].backup_owner);
+      if (!try_generate_lns_signature(wallet, (*response)[0].owner, owner, backup_owner, result))
       {
-        if (!try_generate_lns_signature(wallet, response[0].backup_owner, owner, backup_owner, result))
+        if (!try_generate_lns_signature(wallet, (*response)[0].backup_owner, owner, backup_owner, result))
         {
           if (reason)
           {
-            *reason = "Signature requested when preparing LNS TX, but this wallet is not the owner of the record owner=" + response[0].owner;
-            if (response[0].backup_owner.size()) *reason += ", backup_owner=" + response[0].backup_owner;
+            *reason = "Signature requested when preparing LNS TX, but this wallet is not the owner of the record owner=" + (*response)[0].owner;
+            if ((*response)[0].backup_owner.size()) *reason += ", backup_owner=" + (*response)[0].backup_owner;
           }
           return result;
         }
@@ -8583,7 +8627,8 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_buy_mapping_tx(lns::mapping
                                                                     uint32_t account_index,
                                                                     std::set<uint32_t> subaddr_indices)
 {
-  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, &value, owner, backup_owner, false /*make_signature*/, account_index, reason);
+  std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> response;
+  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, &value, owner, backup_owner, false /*make_signature*/, account_index, reason, &response);
   if (!owner)
     prepared_args.owner = lns::make_monero_owner(get_subaddress({account_index, 0}), account_index != 0);
 
@@ -8646,7 +8691,8 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(lns::mapp
                                                                        std::string *reason,
                                                                        uint32_t priority,
                                                                        uint32_t account_index,
-                                                                       std::set<uint32_t> subaddr_indices)
+                                                                       std::set<uint32_t> subaddr_indices,
+                                                                       std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> *response)
 {
   if (!value && !owner && !backup_owner)
   {
@@ -8655,7 +8701,7 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(lns::mapp
   }
 
   bool make_signature = signature == nullptr;
-  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, value, owner, backup_owner, make_signature, account_index, reason);
+  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, value, owner, backup_owner, make_signature, account_index, reason, response);
   if (!prepared_args) return {};
 
   if (!make_signature)
@@ -8704,13 +8750,14 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(std::stri
                                                                        std::string *reason,
                                                                        uint32_t priority,
                                                                        uint32_t account_index,
-                                                                       std::set<uint32_t> subaddr_indices)
+                                                                       std::set<uint32_t> subaddr_indices,
+                                                                       std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> *response)
 {
   lns::mapping_type mapping_type = lns::mapping_type::session;
   if (!lns::validate_mapping_type(type, &mapping_type, reason))
     return {};
 
-  std::vector<wallet2::pending_tx> result = lns_create_update_mapping_tx(mapping_type, name, value, owner, backup_owner, signature, reason, priority, account_index, subaddr_indices);
+  std::vector<wallet2::pending_tx> result = lns_create_update_mapping_tx(mapping_type, name, value, owner, backup_owner, signature, reason, priority, account_index, subaddr_indices, response);
   return result;
 }
 
@@ -8745,7 +8792,8 @@ bool wallet2::lns_make_update_mapping_signature(lns::mapping_type type,
                                                 uint32_t account_index,
                                                 std::string *reason)
 {
-  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, tx_priority_unimportant, name, value, owner, backup_owner, true /*make_signature*/, account_index, reason);
+  std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> response;
+  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, tx_priority_unimportant, name, value, owner, backup_owner, true /*make_signature*/, account_index, reason, &response);
   if (!prepared_args) return false;
 
   if (prepared_args.prev_txid == crypto::null_hash)
@@ -12992,21 +13040,22 @@ crypto::public_key wallet2::get_tx_pub_key_from_received_outs(const tools::walle
   return tx_pub_key;
 }
 
-bool wallet2::export_key_images(const std::string &filename, bool requested_only) const
+bool wallet2::export_key_images_to_file(const std::string &filename, bool requested_only) const
 {
-  PERF_TIMER(export_key_images);
+  // NOTE: Exported Key Image File
+  // [(magic bytes) (ciphertext..................................................................................) (hashed ciphertext signature)]
+  // [              ((transfer array offset*) (spend public key) (view public key) {(key image) (signature), ...})                              ]
+  // *The offset in the wallet's transfers this exported key image file contains.
+
+  PERF_TIMER(__FUNCTION__);
   std::pair<size_t, std::vector<std::pair<crypto::key_image, crypto::signature>>> ski = export_key_images(requested_only);
   std::string magic(KEY_IMAGE_EXPORT_FILE_MAGIC, strlen(KEY_IMAGE_EXPORT_FILE_MAGIC));
   const cryptonote::account_public_address &keys = get_account().get_keys().m_account_address;
-  const uint32_t offset = ski.first;
-
   std::string data;
-  data.reserve(4 + ski.second.size() * (sizeof(crypto::key_image) + sizeof(crypto::signature)) + 2 * sizeof(crypto::public_key));
-  data.resize(4);
-  data[0] = offset & 0xff;
-  data[1] = (offset >> 8) & 0xff;
-  data[2] = (offset >> 16) & 0xff;
-  data[3] = (offset >> 24) & 0xff;
+  const uint32_t offset = boost::endian::native_to_little(ski.first);
+  data.reserve(sizeof(offset) + ski.second.size() * (sizeof(crypto::key_image) + sizeof(crypto::signature)) + 2 * sizeof(crypto::public_key));
+  data.resize(sizeof(offset));
+  std::memcpy(&data[0], &offset, sizeof(offset));
   data += std::string((const char *)&keys.m_spend_public_key, sizeof(crypto::public_key));
   data += std::string((const char *)&keys.m_view_public_key, sizeof(crypto::public_key));
   for (const auto &i: ski.second)
@@ -13082,9 +13131,9 @@ std::pair<size_t, std::vector<std::pair<crypto::key_image, crypto::signature>>> 
   return std::make_pair(offset, ski);
 }
 
-uint64_t wallet2::import_key_images(const std::string &filename, uint64_t &spent, uint64_t &unspent)
+uint64_t wallet2::import_key_images_from_file(const std::string &filename, uint64_t &spent, uint64_t &unspent)
 {
-  PERF_TIMER(import_key_images_fsu);
+  PERF_TIMER(__FUNCTION__);
   std::string data;
   bool r = epee::file_io_utils::load_file_to_string(filename, data);
 
@@ -13108,29 +13157,38 @@ uint64_t wallet2::import_key_images(const std::string &filename, uint64_t &spent
 
   const size_t headerlen = 4 + 2 * sizeof(crypto::public_key);
   THROW_WALLET_EXCEPTION_IF(data.size() < headerlen, error::wallet_internal_error, std::string("Bad data size from file ") + filename);
-  const uint32_t offset = (uint8_t)data[0] | (((uint8_t)data[1]) << 8) | (((uint8_t)data[2]) << 16) | (((uint8_t)data[3]) << 24);
-  const crypto::public_key &public_spend_key = *(const crypto::public_key*)&data[4];
-  const crypto::public_key &public_view_key = *(const crypto::public_key*)&data[4 + sizeof(crypto::public_key)];
-  const cryptonote::account_public_address &keys = get_account().get_keys().m_account_address;
-  if (public_spend_key != keys.m_spend_public_key || public_view_key != keys.m_view_public_key)
-  {
-    THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string( "Key images from ") + filename + " are for a different account");
-  }
+
+  uint32_t offset;
+  std::memcpy(&offset, &data[0], sizeof(offset));
+  boost::endian::little_to_native_inplace(offset);
   THROW_WALLET_EXCEPTION_IF(offset > m_transfers.size(), error::wallet_internal_error, "Offset larger than known outputs");
 
-  const size_t record_size = sizeof(crypto::key_image) + sizeof(crypto::signature);
-  THROW_WALLET_EXCEPTION_IF((data.size() - headerlen) % record_size,
-      error::wallet_internal_error, std::string("Bad data size from file ") + filename);
-  size_t nki = (data.size() - headerlen) / record_size;
-
-  std::vector<std::pair<crypto::key_image, crypto::signature>> ski;
-  ski.reserve(nki);
-  for (size_t n = 0; n < nki; ++n)
+  // Validate embedded spend/view public keys
   {
-    crypto::key_image key_image = *reinterpret_cast<const crypto::key_image*>(&data[headerlen + n * record_size]);
-    crypto::signature signature = *reinterpret_cast<const crypto::signature*>(&data[headerlen + n * record_size + sizeof(crypto::key_image)]);
+    crypto::public_key public_spend_key, public_view_key;
+    std::memcpy(&public_spend_key, &data[sizeof(offset)], sizeof(public_spend_key));
+    std::memcpy(&public_view_key, &data[sizeof(offset) + sizeof(public_spend_key)], sizeof(public_view_key));
 
-    ski.push_back(std::make_pair(key_image, signature));
+    const cryptonote::account_public_address &keys = get_account().get_keys().m_account_address;
+    if (public_spend_key != keys.m_spend_public_key || public_view_key != keys.m_view_public_key)
+    {
+      THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string( "Key images from ") + filename + " are for a different account");
+    }
+  }
+
+  const size_t record_size        = sizeof(crypto::key_image) + sizeof(crypto::signature);
+  const size_t record_buffer_size = data.size() - headerlen;
+  THROW_WALLET_EXCEPTION_IF(record_buffer_size % record_size, error::wallet_internal_error, std::string("Bad data size from file ") + filename);
+
+  const size_t num_records = record_buffer_size / record_size;
+  std::vector<std::pair<crypto::key_image, crypto::signature>> ski(num_records);
+  for (size_t n = 0; n < num_records; ++n)
+  {
+    size_t const key_image_offset = n * record_size;
+    size_t const signature_offset = key_image_offset + sizeof(key_image);
+    std::pair<crypto::key_image, crypto::signature> &pair = ski[n];
+    std::memcpy(&pair.first,  &data[headerlen + key_image_offset], sizeof(key_image));
+    std::memcpy(&pair.second, &data[headerlen + signature_offset], sizeof(signature));
   }
   
   return import_key_images(ski, offset, spent, unspent);
@@ -13147,16 +13205,16 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
   THROW_WALLET_EXCEPTION_IF(signed_key_images.size() > m_transfers.size() - offset, error::wallet_internal_error,
       "The blockchain is out of date compared to the signed key images");
 
+  spent   = 0;
+  unspent = 0;
   if (signed_key_images.empty() && offset == 0)
   {
-    spent = 0;
-    unspent = 0;
     return 0;
   }
 
   req.key_images.reserve(signed_key_images.size());
 
-  PERF_TIMER_START(import_key_images_A);
+  PERF_TIMER_START(import_key_images_A_validate_and_extract_key_images);
   for (size_t n = 0; n < signed_key_images.size(); ++n)
   {
     const transfer_details &td = m_transfers[n + offset];
@@ -13170,24 +13228,25 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     const cryptonote::txout_to_key &o = boost::get<cryptonote::txout_to_key>(out.target);
     const crypto::public_key pkey = o.key;
 
+    std::string const key_image_str = epee::string_tools::pod_to_hex(key_image);
     if (!td.m_key_image_known || !(key_image == td.m_key_image))
     {
       std::vector<const crypto::public_key*> pkeys;
       pkeys.push_back(&pkey);
       THROW_WALLET_EXCEPTION_IF(!(rct::scalarmultKey(rct::ki2rct(key_image), rct::curveOrder()) == rct::identity()),
-          error::wallet_internal_error, "Key image out of validity domain: input " + boost::lexical_cast<std::string>(n + offset) + "/"
-          + boost::lexical_cast<std::string>(signed_key_images.size()) + ", key image " + epee::string_tools::pod_to_hex(key_image));
+          error::wallet_internal_error, "Key image out of validity domain: input " + std::to_string(n + offset) + "/"
+          + std::to_string(signed_key_images.size()) + ", key image " + key_image_str);
 
       THROW_WALLET_EXCEPTION_IF(!crypto::check_ring_signature((const crypto::hash&)key_image, key_image, pkeys, &signature),
-          error::signature_check_failed, boost::lexical_cast<std::string>(n + offset) + "/"
-          + boost::lexical_cast<std::string>(signed_key_images.size()) + ", key image " + epee::string_tools::pod_to_hex(key_image)
+          error::signature_check_failed, std::to_string(n + offset) + "/"
+          + std::to_string(signed_key_images.size()) + ", key image " + key_image_str
           + ", signature " + epee::string_tools::pod_to_hex(signature) + ", pubkey " + epee::string_tools::pod_to_hex(*pkeys[0]));
     }
-    req.key_images.push_back(epee::string_tools::pod_to_hex(key_image));
+    req.key_images.push_back(key_image_str);
   }
-  PERF_TIMER_STOP(import_key_images_A);
+  PERF_TIMER_STOP(import_key_images_A_validate_and_extract_key_images);
 
-  PERF_TIMER_START(import_key_images_B);
+  PERF_TIMER_START(import_key_images_B_update_wallet_key_images);
   for (size_t n = 0; n < signed_key_images.size(); ++n)
   {
     m_transfers[n + offset].m_key_image = signed_key_images[n].first;
@@ -13196,7 +13255,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     m_transfers[n + offset].m_key_image_request = false;
     m_transfers[n + offset].m_key_image_partial = false;
   }
-  PERF_TIMER_STOP(import_key_images_B);
+  PERF_TIMER_STOP(import_key_images_B_update_wallet_key_images);
 
   if(check_spent)
   {
@@ -13216,8 +13275,6 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       td.m_spent = daemon_resp.spent_status[n] != COMMAND_RPC_IS_KEY_IMAGE_SPENT::UNSPENT;
     }
   }
-  spent = 0;
-  unspent = 0;
   std::unordered_set<crypto::hash> spent_txids;   // For each spent key image, search for a tx in m_transfers that uses it as input.
   std::vector<size_t> swept_transfers;            // If such a spending tx wasn't found in m_transfers, this means the spending tx 
                                                   // was created by sweep_all, so we can't know the spent height and other detailed info.
@@ -13403,10 +13460,12 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
     {
       const transfer_details& td = m_transfers[n];
       confirmed_transfer_details pd;
-      pd.m_change = (uint64_t)-1;                             // change is unknown
-      pd.m_amount_in = pd.m_amount_out = td.amount();         // fee is unknown
-      pd.m_block_height = 0;  // spent block height is unknown
-      const crypto::hash &spent_txid = crypto::null_hash; // spent txid is unknown
+      pd.m_change    = (uint64_t)-1;                        // change is unknown
+      pd.m_amount_in = pd.m_amount_out = td.amount();       // fee is unknown
+      pd.m_block_height                = 0;                 // spent block height is unknown
+      const crypto::hash &spent_txid   = crypto::null_hash; // spent txid is unknown
+      bool stake                       = service_nodes::tx_get_staking_components(td.m_tx, nullptr /*stake*/, td.m_txid);
+      pd.m_pay_type = stake ? tools::pay_type::stake : tools::pay_type::out;
       m_confirmed_txs.insert(std::make_pair(spent_txid, pd));
     }
     PERF_TIMER_STOP(import_key_images_G);

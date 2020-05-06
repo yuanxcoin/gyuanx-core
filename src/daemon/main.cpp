@@ -37,7 +37,6 @@
 #include "cryptonote_core/miner.h"
 #include "daemon/command_server.h"
 #include "daemon/daemon.h"
-#include "daemon/executor.h"
 #include "daemonizer/daemonizer.h"
 #include "misc_log_ex.h"
 #include "net/parse.h"
@@ -130,7 +129,6 @@ int main(int argc, char const * argv[])
 
       command_line::add_arg(visible_options, command_line::arg_help);
       command_line::add_arg(visible_options, command_line::arg_version);
-      command_line::add_arg(visible_options, daemon_args::arg_os_version);
       command_line::add_arg(visible_options, daemon_args::arg_config_file);
 
       // Settings
@@ -144,7 +142,7 @@ int main(int argc, char const * argv[])
       command_line::add_arg(core_settings, daemon_args::arg_zmq_rpc_bind_port);
 
       daemonizer::init_options(hidden_options, visible_options);
-      daemonize::t_executor::init_options(core_settings);
+      daemonize::daemon::init_options(core_settings);
 
       // Hidden options
       command_line::add_arg(hidden_options, daemon_args::arg_command);
@@ -183,13 +181,6 @@ int main(int argc, char const * argv[])
     if (command_line::get_arg(vm, command_line::arg_version))
     {
       std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL;
-      return 0;
-    }
-
-    // OS
-    if (command_line::get_arg(vm, daemon_args::arg_os_version))
-    {
-      std::cout << "OS: " << tools::get_os_version_string() << ENDL;
       return 0;
     }
 
@@ -347,7 +338,20 @@ int main(int argc, char const * argv[])
 
     MINFO("Moving from main() into the daemonize now.");
 
-    return daemonizer::daemonize(argc, argv, daemonize::t_executor{parse_public_rpc_port(vm)}, vm) ? 0 : 1;
+    daemonizer::run_type run_type = daemonizer::setup_run_environment<daemonize::daemon>("Loki Daemon", argc, argv, vm);
+
+    bool interactive = true;
+    switch(run_type)
+    {
+        case daemonizer::run_type::terminate: return 0;
+        case daemonizer::run_type::terminate_with_error: return 1;
+        case daemonizer::run_type::non_interactive: interactive = false; break;
+        default: assert(run_type == daemonizer::run_type::interactive); break;
+    }
+
+    daemonize::daemon daemon{vm, parse_public_rpc_port(vm)};
+    bool result = daemon.run(interactive);
+    return !result;
   }
   catch (std::exception const & ex)
   {

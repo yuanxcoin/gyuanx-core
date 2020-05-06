@@ -76,13 +76,10 @@ namespace daemonizer
     return boost::filesystem::current_path();
   }
 
-  template <typename T_executor>
-  inline bool daemonize(
-      int argc, char const * argv[]
-    , T_executor && executor // universal ref
-    , boost::program_options::variables_map const & vm
-    )
+  template <typename Application>
+  inline run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm)
   {
+    (void)name; (void)argc; (void)argv;
     if (command_line::has_arg(vm, arg_detach))
     {
       tools::success_msg_writer() << "Forking to background...";
@@ -92,17 +89,11 @@ namespace daemonizer
         pidfile = command_line::get_arg(vm, arg_pidfile);
       }
       posix::fork(pidfile);
-      auto daemon = executor.create_daemon(vm);
-      return daemon.run();
+      return run_type::non_interactive;
     }
     else if (command_line::has_arg(vm, arg_non_interactive))
-    {
-      return executor.run_non_interactive(vm);
-    }
-    else
-    {
-      //LOG_PRINT_L0("Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL);
-      return executor.run_interactive(vm);
-    }
+      return run_type::non_interactive;
+
+    return run_type::interactive;
   }
 }

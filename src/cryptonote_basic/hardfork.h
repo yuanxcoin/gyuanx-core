@@ -46,8 +46,8 @@ namespace cryptonote
       time_t time;
     };
 
-    constexpr static uint8_t INVALID_HF_VERSION_FOR_HEIGHT = 255;
-    constexpr static uint64_t INVALID_HF_VERSION_HEIGHT    = static_cast<uint64_t>(-1);
+    constexpr static uint8_t INVALID_HF_VERSION         = 255;
+    constexpr static uint64_t INVALID_HF_VERSION_HEIGHT = static_cast<uint64_t>(-1);
     typedef enum {
       LikelyForked,
       UpdateNeeded,

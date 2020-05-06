@@ -511,6 +511,7 @@ private:
       uint32_t m_subaddr_account;   // subaddress account of your wallet to be used in this transfer
       std::set<uint32_t> m_subaddr_indices;  // set of address indices used as inputs in this transfer
       std::vector<std::pair<crypto::key_image, std::vector<uint64_t>>> m_rings; // relative
+      tools::pay_type m_pay_type = tools::pay_type::out;
     };
 
     struct confirmed_transfer_details
@@ -527,10 +528,25 @@ private:
       uint32_t m_subaddr_account;   // subaddress account of your wallet to be used in this transfer
       std::set<uint32_t> m_subaddr_indices;  // set of address indices used as inputs in this transfer
       std::vector<std::pair<crypto::key_image, std::vector<uint64_t>>> m_rings; // relative
+      tools::pay_type m_pay_type = tools::pay_type::out;
 
       confirmed_transfer_details(): m_amount_in(0), m_amount_out(0), m_change((uint64_t)-1), m_block_height(0), m_payment_id(crypto::null_hash), m_timestamp(0), m_unlock_time(0), m_subaddr_account((uint32_t)-1) {}
-      confirmed_transfer_details(const unconfirmed_transfer_details &utd, uint64_t height):
-        m_amount_in(utd.m_amount_in), m_amount_out(utd.m_amount_out), m_change(utd.m_change), m_block_height(height), m_dests(utd.m_dests), m_payment_id(utd.m_payment_id), m_timestamp(utd.m_timestamp), m_unlock_time(utd.m_tx.unlock_time), m_unlock_times(utd.m_tx.output_unlock_times), m_subaddr_account(utd.m_subaddr_account), m_subaddr_indices(utd.m_subaddr_indices), m_rings(utd.m_rings) {}
+      confirmed_transfer_details(const unconfirmed_transfer_details &utd, uint64_t height)
+      : m_amount_in(utd.m_amount_in)
+      , m_amount_out(utd.m_amount_out)
+      , m_change(utd.m_change)
+      , m_block_height(height)
+      , m_dests(utd.m_dests)
+      , m_payment_id(utd.m_payment_id)
+      , m_timestamp(utd.m_timestamp)
+      , m_unlock_time(utd.m_tx.unlock_time)
+      , m_unlock_times(utd.m_tx.output_unlock_times)
+      , m_subaddr_account(utd.m_subaddr_account)
+      , m_subaddr_indices(utd.m_subaddr_indices)
+      , m_rings(utd.m_rings)
+      , m_pay_type(utd.m_pay_type)
+      {
+      }
     };
 
     struct tx_construction_data
@@ -998,12 +1014,13 @@ private:
 
     struct get_transfers_args_t
     {
-      bool in = true;
-      bool out = true;
-      bool pending = true;
-      bool failed = true;
-      bool pool = true;
-      bool coinbase = true;
+      bool in = false;
+      bool out = false;
+      bool stake = false;
+      bool pending = false;
+      bool failed = false;
+      bool pool = false;
+      bool coinbase = false;
       bool filter_by_height = false;
       uint64_t min_height = 0;
       uint64_t max_height = CRYPTONOTE_MAX_BLOCK_NUMBER;
@@ -1338,10 +1355,10 @@ private:
     void import_payments_out(const std::list<std::pair<crypto::hash,wallet2::confirmed_transfer_details>> &confirmed_payments);
     std::tuple<size_t, crypto::hash, std::vector<crypto::hash>> export_blockchain() const;
     void import_blockchain(const std::tuple<size_t, crypto::hash, std::vector<crypto::hash>> &bc);
-    bool export_key_images(const std::string &filename, bool requested_only) const;
+    bool export_key_images_to_file(const std::string &filename, bool requested_only) const;
     std::pair<size_t, std::vector<std::pair<crypto::key_image, crypto::signature>>> export_key_images(bool requested_only) const;
     uint64_t import_key_images(const std::vector<std::pair<crypto::key_image, crypto::signature>> &signed_key_images, size_t offset, uint64_t &spent, uint64_t &unspent, bool check_spent = true);
-    uint64_t import_key_images(const std::string &filename, uint64_t &spent, uint64_t &unspent);
+    uint64_t import_key_images_from_file(const std::string &filename, uint64_t &spent, uint64_t &unspent);
     bool import_key_images(std::vector<crypto::key_image> key_images, size_t offset=0, boost::optional<std::unordered_set<size_t>> selected_transfers=boost::none);
     bool import_key_images(signed_tx_set & signed_tx, size_t offset=0, bool only_selected_transfers=false);
     crypto::public_key get_tx_pub_key_from_received_outs(const tools::wallet2::transfer_details &td) const;
@@ -1510,6 +1527,7 @@ private:
       convert_registration_args_failed,
       registration_timestamp_expired,
       registration_timestamp_parse_fail,
+      validate_contributor_args_fail,
       service_node_key_parse_fail,
       service_node_signature_parse_fail,
       service_node_register_serialize_to_tx_extra_fail,
@@ -1543,8 +1561,8 @@ private:
 
     // signature: (Optional) If set, use the signature given, otherwise by default derive the signature from the wallet spend key as an ed25519 key.
     //            The signature is derived from the hash of the previous txid blob and previous value blob of the mapping. By default this is signed using the wallet's spend key as an ed25519 keypair.
-    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {});
-    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(std::string const &type, std::string const &name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {});
+    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> *response = {});
+    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(std::string const &type, std::string const &name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> *response = {});
 
     // Generate just the signature required for putting into lns_update_mapping command in the wallet
     bool lns_make_update_mapping_signature(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, lns::generic_signature &signature, uint32_t account_index = 0, std::string *reason = nullptr);
@@ -1829,8 +1847,8 @@ BOOST_CLASS_VERSION(tools::wallet2::multisig_info::LR, 0)
 BOOST_CLASS_VERSION(tools::wallet2::multisig_tx_set, 1)
 BOOST_CLASS_VERSION(tools::wallet2::payment_details, 6)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
-BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 8)
-BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 7)
+BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 9)
+BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 8)
 BOOST_CLASS_VERSION(tools::wallet2::address_book_row, 17)
 BOOST_CLASS_VERSION(tools::wallet2::reserve_proof_entry, 0)
 BOOST_CLASS_VERSION(tools::wallet2::unsigned_tx_set, 0)
@@ -1935,6 +1953,8 @@ namespace boost
       {
         a & x.m_tx;
       }
+      if (ver < 9)
+       x.m_pay_type = tools::pay_type::out;
       if (ver < 1)
         return;
       a & x.m_dests;
@@ -1967,6 +1987,9 @@ namespace boost
       if (ver < 8)
         return;
       a & x.m_rings;
+      if (ver < 9)
+        return;
+      a & x.m_pay_type;
     }
 
     template <class Archive>
@@ -1976,6 +1999,8 @@ namespace boost
       a & x.m_amount_out;
       a & x.m_change;
       a & x.m_block_height;
+      if (ver < 8)
+        x.m_pay_type = tools::pay_type::out;
       if (ver < 1)
         return;
       a & x.m_dests;
@@ -2018,6 +2043,9 @@ namespace boost
       if (ver < 7)
         return;
       a & x.m_unlock_times;
+      if (ver < 8)
+        return;
+      a & x.m_pay_type;
     }
 
     template <class Archive>
@@ -2036,11 +2064,12 @@ namespace boost
       if (ver < 3)
         x.m_fee = 0;
       if (ver < 4)
-        x.m_type = tools::pay_type::unspecified;
+        x.m_type = tools::pay_type::in;
       if (ver < 5)
         x.m_unmined_blink = false;
       if (ver < 6)
         x.m_was_blink = false;
+
 
       if (ver < 1) return;
       a & x.m_timestamp;

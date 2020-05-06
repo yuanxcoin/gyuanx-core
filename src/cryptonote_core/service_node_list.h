@@ -371,6 +371,21 @@ namespace service_nodes
       }
     }
 
+    /// Copies x25519 pubkeys (as strings) of all currently active SNs into the given output iterator
+    template <typename OutputIt>
+    void copy_active_x25519_pubkeys(OutputIt out) const {
+      std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+      for (const auto& pk_info : m_state.service_nodes_infos) {
+        if (!pk_info.second->is_active())
+          continue;
+        auto it = proofs.find(pk_info.first);
+        if (it == proofs.end())
+          continue;
+        if (const auto& x2_pk = it->second.pubkey_x25519)
+          *out++ = std::string{reinterpret_cast<const char*>(&x2_pk), sizeof(x2_pk)};
+      }
+    }
+
     void set_my_service_node_keys(const service_node_keys *keys);
     void set_quorum_history_storage(uint64_t hist_size); // 0 = none (default), 1 = unlimited, N = # of blocks
     bool store();
@@ -541,11 +556,19 @@ namespace service_nodes
     state_t m_state; // NOTE: Not in m_transient due to the non-trivial constructor. We can't blanket initialise using = {}; needs to be reset in ::reset(...) manually
   };
 
-  bool     is_registration_tx   (cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction& tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key& key, service_node_info& info);
-  bool     reg_tx_extract_fields(const cryptonote::transaction& tx, std::vector<cryptonote::account_public_address>& addresses, uint64_t& portions_for_operator, std::vector<uint64_t>& portions, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature, crypto::public_key& tx_pub_key);
-  uint64_t offset_testing_quorum_height(quorum_type type, uint64_t height);
+  struct staking_components
+  {
+    crypto::public_key                             service_node_pubkey;
+    cryptonote::account_public_address             address;
+    uint64_t                                       transferred;
+    crypto::secret_key                             tx_key;
+    std::vector<service_node_info::contribution_t> locked_contributions;
+  };
+  bool tx_get_staking_components            (cryptonote::transaction_prefix const &tx_prefix, staking_components *contribution, crypto::hash const &txid);
+  bool tx_get_staking_components            (cryptonote::transaction const &tx, staking_components *contribution);
+  bool tx_get_staking_components_and_amounts(cryptonote::network_type nettype, uint8_t hf_version, cryptonote::transaction const &tx, uint64_t block_height, staking_components *contribution);
 
-  struct converted_registration_args
+  struct contributor_args_t
   {
     bool                                            success;
     std::vector<cryptonote::account_public_address> addresses;
@@ -553,10 +576,20 @@ namespace service_nodes
     uint64_t                                        portions_for_operator;
     std::string                                     err_msg; // if (success == false), this is set to the err msg otherwise empty
   };
-  converted_registration_args convert_registration_args(cryptonote::network_type nettype,
-                                                        const std::vector<std::string>& args,
-                                                        uint64_t staking_requirement,
-                                                        uint8_t hf_version);
+
+  bool     is_registration_tx   (cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction& tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key& key, service_node_info& info);
+  bool     reg_tx_extract_fields(const cryptonote::transaction& tx, contributor_args_t &contributor_args, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature, crypto::public_key& tx_pub_key);
+  uint64_t offset_testing_quorum_height(quorum_type type, uint64_t height);
+
+  contributor_args_t convert_registration_args(cryptonote::network_type nettype,
+                                               const std::vector<std::string> &args,
+                                               uint64_t staking_requirement,
+                                               uint8_t hf_version);
+
+  // validate_contributors_* functions throws invalid_contributions exception
+  struct invalid_contributions : std::invalid_argument { using std::invalid_argument::invalid_argument; };
+  void validate_contributor_args(uint8_t hf_version, contributor_args_t const &contributor_args);
+  void validate_contributor_args_signature(contributor_args_t const &contributor_args, uint64_t const expiration_timestamp, crypto::public_key const &service_node_key, crypto::signature const &signature);
 
   bool make_registration_cmd(cryptonote::network_type nettype,
       uint8_t hf_version,

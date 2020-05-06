@@ -166,10 +166,7 @@ bool ensure_admin(
   }
 }
 
-bool install_service(
-    std::string const & service_name
-  , std::string const & arguments
-  )
+bool install_service(char const *service_name, std::string const &arguments)
 {
   std::string command = epee::string_tools::get_current_module_path();
   std::string full_command = command + arguments;
@@ -191,8 +188,8 @@ bool install_service(
   service_handle p_service{
     CreateService(
         p_manager.get()
-      , service_name.c_str()
-      , service_name.c_str()
+      , service_name
+      , service_name
       , 0
       //, GENERIC_EXECUTE | GENERIC_READ
       , SERVICE_WIN32_OWN_PROCESS
@@ -221,9 +218,7 @@ bool install_service(
   return true;
 }
 
-bool start_service(
-    std::string const & service_name
-  )
+bool start_service(char const *service_name)
 {
   tools::msg_writer() << "Starting service";
 
@@ -247,7 +242,7 @@ bool start_service(
   service_handle p_service{
     OpenService(
         p_manager.get()
-      , service_name.c_str()
+      , service_name
       //, SERVICE_START | SERVICE_QUERY_STATUS
       , SERVICE_START
       )
@@ -276,9 +271,7 @@ bool start_service(
   return true;
 }
 
-bool stop_service(
-    std::string const & service_name
-  )
+bool stop_service(char const *service_name)
 {
   tools::msg_writer() << "Stopping service";
 
@@ -299,7 +292,7 @@ bool stop_service(
   service_handle p_service{
     OpenService(
         p_manager.get()
-      , service_name.c_str()
+      , service_name
       , SERVICE_STOP | SERVICE_QUERY_STATUS
       )
   , &::CloseServiceHandle
@@ -324,9 +317,7 @@ bool stop_service(
   return true;
 }
 
-bool uninstall_service(
-    std::string const & service_name
-  )
+bool uninstall_service(char const *service_name)
 {
   service_handle p_manager{
     OpenSCManager(
@@ -345,7 +336,7 @@ bool uninstall_service(
   service_handle p_service{
     OpenService(
         p_manager.get()
-      , service_name.c_str()
+      , service_name
       , SERVICE_QUERY_STATUS | DELETE
       )
   , &::CloseServiceHandle

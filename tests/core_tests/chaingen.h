@@ -977,7 +977,7 @@ inline bool do_replay_file(const std::string& filename)
     return false;
   }
 
-  cryptonote::core core(nullptr);
+  cryptonote::core core;
   t_test_class validator;
   bool result = do_replay_events_get_core<t_test_class>(events, &core, validator);
   core.deinit();
@@ -1172,7 +1172,7 @@ inline bool do_replay_file(const std::string& filename)
 
 #define REPLAY_CORE(generator_class, generator_class_instance)                                                         \
   {                                                                                                                    \
-    cryptonote::core core(nullptr);                                                                                    \
+    cryptonote::core core;                                                                                             \
     if (generated && do_replay_events_get_core<generator_class>(events, &core, generator_class_instance))              \
     {                                                                                                                  \
       MGINFO_GREEN("#TEST# Succeeded " << #generator_class);                                                           \

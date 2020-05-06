@@ -133,62 +133,55 @@ namespace daemonizer
     }
   }
 
-  template <typename T_executor>
-  inline bool daemonize(
-      int argc, char const * argv[]
-    , T_executor && executor // universal ref
-    , boost::program_options::variables_map const & vm
-    )
+  template <typename Application>
+  inline run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm)
   {
     std::string arguments = get_argument_string(argc, argv);
 
     if (command_line::has_arg(vm, arg_is_service))
     {
-      // TODO - Set the service status here for return codes
-      windows::t_service_runner<typename T_executor::t_daemon>::run(
-        executor.name()
-      , executor.create_daemon(vm)
-      );
-      return true;
+      Application app(&vm);
+      windows::service_runner<Application> runner(name, &app);
+      runner.run();
+      return run_type::terminate;
     }
     else if (command_line::has_arg(vm, arg_install_service))
     {
       if (windows::ensure_admin(arguments))
       {
         arguments += " --run-as-service";
-        return windows::install_service(executor.name(), arguments);
+        bool result = windows::install_service(name, arguments);
+        return result ? run_type::terminate : run_type::terminate_with_error;
       }
     }
     else if (command_line::has_arg(vm, arg_uninstall_service))
     {
       if (windows::ensure_admin(arguments))
       {
-        return windows::uninstall_service(executor.name());
+        bool result = windows::uninstall_service(name);
+        return result ? run_type::terminate : run_type::terminate_with_error;
       }
     }
     else if (command_line::has_arg(vm, arg_start_service))
     {
       if (windows::ensure_admin(arguments))
       {
-        return windows::start_service(executor.name());
+        bool result = windows::start_service(name);
+        return result ? run_type::terminate : run_type::terminate_with_error;
       }
     }
     else if (command_line::has_arg(vm, arg_stop_service))
     {
       if (windows::ensure_admin(arguments))
       {
-        return windows::stop_service(executor.name());
+        bool result = windows::stop_service(name);
+        return result ? run_type::terminate : run_type::terminate_with_error;
       }
     }
-    else // interactive
-    {
-      //LOG_PRINT_L0("Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL);
-      if (command_line::has_arg(vm, arg_non_interactive))
-        return executor.run_non_interactive(vm);
-      else
-        return executor.run_interactive(vm);
-    }
 
-    return false;
+    if (command_line::has_arg(vm, arg_non_interactive))
+      return run_type::non_interactive;
+    else
+      return run_type::interactive;
   }
 }

@@ -205,7 +205,7 @@ namespace
   const char* USAGE_CHECK_SPEND_PROOF("check_spend_proof <txid> <signature_file> [<message>]");
   const char* USAGE_GET_RESERVE_PROOF("get_reserve_proof (all|<amount>) [<message>]");
   const char* USAGE_CHECK_RESERVE_PROOF("check_reserve_proof <address> <signature_file> [<message>]");
-  const char* USAGE_SHOW_TRANSFERS("show_transfers [in|out|all|pending|failed|coinbase] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
+  const char* USAGE_SHOW_TRANSFERS("show_transfers [in] [out] [stake] [all] [pending] [failed] [coinbase] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]]");
   const char* USAGE_EXPORT_TRANSFERS("export_transfers [in|out|all|pending|failed] [index=<N1>[,<N2>,...]] [<min_height> [<max_height>]] [output=<path>]");
   const char* USAGE_UNSPENT_OUTPUTS("unspent_outputs [index=<N1>[,<N2>,...]] [<min_amount> [<max_amount>]]");
   const char* USAGE_RESCAN_BC("rescan_bc [hard|soft|keep_ki] [start_height=0]");
@@ -2813,10 +2813,10 @@ simple_wallet::simple_wallet()
                            tr(R"(Show the incoming/outgoing transfers within an optional height range.
 
 Output format:
-In or Coinbase:    Block Number, "block"|"in", Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note
-Out:               Block Number,        "out", Time, Amount*, Transaction Hash, Payment ID, Fee, Destinations, Input addresses**, "-", Note
-Pool:              "pool",               "in", Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note, Double Spend Note
-Pending or Failed: "failed"|"pending",  "out", Time, Amount*, Transaction Hash, Payment ID, Fee, Input addresses**,               "-", Note
+In or Coinbase:    Block Number, "block"|"in", Lock, Checkpointed, Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note
+Out:               Block Number,        "out", Lock, Checkpointed, Time, Amount*, Transaction Hash, Payment ID, Fee, Destinations, Input addresses**, "-", Note
+Pool:              "pool",               "in", Lock, Checkpointed, Time, Amount,  Transaction Hash, Payment ID, Subaddress Index,                     "-", Note, Double Spend Note
+Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*, Transaction Hash, Payment ID, Fee, Input addresses**,               "-", Note
 
 * Excluding change and fee.
 ** Set of address indices used as inputs in this transfer.)"));
@@ -5666,7 +5666,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
       {
         prompt << tr("WARNING: this is a non default ring size, which may harm your privacy. Default is recommended.");
       }
-      prompt << ENDL << tr("Is this okay?");
+      prompt << ENDL << ENDL << tr("Is this okay?");
       
       std::string accepted = input_line(prompt.str(), true);
       if (std::cin.eof())
@@ -6391,6 +6391,7 @@ bool simple_wallet::lns_buy_mapping(const std::vector<std::string>& args)
   std::string const &name  = local_args[0];
   std::string const &value = local_args[1];
 
+
   SCOPED_WALLET_UNLOCK();
   std::string reason;
   std::vector<tools::wallet2::pending_tx> ptx_vector;
@@ -6416,6 +6417,17 @@ bool simple_wallet::lns_buy_mapping(const std::vector<std::string>& args)
     info.address                        = m_wallet->get_subaddress({m_current_subaddress_account, 0});
     info.is_subaddress                  = m_current_subaddress_account != 0;
     dsts.push_back(info);
+
+    std::cout << std::endl << tr("Buying Loki Name System Record") << std::endl << std::endl;
+    std::cout << boost::format(tr("Name:         %s")) % name << std::endl;
+    std::cout << boost::format(tr("Value:        %s")) % value << boost::format(tr(" for %s")) % "Session" << std::endl;
+    std::cout << boost::format(tr("Owner:        %s")) % (owner.size() ? owner : m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}) + " (this wallet) ") << std::endl;
+    if(backup_owner.size()) {
+      std::cout << boost::format(tr("Backup Owner: %s")) % backup_owner << std::endl;
+    } else {
+      std::cout << tr("Backup Owner: (none)") << std::endl;
+    }
+
     if (!confirm_and_send_tx(dsts, ptx_vector, priority == tools::tx_priority_blink))
       return false;
   }
@@ -6457,8 +6469,11 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
   SCOPED_WALLET_UNLOCK();
   std::string reason;
   std::vector<tools::wallet2::pending_tx> ptx_vector;
+  std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> response;
   try
   {
+
+
     ptx_vector = m_wallet->lns_create_update_mapping_tx(lns::mapping_type::session,
                                                         name,
                                                         value.size() ? &value : nullptr,
@@ -6468,11 +6483,23 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
                                                         &reason,
                                                         priority,
                                                         m_current_subaddress_account,
-                                                        subaddr_indices);
+                                                        subaddr_indices,
+                                                        &response);
     if (ptx_vector.empty())
     {
       tools::fail_msg_writer() << reason;
       return true;
+    }
+
+    lns::mapping_value encrypted_value = {};
+    encrypted_value.len                = response[0].encrypted_value.size() / 2;
+    lokimq::from_hex(response[0].encrypted_value.begin(), response[0].encrypted_value.end(), encrypted_value.buffer.begin());
+
+    lns::mapping_value old_value = {};
+    if (!lns::decrypt_mapping_value(name, encrypted_value, old_value))
+    {
+      fail_msg_writer() << "Failed to decrypt the mapping value=" << response[0].encrypted_value;
+      return false;
     }
 
     std::vector<cryptonote::address_parse_info> dsts;
@@ -6480,8 +6507,33 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
     info.address                        = m_wallet->get_subaddress({m_current_subaddress_account, 0});
     info.is_subaddress                  = m_current_subaddress_account != 0;
     dsts.push_back(info);
+
+    std::cout << std::endl << tr("Updating Loki Name System Record") << std::endl << std::endl;
+    std::cout << boost::format(tr("Name:             %s")) % name << std::endl;
+
+    if(value.size()) {
+      std::cout << boost::format(tr("Old Value:        %s")) % old_value.to_readable_value(m_wallet->nettype(),static_cast<lns::mapping_type>(response[0].type)) << std::endl;
+      std::cout << boost::format(tr("New Value:        %s")) % value << std::endl;
+    } else {
+      std::cout << boost::format(tr("Value:            %s")) % old_value.to_readable_value(m_wallet->nettype(),static_cast<lns::mapping_type>(response[0].type)) << std::endl;
+    }
+
+    if(owner.size()) {
+      std::cout << boost::format(tr("Old Owner:        %s")) % response[0].owner << std::endl;
+      std::cout << boost::format(tr("New Owner:        %s")) % owner << std::endl;
+    } else {
+      std::cout << boost::format(tr("Owner:            %s (unchanged)")) % response[0].owner << std::endl;
+    }
+
+    if(backup_owner.size()) {
+      std::cout << boost::format(tr("Old Backup Owner: %s")) % (response[0].backup_owner.empty() ? "(none)" : response[0].backup_owner) << std::endl;
+      std::cout << boost::format(tr("New Backup Owner: %s")) % backup_owner << std::endl;
+    } else {
+      std::cout << boost::format(tr("Backup Owner:     %s (unchanged)")) % (response[0].backup_owner.empty() ? "(none)" : response[0].backup_owner) << std::endl;
+    }
     if (!confirm_and_send_tx(dsts, ptx_vector, false /*blink*/))
       return false;
+
   }
   catch (const std::exception &e)
   {
@@ -8004,34 +8056,43 @@ bool simple_wallet::check_reserve_proof(const std::vector<std::string> &args)
 static bool parse_get_transfers_args(std::vector<std::string>& local_args, tools::wallet2::get_transfers_args_t& args)
 {
   // optional in/out selector
-  if (local_args.size() > 0) {
+  while (local_args.size() > 0)
+  {
     if (local_args[0] == "in" || local_args[0] == "incoming") {
-      args.out = args.pending = args.failed = false;
+      args.in = args.coinbase = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "out" || local_args[0] == "outgoing") {
-      args.in = args.pool = args.coinbase = false;
+      args.out = args.stake = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "pending") {
-      args.in = args.out = args.failed = args.coinbase = false;
+      args.pending = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "failed") {
-      args.in = args.out = args.pending = args.pool = args.coinbase = false;
+      args.failed = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "pool") {
-      args.in = args.out = args.pending = args.failed = args.coinbase = false;
+      args.pool = true;
       local_args.erase(local_args.begin());
     }
     else if (local_args[0] == "coinbase") {
-      args.in = args.out = args.pending = args.failed = args.pool = false;
       args.coinbase = true;
       local_args.erase(local_args.begin());
     }
-    else if (local_args[0] == "all" || local_args[0] == "both") {
+    else if (local_args[0] == "stake") {
+      args.stake = true;
       local_args.erase(local_args.begin());
+    }
+    else if (local_args[0] == "all" || local_args[0] == "both") {
+      args.in = args.out = args.stake = args.pending = args.failed = args.pool = args.coinbase = true;
+      local_args.erase(local_args.begin());
+    }
+    else
+    {
+      break;
     }
   }
 
@@ -8076,7 +8137,7 @@ static bool parse_get_transfers_args(std::vector<std::string>& local_args, tools
 // mutates local_args as it parses and consumes arguments
 bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vector<tools::transfer_view>& transfers)
 {
-  tools::wallet2::get_transfers_args_t args;
+  tools::wallet2::get_transfers_args_t args = {};
   if (!parse_get_transfers_args(local_args, args))
   {
     return false;
@@ -8507,22 +8568,8 @@ bool simple_wallet::run()
   m_auto_refresh_enabled = m_wallet->auto_refresh();
   m_idle_thread          = boost::thread([&] { wallet_idle_thread(); });
 
-  if (!m_wallet->m_long_poll_disabled)
-  {
-    m_long_poll_thread = boost::thread([&] {
-      for (;;)
-      {
-        try
-        {
-          if (m_auto_refresh_enabled && m_wallet->long_poll_pool_state())
-            m_idle_cond.notify_one();
-        }
-        catch (...)
-        {
-        }
-      }
-    });
-  }
+  long_poll_thread_t long_poll_thread(*this);
+  if (!m_wallet->m_long_poll_disabled) long_poll_thread.start();
 
   message_writer(console_color_green, false) << "Background refresh thread started";
 
@@ -8547,7 +8594,6 @@ bool simple_wallet::run()
     }
   }
 #endif
-
   return m_cmd_binder.run_handling([this]() {return get_prompt(); }, "");
 }
 //----------------------------------------------------------------------------------------------------
@@ -9274,7 +9320,7 @@ bool simple_wallet::export_key_images(const std::vector<std::string> &args)
   {
     /// whether to export requested key images only
     bool requested_only = (args.size() == 2 && args[1] == "requested-only");
-    if (!m_wallet->export_key_images(filename, requested_only))
+    if (!m_wallet->export_key_images_to_file(filename, requested_only))
     {
       fail_msg_writer() << tr("failed to save file ") << filename;
       return true;
@@ -9309,13 +9355,13 @@ bool simple_wallet::import_key_images(const std::vector<std::string> &args)
     PRINT_USAGE(USAGE_IMPORT_KEY_IMAGES);
     return true;
   }
-  std::string filename = args[0];
 
+  std::string const &filename = args[0];
   LOCK_IDLE_SCOPE();
   try
   {
     uint64_t spent = 0, unspent = 0;
-    uint64_t height = m_wallet->import_key_images(filename, spent, unspent);
+    uint64_t height = m_wallet->import_key_images_from_file(filename, spent, unspent);
     success_msg_writer() << "Signed key images imported to height " << height << ", "
         << print_money(spent) << " spent, " << print_money(unspent) << " unspent"; 
   }

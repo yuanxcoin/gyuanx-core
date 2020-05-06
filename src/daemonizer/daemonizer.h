@@ -45,22 +45,19 @@ namespace daemonizer
       boost::program_options::variables_map const & vm
     );
 
-  /**
-   * @arg create_before_detach - this indicates that the daemon should be
-   * created before the fork, giving it a chance to report initialization
-   * errors.  At the time of this writing, this is not possible in the primary
-   * daemon (likely due to the size of the blockchain in memory).
-   */
-  template <typename T_executor>
-  bool daemonize(
-      int argc, char const * argv[]
-    , T_executor && executor // universal ref
-    , boost::program_options::variables_map const & vm
-    );
+  enum struct run_type
+  {
+      non_interactive,
+      interactive,
+      terminate,
+      terminate_with_error,
+  };
+  template <typename Application>
+  run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm);
 }
 
 #ifdef WIN32
-#  include "daemonizer/windows_daemonizer.inl"
+  #include "daemonizer/windows_daemonizer.inl"
 #else
-#  include "daemonizer/posix_daemonizer.inl"
+  #include "daemonizer/posix_daemonizer.inl"
 #endif

@@ -2980,7 +2980,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
   LOKI_RPC_DOC_INTROSPECT
-  // Get information on Service Node.
+  // Get information on the queried daemon's Service Node state.
   struct COMMAND_RPC_GET_SERVICE_NODE_STATUS
   {
     struct request_t

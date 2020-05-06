@@ -31,6 +31,7 @@ add_executable(difficulty-tests
 target_link_libraries(difficulty-tests
   PRIVATE
     cryptonote_basic
+    easylogging
     extra)
 set_property(TARGET difficulty-tests
   PROPERTY
