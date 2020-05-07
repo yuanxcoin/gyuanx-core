@@ -12993,27 +12993,15 @@ uint64_t wallet2::get_approximate_blockchain_height() const
 }
 
 //TODO(sean)
-//void wallet2::set_lns_cache_record(lns::mapping_type type, std::string name, std::string value, std::string owner, std::string backup_owner)
-//{
-  //lns_detail detail = {
-    //type,
-    //name,
-    //value,
-    //owner,
-    //backup_owner,
-  //};
-  //lns_records_cache.push_back(detail);
-//}
-
-void wallet2::set_lns_cache_record(wallet2::lns_detail detail )
+void wallet2::set_lns_cache_record(const wallet2::lns_detail& detail)
 {
-  //lns_records_cache.push_back(detail);
+  lns_records_cache.push_back(detail);
 }
 
-//std::vector<wallet2::lns_detail> wallet2::get_lns_cache_record(std::string name, std::string value, std::string owner, std::string backup_owner)
-//{
-  //return lns_records_cache;
-//}
+std::vector<wallet2::lns_detail> wallet2::get_lns_cache_record(std::string name, std::string value, std::string owner, std::string backup_owner)
+{
+  return lns_records_cache;
+}
 
 void wallet2::set_tx_note(const crypto::hash &txid, const std::string &note)
 {

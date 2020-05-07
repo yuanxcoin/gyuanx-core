@@ -808,10 +808,9 @@ private:
     };
     std::vector<lns_detail> lns_records_cache;
 
-    //void set_lns_cache_record(lns::mapping_type type, std::string name, std::string value, std::string owner, std::string backup_owner);
-    void set_lns_cache_record(lns_detail detail);
+    void set_lns_cache_record(const wallet2::lns_detail& detail);
 
-    //std::vector<lns_detail> get_lns_cache_record(std::string name, std::string value, std::string owner, std::string backup_owner);
+    std::vector<lns_detail> get_lns_cache_record(std::string name, std::string value, std::string owner, std::string backup_owner);
 
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();

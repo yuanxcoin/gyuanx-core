@@ -6529,13 +6529,14 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
     info.is_subaddress                  = m_current_subaddress_account != 0;
     dsts.push_back(info);
 
-    //tools::wallet2::lns_detail detail = {
-      //lns::mapping_type::session,
-      //"testname",
-      //"testvalue",
-      //"testowner",
-      //"testbackupowner" };
-    //m_wallet->set_lns_cache_record(detail);
+    //TODO:(sean)
+    tools::wallet2::lns_detail detail = {
+      lns::mapping_type::session,
+      "testname",
+      "testvalue",
+      "testowner",
+      "testbackupowner" };
+    m_wallet->set_lns_cache_record(detail);
 
     std::cout << std::endl << tr("Buying Loki Name System Record") << std::endl << std::endl;
     if (type == lns::mapping_type::session)
@@ -7005,12 +7006,12 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
     for (uint32_t index = 0; index < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++index)
     {
       //TODO(sean)
-      //std::cout << tr("Retrieving the Cache") << std::endl;
-      //std::vector<tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache_record("", "", m_wallet->get_subaddress_as_str({m_current_subaddress_account, index}) , "");
-      //std::cout << cache.size() << std::endl;
+      std::cout << tr("Retrieving the Cache") << std::endl;
+      std::vector<tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache_record("", "", m_wallet->get_subaddress_as_str({m_current_subaddress_account, index}) , "");
+      std::cout << cache.size() << std::endl;
 
-      //for(unsigned int i=0; i<cache.size(); ++i)
-          //std::cout << cache[i].name << ' '; 
+      for(unsigned int i=0; i<cache.size(); ++i)
+          std::cout << cache[i].name << ' ';
       if (requests.back().entries.size() >= cryptonote::rpc::LNS_OWNERS_TO_NAMES::MAX_REQUEST_ENTRIES)
         requests.emplace_back();
       requests.back().entries.push_back(m_wallet->get_subaddress_as_str({m_current_subaddress_account, index}));
