@@ -806,6 +806,12 @@ private:
       std::string owner;
       std::string backup_owner;
     };
+    std::vector<lns_detail> lns_records_cache;
+
+    //void set_lns_cache_record(lns::mapping_type type, std::string name, std::string value, std::string owner, std::string backup_owner);
+    void set_lns_cache_record(lns_detail detail);
+
+    //std::vector<lns_detail> get_lns_cache_record(std::string name, std::string value, std::string owner, std::string backup_owner);
 
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
@@ -1547,7 +1553,6 @@ private:
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> m_subaddresses;
     std::vector<std::vector<std::string>> m_subaddress_labels;
     std::unordered_map<crypto::hash, std::string> m_tx_notes;
-    std::vector<lns_detail> lns_records_cache;
     std::unordered_map<std::string, std::string> m_attributes;
     std::vector<tools::wallet2::address_book_row> m_address_book;
     std::pair<std::map<std::string, std::string>, std::vector<std::string>> m_account_tags;
