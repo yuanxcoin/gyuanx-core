@@ -12998,7 +12998,7 @@ void wallet2::set_lns_cache_record(const wallet2::lns_detail& detail)
   lns_records_cache.push_back(detail);
 }
 
-std::vector<wallet2::lns_detail> wallet2::get_lns_cache_record(std::string name, std::string value, std::string owner, std::string backup_owner)
+std::vector<wallet2::lns_detail> wallet2::get_lns_cache()
 {
   return lns_records_cache;
 }

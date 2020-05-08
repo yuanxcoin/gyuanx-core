@@ -802,6 +802,7 @@ private:
     {
       lns::mapping_type type;
       std::string name;
+      std::string hashed_name;
       std::string value;
       std::string owner;
       std::string backup_owner;
@@ -810,7 +811,7 @@ private:
 
     void set_lns_cache_record(const wallet2::lns_detail& detail);
 
-    std::vector<lns_detail> get_lns_cache_record(std::string name, std::string value, std::string owner, std::string backup_owner);
+    std::vector<lns_detail> get_lns_cache();
 
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
@@ -1688,6 +1689,7 @@ namespace boost::serialization
     {
       a & x.type;
       a & x.name;
+      a & x.hashed_name;
       a & x.value;
       a & x.owner;
       a & x.backup_owner;
