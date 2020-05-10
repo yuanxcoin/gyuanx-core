@@ -6556,8 +6556,6 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
     if (!confirm_and_send_tx(dsts, ptx_vector, priority == tools::tx_priority_blink))
       return false;
 
-    //TODO(sean)
-    std::cout << tr("Setting the LNS Cache") << std::endl;
     crypto::hash name_hash = lns::name_to_hash(name);
     std::string name_hash_str =  epee::string_encoding::base64_encode(reinterpret_cast<unsigned char const *>(name_hash.data), sizeof(name_hash));
     tools::wallet2::lns_detail detail = {
@@ -6764,6 +6762,18 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     if (!confirm_and_send_tx(dsts, ptx_vector, false /*blink*/))
       return false;
 
+    m_wallet->delete_lns_cache_record(name);
+    crypto::hash name_hash = lns::name_to_hash(name);
+    std::string name_hash_str =  epee::string_encoding::base64_encode(reinterpret_cast<unsigned char const *>(name_hash.data), sizeof(name_hash));
+    tools::wallet2::lns_detail detail = {
+      lns::mapping_type::session,
+      name,
+      name_hash_str,
+      value,
+      owner.size() ? owner : m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}),
+      backup_owner.size() ? backup_owner : ""};
+    m_wallet->set_lns_cache_record(detail);
+
   }
   catch (const std::exception &e)
   {
@@ -6922,7 +6932,6 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
     return true;
   }
 
-
   rpc::LNS_NAMES_TO_OWNERS::request request = {};
   for (auto& name : args)
   {
@@ -6980,6 +6989,16 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       << "\n    Encrypted value: " << enc_hex;
     writer
       << "\n";
+
+    tools::wallet2::lns_detail detail = 
+    {
+      static_cast<lns::mapping_type>(mapping.type),
+      name,
+      request.entries[0].name_hash,
+      value.to_readable_value(m_wallet->nettype(), static_cast<lns::mapping_type>(mapping.type)),
+      mapping.owner,
+      (mapping.backup_owner.empty() ? NULL_STR : mapping.backup_owner) };
+    m_wallet->set_lns_cache_record(detail);
   }
   for (size_t i = last_index + 1; i < args.size(); i++)
     fail_msg_writer() << args[i] << " not found\n";
@@ -6994,7 +7013,6 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
 
   std::vector<std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry>> rpc_results;
   std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::request> requests(1);
-  //TODO(sean)
   std::vector<tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
 
   if (args.size() == 0)
@@ -7057,7 +7075,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         fail_msg_writer() << "Daemon returned an invalid owner index = " << entry.request_index << " skipping mapping";
         continue;
       }
-      //TODO(sean):
+
       std::string name = "";
       std::string value = "";
       for (size_t j = 0; j < cache.size(); j++)

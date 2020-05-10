@@ -797,7 +797,6 @@ private:
     auto lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request) const { return m_node_rpc_proxy.lns_owners_to_names(request); }
     auto lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request) const { return m_node_rpc_proxy.lns_names_to_owners(request); }
 
-    //TODO(sean)
     struct lns_detail
     {
       lns::mapping_type type;
@@ -810,6 +809,8 @@ private:
     std::vector<lns_detail> lns_records_cache;
 
     void set_lns_cache_record(const wallet2::lns_detail& detail);
+
+    void delete_lns_cache_record(std::string name);
 
     std::vector<lns_detail> get_lns_cache();
 
