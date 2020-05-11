@@ -1173,7 +1173,7 @@ namespace cryptonote { namespace rpc {
     if ( lMiner.is_mining() ) {
       res.speed = lMiner.get_speed();
       res.threads_count = lMiner.get_threads_count();
-      //res.block_reward = lMiner.get_block_reward();
+      res.block_reward = lMiner.get_block_reward();
     }
     const account_public_address& lMiningAdr = lMiner.get_mining_address();
     res.address = get_account_address_as_str(nettype(), false, lMiningAdr);
