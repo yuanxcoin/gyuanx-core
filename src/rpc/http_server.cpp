@@ -185,6 +185,7 @@ namespace cryptonote { namespace rpc {
 
     try {
       response_info.m_body = cmd.invoke(std::move(request), m_server);
+      return HTTP_OK;
     } catch (const parse_error& e) {
       // This isn't really WARNable as it's the client fault; log at info level instead.
       MINFO("RPC request for '/" << uri << "' called with invalid/unparseable data: " << e.what());
