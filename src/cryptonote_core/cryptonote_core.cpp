@@ -1107,7 +1107,10 @@ namespace cryptonote
 
   }
 
-  void core::start_lokimq() { m_lmq->start(); }
+  void core::start_lokimq() {
+      update_lmq_sns(); // Ensure we have SNs set for the current block before starting
+      m_lmq->start();
+  }
 
   //-----------------------------------------------------------------------------------------------
   bool core::set_genesis_block(const block& b)
