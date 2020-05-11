@@ -1540,7 +1540,6 @@ namespace cryptonote { namespace rpc {
       res.status = submit_res.status;
 
       res.blocks.push_back(epee::string_tools::pod_to_hex(get_block_hash(b)));
-      template_req.prev_block = res.blocks.back();
       res.height = template_res.height;
     }
 
