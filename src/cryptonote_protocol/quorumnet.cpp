@@ -111,35 +111,6 @@ crypto::x25519_public_key x25519_from_string(string_view pubkey) {
     return x25519_pub;
 }
 
-std::string get_connect_string(const service_node_list &sn_list, const crypto::x25519_public_key &x25519_pub) {
-    if (!x25519_pub) {
-        MDEBUG("no connection available: pubkey is empty");
-        return "";
-    }
-    auto pubkey = sn_list.get_pubkey_from_x25519(x25519_pub);
-    if (!pubkey) {
-        MDEBUG("no connection available: could not find primary pubkey from x25519 pubkey " << x25519_pub);
-        return "";
-    }
-    bool found = false;
-    uint32_t ip = 0;
-    uint16_t port = 0;
-    sn_list.for_each_service_node_info_and_proof(&pubkey, &pubkey + 1, [&](auto&, auto&, auto& proof) {
-        found = true;
-        ip = proof.public_ip;
-        port = proof.quorumnet_port;
-    });
-    if (!found) {
-        MDEBUG("no connection available: primary pubkey " << pubkey << " is not registered");
-        return "";
-    }
-    if (!(ip && port)) {
-        MDEBUG("no connection available: service node " << pubkey << " has no associated ip and/or port");
-        return "";
-    }
-    return "tcp://" + epee::string_tools::get_ip_string_from_int32(ip) + ":" + std::to_string(port);
-}
-
 void setup_endpoints(QnetState& qnet);
 
 void *new_qnetstate(cryptonote::core& core) {
