@@ -1933,7 +1933,7 @@ namespace rpc {
 
     struct response
     {
-      std::string service_node_pubkey;         // The queried daemon's service node public key.
+      std::string service_node_pubkey;         // The queried daemon's service node public key.  Will be empty if not running as a service node.
       std::string service_node_ed25519_pubkey; // The daemon's ed25519 auxiliary public key.
       std::string service_node_x25519_pubkey;  // The daemon's x25519 auxiliary public key.
       std::string status;                      // Generic RPC error code. "OK" is the success value.
@@ -1955,7 +1955,7 @@ namespace rpc {
 
     struct response
     {
-      std::string service_node_privkey;         // The queried daemon's service node private key.
+      std::string service_node_privkey;         // The queried daemon's service node private key.  Will be empty if not running as a service node.
       std::string service_node_ed25519_privkey; // The daemon's ed25519 private key (note that this is in sodium's format, which consists of the private and public keys concatenated together)
       std::string service_node_x25519_privkey;  // The daemon's x25519 private key.
       std::string status;                       // Generic RPC error code. "OK" is the success value.

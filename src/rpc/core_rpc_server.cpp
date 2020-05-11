@@ -2661,7 +2661,8 @@ namespace cryptonote { namespace rpc {
     PERF_TIMER(on_get_service_node_key);
 
     const auto& keys = m_core.get_service_keys();
-    res.service_node_pubkey = string_tools::pod_to_hex(keys.pub);
+    if (keys.pub)
+      res.service_node_pubkey = string_tools::pod_to_hex(keys.pub);
     res.service_node_ed25519_pubkey = string_tools::pod_to_hex(keys.pub_ed25519);
     res.service_node_x25519_pubkey = string_tools::pod_to_hex(keys.pub_x25519);
     res.status = STATUS_OK;
@@ -2675,7 +2676,8 @@ namespace cryptonote { namespace rpc {
     PERF_TIMER(on_get_service_node_key);
 
     const auto& keys = m_core.get_service_keys();
-    res.service_node_privkey = string_tools::pod_to_hex(keys.key.data);
+    if (keys.key != crypto::null_skey)
+      res.service_node_privkey = string_tools::pod_to_hex(keys.key.data);
     res.service_node_ed25519_privkey = string_tools::pod_to_hex(keys.key_ed25519.data);
     res.service_node_x25519_privkey = string_tools::pod_to_hex(keys.key_x25519.data);
     res.status = STATUS_OK;
