@@ -842,6 +842,8 @@ namespace cryptonote
     sqlite3 *lns_db = lns::init_loki_name_system(lns_db_file_path.c_str());
     if (!lns_db) return false;
 
+    init_lokimq(vm);
+
     const difficulty_type fixed_difficulty = command_line::get_arg(vm, arg_fixed_difficulty);
     r = m_blockchain_storage.init(db.release(), lns_db, m_nettype, m_offline, regtest ? &regtest_test_options : test_options, fixed_difficulty, get_checkpoints);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
@@ -905,8 +907,6 @@ namespace cryptonote
         CHECK_AND_ASSERT_MES(m_blockchain_storage.update_blockchain_pruning(), false, "Failed to update blockchain pruning");
       }
     }
-
-    init_lokimq(vm);
 
     return true;
   }
