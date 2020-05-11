@@ -225,11 +225,6 @@ namespace cryptonote { namespace rpc {
     if (m_restricted && !command.is_public)
       return json_rpc_error(403, "Forbidden; this command is not available over public RPC", body);
 
-    constexpr std::array<lokimq::string_view, 3> json_rpc_ = {
-R"({"jsonrpc": "2.0", "id": )"_sv, R"(, "result": )"_sv, R"(
-}
-)"_sv};
-
     std::string id_str;
     {
       std::ostringstream o;
@@ -257,31 +252,14 @@ R"({"jsonrpc": "2.0", "id": )"_sv, R"(, "result": )"_sv, R"(
       return json_rpc_error(-32603, "Internal error", body);
     }
 
-    // The string is pre-serialized JSON.  But epee serialization is garbage so there's no way we
-    // can actually JSON serialize this using epee without building a separate wrapper struct for
-    // each serializable type, which is just stupid (but that's life with epee and divorce is
-    // currently too expensive) so build it ourselves.
-    size_t needed = json_rpc_[0].size() + json_rpc_[1].size() + json_rpc_[2].size() + id_str.size() + result.size();
-    if (result.capacity() >= needed) {
-      // The returned result has enough spare capacity to avoid a reallocation (though we
-      // still have to shift the contents).
-      auto inner_size = result.size();
-      result.resize(needed);
-      std::copy_backward(result.begin(), result.begin() + inner_size, result.begin() + (needed - json_rpc_[2].size()));
-      body = std::move(result);
-    } else {
-      // Otherwise we need a new string, so clear and resize it to what we need, then copy in the
-      // JSON into the right spot.
-      body.clear();
-      body.resize(needed);
-      std::copy(result.begin(), result.end(), body.begin() + json_rpc_[0].size() + json_rpc_[1].size() + id_str.size());
-    }
-    // Now copy the prefix, id, and tail into the right locations
-    auto bodyit = std::copy(json_rpc_[0].begin(), json_rpc_[0].end(), body.begin()); // Prefix
-    bodyit = std::copy(id_str.begin(), id_str.end(), bodyit); // id (right after prefix)
-    std::copy(json_rpc_[1].begin(), json_rpc_[1].end(), bodyit); // middle (right after id)
-    // json data already copied
-    std::copy(json_rpc_[2].begin(), json_rpc_[2].end(), body.begin() + (needed - json_rpc_[2].size())); // tail at the end
+    assert(body.empty());
+    response_info.m_body_pieces.emplace_back(R"({"jsonrpc":"2.0","id":)");
+    response_info.m_body_pieces.back() += id_str;
+    response_info.m_body_pieces.back() += R"(,"result":)";
+
+    response_info.m_body_pieces.push_back(std::move(result));
+
+    response_info.m_body_pieces.push_back("}\n");
     return HTTP_OK;
   }
 

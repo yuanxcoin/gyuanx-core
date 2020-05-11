@@ -584,14 +584,18 @@ namespace net_utils
 			response.m_response_comment = "OK";
 		}
 
+		if (response.m_body_pieces.empty())
+			response.m_body_pieces.push_back(std::move(response.m_body));
+
 		std::string response_data = get_response_header(response);
 		//LOG_PRINT_L0("HTTP_SEND: << \r\n" << response_data + response.m_body);
 
     LOG_PRINT_L3("HTTP_RESPONSE_HEAD: << \r\n" << response_data);
 		
-		m_psnd_hndlr->do_send((void*)response_data.data(), response_data.size());
-		if ((response.m_body.size() && (query_info.m_http_method != http::http_method_head)) || (query_info.m_http_method == http::http_method_options))
-			m_psnd_hndlr->do_send((void*)response.m_body.data(), response.m_body.size());
+		m_psnd_hndlr->do_send((void*) response_data.data(), response_data.size());
+		if (query_info.m_http_method != http::http_method_head)
+			for (auto& body_piece : response.m_body_pieces)
+				m_psnd_hndlr->do_send((void*) body_piece.data(), body_piece.size());
 		m_psnd_hndlr->send_done();
 		return res;
 	}
@@ -629,24 +633,33 @@ namespace net_utils
   template<class t_connection_context>
 	std::string simple_http_connection_handler<t_connection_context>::get_response_header(const http_response_info& response)
 	{
-		std::string buf = "HTTP/1.1 ";
-		buf += boost::lexical_cast<std::string>(response.m_response_code) + " " + response.m_response_comment + "\r\n" +
+		std::string buf;
+		buf.reserve(200); // Typical length seems to be around 145 bytes
+		buf += "HTTP/1.1 ";
+		buf += std::to_string(response.m_response_code);
+		buf += ' ';
+		buf += response.m_response_comment;
+		buf += "\r\n"
 			"Server: Epee-based\r\n"
 			"Content-Length: ";
-		buf += boost::lexical_cast<std::string>(response.m_body.size()) + "\r\n";
+
+		size_t size = 0;
+		for (auto& piece : response.m_body_pieces)
+			size += piece.size();
+
+		buf += std::to_string(size);
+		buf += "\r\n";
 
 		if(!response.m_mime_tipe.empty())
 		{
 			buf += "Content-Type: ";
-			buf += response.m_mime_tipe + "\r\n";
+			buf += response.m_mime_type;
+			buf += "\r\n";
 		}
 
-		buf += "Last-Modified: ";
-		time_t tm;
-		time(&tm);
-		buf += misc_utils::get_internet_time_str(tm) + "\r\n";
-		buf += "Accept-Ranges: bytes\r\n";
-		//Wed, 01 Dec 2010 03:27:41 GMT"
+		buf += "Last-Modified: "; //Wed, 01 Dec 2010 03:27:41 GMT"
+		buf += misc_utils::get_internet_time_str(std::time(nullptr));
+		buf += "\r\nAccept-Ranges: bytes\r\n";
 
 		string_tools::trim(m_query_info.m_header_info.m_connection);
 		if(m_query_info.m_header_info.m_connection.size())

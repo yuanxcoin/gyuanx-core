@@ -190,6 +190,7 @@ namespace net_utils
 			std::string			m_response_comment;
 			fields_list	        m_additional_fields;
 			std::string			m_body;
+			std::vector<std::string> m_body_pieces; // For specifying outgoing responses in pieces (this takes priority over m_body when sending)
 			std::string			m_mime_tipe;
 			http_header_info    m_header_info;
 			int                 m_http_ver_hi;// OUT paramter only
