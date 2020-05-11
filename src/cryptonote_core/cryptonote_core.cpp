@@ -951,16 +951,24 @@ namespace cryptonote
   bool core::init_service_keys()
   {
     auto& keys = m_service_keys;
-    // Primary SN pubkey (monero NIH curve25519 algo)
-    if (!init_key(m_config_folder + "/key", keys.key, keys.pub,
+    // Primary SN pubkey (curve25519-based cryptography, but not Ed25519 because it doesn't do the
+    // EdDSA part of Ed25519, and thus can't be used with tools that do proper Ed25519
+    // cryptography).  We only use this for SN registrations and proof signatures but the various
+    // external interfaces (lokinet, storage server, lokimq) use a secondary, standard Ed25519 key.
+    if (m_service_node) {
+      if (!init_key(m_config_folder + "/key", keys.key, keys.pub,
           crypto::secret_key_to_public_key,
           [](crypto::secret_key &key, crypto::public_key &pubkey) {
             cryptonote::keypair keypair = keypair::generate(hw::get_device("default"));
             key = keypair.sec;
             pubkey = keypair.pub;
           })
-        )
-      return false;
+      )
+        return false;
+    } else {
+      keys.key = crypto::null_skey;
+      keys.pub = crypto::null_pkey;
+    }
 
     static_assert(
         sizeof(crypto::ed25519_public_key) == crypto_sign_ed25519_PUBLICKEYBYTES &&
@@ -997,6 +1005,8 @@ namespace cryptonote
       MGINFO_YELLOW("- lokinet: " << lokimq::string_view(b32z, sizeof(b32z)) << ".snode");
       MGINFO_YELLOW("-  x25519: " << epee::string_tools::pod_to_hex(keys.pub_x25519));
     } else {
+      // Only print the x25519 version because it's the only thing useful for a non-SN (for
+      // encrypted LMQ RPC connections).
       MGINFO_YELLOW("x25519 public key: " << epee::string_tools::pod_to_hex(keys.pub_x25519));
     }
 

@@ -1097,7 +1097,10 @@ namespace cryptonote
      bool check_disk_space();
 
      /**
-      * @brief Initializes service node key by loading or creating.
+      * @brief Initializes service keys by loading or creating.  An Ed25519 key (from which we also
+      * get an x25519 key) is always created; the Monero SN keypair is only created when running in
+      * Service Node mode (as it is only used to sign registrations and uptime proofs); otherwise
+      * the pair will be set to the null keys.
       *
       * @return true on success, false otherwise
       */
