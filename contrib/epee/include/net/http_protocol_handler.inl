@@ -618,14 +618,14 @@ namespace net_utils
 			response.m_body = get_not_found_response_body(query_info.m_URI);
 			response.m_response_code = 404;
 			response.m_response_comment = "Not found";
-			response.m_mime_tipe = "text/html";
+			response.m_mime_type = "text/html";
 			return true;
 		}
 
 		MDEBUG(" -->> " << query_info.m_full_request_str << "\r\n<<--OK");
 		response.m_response_code = 200;
 		response.m_response_comment = "OK";
-		response.m_mime_tipe = get_file_mime_tipe(uri_to_path);
+		response.m_mime_type = get_file_mime_type(uri_to_path);
 
 		return true;
 	}
@@ -650,7 +650,7 @@ namespace net_utils
 		buf += std::to_string(size);
 		buf += "\r\n";
 
-		if(!response.m_mime_tipe.empty())
+		if(!response.m_mime_type.empty())
 		{
 			buf += "Content-Type: ";
 			buf += response.m_mime_type;
@@ -698,7 +698,7 @@ namespace net_utils
 	}
 	//-----------------------------------------------------------------------------------
 	template<class t_connection_context>
-  std::string simple_http_connection_handler<t_connection_context>::get_file_mime_tipe(const std::string& path)
+  std::string simple_http_connection_handler<t_connection_context>::get_file_mime_type(const std::string& path)
 	{
 		std::string result;
 		std::string ext = string_tools::get_extension(path);

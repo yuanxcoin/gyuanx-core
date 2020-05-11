@@ -77,7 +77,7 @@
       uint64_t ticks2 = epee::misc_utils::get_tick_count(); \
       epee::serialization::store_t_to_json(resp, response_info.m_body); \
       uint64_t ticks3 = epee::misc_utils::get_tick_count(); \
-      response_info.m_mime_tipe = "application/json"; \
+      response_info.m_mime_type = "application/json"; \
       response_info.m_header_info.m_content_type = " application/json"; \
       MDEBUG( s_pattern << " processed with " << ticks1-ticks << "/"<< ticks2-ticks1 << "/" << ticks3-ticks2 << "ms"); \
     }
@@ -105,7 +105,7 @@
       uint64_t ticks2 = epee::misc_utils::get_tick_count(); \
       epee::serialization::store_t_to_binary(resp, response_info.m_body); \
       uint64_t ticks3 = epee::misc_utils::get_tick_count(); \
-      response_info.m_mime_tipe = " application/octet-stream"; \
+      response_info.m_mime_type = " application/octet-stream"; \
       response_info.m_header_info.m_content_type = " application/octet-stream"; \
       MDEBUG( s_pattern << "() processed with " << ticks1-ticks << "/"<< ticks2-ticks1 << "/" << ticks3-ticks2 << "ms"); \
     }
@@ -166,7 +166,7 @@
   uint64_t ticks2 = epee::misc_utils::get_tick_count(); \
   epee::serialization::store_t_to_json(resp, response_info.m_body); \
   uint64_t ticks3 = epee::misc_utils::get_tick_count(); \
-  response_info.m_mime_tipe = "application/json"; \
+  response_info.m_mime_type = "application/json"; \
   response_info.m_header_info.m_content_type = " application/json"; \
   MDEBUG( query_info.m_URI << "[" << method_name << "] processed with " << ticks1-ticks << "/"<< ticks2-ticks1 << "/" << ticks3-ticks2 << "ms");
 

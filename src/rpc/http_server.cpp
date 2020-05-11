@@ -176,10 +176,8 @@ namespace cryptonote { namespace rpc {
     rpc_request request;
     request.context.admin = m_restricted;
     request.body = std::move(query_info.m_body);
-    // Really, epee, mime "tipe"?  I suppose that is for when epee analizes the response lacation to
-    // see whether the verifivation varialbe failed.
-    response_info.m_mime_tipe = cmd.is_binary ? "application/octet-stream" : "application/json";
-    response_info.m_header_info.m_content_type = response_info.m_mime_tipe;
+    response_info.m_mime_type = cmd.is_binary ? "application/octet-stream" : "application/json";
+    response_info.m_header_info.m_content_type = response_info.m_mime_type;
 
     try {
       response_info.m_body = cmd.invoke(std::move(request), m_server);
