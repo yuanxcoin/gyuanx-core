@@ -490,7 +490,7 @@ namespace cryptonote
 
     MINFO("Transaction added to pool: txid " << id << " weight: " << tx_weight << " fee/byte: " << (fee / (double)tx_weight));
 
-    if (!opts.kept_by_block && !opts.do_not_relay && !m_tx_notify.empty())
+    if (!opts.kept_by_block && !opts.do_not_relay)
       for (auto& notify : m_tx_notify)
         notify(id, tx, blob, opts);
 

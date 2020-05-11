@@ -17,13 +17,10 @@ namespace epee {
         void operator()(const array_entry_t<t_type>& a)
         {
           m_strm << '[';
-          if (!a.m_array.empty())
+          for (auto it = a.m_array.begin(); it != a.m_array.end(); it++)
           {
-            for (auto it = a.m_array.begin(); it != a.m_array.end(); it++)
-            {
-              if (it != a.m_array.begin()) m_strm << ',';
-              dump_as_json(m_strm, *it, m_indent, m_pretty);
-            }
+            if (it != a.m_array.begin()) m_strm << ',';
+            dump_as_json(m_strm, *it, m_indent, m_pretty);
           }
           m_strm << "]";
         }
