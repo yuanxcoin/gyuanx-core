@@ -67,97 +67,6 @@
 namespace cryptonote { namespace rpc {
 
   namespace {
-    // forward declaration; we don't really need to (it is defined just below), but doing it this
-    // way keeps the RPC structs close to the top of this file.
-    template <typename... T>
-    std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands();
-  }
-
-  /// Static registration of all rpc commands declared in core_rpc_server_commands_defs.h.
-  /// Each of these must also have a core_rpc_server::invoke overload that takes a ::request and
-  /// returns a ::response.
-  const std::unordered_map<std::string, std::shared_ptr<const rpc_command>> rpc_commands = register_rpc_commands<
-    GET_HEIGHT,
-    GET_BLOCKS_FAST,
-    GET_BLOCKS_BY_HEIGHT,
-    GET_ALT_BLOCKS_HASHES,
-    GET_HASHES_FAST,
-    GET_TRANSACTIONS,
-    IS_KEY_IMAGE_SPENT,
-    GET_TX_GLOBAL_OUTPUTS_INDEXES,
-    GET_OUTPUTS_BIN,
-    GET_OUTPUTS,
-    SEND_RAW_TX,
-    START_MINING,
-    STOP_MINING,
-    MINING_STATUS,
-    GET_INFO,
-    GET_NET_STATS,
-    SAVE_BC,
-    GETBLOCKCOUNT,
-    GETBLOCKHASH,
-    GETBLOCKTEMPLATE,
-    SUBMITBLOCK,
-    GENERATEBLOCKS,
-    GET_LAST_BLOCK_HEADER,
-    GET_BLOCK_HEADER_BY_HASH,
-    GET_BLOCK_HEADER_BY_HEIGHT,
-    GET_BLOCK,
-    GET_PEER_LIST,
-    SET_LOG_HASH_RATE,
-    SET_LOG_LEVEL,
-    SET_LOG_CATEGORIES,
-    GET_TRANSACTION_POOL,
-    GET_TRANSACTION_POOL_HASHES_BIN,
-    GET_TRANSACTION_POOL_HASHES,
-    GET_TRANSACTION_POOL_BACKLOG,
-    GET_TRANSACTION_POOL_STATS,
-    GET_CONNECTIONS,
-    GET_BLOCK_HEADERS_RANGE,
-    STOP_DAEMON,
-    GET_LIMIT,
-    SET_LIMIT,
-    OUT_PEERS,
-    IN_PEERS,
-    HARD_FORK_INFO,
-    GETBANS,
-    SETBANS,
-    BANNED,
-    FLUSH_TRANSACTION_POOL,
-    GET_OUTPUT_HISTOGRAM,
-    GET_VERSION,
-    GET_COINBASE_TX_SUM,
-    GET_BASE_FEE_ESTIMATE,
-    GET_ALTERNATE_CHAINS,
-    UPDATE,
-    RELAY_TX,
-    SYNC_INFO,
-    GET_OUTPUT_DISTRIBUTION,
-    GET_OUTPUT_DISTRIBUTION_BIN,
-    POP_BLOCKS,
-    PRUNE_BLOCKCHAIN,
-    GET_QUORUM_STATE,
-    GET_SERVICE_NODE_REGISTRATION_CMD_RAW,
-    GET_SERVICE_NODE_REGISTRATION_CMD,
-    GET_SERVICE_KEYS,
-    GET_SERVICE_PRIVKEYS,
-    PERFORM_BLOCKCHAIN_TEST,
-    GET_SERVICE_NODES,
-    GET_SERVICE_NODE_STATUS,
-    STORAGE_SERVER_PING,
-    LOKINET_PING,
-    GET_STAKING_REQUIREMENT,
-    GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES,
-    GET_OUTPUT_BLACKLIST,
-    GET_CHECKPOINTS,
-    GET_SN_STATE_CHANGES,
-    REPORT_PEER_SS_STATUS,
-    TEST_TRIGGER_P2P_RESYNC,
-    LNS_NAMES_TO_OWNERS,
-    LNS_OWNERS_TO_NAMES
-  >();
-
-  namespace {
     // Helper loaders for RPC registration; this lets us reduce the amount of compiled code by
     // avoiding the need to instantiate {JSON,binary} loading code for {binary,JSON} commands.
     // This first one is for JSON, the specialization below is for binary.
@@ -255,7 +164,7 @@ namespace cryptonote { namespace rpc {
     }
 
     template <typename... RPC>
-    std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands() {
+    std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands(rpc::type_list<RPC...>) {
       std::unordered_map<std::string, std::shared_ptr<const rpc_command>> regs;
 
 #ifdef __cpp_fold_expressions // C++17
@@ -272,6 +181,8 @@ namespace cryptonote { namespace rpc {
     constexpr uint64_t round_up(uint64_t value, uint64_t quantum) { return (value + quantum - 1) / quantum * quantum; }
 
   }
+
+  const std::unordered_map<std::string, std::shared_ptr<const rpc_command>> rpc_commands = register_rpc_commands(rpc::core_rpc_types{});
 
   namespace string_tools = epee::string_tools;
 
