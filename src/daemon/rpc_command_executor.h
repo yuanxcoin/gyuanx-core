@@ -126,11 +126,11 @@ private:
   bool print_block(cryptonote::rpc::GET_BLOCK::request&& req, bool include_hdex);
 
 public:
-  bool print_block_by_hash(crypto::hash block_hash, bool include_hex);
+  bool print_block_by_hash(const crypto::hash& block_hash, bool include_hex);
 
   bool print_block_by_height(uint64_t height, bool include_hex);
 
-  bool print_transaction(crypto::hash transaction_hash, bool include_hex, bool include_json);
+  bool print_transaction(const crypto::hash& transaction_hash, bool include_hex, bool include_json);
 
   bool is_key_image_spent(const crypto::key_image &ki);
 
@@ -140,7 +140,7 @@ public:
 
   bool print_transaction_pool_stats();
 
-  bool start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype);
+  bool start_mining(const cryptonote::account_public_address& address, uint64_t num_threads, cryptonote::network_type nettype);
 
   bool stop_mining();
 

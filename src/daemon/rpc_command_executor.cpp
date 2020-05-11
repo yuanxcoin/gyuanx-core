@@ -801,7 +801,7 @@ bool rpc_command_executor::print_block(GET_BLOCK::request&& req, bool include_he
   return true;
 }
 
-bool rpc_command_executor::print_block_by_hash(crypto::hash block_hash, bool include_hex) {
+bool rpc_command_executor::print_block_by_hash(const crypto::hash& block_hash, bool include_hex) {
   GET_BLOCK::request req{};
   req.hash = epee::string_tools::pod_to_hex(block_hash);
   return print_block(std::move(req), include_hex);
@@ -813,7 +813,7 @@ bool rpc_command_executor::print_block_by_height(uint64_t height, bool include_h
   return print_block(std::move(req), include_hex);
 }
 
-bool rpc_command_executor::print_transaction(crypto::hash transaction_hash,
+bool rpc_command_executor::print_transaction(const crypto::hash& transaction_hash,
   bool include_hex,
   bool include_json) {
   GET_TRANSACTIONS::request req{};
@@ -1060,7 +1060,7 @@ bool rpc_command_executor::print_transaction_pool_stats() {
   return true;
 }
 
-bool rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype) {
+bool rpc_command_executor::start_mining(const cryptonote::account_public_address& address, uint64_t num_threads, cryptonote::network_type nettype) {
   START_MINING::request req{};
   START_MINING::response res{};
   req.miner_address = cryptonote::get_account_address_as_str(nettype, false, address);
