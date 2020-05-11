@@ -147,7 +147,7 @@ lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::prog
         m.send_reply(LMQ_BAD_REQUEST, "Bad request: RPC commands must have at most one data part "
             "(received " + std::to_string(m.data.size()) + ")");
 
-      rpc_request request;
+      rpc_request request{};
       request.context.admin = m.access.auth >= AuthLevel::admin;
       request.context.source = rpc_source::lmq;
       request.context.remote = m.remote;

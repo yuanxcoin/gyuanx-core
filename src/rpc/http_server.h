@@ -83,7 +83,8 @@ namespace cryptonote { namespace rpc {
     http_response_code handle_json_rpc_request(
       const epee::net_utils::http::http_request_info& query_info,
       epee::net_utils::http::http_response_info& response_info,
-      connection_context& context);
+      connection_context& context,
+      rpc_request& request);
 
     int m_max_long_poll_connections;
   private:

@@ -96,10 +96,10 @@ namespace cryptonote { namespace rpc {
     // versus non-admin when invoking a public RPC command.  (Note that non-public RPC commands do
     // not need to check this field for authentication: a non-public invoke() is not called in the
     // first place if attempted by a public requestor).
-    bool admin;
+    bool admin = false;
 
     // The RPC engine source of the request, i.e. internal, HTTP, LMQ
-    rpc_source source;
+    rpc_source source = rpc_source::internal;
 
     // A free-form identifier identifiying the remote address of the request; this might be IP:PORT,
     // or could contain a pubkey, or ...

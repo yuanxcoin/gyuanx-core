@@ -162,8 +162,14 @@ namespace cryptonote { namespace rpc {
   {
     auto uri = query_info.m_URI.size() > 0 && query_info.m_URI[0] == '/' ? query_info.m_URI.substr(1) : query_info.m_URI;
 
+    auto remote = context.m_remote_address.str();
+    rpc_request request{};
+    request.context.admin = m_restricted;
+    request.context.source = rpc_source::http;
+    request.context.remote = remote;
+
     if (uri == "json_rpc")
-      return handle_json_rpc_request(query_info, response_info, context);
+      return handle_json_rpc_request(query_info, response_info, context, request);
 
     auto it = rpc_commands.find(uri);
     if (it == rpc_commands.end())
@@ -173,8 +179,6 @@ namespace cryptonote { namespace rpc {
     if (m_restricted && !cmd.is_public)
       return HTTP_FORBIDDEN;
 
-    rpc_request request;
-    request.context.admin = m_restricted;
     request.body = std::move(query_info.m_body);
     response_info.m_mime_type = cmd.is_binary ? "application/octet-stream" : "application/json";
     response_info.m_header_info.m_content_type = response_info.m_mime_type;
@@ -197,12 +201,11 @@ namespace cryptonote { namespace rpc {
   http_response_code http_server::handle_json_rpc_request(
     const epee::net_utils::http::http_request_info& query_info,
     epee::net_utils::http::http_response_info& response_info,
-    connection_context& context)
+    connection_context& context,
+    rpc_request& request)
   {
     auto& body = response_info.m_body;
 
-    rpc_request request;
-    request.context.admin = m_restricted;
     request.body = jsonrpc_params{};
     auto& epee_stuff = request.body.get_unchecked<jsonrpc_params>();
     auto& ps = epee_stuff.first;
