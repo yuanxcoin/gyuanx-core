@@ -33,6 +33,7 @@ add_library(net
   socks.cpp
   socks_connect.cpp
   tor_address.cpp
+  epee_network_address_hack.cpp
   )
 target_link_libraries(net PRIVATE
   common

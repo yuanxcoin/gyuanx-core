@@ -40,16 +40,29 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include "include_base_utils.h"
+#include "common/string_util.h"
+#include "common/i18n.h"
 
 namespace command_line
 {
+  inline const char* tr(const char* str) { return i18n_translate(str, "command_line"); }
 
-  //! \return True if `str` is `is_iequal("y" || "yes" || `tr("yes"))`.
-  bool is_yes(const std::string& str);
-  //! \return True if `str` is `is_iequal("n" || "no" || `tr("no"))`.
-  bool is_no(const std::string& str);
-  bool is_cancel(const std::string& str);
-  bool is_back(const std::string& str);
+  /// @return True if `str` is (case-insensitively) y, yes, a potentially translated yes, or any of
+  /// the optional extra arguments passed in.
+  template <typename S, typename... More>
+  bool is_yes(const S& str, const More&... more) { return tools::string_iequal_any(str, "y", "yes", tr("yes"), more...); }
+  /// @return True if `str` is (case-insensitively) n, no, or a potentially translated no, or any of
+  /// the optional extra arguments passed in.
+  template <typename S, typename... More>
+  bool is_no(const S& str, const More&... more) { return tools::string_iequal_any(str, "n", "no", tr("no"), more...); }
+  /// @return True if `str` is (case-insensitively) c, cancel, or a potentially translated cancel,
+  /// or any of the optional extra arguments passed in.
+  template <typename S, typename... More>
+  bool is_cancel(const S& str, const More&... more) { return tools::string_iequal_any(str, "c", "cancel", tr("cancel"), more...); }
+  /// @return True if `str` is (case-insensitively) b, back, or a potentially translated back, or
+  /// any of the optional extra arguments passed in.
+  template <typename S, typename... More>
+  bool is_back(const S& str, const More&... more) { return tools::string_iequal_any(str, "b", "back", tr("back"), more...); }
 
   template<typename T, bool required = false, bool dependent = false, int NUM_DEPS = 1>
   struct arg_descriptor;
@@ -298,4 +311,13 @@ namespace command_line
 
   extern const arg_descriptor<bool> arg_help;
   extern const arg_descriptor<bool> arg_version;
+
+  /// Returns the terminal width and height (in characters), if supported on this system and
+  /// available.  Returns {0,0} if not available or could not be determined.
+  std::pair<unsigned, unsigned> terminal_size();
+
+  /// Returns the ideal line width and description width values for
+  /// boost::program_options::options_description, using the terminal width (if available).  Returns
+  /// the boost defaults if terminal width isn't available.
+  std::pair<unsigned, unsigned> boost_option_sizes();
 }

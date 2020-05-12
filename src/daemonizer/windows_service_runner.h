@@ -40,7 +40,6 @@
 #include <windows.h>
 
 namespace windows {
-  static void *runner_instance; // For C-style callbacks to call into C++ classes
 
   template <typename Application>
   class service_runner final
@@ -50,17 +49,18 @@ namespace windows {
     SERVICE_STATUS m_status{};
     boost::mutex m_lock{};
     std::string m_name;
-    Application *app;
+    Application app;
+
+    static service_runner* instance{nullptr};
 
   public:
-    service_runner(
-        std::string name
-      , Application *app
-      )
-      : m_name{std::move(name)}
-      , app{app}
+    template <typename... Args>
+    service_runner(std::string name, Args&&... args)
+        : m_name{std::move(name)}, app{std::forward<Args>(args)...}
     {
-      windows::runner_instance = this;
+      // This limitation is crappy, but imposed on us by Windows
+      if (instance) throw std::runtime_error("Only one service_runner<T> may exist at a time");
+      instance = this;
 
       m_status.dwServiceType = SERVICE_WIN32;
       m_status.dwCurrentState = SERVICE_STOPPED;
@@ -70,14 +70,18 @@ namespace windows {
       m_status.dwCheckPoint = 0;
       m_status.dwWaitHint = 0;
     }
-    service_runner &operator=(service_runner &&other) = delete;
+
+    ~service_runner() { instance = nullptr; }
+
+    // Non-copyable and non-moveable
+    service_runner &operator=(service_runner&&) = delete;
+    service_runner &operator=(const service_runner&) = delete;
+    service_runner(service_runner&&) = delete;
+    service_runner(const service_runner&) = delete;
 
     void run()
     {
-      std::vector<char> name{m_name.begin(), m_name.end()};
-      name.push_back('\0');
-      SERVICE_TABLE_ENTRY const table[] = {{name.data(), &service_main}, {0, 0}};
-
+      SERVICE_TABLE_ENTRY const table[] = {{m_name.c_str(), &service_main}, {0, 0}};
       StartServiceCtrlDispatcher(table);
     }
   private:
@@ -98,7 +102,7 @@ namespace windows {
 
     static void WINAPI service_main(DWORD argc, LPSTR * argv)
     {
-      ((service_runner *)windows::runner_instance)->service_main_(argc, argv);
+      instance->service_main_(argc, argv);
     }
 
     void service_main_(DWORD argc, LPSTR * argv)
@@ -110,7 +114,7 @@ namespace windows {
 
       report_status(SERVICE_RUNNING);
 
-      app->run();
+      app.run(false /*not interactive*/);
 
       on_state_change_request_(SERVICE_CONTROL_STOP);
 
@@ -120,7 +124,7 @@ namespace windows {
 
     static void WINAPI on_state_change_request(DWORD control_code)
     {
-      ((service_runner *)windows::runner_instance)->on_state_change_request_(control_code);
+      instance->on_state_change_request_(control_code);
     }
 
     void on_state_change_request_(DWORD control_code)
@@ -132,7 +136,7 @@ namespace windows {
         case SERVICE_CONTROL_SHUTDOWN:
         case SERVICE_CONTROL_STOP:
           report_status(SERVICE_STOP_PENDING);
-          app->stop();
+          app.stop();
           report_status(SERVICE_STOPPED);
           break;
         case SERVICE_CONTROL_PAUSE:

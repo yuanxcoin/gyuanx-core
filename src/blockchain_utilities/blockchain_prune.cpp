@@ -45,7 +45,6 @@
 #define MDB_val_set(var, val)   MDB_val var = {sizeof(val), (void *)&val}
 
 namespace po = boost::program_options;
-using namespace epee;
 using namespace cryptonote;
 
 static std::string db_path;
@@ -158,10 +157,10 @@ static void copy_table(MDB_env *env0, MDB_env *env1, const char *table, unsigned
 
   MINFO("Copying " << table);
 
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){
+  LOKI_DEFER {
     if (tx_active1) mdb_txn_abort(txn1);
     if (tx_active0) mdb_txn_abort(txn0);
-  });
+  };
 
   dbr = mdb_txn_begin(env0, NULL, MDB_RDONLY, &txn0);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -255,10 +254,10 @@ static void prune(MDB_env *env0, MDB_env *env1)
 
   MGINFO("Creating pruned txs_prunable");
 
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){
+  LOKI_DEFER {
     if (tx_active1) mdb_txn_abort(txn1);
     if (tx_active0) mdb_txn_abort(txn0);
-  });
+  };
 
   dbr = mdb_txn_begin(env0, NULL, MDB_RDONLY, &txn0);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -453,8 +452,10 @@ int main(int argc, char* argv[])
 
   boost::filesystem::path output_file_path;
 
-  po::options_description desc_cmd_only("Command line options");
-  po::options_description desc_cmd_sett("Command line options and settings options");
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
+  po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
   const command_line::arg_descriptor<std::string> arg_database = {
     "database", available_dbs.c_str(), default_db_type
@@ -491,7 +492,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }

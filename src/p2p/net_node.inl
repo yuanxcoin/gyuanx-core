@@ -980,8 +980,8 @@ namespace nodetool
   {
     network_zone& zone = m_network_zones.at(context_.m_remote_address.get_zone());
 
-    typename COMMAND_HANDSHAKE::request arg;
-    typename COMMAND_HANDSHAKE::response rsp;
+    typename COMMAND_HANDSHAKE::request arg{};
+    typename COMMAND_HANDSHAKE::response rsp{};
     get_local_node_data(arg.node_data, zone);
     m_payload_handler.get_payload_sync_data(arg.payload_data);
 
@@ -991,7 +991,7 @@ namespace nodetool
     bool r = epee::net_utils::async_invoke_remote_command2<typename COMMAND_HANDSHAKE::response>(context_.m_connection_id, COMMAND_HANDSHAKE::ID, arg, zone.m_net_server.get_config_object(),
       [this, &pi, &ev, &hsh_result, &just_take_peerlist, &context_](int code, typename COMMAND_HANDSHAKE::response&& rsp, p2p_connection_context& context)
     {
-      epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){ev.raise();});
+      LOKI_DEFER { ev.raise(); };
 
       if(code < 0)
       {
@@ -1919,7 +1919,6 @@ namespace nodetool
     rsp.connections_count = get_connections_count();
     rsp.incoming_connections_count = rsp.connections_count - get_outgoing_connections_count();
     rsp.version = LOKI_VERSION_FULL;
-    rsp.os_version = tools::get_os_version_string();
     m_payload_handler.get_stat_info(rsp.payload_info);
     return 1;
   }
@@ -2082,8 +2081,8 @@ namespace nodetool
         LOG_WARNING_CC(ping_context, "back ping connect failed to " << address.str());
         return false;
       }
-      COMMAND_PING::request req;
-      COMMAND_PING::response rsp;
+      COMMAND_PING::request req{};
+      COMMAND_PING::response rsp{};
       //vc2010 workaround
       /*std::string ip_ = ip;
       std::string port_=port;
@@ -2136,7 +2135,7 @@ namespace nodetool
     if(context.m_remote_address.get_zone() != epee::net_utils::zone::public_)
       return false;
 
-    COMMAND_REQUEST_SUPPORT_FLAGS::request support_flags_request;
+    COMMAND_REQUEST_SUPPORT_FLAGS::request support_flags_request{};
     bool r = epee::net_utils::async_invoke_remote_command2<typename COMMAND_REQUEST_SUPPORT_FLAGS::response>
     (
       context.m_connection_id, 
@@ -2310,7 +2309,7 @@ namespace nodetool
     std::vector<peerlist_entry> pl_gray;
     for (auto& zone : m_network_zones)
       zone.second.m_peerlist.get_peerlist(pl_gray, pl_white);
-    MINFO(ENDL << "Peerlist white:" << ENDL << print_peerlist_to_string(pl_white) << ENDL << "Peerlist gray:" << ENDL << print_peerlist_to_string(pl_gray) );
+    MINFO("\nPeerlist white:\n" << print_peerlist_to_string(pl_white) << "\nPeerlist gray:\n" << print_peerlist_to_string(pl_gray) );
     return true;
   }
   //-----------------------------------------------------------------------------------

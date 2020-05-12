@@ -58,14 +58,14 @@ public:
 
   CHAIN_HTTP_TO_MAP2(cryptonote::core_rpc_server::connection_context); //forward http requests to uri map
   BEGIN_URI_MAP2()
-    MAP_URI_AUTO_JON2("/send_raw_transaction", on_send_raw_tx_2, cryptonote::COMMAND_RPC_SEND_RAW_TX)
-    MAP_URI_AUTO_JON2("/sendrawtransaction", on_send_raw_tx_2, cryptonote::COMMAND_RPC_SEND_RAW_TX)
+    MAP_URI_AUTO_JON2("/send_raw_transaction", on_send_raw_tx_2, cryptonote::rpc::SEND_RAW_TX)
+    MAP_URI_AUTO_JON2("/sendrawtransaction", on_send_raw_tx_2, cryptonote::rpc::SEND_RAW_TX)
     else {  // Default to parent for non-overriden callbacks
       return cryptonote::core_rpc_server::handle_http_request_map(query_info, response_info, m_conn_context);
     }
   END_URI_MAP2()
 
-  bool on_send_raw_tx_2(const cryptonote::COMMAND_RPC_SEND_RAW_TX::request& req, cryptonote::COMMAND_RPC_SEND_RAW_TX::response& res, const cryptonote::core_rpc_server::connection_context *ctx);
+  bool on_send_raw_tx_2(const cryptonote::rpc::SEND_RAW_TX::request& req, cryptonote::rpc::SEND_RAW_TX::response& res, const cryptonote::core_rpc_server::connection_context *ctx);
 
 protected:
   cryptonote::network_type m_network_type;

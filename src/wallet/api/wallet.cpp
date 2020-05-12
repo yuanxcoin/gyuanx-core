@@ -982,7 +982,7 @@ bool WalletImpl::lightWalletImportWalletRequest(std::string &payment_id, uint64_
 {
   try
   {
-    tools::COMMAND_RPC_IMPORT_WALLET_REQUEST::response response;
+    tools::COMMAND_RPC_IMPORT_WALLET_REQUEST::response response{};
     if(!m_wallet->light_wallet_import_wallet_request(response)){
       setStatusError(tr("Failed to send import wallet request"));
       return false;
@@ -2042,12 +2042,12 @@ bool WalletImpl::connectToDaemon()
 
 Wallet::ConnectionStatus WalletImpl::connected() const
 {
-    uint32_t version = 0;
+    rpc::version_t version;
     m_is_connected = m_wallet->check_connection(&version, NULL, DEFAULT_CONNECTION_TIMEOUT_MILLIS);
     if (!m_is_connected)
         return Wallet::ConnectionStatus_Disconnected;
     // Version check is not implemented in light wallets nodes/wallets
-    if (!m_wallet->light_wallet() && (version >> 16) != CORE_RPC_VERSION_MAJOR)
+    if (!m_wallet->light_wallet() && version.first != rpc::VERSION.first)
         return Wallet::ConnectionStatus_WrongVersion;
     return Wallet::ConnectionStatus_Connected;
 }

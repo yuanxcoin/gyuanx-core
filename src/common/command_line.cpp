@@ -29,55 +29,49 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "command_line.h"
-#include <boost/algorithm/string/compare.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include "common/i18n.h"
+#include "common/string_util.h"
 
 namespace command_line
 {
-  namespace
-  {
-    const char* tr(const char* str)
-    {
-      return i18n_translate(str, "command_line");
-    }
-  }
+const arg_descriptor<bool> arg_help = {"help", "Produce help message"};
+const arg_descriptor<bool> arg_version = {"version", "Output version information"};
 
-  static bool str_compare_with_boost(const std::string &str, char const *check_str)
-  {
-    boost::algorithm::is_iequal ignore_case{};
-    if (boost::algorithm::equals(check_str, str, ignore_case))
-      return true;
-    if (boost::algorithm::equals(command_line::tr(check_str), str, ignore_case))
-      return true;
+// Terminal sizing.
+//
+// Currently only linux is supported.
 
-    return false;
-  }
+#ifdef __linux__
 
-  bool is_yes(const std::string& str)
-  {
-    bool result = (str == "y" || str == "Y") || str_compare_with_boost(str, "yes");
-    return result;
-  }
+extern "C" {
+#include <sys/ioctl.h>
+#include <stdio.h>
+#include <unistd.h>
+}
+std::pair<unsigned, unsigned> terminal_size() {
+    struct winsize w;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1)
+      return {w.ws_col, w.ws_row};
+    return {0, 0};
+}
 
-  bool is_no(const std::string& str)
-  {
-    bool result = (str == "n" || str == "N") || str_compare_with_boost(str, "no");
-    return result;
-  }
+#else
 
-  bool is_cancel(const std::string& str)
-  {
-    bool result = (str == "c" || str == "C") || str_compare_with_boost(str, "cancel");
-    return result;
-  }
+std::pair<unsigned, unsigned> terminal_size() { return {0, 0}; }
 
-  bool is_back(const std::string& str)
-  {
-    bool result = (str == "b" || str == "B") || str_compare_with_boost(str, "back");
-    return result;
-  }
+#endif
 
-  const arg_descriptor<bool> arg_help = {"help", "Produce help message"};
-  const arg_descriptor<bool> arg_version = {"version", "Output version information"};
+
+std::pair<unsigned, unsigned> boost_option_sizes() {
+  std::pair<unsigned, unsigned> result;
+
+  result.first = std::max(
+      terminal_size().first,
+      boost::program_options::options_description::m_default_line_length);
+
+  result.second = result.first - boost::program_options::options_description::m_default_line_length / 2;
+
+  return result;
+}
+
 }

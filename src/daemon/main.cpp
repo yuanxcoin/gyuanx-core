@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2019, The Monero Project
+// Copyright (c) 2014-2020, The Monero Project
 // Copyright (c)      2018, The Loki Project
 //
 // All rights reserved.
@@ -29,23 +29,24 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+#include <cstdlib>
 #include "common/command_line.h"
 #include "common/scoped_message_writer.h"
 #include "common/password.h"
 #include "common/util.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_core/miner.h"
-#include "daemon/command_server.h"
-#include "daemon/daemon.h"
 #include "daemonizer/daemonizer.h"
 #include "misc_log_ex.h"
-#include "net/parse.h"
 #include "p2p/net_node.h"
-#include "rpc/core_rpc_server.h"
 #include "rpc/rpc_args.h"
+#include "rpc/core_rpc_server.h"
 #include "daemon/command_line_args.h"
 #include "blockchain_db/db_types.h"
 #include "version.h"
+
+#include "command_server.h"
+#include "daemon.h"
 
 #ifdef STACK_TRACE
 #include "common/stack_trace.h"
@@ -57,57 +58,6 @@
 namespace po = boost::program_options;
 namespace bf = boost::filesystem;
 
-uint16_t parse_public_rpc_port(const po::variables_map &vm)
-{
-  const auto &public_node_arg = daemon_args::arg_public_node;
-  const bool public_node = command_line::get_arg(vm, public_node_arg);
-  if (!public_node)
-  {
-    return 0;
-  }
-
-  std::string rpc_port_str;
-  const auto &restricted_rpc_port = cryptonote::core_rpc_server::arg_rpc_restricted_bind_port;
-  if (!command_line::is_arg_defaulted(vm, restricted_rpc_port))
-  {
-    rpc_port_str = command_line::get_arg(vm, restricted_rpc_port);;
-  }
-  else if (command_line::get_arg(vm, cryptonote::core_rpc_server::arg_restricted_rpc))
-  {
-    rpc_port_str = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_bind_port);
-  }
-  else
-  {
-    throw std::runtime_error("restricted RPC mode is required");
-  }
-
-  uint16_t rpc_port;
-  if (!string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
-  {
-    throw std::runtime_error("invalid RPC port " + rpc_port_str);
-  }
-
-  const auto rpc_bind_address = command_line::get_arg(vm, cryptonote::rpc_args::descriptors().rpc_bind_ip);
-  const auto address = net::get_network_address(rpc_bind_address, rpc_port);
-  if (!address) {
-    throw std::runtime_error("failed to parse RPC bind address");
-  }
-  if (address->get_zone() != epee::net_utils::zone::public_)
-  {
-    throw std::runtime_error(std::string(zone_to_string(address->get_zone()))
-      + " network zone is not supported, please check RPC server bind address");
-  }
-
-  if (address->is_loopback() || address->is_local())
-  {
-    MLOG_RED(el::Level::Warning, "--" << public_node_arg.name 
-      << " is enabled, but RPC server " << address->str() 
-      << " may be unreachable from outside, please check RPC server bind address");
-  }
-
-  return rpc_port;
-}
-
 int main(int argc, char const * argv[])
 {
   try {
@@ -118,11 +68,13 @@ int main(int argc, char const * argv[])
 
     epee::string_tools::set_module_name_and_folder(argv[0]);
 
+    auto opt_size = command_line::boost_option_sizes();
+
     // Build argument description
-    po::options_description all_options("All");
+    po::options_description all_options("All", opt_size.first, opt_size.second);
     po::options_description hidden_options("Hidden");
-    po::options_description visible_options("Options");
-    po::options_description core_settings("Settings");
+    po::options_description visible_options("Options", opt_size.first, opt_size.second);
+    po::options_description core_settings("Settings", opt_size.first, opt_size.second);
     po::positional_options_description positional_options;
     {
       // Misc Options
@@ -137,9 +89,6 @@ int main(int argc, char const * argv[])
       command_line::add_arg(core_settings, daemon_args::arg_max_log_file_size);
       command_line::add_arg(core_settings, daemon_args::arg_max_log_files);
       command_line::add_arg(core_settings, daemon_args::arg_max_concurrency);
-      command_line::add_arg(core_settings, daemon_args::arg_public_node);
-      command_line::add_arg(core_settings, daemon_args::arg_zmq_rpc_bind_ip);
-      command_line::add_arg(core_settings, daemon_args::arg_zmq_rpc_bind_port);
 
       daemonizer::init_options(hidden_options, visible_options);
       daemonize::daemon::init_options(core_settings);
@@ -171,7 +120,7 @@ int main(int argc, char const * argv[])
 
     if (command_line::get_arg(vm, command_line::arg_help))
     {
-      std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL << ENDL;
+      std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
       std::cout << "Usage: " + std::string{argv[0]} + " [options|settings] [daemon_command...]" << std::endl << std::endl;
       std::cout << visible_options << std::endl;
       return 0;
@@ -180,7 +129,7 @@ int main(int argc, char const * argv[])
     // Loki Version
     if (command_line::get_arg(vm, command_line::arg_version))
     {
-      std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL;
+      std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
       return 0;
     }
 
@@ -211,7 +160,7 @@ int main(int argc, char const * argv[])
     const bool regtest = command_line::get_arg(vm, cryptonote::arg_regtest_on);
     if (testnet + stagenet + regtest > 1)
     {
-      std::cerr << "Can't specify more than one of --tesnet and --stagenet and --regtest" << ENDL;
+      std::cerr << "Can't specify more than one of --tesnet and --stagenet and --regtest\n";
       return 1;
     }
 
@@ -270,7 +219,8 @@ int main(int argc, char const * argv[])
       tools::set_max_concurrency(command_line::get_arg(vm, daemon_args::arg_max_concurrency));
 
     // logging is now set up
-    MGINFO("Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")");
+    // FIXME: only print this when starting up as a daemon but not when running rpc commands
+    MGINFO_GREEN("Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")");
 
     // If there are positional options, we're running a daemon command
     {
@@ -280,7 +230,7 @@ int main(int argc, char const * argv[])
       {
         const cryptonote::rpc_args::descriptors arg{};
         auto rpc_ip_str = command_line::get_arg(vm, arg.rpc_bind_ip);
-        auto rpc_port_str = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_bind_port);
+        auto rpc_port_str = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_bind_port);
 
         uint32_t rpc_ip;
         uint16_t rpc_port;
@@ -304,7 +254,7 @@ int main(int argc, char const * argv[])
           login = tools::login::parse(
             has_rpc_arg ? command_line::get_arg(vm, arg.rpc_login) : std::string(env_rpc_login), false, [](bool verify) {
 #ifdef HAVE_READLINE
-        rdln::suspend_readline pause_readline;
+              rdln::suspend_readline pause_readline;
 #endif
               return tools::password_container::prompt(verify, "Daemon client password");
             }
@@ -320,38 +270,25 @@ int main(int argc, char const * argv[])
         if (!ssl_options)
           return 1;
 
-        daemonize::t_command_server rpc_commands{rpc_ip, rpc_port, std::move(login), std::move(*ssl_options)};
-        if (rpc_commands.process_command_vec(command))
-        {
-          return 0;
-        }
-        else
-        {
+        daemonize::command_server rpc_commands{rpc_ip, rpc_port, std::move(login), std::move(*ssl_options)};
+
+        try {
+          if (rpc_commands.process_command(command))
+            return 0;
+        } catch (const std::out_of_range& e) {
 #ifdef HAVE_READLINE
           rdln::suspend_readline pause_readline;
 #endif
-          std::cerr << "Unknown command: " << command.front() << std::endl;
-          return 1;
+          std::cout << "Unknown command: " << e.what() << ".  Try 'help' for available commands\n";
         }
+        return 1;
       }
     }
 
     MINFO("Moving from main() into the daemonize now.");
 
-    daemonizer::run_type run_type = daemonizer::setup_run_environment<daemonize::daemon>("Loki Daemon", argc, argv, vm);
-
-    bool interactive = true;
-    switch(run_type)
-    {
-        case daemonizer::run_type::terminate: return 0;
-        case daemonizer::run_type::terminate_with_error: return 1;
-        case daemonizer::run_type::non_interactive: interactive = false; break;
-        default: assert(run_type == daemonizer::run_type::interactive); break;
-    }
-
-    daemonize::daemon daemon{vm, parse_public_rpc_port(vm)};
-    bool result = daemon.run(interactive);
-    return !result;
+    return daemonizer::daemonize<daemonize::daemon>("Loki Daemon", argc, argv, std::move(vm))
+        ? 0 : 1;
   }
   catch (std::exception const & ex)
   {

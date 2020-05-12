@@ -36,7 +36,6 @@ add_executable(unit_tests
   block_queue.cpp
   block_reward.cpp
   bulletproofs.cpp
-  canonical_amounts.cpp
   chacha.cpp
   checkpoints.cpp
   command_line.cpp
@@ -76,7 +75,6 @@ add_executable(unit_tests
   service_nodes.cpp
   service_nodes_swarm.cpp
   sha256.cpp
-  slow_memmem.cpp
   subaddress.cpp
   test_tx_utils.cpp
   test_peerlist.cpp

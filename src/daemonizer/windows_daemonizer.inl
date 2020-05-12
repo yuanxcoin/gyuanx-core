@@ -133,55 +133,48 @@ namespace daemonizer
     }
   }
 
-  template <typename Application>
-  inline run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm)
+  template <typename Application, typename... Args>
+  bool daemonize(
+      const char* name, int argc, const char* argv[],
+      boost::program_options::variables_map vm,
+      Args&&... args)
   {
     std::string arguments = get_argument_string(argc, argv);
 
     if (command_line::has_arg(vm, arg_is_service))
     {
-      Application app(&vm);
-      windows::service_runner<Application> runner(name, &app);
+      windows::service_runner<Application> runner{name, std::move(vm), std::forward<Args>(args)...};
       runner.run();
-      return run_type::terminate;
+      return true;
     }
     else if (command_line::has_arg(vm, arg_install_service))
     {
       if (windows::ensure_admin(arguments))
       {
         arguments += " --run-as-service";
-        bool result = windows::install_service(name, arguments);
-        return result ? run_type::terminate : run_type::terminate_with_error;
+        return windows::install_service(name, arguments);
       }
     }
     else if (command_line::has_arg(vm, arg_uninstall_service))
     {
       if (windows::ensure_admin(arguments))
-      {
-        bool result = windows::uninstall_service(name);
-        return result ? run_type::terminate : run_type::terminate_with_error;
-      }
+        return windows::uninstall_service(name);
     }
     else if (command_line::has_arg(vm, arg_start_service))
     {
       if (windows::ensure_admin(arguments))
-      {
-        bool result = windows::start_service(name);
-        return result ? run_type::terminate : run_type::terminate_with_error;
-      }
+        return windows::start_service(name);
     }
     else if (command_line::has_arg(vm, arg_stop_service))
     {
       if (windows::ensure_admin(arguments))
-      {
-        bool result = windows::stop_service(name);
-        return result ? run_type::terminate : run_type::terminate_with_error;
-      }
+        return windows::stop_service(name);
     }
-
-    if (command_line::has_arg(vm, arg_non_interactive))
-      return run_type::non_interactive;
     else
-      return run_type::interactive;
+    {
+      bool interactive = !command_line::has_arg(vm, arg_non_interactive);
+      return Application{std::move(vm), std::forward<Args>(args)...}.run(interactive);
+    }
+    return false;
   }
 }

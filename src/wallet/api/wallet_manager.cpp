@@ -233,8 +233,8 @@ void WalletManagerImpl::setDaemonAddress(const std::string &address)
 
 bool WalletManagerImpl::connected(uint32_t *version)
 {
-    epee::json_rpc::request<cryptonote::COMMAND_RPC_GET_VERSION::request> req_t{};
-    epee::json_rpc::response<cryptonote::COMMAND_RPC_GET_VERSION::response, std::string> resp_t{};
+    epee::json_rpc::request<cryptonote::rpc::GET_VERSION::request> req_t{};
+    epee::json_rpc::response<cryptonote::rpc::GET_VERSION::response, std::string> resp_t{};
     req_t.jsonrpc = "2.0";
     req_t.id = epee::serialization::storage_entry(0);
     req_t.method = "get_version";
@@ -248,8 +248,8 @@ bool WalletManagerImpl::connected(uint32_t *version)
 
 uint64_t WalletManagerImpl::blockchainHeight()
 {
-    cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-    cryptonote::COMMAND_RPC_GET_INFO::response ires;
+    cryptonote::rpc::GET_INFO::request ireq{};
+    cryptonote::rpc::GET_INFO::response ires{};
 
     if (!epee::net_utils::invoke_http_json("/getinfo", ireq, ires, m_http_client))
       return 0;
@@ -258,8 +258,8 @@ uint64_t WalletManagerImpl::blockchainHeight()
 
 uint64_t WalletManagerImpl::blockchainTargetHeight()
 {
-    cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-    cryptonote::COMMAND_RPC_GET_INFO::response ires;
+    cryptonote::rpc::GET_INFO::request ireq{};
+    cryptonote::rpc::GET_INFO::response ires{};
 
     if (!epee::net_utils::invoke_http_json("/getinfo", ireq, ires, m_http_client))
       return 0;
@@ -268,8 +268,8 @@ uint64_t WalletManagerImpl::blockchainTargetHeight()
 
 uint64_t WalletManagerImpl::networkDifficulty()
 {
-    cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-    cryptonote::COMMAND_RPC_GET_INFO::response ires;
+    cryptonote::rpc::GET_INFO::request ireq{};
+    cryptonote::rpc::GET_INFO::response ires{};
 
     if (!epee::net_utils::invoke_http_json("/getinfo", ireq, ires, m_http_client))
       return 0;
@@ -278,8 +278,8 @@ uint64_t WalletManagerImpl::networkDifficulty()
 
 double WalletManagerImpl::miningHashRate()
 {
-    cryptonote::COMMAND_RPC_MINING_STATUS::request mreq;
-    cryptonote::COMMAND_RPC_MINING_STATUS::response mres;
+    cryptonote::rpc::MINING_STATUS::request mreq{};
+    cryptonote::rpc::MINING_STATUS::response mres{};
 
     if (!epee::net_utils::invoke_http_json("/mining_status", mreq, mres, m_http_client))
       return 0.0;
@@ -290,8 +290,8 @@ double WalletManagerImpl::miningHashRate()
 
 uint64_t WalletManagerImpl::blockTarget()
 {
-    cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-    cryptonote::COMMAND_RPC_GET_INFO::response ires;
+    cryptonote::rpc::GET_INFO::request ireq{};
+    cryptonote::rpc::GET_INFO::response ires{};
 
     if (!epee::net_utils::invoke_http_json("/getinfo", ireq, ires, m_http_client))
         return 0;
@@ -300,37 +300,35 @@ uint64_t WalletManagerImpl::blockTarget()
 
 bool WalletManagerImpl::isMining()
 {
-    cryptonote::COMMAND_RPC_MINING_STATUS::request mreq;
-    cryptonote::COMMAND_RPC_MINING_STATUS::response mres;
+    cryptonote::rpc::MINING_STATUS::request mreq{};
+    cryptonote::rpc::MINING_STATUS::response mres{};
 
     if (!epee::net_utils::invoke_http_json("/mining_status", mreq, mres, m_http_client))
       return false;
     return mres.active;
 }
 
-bool WalletManagerImpl::startMining(const std::string &address, uint32_t threads, bool background_mining, bool ignore_battery)
+bool WalletManagerImpl::startMining(const std::string &address, uint32_t threads)
 {
-    cryptonote::COMMAND_RPC_START_MINING::request mreq;
-    cryptonote::COMMAND_RPC_START_MINING::response mres;
+    cryptonote::rpc::START_MINING::request mreq{};
+    cryptonote::rpc::START_MINING::response mres{};
 
     mreq.miner_address = address;
     mreq.threads_count = threads;
-    mreq.ignore_battery = ignore_battery;
-    mreq.do_background_mining = background_mining;
 
     if (!epee::net_utils::invoke_http_json("/start_mining", mreq, mres, m_http_client))
       return false;
-    return mres.status == CORE_RPC_STATUS_OK;
+    return mres.status == cryptonote::rpc::STATUS_OK;
 }
 
 bool WalletManagerImpl::stopMining()
 {
-    cryptonote::COMMAND_RPC_STOP_MINING::request mreq;
-    cryptonote::COMMAND_RPC_STOP_MINING::response mres;
+    cryptonote::rpc::STOP_MINING::request mreq{};
+    cryptonote::rpc::STOP_MINING::response mres{};
 
     if (!epee::net_utils::invoke_http_json("/stop_mining", mreq, mres, m_http_client))
       return false;
-    return mres.status == CORE_RPC_STATUS_OK;
+    return mres.status == cryptonote::rpc::STATUS_OK;
 }
 
 std::string WalletManagerImpl::resolveOpenAlias(const std::string &address, bool &dnssec_valid) const

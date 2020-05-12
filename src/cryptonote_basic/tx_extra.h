@@ -143,6 +143,14 @@ static_assert(sizeof(crypto::ed25519_signature) == sizeof(crypto::signature), "L
 inline std::ostream &operator<<(std::ostream &o, const generic_signature &v) { epee::to_hex::formatted(o, epee::as_byte_span(v.data)); return o; }
 }
 
+namespace std {
+  static_assert(sizeof(lns::generic_owner) >= sizeof(std::size_t) && alignof(lns::generic_owner) >= alignof(std::size_t),
+                "Size and alignment of hash must be at least that of size_t");
+  template <> struct hash<lns::generic_owner> {
+    std::size_t operator()(const lns::generic_owner &v) const { return reinterpret_cast<const std::size_t &>(v); }
+  };
+}
+
 namespace service_nodes {
   enum class new_state : uint16_t
   {
@@ -152,7 +160,7 @@ namespace service_nodes {
     ip_change_penalty,
     _count,
   };
-};
+}
 
 namespace cryptonote
 {

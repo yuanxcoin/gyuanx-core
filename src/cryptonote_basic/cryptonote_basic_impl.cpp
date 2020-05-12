@@ -30,7 +30,6 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "include_base_utils.h"
-using namespace epee;
 
 #include "cryptonote_basic_impl.h"
 #include "string_tools.h"
@@ -59,11 +58,6 @@ namespace cryptonote {
       FIELD(adr)
       FIELD(payment_id)
     END_SERIALIZE()
-
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(adr)
-      KV_SERIALIZE(payment_id)
-    END_KV_SERIALIZE_MAP()
   };
 
   /************************************************************************/
@@ -283,7 +277,7 @@ namespace cryptonote {
     {
       // Old address format
       std::string buff;
-      if(!string_tools::parse_hexstr_to_binbuff(str, buff))
+      if(!epee::string_tools::parse_hexstr_to_binbuff(str, buff))
         return false;
 
       if(buff.size()!=sizeof(public_address_outer_blob))

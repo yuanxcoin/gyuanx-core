@@ -31,7 +31,7 @@
 
 #include "common/scoped_message_writer.h"
 #include "common/util.h"
-#include "daemonizer/posix_fork.h"
+#include "common/command_line.h"
 
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
@@ -41,12 +41,8 @@ namespace daemonizer
   namespace
   {
     const command_line::arg_descriptor<bool> arg_detach = {
-      "detach"
-    , "Run as daemon"
-    };
-    const command_line::arg_descriptor<std::string> arg_pidfile = {
-      "pidfile"
-    , "File path to write the daemon's PID to (optional, requires --detach)"
+      "detach" // deprecated, but still here to print an error msg if you try to use it
+    , ""
     };
     const command_line::arg_descriptor<bool> arg_non_interactive = {
       "non-interactive"
@@ -59,8 +55,7 @@ namespace daemonizer
     , boost::program_options::options_description & normal_options
     )
   {
-    command_line::add_arg(normal_options, arg_detach);
-    command_line::add_arg(normal_options, arg_pidfile);
+    command_line::add_arg(hidden_options, arg_detach);
     command_line::add_arg(normal_options, arg_non_interactive);
   }
 
@@ -76,24 +71,19 @@ namespace daemonizer
     return boost::filesystem::current_path();
   }
 
-  template <typename Application>
-  inline run_type setup_run_environment(char const *name, int argc, char const *argv[], boost::program_options::variables_map const &vm)
+  template <typename Application, typename... Args>
+  bool daemonize(
+      const char* name, int argc, const char* argv[],
+      boost::program_options::variables_map vm,
+      Args&&... args)
   {
-    (void)name; (void)argc; (void)argv;
+    (void)name; (void)argc; (void)argv; // Only used for Windows
     if (command_line::has_arg(vm, arg_detach))
     {
-      tools::success_msg_writer() << "Forking to background...";
-      std::string pidfile;
-      if (command_line::has_arg(vm, arg_pidfile))
-      {
-        pidfile = command_line::get_arg(vm, arg_pidfile);
-      }
-      posix::fork(pidfile);
-      return run_type::non_interactive;
+      MFATAL("--detach is no longer supported. Use systemd (or another process manager), tmux, screen, or nohup instead");
+      return false;
     }
-    else if (command_line::has_arg(vm, arg_non_interactive))
-      return run_type::non_interactive;
-
-    return run_type::interactive;
+    bool interactive = !command_line::has_arg(vm, arg_non_interactive);
+    return Application{std::move(vm), std::forward<Args>(args)...}.run(interactive);
   }
 }

@@ -40,6 +40,9 @@
 #define MAX_LOG_FILE_SIZE 104850000 // 100 MB - 7600 bytes
 #define MAX_LOG_FILES 50
 
+#define CLOG_ENABLED(level, cat) ELPP->vRegistry()->allowed(el::Level::level, cat)
+#define LOG_ENABLED(level) CLOG_ENABLED(level, LOKI_DEFAULT_LOG_CATEGORY)
+
 #define MCLOG_TYPE(level, cat, type, x) do { \
     if (ELPP->vRegistry()->allowed(level, cat)) { \
       el::base::Writer(level, __FILE__, __LINE__, ELPP_FUNC, type).construct(cat) << x; \
@@ -147,8 +150,6 @@ namespace debug
 }
 
 
-
-#define ENDL std::endl
 
 #define TRY_ENTRY()   try {
 #define CATCH_ENTRY(location, return_val) } \

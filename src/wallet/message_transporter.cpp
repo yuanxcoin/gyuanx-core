@@ -44,7 +44,7 @@ namespace mms
 namespace bitmessage_rpc
 {
 
-  struct message_info_t
+  struct message_info
   {
     uint32_t encodingType;
     std::string toAddress;
@@ -66,9 +66,8 @@ namespace bitmessage_rpc
       KV_SERIALIZE(subject)
     END_KV_SERIALIZE_MAP()
   };
-  typedef epee::misc_utils::struct_init<message_info_t> message_info;
 
-  struct inbox_messages_response_t
+  struct inbox_messages_response
   {
     std::vector<message_info> inboxMessages;
 
@@ -76,7 +75,6 @@ namespace bitmessage_rpc
       KV_SERIALIZE(inboxMessages)
     END_KV_SERIALIZE_MAP()
   };
-  typedef epee::misc_utils::struct_init<inbox_messages_response_t> inbox_messages_response;
 
 }
 
@@ -136,7 +134,7 @@ bool message_transporter::receive_messages(const std::vector<std::string> &desti
     const bitmessage_rpc::message_info &message_info = bitmessage_res.inboxMessages[i];
     if (std::find(destination_transport_addresses.begin(), destination_transport_addresses.end(), message_info.toAddress) != destination_transport_addresses.end())
     {
-      transport_message message;
+      transport_message message{};
       bool is_mms_message = false;
       try
       {

@@ -1,5 +1,5 @@
+// Copyright (c) 2018-2020, The Loki Project
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
 // 
 // All rights reserved.
 // 
@@ -29,6 +29,12 @@
 
 #pragma once
 #include <boost/program_options.hpp>
+#include "cryptonote_core/cryptonote_core.h"
+#include "cryptonote_protocol/cryptonote_protocol_handler.h"
+#include "p2p/net_node.h"
+#include "rpc/core_rpc_server.h"
+#include "rpc/http_server.h"
+#include "rpc/lmq_server.h"
 
 #include "blocks/blocks.h"
 #include "rpc/core_rpc_server.h"
@@ -41,40 +47,48 @@
 
 namespace daemonize
 {
-struct rpc_server
+class http_rpc_server
 {
-  rpc_server(boost::program_options::variables_map const &vm,
-             cryptonote::core &core,
-             nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>> &p2p,
+public:
+  http_rpc_server(boost::program_options::variables_map const &vm,
+             cryptonote::rpc::core_rpc_server &corerpc,
              const bool restricted,
              const std::string &port,
-             const std::string &description);
+             std::string description);
   void run();
   void stop();
-  ~rpc_server();
+  ~http_rpc_server();
 
-  cryptonote::core_rpc_server m_server;
+  cryptonote::rpc::http_server m_server;
   std::string m_description;
 };
 
-struct daemon
-{
+class daemon {
+public:
   static void init_options(boost::program_options::options_description & option_spec);
 
-  daemon(boost::program_options::variables_map const &vm, uint16_t public_rpc_port = 0);
+  daemon(boost::program_options::variables_map vm);
   ~daemon();
+
   bool run(bool interactive = false);
-  void stop_p2p();
   void stop();
 
-  boost::program_options::variables_map vm;
-  uint16_t    public_rpc_port;
-  std::string zmq_rpc_bind_address;
-  std::string zmq_rpc_bind_port;
+private:
 
-  cryptonote::core core;
-  cryptonote::t_cryptonote_protocol_handler<cryptonote::core> protocol;
-  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>> p2p;
-  std::vector<std::unique_ptr<rpc_server>> rpc_servers;
+  boost::program_options::variables_map vm;
+
+  /// 💩
+  using protocol_handler = cryptonote::t_cryptonote_protocol_handler<cryptonote::core>;
+  using node_server = nodetool::node_server<protocol_handler>;
+
+  // Core objects; these are in unique ptrs because we want daemon to be movable and most of these
+  // are not movable, and std::unique_ptr is a sort of pre-C++17 poor man's std::optional.
+  std::unique_ptr<cryptonote::core> core;
+  std::unique_ptr<protocol_handler> protocol;
+  std::unique_ptr<node_server> p2p;
+  std::unique_ptr<cryptonote::rpc::core_rpc_server> rpc;
+  std::list<http_rpc_server> http_rpcs;
+  std::unique_ptr<cryptonote::rpc::lmq_rpc> lmq_rpc;
 };
+
 } // namespace daemonize

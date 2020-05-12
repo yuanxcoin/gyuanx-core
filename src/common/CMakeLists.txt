@@ -28,29 +28,30 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(common
+  aligned.c
   base32z.cpp
   base58.cpp
+  combinator.cpp
   command_line.cpp
   dns_utils.cpp
   download.cpp
   error.cpp
   expect.cpp
-  loki.cpp
-  util.cpp
   i18n.cpp
-  rules.cpp
+  loki.cpp
   notify.cpp
   password.cpp
   perf_timer.cpp
   pruning.cpp
   random.cpp
+  rules.cpp
   scoped_message_writer.cpp
   spawn.cpp
   threadpool.cpp
-  updates.cpp
-  aligned.c
   timings.cc
-  combinator.cpp)
+  updates.cpp
+  util.cpp
+  )
 
 if (STACK_TRACE)
   target_sources(common PRIVATE stack_trace.cpp)

@@ -233,7 +233,7 @@ namespace epee
     {
       bool res = false;
       container.clear();
-      typename stl_container::value_type val = typename stl_container::value_type();
+      typename stl_container::value_type val{};
       typename t_storage::hsection hchild_section = nullptr;
       typename t_storage::harray hsec_array = stg.get_first_section(pname, hchild_section, hparent_section);
       if(!hsec_array || !hchild_section) return false;
@@ -241,7 +241,7 @@ namespace epee
       container.insert(container.end(), std::move(val));
       while(stg.get_next_section(hsec_array, hchild_section))
       {
-        typename stl_container::value_type val_l = typename stl_container::value_type();
+        typename stl_container::value_type val_l{};
         res |= val_l._load(stg, hchild_section);
         container.insert(container.end(), std::move(val_l));
       }
@@ -271,9 +271,8 @@ namespace epee
       return res;
     }
     //--------------------------------------------------------------------------------------------------------------------
-    template<bool> struct selector;
-    template<>
-    struct selector<true>
+    template <bool Serializing = true>
+    struct selector
     {
       template<class t_type, class t_storage>
       static bool serialize(const t_type& d, t_storage& stg, typename t_storage::hsection hparent_section, const char* pname)

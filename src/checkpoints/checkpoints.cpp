@@ -41,8 +41,6 @@
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 
-using namespace epee;
-
 #include "common/loki_integration_test_hooks.h"
 #include "common/loki.h"
 

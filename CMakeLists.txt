@@ -56,6 +56,10 @@ if(NOT DEFINED LOKI_RELEASE_SUFFIX)
   set(LOKI_RELEASE_SUFFIX "-dev")
 endif()
 
+if(POLICY CMP0079)
+  cmake_policy(SET CMP0079 NEW)
+endif()
+
 function (add_c_flag_if_supported flag var)
   string(REPLACE "-" "_" supported ${flag}_c)
   check_c_compiler_flag(${flag} ${supported})
@@ -416,11 +420,9 @@ ExternalProject_Add(generate_translations_header
   CMAKE_ARGS -DLRELEASE_PATH=${LRELEASE_PATH}
   INSTALL_COMMAND cmake -E echo "")
 
-if(POLICY CMP0079)
-  cmake_policy(SET CMP0079 NEW)
-endif()
 add_library(libunbound INTERFACE)
 add_library(miniupnpc INTERFACE)
+add_library(systemd INTERFACE)  # Will do nothing unless we find and enable systemd support
 
 # Allow -D DOWNLOAD_SODIUM=FORCE to download without even checking for a local libsodium
 option(DOWNLOAD_SODIUM "Allow libsodium to be downloaded and built locally if not found on the system" OFF)
@@ -443,6 +445,19 @@ endif()
 
 export(TARGETS sodium NAMESPACE sodium:: FILE sodium-exports.cmake)
 install(TARGETS sodium EXPORT sodiumConfig DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+option(WITH_SYSTEMD "Attempts to link against and enable systemd daemon notification support" ON)
+if (WITH_SYSTEMD)
+  pkg_check_modules(SYSTEMD libsystemd IMPORTED_TARGET)
+
+    if(SYSTEMD_FOUND)
+      target_compile_definitions(systemd INTERFACE ENABLE_SYSTEMD)
+      target_link_libraries(systemd INTERFACE PkgConfig::SYSTEMD)
+    else()
+      message(WARNING "systemd not found; building without systemd support (use -DWITH_SYSTEMD=OFF to suppress this warning)")
+    endif()
+endif()
+
 
 add_subdirectory(external)
 
