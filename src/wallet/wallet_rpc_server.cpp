@@ -140,18 +140,16 @@ namespace tools
     m_long_poll_thread = boost::thread([&] {
       for (;;)
       {
-        if (m_auto_refresh_period == 0 || !m_wallet)
+        if (m_long_poll_disabled) return true;
+        if (m_auto_refresh_period == 0)
         {
-          std::this_thread::sleep_for(std::chrono::seconds(10));
+          std::this_thread::sleep_for(std::chrono::seconds(1));
           continue;
         }
 
-        if (m_wallet->m_long_poll_disabled)
-          return true;
-
         try
         {
-          if (m_wallet->long_poll_pool_state())
+          if (m_wallet && m_wallet->long_poll_pool_state())
             m_long_poll_new_changes = true;
         }
         catch (...)
@@ -167,6 +165,7 @@ namespace tools
   //------------------------------------------------------------------------------------------------------------------------------
   void wallet_rpc_server::stop()
   {
+    m_long_poll_disabled = true;
     send_stop_signal();
     if (m_wallet)
     {
@@ -4568,6 +4567,7 @@ namespace tools
     }
 
   just_dir:
+    wrpc->m_long_poll_disabled = tools::wallet2::has_disable_rpc_long_poll(vm);
     if (wal) set_wallet(std::move(wal));
     bool r = init();
     CHECK_AND_ASSERT_MES(r, false, tools::wallet_rpc_server::tr("Failed to initialize wallet RPC server"));
