@@ -4567,7 +4567,7 @@ namespace tools
     }
 
   just_dir:
-    wrpc->m_long_poll_disabled = tools::wallet2::has_disable_rpc_long_poll(vm);
+    m_long_poll_disabled = tools::wallet2::has_disable_rpc_long_poll(m_vm);
     if (wal) set_wallet(std::move(wal));
     bool r = init();
     CHECK_AND_ASSERT_MES(r, false, tools::wallet_rpc_server::tr("Failed to initialize wallet RPC server"));
