@@ -71,7 +71,7 @@
       MINFO(m_conn_context << "calling " << s_pattern); \
       if(!callback_f(req, resp, &m_conn_context)) \
       { \
-        MERROR(m_conn_context << "Failed to " << #callback_f << "()"); \
+        LOG_ERROR("Failed to " << #callback_f << "()"); \
         response_info.m_response_code = 500; \
         response_info.m_response_comment = "Internal Server Error"; \
         return true; \
@@ -99,7 +99,7 @@
       MINFO(m_conn_context << "calling " << s_pattern); \
       if(!callback_f(req, resp, &m_conn_context)) \
       { \
-        MERROR(m_conn_context << "Failed to " << #callback_f << "()"); \
+        LOG_ERROR("Failed to " << #callback_f << "()"); \
         response_info.m_response_code = 500; \
         response_info.m_response_comment = "Internal Server Error"; \
         return true; \
