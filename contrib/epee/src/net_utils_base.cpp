@@ -86,6 +86,11 @@ namespace epee { namespace net_utils
 		return self_->is_same_host(*other_self);
 	}
 
+
+  // should be here, but network_address is perverted with a circular dependency into src/net, so
+  // this is in src/net/epee_network_address_hack.cpp instead.
+  //KV_SERIALIZE_MAP_CODE_BEGIN(network_address)
+
   std::string print_connection_context(const connection_context_base& ctx)
   {
     std::stringstream ss;

@@ -39,7 +39,7 @@ namespace tools
   // TODO: Undocumented light wallet RPC call
   struct COMMAND_RPC_GET_ADDRESS_TXS
   {
-      struct request_t
+      struct request
       {
         std::string address;      // Address of wallet to receive tx information. 
         std::string view_key;     // View key of Address.
@@ -49,7 +49,6 @@ namespace tools
           KV_SERIALIZE(view_key)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
 
       struct spent_output
       {
@@ -102,7 +101,7 @@ namespace tools
       };
       
       
-      struct response_t
+      struct response
       {
         //std::list<std::string> txs_as_json;
         uint64_t total_received;                 // Total Loki received in atomic units.
@@ -123,7 +122,6 @@ namespace tools
           KV_SERIALIZE(status)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
@@ -131,7 +129,7 @@ namespace tools
   // TODO: Undocumented light wallet RPC call
   struct COMMAND_RPC_GET_ADDRESS_INFO
   {
-      struct request_t
+      struct request
       {
         std::string address;
         std::string view_key;
@@ -141,7 +139,6 @@ namespace tools
           KV_SERIALIZE(view_key)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
       
       struct spent_output 
       {
@@ -160,7 +157,7 @@ namespace tools
         END_KV_SERIALIZE_MAP()
       };
  
-      struct response_t
+      struct response
       { 
         uint64_t locked_funds;
         uint64_t total_received;
@@ -184,7 +181,6 @@ namespace tools
           KV_SERIALIZE(spent_outputs)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
@@ -192,7 +188,7 @@ namespace tools
   // TODO: Undocumented light wallet RPC call
   struct COMMAND_RPC_GET_UNSPENT_OUTS
   {
-      struct request_t
+      struct request
       {
         std::string amount;
         std::string address;
@@ -211,7 +207,6 @@ namespace tools
           KV_SERIALIZE(dust_threshold)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
     
       
       struct output {
@@ -242,7 +237,7 @@ namespace tools
         END_KV_SERIALIZE_MAP()
       };
       
-      struct response_t
+      struct response
       {
         uint64_t amount;
         std::list<output> outputs;
@@ -258,7 +253,6 @@ namespace tools
           KV_SERIALIZE(reason)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   
@@ -266,7 +260,7 @@ namespace tools
   LOKI_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_LOGIN
   {
-      struct request_t
+      struct request
       {
         std::string address;
         std::string view_key;
@@ -278,9 +272,8 @@ namespace tools
           KV_SERIALIZE(create_account) 
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
 
-      struct response_t
+      struct response
       {
         std::string status;
         std::string reason;
@@ -292,13 +285,12 @@ namespace tools
           KV_SERIALIZE(new_address)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
   //-----------------------------------------------
   LOKI_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_IMPORT_WALLET_REQUEST
   {
-      struct request_t
+      struct request
       {
         std::string address;
         std::string view_key;
@@ -308,9 +300,8 @@ namespace tools
           KV_SERIALIZE(view_key)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
 
-      struct response_t
+      struct response
       {
         std::string payment_id;
         uint64_t import_fee;
@@ -328,7 +319,6 @@ namespace tools
           KV_SERIALIZE(status)            
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
   //-----------------------------------------------
 }

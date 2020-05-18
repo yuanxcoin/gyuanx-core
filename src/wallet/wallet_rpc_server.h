@@ -55,13 +55,13 @@ namespace tools
 
     static const char* tr(const char* str);
 
-    wallet_rpc_server(const boost::program_options::variables_map *vm);
-    ~wallet_rpc_server();
+    wallet_rpc_server(boost::program_options::variables_map vm);
 
     bool init();
-    bool run();
+    bool run(bool /*interactive - ignored (rpc wallet is always non-interactive) */);
     void stop();
-    void set_wallet(wallet2 *cr);
+    void set_wallet(std::unique_ptr<wallet2> cr);
+    std::atomic<bool> m_long_poll_disabled;
 
   private:
     bool run_server_threads();
@@ -280,14 +280,12 @@ namespace tools
 
       bool validate_transfer(const std::list<transfer_destination>& destinations, const std::string& payment_id, std::vector<cryptonote::tx_destination_entry>& dsts, std::vector<uint8_t>& extra, bool at_least_one_destination, epee::json_rpc::error& er);
 
-      void check_background_mining();
-
-      wallet2 *m_wallet;
+      std::unique_ptr<wallet2> m_wallet;
       std::string m_wallet_dir;
       tools::private_file rpc_login_file;
       std::atomic<bool> m_stop;
       bool m_restricted;
-      const boost::program_options::variables_map *m_vm;
+      boost::program_options::variables_map m_vm;
       uint32_t m_auto_refresh_period;
       boost::posix_time::ptime m_last_auto_refresh_time;
       boost::thread m_long_poll_thread;

@@ -34,7 +34,7 @@ target_link_libraries(simplewallet
   PRIVATE
     wallet
     daemonizer
-    rpc_base
+    rpc_commands
     cryptonote_core
     mnemonics
     epee_readline

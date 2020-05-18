@@ -90,6 +90,7 @@ namespace wallet_args
     const char* const usage,
     const char* const notice,
     boost::program_options::options_description desc_params,
+    boost::program_options::options_description hidden_params,
     const boost::program_options::positional_options_description& positional_options,
     const std::function<void(const std::string&, bool)> &print,
     const char *default_log_name,
@@ -135,11 +136,12 @@ namespace wallet_args
 
     i18n_set_language("translations", "loki", lang);
 
-    po::options_description desc_all;
-    desc_all.add(desc_general).add(desc_params);
+    po::options_description desc_all, desc_visible;
+    desc_visible.add(desc_general).add(desc_params);
+    desc_all.add(desc_visible).add(hidden_params);
     po::variables_map vm;
     bool should_terminate = false;
-    bool r = command_line::handle_error_helper(desc_all, [&]()
+    bool r = command_line::handle_error_helper(desc_visible, [&]()
     {
       auto parser = po::command_line_parser(argc, argv).options(desc_all).positional(positional_options);
       po::store(parser.run(), vm);
@@ -153,11 +155,11 @@ namespace wallet_args
 
       if (command_line::get_arg(vm, command_line::arg_help))
       {
-        Print(print) << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL;
+        Print(print) << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n";
         Print(print) << wallet_args::tr("This is the command line loki wallet. It needs to connect to a loki\n"
-												  "daemon to work correctly.") << ENDL;
-        Print(print) << wallet_args::tr("Usage:") << ENDL << "  " << usage;
-        Print(print) << desc_all;
+												  "daemon to work correctly.") << "\n";
+        Print(print) << wallet_args::tr("Usage:") << "\n  " << usage;
+        Print(print) << desc_visible;
         should_terminate = true;
         return true;
       }
@@ -209,7 +211,7 @@ namespace wallet_args
     }
 
     if (notice)
-      Print(print) << notice << ENDL;
+      Print(print) << notice << "\n";
 
     if (!command_line::is_arg_defaulted(vm, arg_max_concurrency))
       tools::set_max_concurrency(command_line::get_arg(vm, arg_max_concurrency));

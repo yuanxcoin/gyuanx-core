@@ -32,6 +32,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <boost/thread/shared_mutex.hpp>
+#include <lokimq/string_view.h>
 #include "serialization/serialization.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/service_node_rules.h"
@@ -247,21 +248,25 @@ namespace service_nodes
 
   struct key_image_blacklist_entry
   {
-    uint8_t           version{0};
+    enum struct version_t : uint8_t { version_0, version_1_serialize_amount, count, };
+    version_t           version{version_t::version_1_serialize_amount};
     crypto::key_image key_image;
-    uint64_t          unlock_height;
+    uint64_t          unlock_height = 0;
+    uint64_t          amount        = 0;
 
     key_image_blacklist_entry() = default;
-    key_image_blacklist_entry(uint8_t version, const crypto::key_image &key_image, uint64_t unlock_height)
-        : version{version}, key_image{key_image}, unlock_height{unlock_height} {}
+    key_image_blacklist_entry(version_t version, const crypto::key_image &key_image, uint64_t unlock_height, uint64_t amount)
+  : version{version}, key_image{key_image}, unlock_height{unlock_height}, amount(amount) {}
 
     bool operator==(const key_image_blacklist_entry &other) const { return key_image == other.key_image; }
     bool operator==(const crypto::key_image &image) const { return key_image == image; }
 
     BEGIN_SERIALIZE()
-      VARINT_FIELD(version)
+      ENUM_FIELD(version, version < version_t::count)
       FIELD(key_image)
       VARINT_FIELD(unlock_height)
+      if (version >= version_t::version_1_serialize_amount)
+        VARINT_FIELD(amount)
     END_SERIALIZE()
   };
 
@@ -353,6 +358,10 @@ namespace service_nodes
     /// Initializes the x25519 map from current pubkey state; called during initialization
     void initialize_x25519_map();
 
+    /// Remote SN lookup address function for LokiMQ: given a string_view of a x25519 pubkey, this
+    /// returns that service node's quorumnet contact information, if we have it, else empty string.
+    std::string remote_lookup(lokimq::string_view x25519_pk);
+
     /// Does something read-only for each registered service node in the range of pubkeys.  The SN
     /// lock is held while iterating, so the "something" should be quick.  Func should take
     /// arguments:
@@ -391,8 +400,7 @@ namespace service_nodes
     bool store();
 
     /// Record public ip and storage port and add them to the service node list
-    cryptonote::NOTIFY_UPTIME_PROOF::request generate_uptime_proof(const service_node_keys& keys,
-                                                                   uint32_t public_ip,
+    cryptonote::NOTIFY_UPTIME_PROOF::request generate_uptime_proof(uint32_t public_ip,
                                                                    uint16_t storage_port,
                                                                    uint16_t storage_lmq_port,
                                                                    uint16_t quorumnet_port) const;

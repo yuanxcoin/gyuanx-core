@@ -43,7 +43,6 @@
 #define LOKI_DEFAULT_LOG_CATEGORY "bcutil"
 
 namespace po = boost::program_options;
-using namespace epee;
 using namespace cryptonote;
 
 static std::map<uint64_t, uint64_t> load_outputs(const std::string &filename)
@@ -114,8 +113,10 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  po::options_description desc_cmd_only("Command line options");
-  po::options_description desc_cmd_sett("Command line options and settings options");
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
+  po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
   const command_line::arg_descriptor<std::string> arg_database = {
     "database", available_dbs.c_str(), default_db_type
@@ -150,7 +151,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
@@ -267,7 +268,7 @@ int main(int argc, char* argv[])
     uint64_t num_outputs = db->get_num_outputs(i->first);
     num_total_outputs += num_outputs;
     num_known_spent_outputs += i->second;
-    if (i->first == 0 || is_valid_decomposed_amount(i->first))
+    if (i->first == 0)
     {
       if (opt_verbose)
         MINFO("Ignoring output value " << i->first << ", with " << num_outputs << " outputs");

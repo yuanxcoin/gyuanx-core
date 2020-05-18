@@ -36,6 +36,7 @@
 #include <unordered_set>
 #include <queue>
 #include <boost/serialization/version.hpp>
+#include <functional>
 
 #include "string_tools.h"
 #include "syncobj.h"
@@ -321,6 +322,16 @@ namespace cryptonote
     void on_idle();
 
     /**
+     * Specifies a callback to invoke when one or more transactions is added to the mempool.  Note
+     * that, because incoming blocks have their transactions added to the mempool, this *does*
+     * trigger for txes that arrive in new blocks.
+     *
+     * It does not, however, trigger for transactions that fail verification, that are flagged
+     * do-not-relay, or that are returned to the pool from a block (i.e. when doing a reorg).
+     */
+    void add_notify(std::function<void(const crypto::hash&, const transaction&, const std::string& blob, const tx_pool_options&)> notify);
+
+    /**
      * @brief locks the transaction pool
      */
     void lock() const { m_transactions_lock.lock(); }
@@ -416,7 +427,7 @@ namespace cryptonote
      * @param include_unrelayed_txes include unrelayed txes in the result
      *
      */
-    void get_transaction_backlog(std::vector<tx_backlog_entry>& backlog, bool include_unrelayed_txes = true) const;
+    void get_transaction_backlog(std::vector<rpc::tx_backlog_entry>& backlog, bool include_unrelayed_txes = true) const;
 
     /**
      * @brief get a summary statistics of all transaction hashes in the pool
@@ -425,7 +436,7 @@ namespace cryptonote
      * @param include_unrelayed_txes include unrelayed txes in the result
      *
      */
-    void get_transaction_stats(struct txpool_stats& stats, bool include_unrelayed_txes = true) const;
+    void get_transaction_stats(struct rpc::txpool_stats& stats, bool include_unrelayed_txes = true) const;
 
     /**
      * @brief get information about all transactions and key images in the pool
@@ -438,7 +449,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_transactions_and_spent_keys_info(std::vector<tx_info>& tx_infos, std::vector<spent_key_image_info>& key_image_infos, bool include_sensitive_data = true) const;
+    bool get_transactions_and_spent_keys_info(std::vector<rpc::tx_info>& tx_infos, std::vector<rpc::spent_key_image_info>& key_image_infos, bool include_sensitive_data = true) const;
 
     /**
      * @brief get information about all transactions and key images in the pool
@@ -736,6 +747,9 @@ namespace cryptonote
     sorted_tx_container m_txs_by_fee_and_receive_time;
 
     std::atomic<uint64_t> m_cookie; //!< incremented at each change
+
+    /// Callbacks for new tx notifications
+    std::vector<std::function<void(const crypto::hash&, const transaction&, const std::string& blob, const tx_pool_options&)>> m_tx_notify;
 
     /**
      * @brief get an iterator to a transaction in the sorted container

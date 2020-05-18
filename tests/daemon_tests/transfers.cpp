@@ -68,10 +68,10 @@ TEST(Transfers, Transfers)
   receiver.store("receiver.b2wallet");
 
   {
-    COMMAND_RPC_START_MINE::request req;
+    rpc::START_MINE::request req;
     req.miner_address = miner.get_account().get_public_address_str(false);
     req.threads_count = 1;
-    COMMAND_RPC_START_MINE::response res;
+    rpc::START_MINE::response res;
     bool r = net_utils::http::invoke_http_json_remote_command(daemon_address + "/start_mine", req, res, http_client);
     ASSERT_TRUE(r);
   }

@@ -36,6 +36,7 @@
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <lokimq/lokimq.h>
 
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
 #include "storages/portable_storage_template_helper.h"
@@ -78,20 +79,19 @@ namespace cryptonote
   // cryptonote_protocol/quorumnet.cpp's quorumnet::init_core_callbacks().  This indirection is here
   // so that core doesn't need to link against cryptonote_protocol (plus everything it depends on).
 
-  // Starts the quorumnet listener.  Return an opaque pointer (void *) that gets passed into all the
-  // other callbacks below so that the callbacks can recast it into whatever it should be.  `bind`
-  // will be null if the quorumnet object is started in remote-only (non-listening) mode, which only
-  // happens on-demand when running in non-SN mode.
-  extern void *(*quorumnet_new)(core &core, const std::string &bind);
-  // Stops the quorumnet listener; is expected to delete the object and reset the pointer to nullptr.
-  extern void (*quorumnet_delete)(void *&self);
-  // Called when a block is added to let LokiMQ update the active set of SNs
-  extern void (*quorumnet_refresh_sns)(void* self);
+  // Initializes quorumnet state (for service nodes only).  This is called after the LokiMQ object
+  // has been set up but before it starts listening.  Return an opaque pointer (void *) that gets
+  // passed into all the other callbacks below so that the callbacks can recast it into whatever it
+  // should be.
+  extern void* (*quorumnet_new)(core& core);
+  // Destroys the quorumnet state; called on shutdown *after* the LokiMQ object has been destroyed.
+  // Should destroy the state object and set the pointer reference to nullptr.
+  extern void (*quorumnet_delete)(void*& self);
   // Relays votes via quorumnet.
   extern void (*quorumnet_relay_obligation_votes)(void *self, const std::vector<service_nodes::quorum_vote_t> &votes);
   // Sends a blink tx to the current blink quorum, returns a future that can be used to wait for the
   // result.
-  extern std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(void *self, const std::string &tx_blob);
+  extern std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(core& core, const std::string& tx_blob);
   extern bool init_core_callback_complete;
 
 
@@ -410,11 +410,9 @@ namespace cryptonote
      /**
       * @brief performs safe shutdown steps for core and core components
       *
-      * Uninitializes the miner instance, transaction pool, and Blockchain
-      *
-      * @return true
+      * Uninitializes the miner instance, lokimq, transaction pool, and Blockchain
       */
-     bool deinit();
+     void deinit();
 
      /**
       * @brief sets to drop blocks downloaded (for testing)
@@ -542,6 +540,12 @@ namespace cryptonote
      size_t get_alternative_blocks_count() const;
 
      /**
+      * Returns a short daemon status summary string.  Used when built with systemd support and
+      * running as a Type=notify daemon.
+      */
+     std::string get_status_string() const;
+
+     /**
       * @brief set the pointer to the cryptonote protocol object to use
       *
       * @param pprotocol the pointer to set ours as
@@ -613,7 +617,7 @@ namespace cryptonote
       *
       * @note see Blockchain::get_outs
       */
-     bool get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res) const;
+     bool get_outs(const rpc::GET_OUTPUTS_BIN::request& req, rpc::GET_OUTPUTS_BIN::response& res) const;
 
      /**
       * @copydoc Blockchain::get_output_distribution
@@ -661,6 +665,10 @@ namespace cryptonote
      const tx_memory_pool &get_pool() const { return m_mempool; }
      /// @brief return a reference to the service node list
      tx_memory_pool &get_pool() { return m_mempool; }
+
+     /// Returns a reference to the LokiMQ object.  Must not be called before init(), and should not
+     /// be used for any lmq communication until after start_lokimq() has been called.
+     lokimq::LokiMQ& get_lmq() { return *m_lmq; }
 
      /**
       * @copydoc miner::on_synchronized
@@ -884,14 +892,25 @@ namespace cryptonote
       */
      bool add_service_node_vote(const service_nodes::quorum_vote_t& vote, vote_verification_context &vvc);
 
-     using service_node_keys = service_nodes::service_node_keys;
+     using service_keys = service_nodes::service_node_keys;
 
      /**
-      * @brief Get the keys for this service node.
+      * @brief Returns true if this node is operating in service node mode.
       *
-      * @return pointer to service node keys, or nullptr if this node is not running as a service node.
+      * Note that this does not mean the node is currently a registered service node, only that it
+      * is capable of performing service node duties if a registration hits the network.
       */
-     const service_node_keys* get_service_node_keys() const;
+     bool service_node() const { return m_service_node; }
+
+     /**
+      * @brief Get the service keys for this node.
+      *
+      * Note that these exists even if the node is not currently operating as a service node as they
+      * can be used for services other than service nodes (e.g. authenticated public RPC).
+      *
+      * @return reference to service keys.
+      */
+     const service_keys& get_service_keys() const { return m_service_keys; }
 
      /**
       * @brief attempts to submit an uptime proof to the network, if this is running in service node mode
@@ -1078,11 +1097,52 @@ namespace cryptonote
      bool check_disk_space();
 
      /**
-      * @brief Initializes service node key by loading or creating.
+      * @brief Initializes service keys by loading or creating.  An Ed25519 key (from which we also
+      * get an x25519 key) is always created; the Monero SN keypair is only created when running in
+      * Service Node mode (as it is only used to sign registrations and uptime proofs); otherwise
+      * the pair will be set to the null keys.
       *
       * @return true on success, false otherwise
       */
-     bool init_service_node_keys();
+     bool init_service_keys();
+
+     /**
+      * Checks the given x25519 pubkey against the configured access lists and, if allowed, returns
+      * the access level; otherwise returns `denied`.
+      */
+     lokimq::AuthLevel lmq_check_access(const crypto::x25519_public_key& pubkey) const;
+
+     /**
+      * @brief Initializes LokiMQ object, called during init().
+      *
+      * Does not start it: this gets called to initialize it, then it gets configured with endpoints
+      * and listening addresses, then finally a call to `start_lokimq()` should happen to actually
+      * start it.
+      */
+     void init_lokimq(const boost::program_options::variables_map& vm);
+
+ public:
+     /**
+      * @brief Starts LokiMQ listening.
+      *
+      * Called after all LokiMQ initialization is done.
+      */
+     void start_lokimq();
+
+     /**
+      * Returns whether to allow the connection and, if so, at what authentication level.
+      */
+     lokimq::AuthLevel lmq_allow(lokimq::string_view ip, lokimq::string_view x25519_pubkey, lokimq::AuthLevel default_auth);
+
+     /**
+      * @brief Internal use only!
+      *
+      * This returns a mutable reference to the internal auth level map that LokiMQ uses, for
+      * internal use only.
+      */
+     std::unordered_map<crypto::x25519_public_key, lokimq::AuthLevel>& _lmq_auth_level_map() { return m_lmq_auth; }
+
+ private:
 
      /**
       * @brief do the uptime proof logic and calls for idle loop.
@@ -1142,16 +1202,24 @@ namespace cryptonote
 
      std::atomic_flag m_checkpoints_updating; //!< set if checkpoints are currently updating to avoid multiple threads attempting to update at once
 
-     std::unique_ptr<service_node_keys> m_service_node_keys;
+     bool m_service_node; // True if running in service node mode
+     service_keys m_service_keys; // Always set, even for non-SN mode -- these can be used for public lokimq rpc
 
      /// Service Node's public IP and storage server port (http and lokimq)
      uint32_t m_sn_public_ip;
      uint16_t m_storage_port;
      uint16_t m_quorumnet_port;
 
-     std::string m_quorumnet_bind_ip; // Currently just copied from p2p-bind-ip
-     void *m_quorumnet_obj = nullptr;
-     std::mutex m_quorumnet_init_mutex;
+     /// LokiMQ main object.  Gets created during init().
+     std::unique_ptr<lokimq::LokiMQ> m_lmq;
+
+     // Internal opaque data object managed by cryptonote_protocol/quorumnet.cpp.  void pointer to
+     // avoid linking issues (protocol does not link against core).
+     void* m_quorumnet_state = nullptr;
+
+     /// Stores x25519 -> access level for LMQ authentication.
+     /// Not to be modified after the LMQ listener starts.
+     std::unordered_map<crypto::x25519_public_key, lokimq::AuthLevel> m_lmq_auth;
 
      size_t block_sync_size;
 

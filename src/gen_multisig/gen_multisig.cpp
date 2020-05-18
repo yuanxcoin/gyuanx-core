@@ -48,8 +48,6 @@
 #include "wallet/wallet_args.h"
 #include "wallet/wallet2.h"
 
-using namespace std;
-using namespace epee;
 using namespace cryptonote;
 using boost::lexical_cast;
 namespace po = boost::program_options;
@@ -182,6 +180,7 @@ int main(int argc, char* argv[])
    "loki-gen-multisig [(--testnet|--stagenet)] [--filename-base=<filename>] [--scheme=M/N] [--threshold=M] [--participants=N]",
     genms::tr("This program generates a set of multisig wallets - use this simpler scheme only if all the participants trust each other"),
     desc_params,
+    po::options_description{},
     boost::program_options::positional_options_description(),
     [](const std::string &s, bool emphasis){ tools::scoped_message_writer(emphasis ? epee::console_color_white : epee::console_color_default, true) << s; },
     "loki-gen-multisig.log"

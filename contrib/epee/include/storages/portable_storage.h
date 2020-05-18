@@ -51,8 +51,8 @@ namespace epee
       typedef epee::serialization::hsection hsection;
       typedef epee::serialization::harray  harray;
 
-      portable_storage(){}
-      virtual ~portable_storage(){}
+      portable_storage() = default;
+      virtual ~portable_storage() = default;
       hsection   open_section(const std::string& section_name,  hsection hparent_section, bool create_if_notexist = false);
       template<class t_value>
       bool       get_value(const std::string& value_name, t_value& val, hsection hparent_section);
@@ -80,13 +80,24 @@ namespace epee
       bool        delete_entry(const std::string& pentry_name, hsection hparent_section = nullptr);
 
       //-------------------------------------------------------------------------------
-      bool		store_to_binary(binarybuffer& target);
+      bool		store_to_binary(std::string& target);
       bool		load_from_binary(const epee::span<const uint8_t> target);
       bool		load_from_binary(const std::string& target) { return load_from_binary(epee::strspan<uint8_t>(target)); }
-      template<class trace_policy>
-      bool		  dump_as_xml(std::string& targetObj, const std::string& root_name = "");
       bool		  dump_as_json(std::string& targetObj, size_t indent = 0, bool insert_newlines = true);
       bool		  load_from_json(const std::string& source);
+
+      /// Lets you store a pointer to some arbitrary context object; typically used to pass some
+      /// context to dependent child objects.
+      template <typename T> void set_context(const T* obj) { context_type = &typeid(T); context = obj; }
+      /// Clears a context pointer stored with set_context
+      void clear_context() { context_type = nullptr; context = nullptr; }
+      /// Retrieves context set by set_context().  Returns nullptr if the stored type doesn't match
+      /// `T`, or if no context pointer is stored at all.
+      template <typename T> const T* get_context() {
+        return (context && context_type && *context_type == typeid(T))
+            ? static_cast<const T*>(context)
+            : nullptr;
+      }
 
     private:
       section m_root;
@@ -96,6 +107,9 @@ namespace epee
       storage_entry* insert_new_entry_get_storage_entry(const std::string& pentry_name, hsection psection, const entry_type& entry);
 
       hsection    insert_new_section(const std::string& pentry_name, hsection psection);
+
+      const void* context = nullptr;
+      const std::type_info* context_type = nullptr;
 
 #pragma pack(push)
 #pragma pack(1)
@@ -125,14 +139,8 @@ namespace epee
       CATCH_ENTRY("portable_storage::load_from_json", false)
     }
 
-    template<class trace_policy>
-    bool portable_storage::dump_as_xml(std::string& targetObj, const std::string& root_name)
-    {
-      return false;//TODO: don't think i ever again will use xml - ambiguous and "overtagged" format
-    }
-
     inline
-    bool portable_storage::store_to_binary(binarybuffer& target)
+    bool portable_storage::store_to_binary(std::string& target)
     {
       TRY_ENTRY();
       std::stringstream ss;

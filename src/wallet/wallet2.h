@@ -343,16 +343,11 @@ private:
       AskPasswordToDecrypt = 2,
     };
 
-    enum BackgroundMiningSetupType {
-      BackgroundMiningMaybe = 0,
-      BackgroundMiningYes = 1,
-      BackgroundMiningNo = 2,
-    };
-
     static const char* tr(const char* str);
 
     static bool has_testnet_option(const boost::program_options::variables_map& vm);
     static bool has_stagenet_option(const boost::program_options::variables_map& vm);
+    static bool has_disable_rpc_long_poll(const boost::program_options::variables_map& vm);
     static std::string device_name_option(const boost::program_options::variables_map& vm);
     static std::string device_derivation_path_option(const boost::program_options::variables_map &vm);
     static void init_options(boost::program_options::options_description& desc_params);
@@ -701,7 +696,7 @@ private:
       crypto::hash hash;
       cryptonote::block block;
       std::vector<cryptonote::transaction> txes;
-      cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices o_indices;
+      cryptonote::rpc::GET_BLOCKS_FAST::block_output_indices o_indices;
       bool error;
     };
 
@@ -1005,7 +1000,7 @@ private:
     std::vector<pending_tx> create_unmixable_sweep_transactions();
     void discard_unmixable_outputs();
     bool is_connected() const;
-    bool check_connection(uint32_t *version = NULL, bool *ssl = NULL, uint32_t timeout = 200000);
+    bool check_connection(cryptonote::rpc::version_t *version = NULL, bool *ssl = NULL, uint32_t timeout = 200000);
     transfer_view make_transfer_view(const crypto::hash &txid, const crypto::hash &payment_id, const wallet2::payment_details &pd) const;
     transfer_view make_transfer_view(const crypto::hash &txid, const tools::wallet2::confirmed_transfer_details &pd) const;
     transfer_view make_transfer_view(const crypto::hash &txid, const tools::wallet2::unconfirmed_transfer_details &pd) const;
@@ -1038,11 +1033,11 @@ private:
     void get_unconfirmed_payments(std::list<std::pair<crypto::hash,wallet2::pool_payment_details>>& unconfirmed_payments, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
 
     // NOTE(loki): get_all_service_node caches the result, get_service_nodes doesn't
-    std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> get_all_service_nodes(boost::optional<std::string> &failed)                                             const { return m_node_rpc_proxy.get_all_service_nodes(failed); }
-    std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> get_service_nodes    (std::vector<std::string> const &pubkeys, boost::optional<std::string> &failed)    const { return m_node_rpc_proxy.get_service_nodes(pubkeys, failed); }
-    std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> get_service_node_blacklisted_key_images(boost::optional<std::string> &failed)               const { return m_node_rpc_proxy.get_service_node_blacklisted_key_images(failed); }
-    std::vector<cryptonote::COMMAND_RPC_LNS_OWNERS_TO_NAMES::response_entry> lns_owners_to_names(cryptonote::COMMAND_RPC_LNS_OWNERS_TO_NAMES::request const &request, boost::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_owners_to_names(request, failed); }
-    std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> lns_names_to_owners(cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::request const &request, boost::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_names_to_owners(request, failed); }
+    std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> get_all_service_nodes(boost::optional<std::string> &failed)                                             const { return m_node_rpc_proxy.get_all_service_nodes(failed); }
+    std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> get_service_nodes    (std::vector<std::string> const &pubkeys, boost::optional<std::string> &failed)    const { return m_node_rpc_proxy.get_service_nodes(pubkeys, failed); }
+    std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> get_service_node_blacklisted_key_images(boost::optional<std::string> &failed)               const { return m_node_rpc_proxy.get_service_node_blacklisted_key_images(failed); }
+    std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry> lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request, boost::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_owners_to_names(request, failed); }
+    std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request, boost::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_names_to_owners(request, failed); }
 
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
@@ -1225,8 +1220,6 @@ private:
     void confirm_non_default_ring_size(bool always) { m_confirm_non_default_ring_size = always; }
     bool track_uses() const { return m_track_uses; }
     void track_uses(bool value) { m_track_uses = value; }
-    BackgroundMiningSetupType setup_background_mining() const { return m_setup_background_mining; }
-    void setup_background_mining(BackgroundMiningSetupType value) { m_setup_background_mining = value; }
     const std::string & device_name() const { return m_device_name; }
     void device_name(const std::string & device_name) { m_device_name = device_name; }
     const std::string & device_derivation_path() const { return m_device_derivation_path; }
@@ -1561,8 +1554,8 @@ private:
 
     // signature: (Optional) If set, use the signature given, otherwise by default derive the signature from the wallet spend key as an ed25519 key.
     //            The signature is derived from the hash of the previous txid blob and previous value blob of the mapping. By default this is signed using the wallet's spend key as an ed25519 keypair.
-    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> *response = {});
-    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(std::string const &type, std::string const &name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> *response = {});
+    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
+    std::vector<wallet2::pending_tx> lns_create_update_mapping_tx(std::string const &type, std::string const &name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
 
     // Generate just the signature required for putting into lns_update_mapping command in the wallet
     bool lns_make_update_mapping_signature(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, lns::generic_signature &signature, uint32_t account_index = 0, std::string *reason = nullptr);
@@ -1598,7 +1591,7 @@ private:
     void set_offline(bool offline = true);
 
 
-    bool m_long_poll_disabled = false;
+    std::atomic<bool> m_long_poll_disabled;
   private:
     /*!
      * \brief  Stores wallet information to wallet file.
@@ -1621,7 +1614,7 @@ private:
     void get_short_chain_history(std::list<crypto::hash>& ids, uint64_t granularity = 1) const;
     bool clear();
     void clear_soft(bool keep_key_images=false);
-    void pull_blocks(uint64_t start_height, uint64_t& blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::block_output_indices> &o_indices);
+    void pull_blocks(uint64_t start_height, uint64_t& blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<cryptonote::rpc::GET_BLOCKS_FAST::block_output_indices> &o_indices);
     void pull_hashes(uint64_t start_height, uint64_t& blocks_start_height, const std::list<crypto::hash> &short_chain_history, std::vector<crypto::hash> &hashes);
     void fast_refresh(uint64_t stop_height, uint64_t &blocks_start_height, std::list<crypto::hash> &short_chain_history, bool force = false);
     void pull_and_parse_next_blocks(uint64_t start_height, uint64_t &blocks_start_height, std::list<crypto::hash> &short_chain_history, const std::vector<cryptonote::block_complete_entry> &prev_blocks, const std::vector<parsed_block> &prev_parsed_blocks, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<parsed_block> &parsed_blocks, bool &error);
@@ -1775,7 +1768,6 @@ private:
     uint64_t m_segregation_height;
     bool m_ignore_fractional_outputs;
     bool m_track_uses;
-    BackgroundMiningSetupType m_setup_background_mining;
     bool m_is_initialized;
     NodeRPCProxy m_node_rpc_proxy;
     std::unordered_set<crypto::hash> m_scanned_pool_txs[2];

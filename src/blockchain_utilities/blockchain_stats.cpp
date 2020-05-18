@@ -40,7 +40,6 @@
 #define LOKI_DEFAULT_LOG_CATEGORY "bcutil"
 
 namespace po = boost::program_options;
-using namespace epee;
 using namespace cryptonote;
 
 static bool stop_requested = false;
@@ -64,8 +63,10 @@ int main(int argc, char* argv[])
 
   boost::filesystem::path output_file_path;
 
-  po::options_description desc_cmd_only("Command line options");
-  po::options_description desc_cmd_sett("Command line options and settings options");
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
+  po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
   const command_line::arg_descriptor<std::string> arg_database = {
     "database", available_dbs.c_str(), default_db_type
@@ -106,7 +107,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
@@ -191,7 +192,7 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
  */
 
   // spit out a comment that GnuPlot can use as an index
-  std::cout << ENDL << "# DATA" << ENDL;
+  std::cout << "\n# DATA\n";
   std::cout << "Date\tBlocks/day\tBlocks\tTxs/Day\tTxs\tBytes/Day\tBytes";
   if (do_inputs)
     std::cout << "\tInMin\tInMax\tInAvg";
@@ -207,7 +208,7 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
       std::cout << buf;
     }
   }
-  std::cout << ENDL;
+  std::cout << "\n";
 
   struct tm prevtm = {0}, currtm;
   uint64_t prevsz = 0, currsz = 0;
@@ -270,7 +271,7 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
           txhr[i] = 0;
         }
       }
-      std::cout << ENDL;
+      std::cout << "\n";
     }
 skip:
     currsz += bd.size();

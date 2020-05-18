@@ -51,7 +51,6 @@
 #define LOKI_DEFAULT_LOG_CATEGORY "bcutil"
 
 namespace po = boost::program_options;
-using namespace epee;
 using namespace cryptonote;
 
 static const char zerokey[8] = {0};
@@ -252,7 +251,7 @@ static void init(std::string cache_filename)
 
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
+  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "relative_rings", MDB_CREATE | MDB_INTEGERKEY, &dbi_relative_rings);
@@ -360,7 +359,7 @@ static bool for_all_transactions(const std::string &filename, uint64_t &start_id
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
+  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "txs_pruned", MDB_INTEGERKEY, &dbi);
@@ -431,7 +430,11 @@ static uint64_t find_first_diverging_transaction(const std::string &first_filena
   MDB_val k;
   MDB_val v[2];
 
-  epee::misc_utils::auto_scope_leave_caller txn_dtor[2];
+  LOKI_DEFER {
+    for (int i = 0; i < 2; i++)
+      if (tx_active[i]) mdb_txn_abort(txn[i]);
+  };
+
   for (int i = 0; i < 2; ++i)
   {
     dbr = mdb_env_create(&env[i]);
@@ -445,7 +448,6 @@ static uint64_t find_first_diverging_transaction(const std::string &first_filena
 
     dbr = mdb_txn_begin(env[i], NULL, MDB_RDONLY, &txn[i]);
     if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-    txn_dtor[i] = epee::misc_utils::create_scope_leave_handler([&, i](){if (tx_active[i]) mdb_txn_abort(txn[i]);});
     tx_active[i] = true;
 
     dbr = mdb_dbi_open(txn[i], "txs_pruned", MDB_INTEGERKEY, &dbi[i]);
@@ -516,7 +518,7 @@ static uint64_t get_num_spent_outputs()
 
   int dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
+  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   MDB_cursor *cur;
@@ -652,7 +654,7 @@ static uint64_t get_processed_txidx(const std::string &name)
 
   int dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
+  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   uint64_t height = 0;
@@ -930,7 +932,7 @@ static crypto::hash get_genesis_block_hash(const std::string &filename)
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
+  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "block_info", MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED, &dbi);
@@ -1076,8 +1078,10 @@ int main(int argc, char* argv[])
 
   boost::filesystem::path output_file_path;
 
-  po::options_description desc_cmd_only("Command line options");
-  po::options_description desc_cmd_sett("Command line options and settings options");
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
+  po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_blackball_db_dir = {
       "spent-output-db-dir", "Specify spent output database directory",
       get_default_db_path(),
@@ -1131,7 +1135,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }

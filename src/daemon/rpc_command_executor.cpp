@@ -1,5 +1,5 @@
+// Copyright (c) 2018-2020, The Loki Project
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
 //
 // All rights reserved.
 //
@@ -44,6 +44,8 @@
 
 #include "common/loki_integration_test_hooks.h"
 
+#include <boost/format.hpp>
+
 #include <fstream>
 #include <ctime>
 #include <string>
@@ -52,6 +54,8 @@
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "daemon"
+
+using namespace cryptonote::rpc;
 
 namespace daemonize {
 
@@ -123,10 +127,9 @@ namespace {
     }
   }
 
-  void print_peer(std::string const & prefix, cryptonote::peer const & peer)
+  void print_peer(std::string const& prefix, GET_PEER_LIST::peer const& peer)
   {
-    time_t now;
-    time(&now);
+    time_t now = std::time(nullptr);
     time_t last_seen = static_cast<time_t>(peer.last_seen);
 
     std::string elapsed = epee::misc_utils::get_time_interval_string(now - last_seen);
@@ -139,7 +142,7 @@ namespace {
     tools::msg_writer() << boost::format("%-10s %-25s %-25s %-5s %-4s %s") % prefix % id_str % addr_str % rpc_port % pruning_seed % elapsed;
   }
 
-  void print_block_header(cryptonote::block_header_response const & header)
+  void print_block_header(block_header_response const & header)
   {
     tools::success_msg_writer()
       << "timestamp: " << boost::lexical_cast<std::string>(header.timestamp) << " (" << tools::get_human_readable_timestamp(header.timestamp) << ")" << "\n"
@@ -206,95 +209,45 @@ namespace {
     snprintf(buffer, sizeof(buffer), "%02u:%02u:%02u", hours, minutes, seconds);
     return std::string(buffer);
   }
-
-
-  std::string make_error(const std::string &base, const std::string &status)
-  {
-    if (status == CORE_RPC_STATUS_OK)
-      return base;
-    return base + " -- " + status;
-  }
 }
 
-t_rpc_command_executor::t_rpc_command_executor(
+rpc_command_executor::rpc_command_executor(
     uint32_t ip
   , uint16_t port
   , const boost::optional<tools::login>& login
   , const epee::net_utils::ssl_options_t& ssl_options
-  , bool is_rpc
-  , cryptonote::core_rpc_server* rpc_server
   )
-  : m_rpc_client(NULL), m_rpc_server(rpc_server)
 {
-  if (is_rpc)
-  {
-    boost::optional<epee::net_utils::http::login> http_login{};
-    if (login)
-      http_login.emplace(login->username, login->password.password());
-    m_rpc_client = new tools::t_rpc_client(ip, port, std::move(http_login), ssl_options);
-  }
-  else
-  {
-    if (rpc_server == NULL)
-    {
-      throw std::runtime_error("If not calling commands via RPC, rpc_server pointer must be non-null");
-    }
-  }
-
-  m_is_rpc = is_rpc;
+  boost::optional<epee::net_utils::http::login> http_login{};
+  if (login)
+    http_login.emplace(login->username, login->password.password());
+  m_rpc_client = std::make_unique<tools::t_rpc_client>(ip, port, std::move(http_login), ssl_options);
 }
 
-t_rpc_command_executor::~t_rpc_command_executor()
+bool rpc_command_executor::print_checkpoints(uint64_t start_height, uint64_t end_height, bool print_json)
 {
-  if (m_rpc_client != NULL)
+  GET_CHECKPOINTS::request  req{start_height, end_height};
+  if (req.start_height == GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE &&
+      req.end_height   == GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE)
   {
-    delete m_rpc_client;
+    req.count = GET_CHECKPOINTS::NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT;
   }
-}
-
-bool t_rpc_command_executor::print_checkpoints(uint64_t start_height, uint64_t end_height, bool print_json)
-{
-  cryptonote::COMMAND_RPC_GET_CHECKPOINTS::request  req;
-  cryptonote::COMMAND_RPC_GET_CHECKPOINTS::response res;
-  epee::json_rpc::error error_resp;
-
-  req.start_height = start_height;
-  req.end_height   = end_height;
-
-  if (req.start_height == cryptonote::COMMAND_RPC_GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE &&
-      req.end_height   == cryptonote::COMMAND_RPC_GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE)
-  {
-    req.count = cryptonote::COMMAND_RPC_GET_CHECKPOINTS::NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT;
-  }
-  else if (req.start_height == cryptonote::COMMAND_RPC_GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE ||
-           req.end_height   == cryptonote::COMMAND_RPC_GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE)
+  else if (req.start_height == GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE ||
+           req.end_height   == GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE)
   {
     req.count = 1;
   }
-  else
-  {
-    // NOTE: Otherwise, neither heights are set to HEIGHT_SENTINEL_VALUE, so get all the checkpoints between start and end
-  }
+  // Otherwise, neither heights are set to HEIGHT_SENTINEL_VALUE, so get all the checkpoints between start and end
 
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "get_checkpoints", "Failed to query blockchain checkpoints"))
-      return false;
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_checkpoints(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << "Failed to query checkpoints";
-      return false;
-    }
-  }
+  GET_CHECKPOINTS::response res{};
+  if (!invoke<GET_CHECKPOINTS>(std::move(req), res, "Failed to query blockchain checkpoints"))
+    return false;
 
   std::string entry;
   if (print_json) entry.append("{\n\"checkpoints\": [");
   for (size_t i = 0; i < res.checkpoints.size(); i++)
   {
-    cryptonote::COMMAND_RPC_GET_CHECKPOINTS::checkpoint_serialized &checkpoint = res.checkpoints[i];
+    GET_CHECKPOINTS::checkpoint_serialized &checkpoint = res.checkpoints[i];
     if (print_json)
     {
       entry.append("\n");
@@ -333,28 +286,16 @@ bool t_rpc_command_executor::print_checkpoints(uint64_t start_height, uint64_t e
   return true;
 }
 
-bool t_rpc_command_executor::print_sn_state_changes(uint64_t start_height, uint64_t end_height)
+bool rpc_command_executor::print_sn_state_changes(uint64_t start_height, uint64_t end_height)
 {
-  cryptonote::COMMAND_RPC_GET_SN_STATE_CHANGES::request  req;
-  cryptonote::COMMAND_RPC_GET_SN_STATE_CHANGES::response res;
-  epee::json_rpc::error error_resp;
+  GET_SN_STATE_CHANGES::request  req{};
+  GET_SN_STATE_CHANGES::response res{};
 
   req.start_height = start_height;
   req.end_height   = end_height;
 
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "get_service_nodes_state_changes", "Failed to query service nodes state changes"))
-      return false;
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_service_nodes_state_changes(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << "Failed to query sn state changes";
-      return false;
-    }
-  }
+  if (!invoke<GET_SN_STATE_CHANGES>(std::move(req), res, "Failed to query service nodes state changes"))
+    return false;
 
   std::stringstream output;
 
@@ -369,26 +310,11 @@ bool t_rpc_command_executor::print_sn_state_changes(uint64_t start_height, uint6
   return true;
 }
 
-bool t_rpc_command_executor::print_peer_list(bool white, bool gray, size_t limit) {
-  cryptonote::COMMAND_RPC_GET_PEER_LIST::request req;
-  cryptonote::COMMAND_RPC_GET_PEER_LIST::response res;
+bool rpc_command_executor::print_peer_list(bool white, bool gray, size_t limit) {
+  GET_PEER_LIST::response res{};
 
-  std::string failure_message = "Couldn't retrieve peer list";
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_peer_list", failure_message.c_str()))
-    {
-      return false;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_peer_list(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << failure_message;
-      return false;
-    }
-  }
+  if (!invoke<GET_PEER_LIST>({}, res, "Couldn't retrieve peer list"))
+    return false;
 
   if (white)
   {
@@ -413,29 +339,11 @@ bool t_rpc_command_executor::print_peer_list(bool white, bool gray, size_t limit
   return true;
 }
 
-bool t_rpc_command_executor::print_peer_list_stats() {
-  cryptonote::COMMAND_RPC_GET_PEER_LIST::request req;
-  cryptonote::COMMAND_RPC_GET_PEER_LIST::response res;
+bool rpc_command_executor::print_peer_list_stats() {
+  GET_PEER_LIST::response res{};
 
-  std::string failure_message = "Couldn't retrieve peer list";
-
-  req.public_only = false;
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_peer_list", failure_message.c_str()))
-    {
-      return false;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_peer_list(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << failure_message;
-      return false;
-    }
-  }
+  if (!invoke<GET_PEER_LIST>({}, res, "Couldn't retrieve peer list"))
+    return false;
 
   tools::msg_writer()
     << "White list size: " << res.white_list.size() << "/" << P2P_LOCAL_WHITE_PEERLIST_LIMIT << " (" << res.white_list.size() *  100.0 / P2P_LOCAL_WHITE_PEERLIST_LIMIT << "%)" << std::endl
@@ -444,109 +352,47 @@ bool t_rpc_command_executor::print_peer_list_stats() {
   return true;
 }
 
-bool t_rpc_command_executor::save_blockchain() {
-  cryptonote::COMMAND_RPC_SAVE_BC::request req;
-  cryptonote::COMMAND_RPC_SAVE_BC::response res;
+bool rpc_command_executor::save_blockchain() {
+  SAVE_BC::response res{};
 
-  std::string fail_message = "Couldn't save blockchain";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/save_bc", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_save_bc(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<SAVE_BC>({}, res, "Couldn't save blockchain"))
+    return false;
 
   tools::success_msg_writer() << "Blockchain saved";
 
   return true;
 }
 
-bool t_rpc_command_executor::show_hash_rate() {
-  cryptonote::COMMAND_RPC_SET_LOG_HASH_RATE::request req;
-  cryptonote::COMMAND_RPC_SET_LOG_HASH_RATE::response res;
+bool rpc_command_executor::show_hash_rate() {
+  SET_LOG_HASH_RATE::request req{};
+  SET_LOG_HASH_RATE::response res{};
   req.visible = true;
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/set_log_hash_rate", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_set_log_hash_rate(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-    }
-  }
+  if (!invoke<SET_LOG_HASH_RATE>(std::move(req), res, "Couldn't enable hash rate logging"))
+    return false;
 
   tools::success_msg_writer() << "Hash rate logging is on";
 
   return true;
 }
 
-bool t_rpc_command_executor::hide_hash_rate() {
-  cryptonote::COMMAND_RPC_SET_LOG_HASH_RATE::request req;
-  cryptonote::COMMAND_RPC_SET_LOG_HASH_RATE::response res;
+bool rpc_command_executor::hide_hash_rate() {
+  SET_LOG_HASH_RATE::request req{};
+  SET_LOG_HASH_RATE::response res{};
   req.visible = false;
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/set_log_hash_rate", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_set_log_hash_rate(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<SET_LOG_HASH_RATE>(std::move(req), res, "Couldn't disable hash rate logging"))
+    return false;
 
   tools::success_msg_writer() << "Hash rate logging is off";
 
   return true;
 }
 
-bool t_rpc_command_executor::show_difficulty() {
-  cryptonote::COMMAND_RPC_GET_INFO::request req;
-  cryptonote::COMMAND_RPC_GET_INFO::response res;
-
-  std::string fail_message = "Problem fetching info";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/getinfo", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_info(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message.c_str(), res.status);
-      return true;
-    }
-  }
+bool rpc_command_executor::show_difficulty() {
+  GET_INFO::response res{};
+  if (!invoke<GET_INFO>({}, res, "Failed to get node info"))
+    return false;
 
   tools::success_msg_writer() <<   "BH: " << res.height
                               << ", TH: " << res.top_block_hash
@@ -594,64 +440,32 @@ static float get_sync_percentage(uint64_t height, uint64_t target_height)
     return 99.9f; // to avoid 100% when not fully synced
   return pc;
 }
-static float get_sync_percentage(const cryptonote::COMMAND_RPC_GET_INFO::response &ires)
+static float get_sync_percentage(const GET_INFO::response &ires)
 {
   return get_sync_percentage(ires.height, ires.target_height);
 }
 
-bool t_rpc_command_executor::show_status() {
-  cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-  cryptonote::COMMAND_RPC_GET_INFO::response ires;
-  cryptonote::COMMAND_RPC_HARD_FORK_INFO::request hfreq;
-  cryptonote::COMMAND_RPC_HARD_FORK_INFO::response hfres;
-  cryptonote::COMMAND_RPC_MINING_STATUS::request mreq;
-  cryptonote::COMMAND_RPC_MINING_STATUS::response mres;
-  epee::json_rpc::error error_resp;
+bool rpc_command_executor::show_status() {
+  GET_INFO::response ires{};
+  HARD_FORK_INFO::request hfreq{};
+  HARD_FORK_INFO::response hfres{};
+  MINING_STATUS::response mres{};
   bool has_mining_info = true;
-
-  std::string fail_message = "Problem fetching info";
 
   hfreq.version = 0;
   bool mining_busy = false;
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(ireq, ires, "/getinfo", fail_message.c_str()))
-    {
-      return true;
-    }
-    if (!m_rpc_client->json_rpc_request(hfreq, hfres, "hard_fork_info", fail_message.c_str()))
-    {
-      return true;
-    }
-    // mining info is only available non unrestricted RPC mode
-    has_mining_info = m_rpc_client->rpc_request(mreq, mres, "/mining_status", fail_message.c_str());
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_info(ireq, ires) || ires.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, ires.status);
-      return true;
-    }
-    if (!m_rpc_server->on_hard_fork_info(hfreq, hfres, error_resp) || hfres.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, hfres.status);
-      return true;
-    }
-    if (!m_rpc_server->on_mining_status(mreq, mres))
-    {
-      tools::fail_msg_writer() << fail_message.c_str();
-      return true;
-    }
-
-    if (mres.status == CORE_RPC_STATUS_BUSY)
-    {
+  if (!invoke<GET_INFO>({}, ires, "Failed to get node info") ||
+      !invoke<HARD_FORK_INFO>(std::move(hfreq), hfres, "Failed to retrieve hard fork info"))
+    return false;
+  has_mining_info = invoke<MINING_STATUS>({}, mres, "Failed to retrieve mining info", false);
+  // FIXME: make sure this fails elegantly (i.e. just setting has_mining_info to false) with a
+  // restricted RPC connection
+  if (has_mining_info) {
+    if (mres.status == STATUS_BUSY)
       mining_busy = true;
-    }
-    else if (mres.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, mres.status);
-      return true;
+    else if (mres.status != STATUS_OK) {
+      tools::fail_msg_writer() << "Failed to retrieve mining info";
+      return false;
     }
   }
 
@@ -659,40 +473,25 @@ bool t_rpc_command_executor::show_status() {
   int64_t my_decomm_remaining = 0;
   uint64_t my_sn_last_uptime = 0;
   bool my_sn_registered = false, my_sn_staked = false, my_sn_active = false;
-  {
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::request req = {};
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::response res = {};
-    epee::json_rpc::error error_resp;
-    std::string fail_message = "Unsuccessful";
+  if (ires.service_node) {
+    GET_SERVICE_KEYS::response res{};
 
-    // Allow to fail, and if it does just ignore it.
-    bool good = false;
-    if (m_is_rpc)
-      good = m_rpc_client->json_rpc_request(req, res, "get_service_node_key", fail_message.c_str());
-    else
-      good = m_rpc_server->on_get_service_node_key(req, res, error_resp) && res.status == CORE_RPC_STATUS_OK;
+    if (!invoke<GET_SERVICE_KEYS>({}, res, "Failed to retrieve service node keys"))
+      return false;
 
-    if (good)
+    my_sn_key = std::move(res.service_node_pubkey);
+    GET_SERVICE_NODES::request sn_req{};
+    GET_SERVICE_NODES::response sn_res{};
+
+    sn_req.service_node_pubkeys.push_back(my_sn_key);
+    if (invoke<GET_SERVICE_NODES>(std::move(sn_req), sn_res, "") && sn_res.service_node_states.size() == 1)
     {
-      my_sn_key = std::move(res.service_node_pubkey);
-      cryptonote::COMMAND_RPC_GET_SERVICE_NODES::request sn_req = {};
-      cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response sn_res = {};
-
-      sn_req.service_node_pubkeys.push_back(my_sn_key);
-      if (m_is_rpc)
-        good = m_rpc_client->json_rpc_request(sn_req, sn_res, "get_service_nodes", fail_message.c_str()) && sn_res.service_node_states.size() == 1;
-      else
-        good = m_rpc_server->on_get_service_nodes(sn_req, sn_res, error_resp) && sn_res.status == CORE_RPC_STATUS_OK && sn_res.service_node_states.size() == 1;
-
-      if (good)
-      {
-        auto &entry = sn_res.service_node_states.front();
-        my_sn_registered = true;
-        my_sn_staked = entry.total_contributed >= entry.staking_requirement;
-        my_sn_active = entry.active;
-        my_decomm_remaining = entry.earned_downtime_blocks;
-        my_sn_last_uptime = entry.last_uptime_proof;
-      }
+      auto &entry = sn_res.service_node_states.front();
+      my_sn_registered = true;
+      my_sn_staked = entry.total_contributed >= entry.staking_requirement;
+      my_sn_active = entry.active;
+      my_decomm_remaining = entry.earned_downtime_blocks;
+      my_sn_last_uptime = entry.last_uptime_proof;
     }
   }
 
@@ -719,7 +518,7 @@ bool t_rpc_command_executor::show_status() {
     % get_sync_percentage(ires)
     % (ires.testnet ? " ON TESTNET" : ires.stagenet ? " ON STAGENET" : ""/*mainnet*/)
     % bootstrap_msg
-    % (!has_mining_info ? ", mining info unavailable" : mining_busy ? ", syncing" : mres.active ? ( ( mres.is_background_mining_enabled ? ", smart " : ", " ) + std::string("mining at ") + get_mining_speed(mres.speed)) : ""/*not mining*/)
+    % (!has_mining_info ? ", mining info unavailable" : mining_busy ? ", syncing" : mres.active ? ( ", mining at " + get_mining_speed(mres.speed)) : ""/*not mining*/)
     % get_mining_speed(ires.difficulty / ires.target)
     % (ires.version.empty() ? "?.?.?" : ires.version)
     % (unsigned)hfres.version
@@ -770,43 +569,21 @@ bool t_rpc_command_executor::show_status() {
   return true;
 }
 
-bool t_rpc_command_executor::mining_status() {
-  cryptonote::COMMAND_RPC_MINING_STATUS::request mreq;
-  cryptonote::COMMAND_RPC_MINING_STATUS::response mres;
-  epee::json_rpc::error error_resp;
-  bool has_mining_info = true;
+bool rpc_command_executor::mining_status() {
+  MINING_STATUS::response mres{};
 
-  std::string fail_message = "Problem fetching info";
+  if (!invoke<MINING_STATUS>({}, mres, "Failed to retrieve mining info", false))
+    return false;
 
   bool mining_busy = false;
-  if (m_is_rpc)
+  if (mres.status == STATUS_BUSY)
   {
-    // mining info is only available non unrestricted RPC mode
-    has_mining_info = m_rpc_client->rpc_request(mreq, mres, "/mining_status", fail_message.c_str());
+    mining_busy = true;
   }
-  else
+  else if (mres.status != STATUS_OK)
   {
-    if (!m_rpc_server->on_mining_status(mreq, mres))
-    {
-      tools::fail_msg_writer() << fail_message.c_str();
-      return true;
-    }
-
-    if (mres.status == CORE_RPC_STATUS_BUSY)
-    {
-      mining_busy = true;
-    }
-    else if (mres.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, mres.status);
-      return true;
-    }
-  }
-
-  if (!has_mining_info)
-  {
-    tools::fail_msg_writer() << "Mining info unavailable";
-    return true;
+    tools::fail_msg_writer() << "Failed to retrieve mining info";
+    return false;
   }
 
   if (mining_busy || !mres.active)
@@ -818,56 +595,26 @@ bool t_rpc_command_executor::mining_status() {
     tools::msg_writer() << "Mining at " << get_mining_speed(mres.speed) << " with " << mres.threads_count << " threads";
   }
 
-  if (mres.active || mres.is_background_mining_enabled)
+  if (mres.active)
   {
     tools::msg_writer() << "PoW algorithm: " << mres.pow_algorithm;
     tools::msg_writer() << "Mining address: " << mres.address;
   }
 
-  if (mres.is_background_mining_enabled)
-  {
-    tools::msg_writer() << "Smart mining enabled:";
-    tools::msg_writer() << "  Target: " << (unsigned)mres.bg_target << "% CPU";
-    tools::msg_writer() << "  Idle threshold: " << (unsigned)mres.bg_idle_threshold << "% CPU";
-    tools::msg_writer() << "  Min idle time: " << (unsigned)mres.bg_min_idle_seconds << " seconds";
-    tools::msg_writer() << "  Ignore battery: " << (mres.bg_ignore_battery ? "yes" : "no");
-  }
-
   if (!mining_busy && mres.active && mres.speed > 0 && mres.block_target > 0 && mres.difficulty > 0)
   {
-    double ratio = mres.speed * mres.block_target / (double)mres.difficulty;
-    uint64_t daily = 86400ull / mres.block_target * mres.block_reward * ratio;
-    uint64_t monthly = 86400ull / mres.block_target * 30.5 * mres.block_reward * ratio;
-    uint64_t yearly = 86400ull / mres.block_target * 356 * mres.block_reward * ratio;
-    tools::msg_writer() << "Expected: " << cryptonote::print_money(daily) << " LOKI daily, "
-        << cryptonote::print_money(monthly) << " monthly, " << cryptonote::print_money(yearly) << " yearly";
+    uint64_t daily = 86400 / (double)mres.difficulty * mres.speed * mres.block_reward;
+    tools::msg_writer() << "Expected: " << cryptonote::print_money(daily) << " LOKI daily, " << cryptonote::print_money(7*daily) << " weekly";
   }
 
   return true;
 }
 
-bool t_rpc_command_executor::print_connections() {
-  cryptonote::COMMAND_RPC_GET_CONNECTIONS::request req;
-  cryptonote::COMMAND_RPC_GET_CONNECTIONS::response res;
-  epee::json_rpc::error error_resp;
+bool rpc_command_executor::print_connections() {
+  GET_CONNECTIONS::response res{};
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "get_connections", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_connections(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_CONNECTIONS>({}, res, "Failed to retrieve connection info"))
+    return false;
 
   tools::msg_writer() << std::setw(30) << std::left << "Remote Host"
       << std::setw(8) << "Type"
@@ -912,39 +659,14 @@ bool t_rpc_command_executor::print_connections() {
   return true;
 }
 
-bool t_rpc_command_executor::print_net_stats()
+bool rpc_command_executor::print_net_stats()
 {
-  cryptonote::COMMAND_RPC_GET_NET_STATS::request net_stats_req;
-  cryptonote::COMMAND_RPC_GET_NET_STATS::response net_stats_res;
-  cryptonote::COMMAND_RPC_GET_LIMIT::request limit_req;
-  cryptonote::COMMAND_RPC_GET_LIMIT::response limit_res;
+  GET_NET_STATS::response net_stats_res{};
+  GET_LIMIT::response limit_res{};
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(net_stats_req, net_stats_res, "get_net_stats", fail_message.c_str()))
-    {
-      return true;
-    }
-    if (!m_rpc_client->json_rpc_request(limit_req, limit_res, "get_limit", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_net_stats(net_stats_req, net_stats_res) || net_stats_res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, net_stats_res.status);
-      return true;
-    }
-    if (!m_rpc_server->on_get_limit(limit_req, limit_res) || limit_res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, limit_res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_NET_STATS>({}, net_stats_res, "Unable to retrieve net statistics") ||
+      !invoke<GET_LIMIT>({}, limit_res, "Unable to retrieve bandwidth limits"))
+    return false;
 
   uint64_t seconds = (uint64_t)time(NULL) - net_stats_res.start_time;
   uint64_t average = seconds > 0 ? net_stats_res.total_bytes_in / seconds : 0;
@@ -972,81 +694,51 @@ bool t_rpc_command_executor::print_net_stats()
   return true;
 }
 
-bool t_rpc_command_executor::print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index) {
-  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::request req;
-  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::response res;
-  epee::json_rpc::error error_resp;
+bool rpc_command_executor::print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index) {
+  GET_BLOCK_HEADERS_RANGE::request req{};
+  GET_BLOCK_HEADERS_RANGE::response res{};
 
   req.start_height = start_block_index;
   req.end_height = end_block_index;
   req.fill_pow_hash = false;
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "getblockheadersrange", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_block_headers_range(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_BLOCK_HEADERS_RANGE>(std::move(req), res, "Failed to retrieve block headers"))
+    return false;
 
   bool first = true;
   for (auto & header : res.headers)
   {
-    if (!first)
-      tools::msg_writer() << "" << std::endl;
+    if (first)
+      first = false;
+    else
+      tools::msg_writer() << "\n";
+
     tools::msg_writer()
       << "height: " << header.height << ", timestamp: " << header.timestamp << " (" << tools::get_human_readable_timestamp(header.timestamp) << ")"
-      << ", size: " << header.block_size << ", weight: " << header.block_weight << " (long term " << header.long_term_weight << "), transactions: " << header.num_txes << std::endl
-      << "major version: " << (unsigned)header.major_version << ", minor version: " << (unsigned)header.minor_version << std::endl
-      << "block id: " << header.hash << ", previous block id: " << header.prev_hash << std::endl
-      << "difficulty: " << header.difficulty << ", nonce " << header.nonce << ", reward " << cryptonote::print_money(header.reward) << std::endl;
-    first = false;
+      << ", size: " << header.block_size << ", weight: " << header.block_weight << " (long term " << header.long_term_weight << "), transactions: " << header.num_txes
+      << "\nmajor version: " << (unsigned)header.major_version << ", minor version: " << (unsigned)header.minor_version
+      << "\nblock id: " << header.hash << ", previous block id: " << header.prev_hash
+      << "\ndifficulty: " << header.difficulty << ", nonce " << header.nonce << ", reward " << cryptonote::print_money(header.reward) << "\n";
   }
 
   return true;
 }
 
-bool t_rpc_command_executor::print_quorum_state(uint64_t start_height, uint64_t end_height)
+bool rpc_command_executor::print_quorum_state(uint64_t start_height, uint64_t end_height)
 {
-  cryptonote::COMMAND_RPC_GET_QUORUM_STATE::request req;
-  cryptonote::COMMAND_RPC_GET_QUORUM_STATE::response res;
-  epee::json_rpc::error error_resp;
+  GET_QUORUM_STATE::request req{};
+  GET_QUORUM_STATE::response res{};
 
   req.start_height = start_height;
   req.end_height   = end_height;
-  req.quorum_type  = cryptonote::COMMAND_RPC_GET_QUORUM_STATE::ALL_QUORUMS_SENTINEL_VALUE;
+  req.quorum_type  = GET_QUORUM_STATE::ALL_QUORUMS_SENTINEL_VALUE;
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "get_quorum_state", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_quorum_state(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_QUORUM_STATE>(std::move(req), res, "Failed to retrieve quorum state"))
+    return false;
 
   std::string output;
   output.append("{\n\"quorums\": [");
-  for (cryptonote::COMMAND_RPC_GET_QUORUM_STATE::quorum_for_height const &quorum : res.quorums)
+  for (GET_QUORUM_STATE::quorum_for_height const &quorum : res.quorums)
   {
     output.append("\n");
     output.append(epee::serialization::store_t_to_json(quorum));
@@ -1058,184 +750,77 @@ bool t_rpc_command_executor::print_quorum_state(uint64_t start_height, uint64_t 
 }
 
 
-bool t_rpc_command_executor::set_log_level(int8_t level) {
-  cryptonote::COMMAND_RPC_SET_LOG_LEVEL::request req;
-  cryptonote::COMMAND_RPC_SET_LOG_LEVEL::response res;
-  req.level = level;
-
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/set_log_level", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_set_log_level(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+bool rpc_command_executor::set_log_level(int8_t level) {
+  SET_LOG_LEVEL::response res{};
+  if (!invoke<SET_LOG_LEVEL>({level}, res, "Failed to set log level"))
+    return false;
 
   tools::success_msg_writer() << "Log level is now " << std::to_string(level);
 
   return true;
 }
 
-bool t_rpc_command_executor::set_log_categories(const std::string &categories) {
-  cryptonote::COMMAND_RPC_SET_LOG_CATEGORIES::request req;
-  cryptonote::COMMAND_RPC_SET_LOG_CATEGORIES::response res;
-  req.categories = categories;
+bool rpc_command_executor::set_log_categories(std::string categories) {
+  SET_LOG_CATEGORIES::response res{};
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/set_log_categories", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_set_log_categories(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<SET_LOG_CATEGORIES>({std::move(categories)}, res, "Failed to set log categories"))
+    return false;
 
   tools::success_msg_writer() << "Log categories are now " << res.categories;
 
   return true;
 }
 
-bool t_rpc_command_executor::print_height() {
-  cryptonote::COMMAND_RPC_GET_HEIGHT::request req;
-  cryptonote::COMMAND_RPC_GET_HEIGHT::response res;
+bool rpc_command_executor::print_height() {
+  GET_HEIGHT::response res{};
 
-  std::string fail_message = "Unsuccessful";
+  if (!invoke<GET_HEIGHT>({}, res, "Failed to retrieve height"))
+    return false;
 
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/getheight", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_height(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
-
-  tools::success_msg_writer() << boost::lexical_cast<std::string>(res.height);
+  tools::success_msg_writer() << res.height;
 
   return true;
 }
 
-bool t_rpc_command_executor::print_block_by_hash(crypto::hash block_hash, bool include_hex) {
-  cryptonote::COMMAND_RPC_GET_BLOCK::request req;
-  cryptonote::COMMAND_RPC_GET_BLOCK::response res;
-  epee::json_rpc::error error_resp;
+bool rpc_command_executor::print_block(GET_BLOCK::request&& req, bool include_hex) {
+  req.fill_pow_hash = true;
+  GET_BLOCK::response res{};
 
+  if (!invoke<GET_BLOCK>(std::move(req), res, "Block retrieval failed"))
+    return false;
+
+  if (include_hex)
+    tools::success_msg_writer() << res.blob << std::endl;
+  print_block_header(res.block_header);
+  tools::success_msg_writer() << res.json << "\n";
+
+  return true;
+}
+
+bool rpc_command_executor::print_block_by_hash(const crypto::hash& block_hash, bool include_hex) {
+  GET_BLOCK::request req{};
   req.hash = epee::string_tools::pod_to_hex(block_hash);
-  req.fill_pow_hash = true;
-
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "getblock", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_block(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
-
-  if (include_hex)
-    tools::success_msg_writer() << res.blob << std::endl;
-  print_block_header(res.block_header);
-  tools::success_msg_writer() << res.json << ENDL;
-
-  return true;
+  return print_block(std::move(req), include_hex);
 }
 
-bool t_rpc_command_executor::print_block_by_height(uint64_t height, bool include_hex) {
-  cryptonote::COMMAND_RPC_GET_BLOCK::request req;
-  cryptonote::COMMAND_RPC_GET_BLOCK::response res;
-  epee::json_rpc::error error_resp;
-
+bool rpc_command_executor::print_block_by_height(uint64_t height, bool include_hex) {
+  GET_BLOCK::request req{};
   req.height = height;
-  req.fill_pow_hash = true;
-
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "getblock", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_block(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
-
-  if (include_hex)
-    tools::success_msg_writer() << res.blob << std::endl;
-  print_block_header(res.block_header);
-  tools::success_msg_writer() << res.json << ENDL;
-
-  return true;
+  return print_block(std::move(req), include_hex);
 }
 
-bool t_rpc_command_executor::print_transaction(crypto::hash transaction_hash,
+bool rpc_command_executor::print_transaction(const crypto::hash& transaction_hash,
   bool include_hex,
   bool include_json) {
-  cryptonote::COMMAND_RPC_GET_TRANSACTIONS::request req;
-  cryptonote::COMMAND_RPC_GET_TRANSACTIONS::response res;
-
-  std::string fail_message = "Problem fetching transaction";
+  GET_TRANSACTIONS::request req{};
+  GET_TRANSACTIONS::response res{};
 
   req.txs_hashes.push_back(epee::string_tools::pod_to_hex(transaction_hash));
   req.decode_as_json = false;
   req.split = true;
   req.prune = false;
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/gettransactions", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_transactions(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_TRANSACTIONS>(std::move(req), res, "Transaction retrieval failed"))
+    return false;
 
   if (1 == res.txs.size() || 1 == res.txs_as_hex.size())
   {
@@ -1273,7 +858,7 @@ bool t_rpc_command_executor::print_transaction(crypto::hash transaction_hash,
       cryptonote::blobdata blob;
       std::string source = as_hex.empty() ? pruned_as_hex + prunable_as_hex : as_hex;
       bool pruned = !pruned_as_hex.empty() && prunable_as_hex.empty();
-      if (!string_tools::parse_hexstr_to_binbuff(source, blob))
+      if (!epee::string_tools::parse_hexstr_to_binbuff(source, blob))
       {
         tools::fail_msg_writer() << "Failed to parse tx to get json format";
       }
@@ -1303,43 +888,23 @@ bool t_rpc_command_executor::print_transaction(crypto::hash transaction_hash,
   return true;
 }
 
-bool t_rpc_command_executor::is_key_image_spent(const crypto::key_image &ki) {
-  cryptonote::COMMAND_RPC_IS_KEY_IMAGE_SPENT::request req;
-  cryptonote::COMMAND_RPC_IS_KEY_IMAGE_SPENT::response res;
-
-  std::string fail_message = "Problem checking key image";
-
-  req.key_images.push_back(epee::string_tools::pod_to_hex(ki));
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/is_key_image_spent", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_is_key_image_spent(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+bool rpc_command_executor::is_key_image_spent(const crypto::key_image &ki) {
+  IS_KEY_IMAGE_SPENT::response res{};
+  if (!invoke<IS_KEY_IMAGE_SPENT>({{epee::string_tools::pod_to_hex(ki)}}, res, "Failed to retrieve key image status"))
+    return false;
 
   if (1 == res.spent_status.size())
   {
     // first as hex
-    tools::success_msg_writer() << ki << ": " << (res.spent_status.front() ? "spent" : "unspent") << (res.spent_status.front() == cryptonote::COMMAND_RPC_IS_KEY_IMAGE_SPENT::SPENT_IN_POOL ? " (in pool)" : "");
-  }
-  else
-  {
-    tools::fail_msg_writer() << "key image status could not be determined" << std::endl;
+    tools::success_msg_writer() << ki << ": " << (res.spent_status.front() ? "spent" : "unspent") << (res.spent_status.front() == IS_KEY_IMAGE_SPENT::SPENT_IN_POOL ? " (in pool)" : "");
+    return true;
   }
 
-  return true;
+  tools::fail_msg_writer() << "key image status could not be determined" << std::endl;
+  return false;
 }
 
-static void print_pool(const std::vector<cryptonote::tx_info> &transactions, bool include_json) {
+static void print_pool(const std::vector<cryptonote::rpc::tx_info> &transactions, bool include_json) {
   if (transactions.empty())
   {
     tools::msg_writer() << "Pool is empty" << std::endl;
@@ -1374,27 +939,11 @@ static void print_pool(const std::vector<cryptonote::tx_info> &transactions, boo
   }
 }
 
-bool t_rpc_command_executor::print_transaction_pool_long() {
-  cryptonote::COMMAND_RPC_GET_TRANSACTION_POOL::request req;
-  cryptonote::COMMAND_RPC_GET_TRANSACTION_POOL::response res;
+bool rpc_command_executor::print_transaction_pool_long() {
+  GET_TRANSACTION_POOL::response res{};
 
-  std::string fail_message = "Problem fetching transaction pool";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_transaction_pool", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_transaction_pool(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_TRANSACTION_POOL>({}, res, "Failed to retrieve transaction pool details"))
+    return false;
 
   print_pool(res.transactions, true);
 
@@ -1407,7 +956,7 @@ bool t_rpc_command_executor::print_transaction_pool_long() {
   {
     tools::msg_writer() << ""; // one newline
     tools::msg_writer() << "Spent key images: ";
-    for (const cryptonote::spent_key_image_info& kinfo : res.spent_key_images)
+    for (const auto& kinfo : res.spent_key_images)
     {
       tools::msg_writer() << "key image: " << kinfo.id_hash;
       if (kinfo.txs_hashes.size() == 1)
@@ -1436,66 +985,25 @@ bool t_rpc_command_executor::print_transaction_pool_long() {
   return true;
 }
 
-bool t_rpc_command_executor::print_transaction_pool_short() {
-  cryptonote::COMMAND_RPC_GET_TRANSACTION_POOL::request req;
-  cryptonote::COMMAND_RPC_GET_TRANSACTION_POOL::response res;
+bool rpc_command_executor::print_transaction_pool_short() {
+  GET_TRANSACTION_POOL::request req{};
+  GET_TRANSACTION_POOL::response res{};
 
-  std::string fail_message = "Problem fetching transaction pool";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_transaction_pool", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_transaction_pool(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_TRANSACTION_POOL>({}, res, "Failed to retrieve transaction pool details"))
+    return false;
 
   print_pool(res.transactions, false);
 
   return true;
 }
 
-bool t_rpc_command_executor::print_transaction_pool_stats() {
-  cryptonote::COMMAND_RPC_GET_TRANSACTION_POOL_STATS::request req;
-  cryptonote::COMMAND_RPC_GET_TRANSACTION_POOL_STATS::response res;
-  cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-  cryptonote::COMMAND_RPC_GET_INFO::response ires;
+bool rpc_command_executor::print_transaction_pool_stats() {
+  GET_TRANSACTION_POOL_STATS::response res{};
+  GET_INFO::response ires{};
 
-  std::string fail_message = "Problem fetching transaction pool stats";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_transaction_pool_stats", fail_message.c_str()))
-    {
-      return true;
-    }
-    if (!m_rpc_client->rpc_request(ireq, ires, "/getinfo", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    res.pool_stats = {};
-    if (!m_rpc_server->on_get_transaction_pool_stats(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-    if (!m_rpc_server->on_get_info(ireq, ires) || ires.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, ires.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_TRANSACTION_POOL_STATS>({}, res, "Failed to retreive transaction pool statistics") ||
+      !invoke<GET_INFO>({}, ires, "Failed to retrieve node info"))
+    return false;
 
   size_t n_transactions = res.pool_stats.txs_total;
   const uint64_t now = time(NULL);
@@ -1548,263 +1056,91 @@ bool t_rpc_command_executor::print_transaction_pool_stats() {
   return true;
 }
 
-bool t_rpc_command_executor::start_mining(cryptonote::account_public_address address, uint64_t num_threads, cryptonote::network_type nettype, bool do_background_mining, bool ignore_battery) {
-  cryptonote::COMMAND_RPC_START_MINING::request req;
-  cryptonote::COMMAND_RPC_START_MINING::response res;
+bool rpc_command_executor::start_mining(const cryptonote::account_public_address& address, uint64_t num_threads, cryptonote::network_type nettype) {
+  START_MINING::request req{};
+  START_MINING::response res{};
   req.miner_address = cryptonote::get_account_address_as_str(nettype, false, address);
   req.threads_count = num_threads;
-  req.do_background_mining = do_background_mining;
-  req.ignore_battery = ignore_battery;
 
-  std::string fail_message = "Mining did not start";
+  if (!invoke<START_MINING>(std::move(req), res, "Unable to start mining"))
+    return false;
 
-  if (m_is_rpc)
-  {
-    if (m_rpc_client->rpc_request(req, res, "/start_mining", fail_message.c_str()))
-    {
-      tools::success_msg_writer() << "Mining started";
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_start_mining(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
-
+  tools::success_msg_writer() << "Mining started";
   return true;
 }
 
-bool t_rpc_command_executor::stop_mining() {
-  cryptonote::COMMAND_RPC_STOP_MINING::request req;
-  cryptonote::COMMAND_RPC_STOP_MINING::response res;
+bool rpc_command_executor::stop_mining() {
+  STOP_MINING::response res{};
 
-  std::string fail_message = "Mining did not stop";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/stop_mining", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_stop_mining(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<STOP_MINING>({}, res, "Unable to stop mining"))
+    return false;
 
   tools::success_msg_writer() << "Mining stopped";
   return true;
 }
 
-bool t_rpc_command_executor::stop_daemon()
+bool rpc_command_executor::stop_daemon()
 {
-  cryptonote::COMMAND_RPC_STOP_DAEMON::request req;
-  cryptonote::COMMAND_RPC_STOP_DAEMON::response res;
+  STOP_DAEMON::response res{};
 
-//# ifdef WIN32
-//    // Stop via service API
-//    // TODO - this is only temporary!  Get rid of hard-coded constants!
-//    bool ok = windows::stop_service("Loki Daemon");
-//    ok = windows::uninstall_service("Loki Daemon");
-//    //bool ok = windows::stop_service(SERVICE_NAME);
-//    //ok = windows::uninstall_service(SERVICE_NAME);
-//    if (ok)
-//    {
-//      return true;
-//    }
-//# endif
-
-  // Stop via RPC
-  std::string fail_message = "Daemon did not stop";
-
-  if (m_is_rpc)
-  {
-    if(!m_rpc_client->rpc_request(req, res, "/stop_daemon", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_stop_daemon(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<STOP_DAEMON>({}, res, "Failed to stop daemon"))
+    return false;
 
   tools::success_msg_writer() << "Stop signal sent";
 
   return true;
 }
 
-bool t_rpc_command_executor::print_status()
+bool rpc_command_executor::print_status()
 {
-  if (!m_is_rpc)
+  if (!m_rpc_client)
   {
-    tools::success_msg_writer() << "print_status makes no sense in interactive mode";
-    return true;
+    tools::fail_msg_writer() << "print_status makes no sense in interactive mode";
+    return false;
   }
 
   bool daemon_is_alive = m_rpc_client->check_connection();
 
   if(daemon_is_alive) {
     tools::success_msg_writer() << "lokid is running";
+    return true;
   }
-  else {
-    tools::fail_msg_writer() << "lokid is NOT running";
-  }
+  tools::fail_msg_writer() << "lokid is NOT running";
+  return false;
+}
 
+bool rpc_command_executor::get_limit(bool up, bool down)
+{
+  GET_LIMIT::response res{};
+
+  if (!invoke<GET_LIMIT>({}, res, "Failed to retrieve current bandwidth limits"))
+    return false;
+
+  if (down)
+    tools::msg_writer() << "limit-down is " << res.limit_down << " kB/s";
+  if (up)
+    tools::msg_writer() << "limit-up is " << res.limit_up << " kB/s";
   return true;
 }
 
-bool t_rpc_command_executor::get_limit()
+bool rpc_command_executor::set_limit(int64_t limit_down, int64_t limit_up)
 {
-  cryptonote::COMMAND_RPC_GET_LIMIT::request req;
-  cryptonote::COMMAND_RPC_GET_LIMIT::response res;
-
-  std::string failure_message = "Couldn't get limit";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_limit", failure_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_limit(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(failure_message, res.status);
-      return true;
-    }
-  }
-
-  tools::msg_writer() << "limit-down is " << res.limit_down << " kB/s";
-  tools::msg_writer() << "limit-up is " << res.limit_up << " kB/s";
-  return true;
-}
-
-bool t_rpc_command_executor::set_limit(int64_t limit_down, int64_t limit_up)
-{
-  cryptonote::COMMAND_RPC_SET_LIMIT::request req;
-  cryptonote::COMMAND_RPC_SET_LIMIT::response res;
-
-  req.limit_down = limit_down;
-  req.limit_up = limit_up;
-
-  std::string failure_message = "Couldn't set limit";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/set_limit", failure_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_set_limit(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(failure_message, res.status);
-      return true;
-    }
-  }
+  SET_LIMIT::response res{};
+  if (!invoke<SET_LIMIT>({limit_down, limit_up}, res, "Failed to set bandwidth limits"))
+    return false;
 
   tools::msg_writer() << "Set limit-down to " << res.limit_down << " kB/s";
   tools::msg_writer() << "Set limit-up to " << res.limit_up << " kB/s";
   return true;
 }
 
-bool t_rpc_command_executor::get_limit_up()
+
+bool rpc_command_executor::out_peers(bool set, uint32_t limit)
 {
-  cryptonote::COMMAND_RPC_GET_LIMIT::request req;
-  cryptonote::COMMAND_RPC_GET_LIMIT::response res;
-
-  std::string failure_message = "Couldn't get limit";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_limit", failure_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_limit(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(failure_message, res.status);
-      return true;
-    }
-  }
-
-  tools::msg_writer() << "limit-up is " << res.limit_up << " kB/s";
-  return true;
-}
-
-bool t_rpc_command_executor::get_limit_down()
-{
-  cryptonote::COMMAND_RPC_GET_LIMIT::request req;
-  cryptonote::COMMAND_RPC_GET_LIMIT::response res;
-
-  std::string failure_message = "Couldn't get limit";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/get_limit", failure_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_limit(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(failure_message, res.status);
-      return true;
-    }
-  }
-
-  tools::msg_writer() << "limit-down is " << res.limit_down << " kB/s";
-  return true;
-}
-
-bool t_rpc_command_executor::out_peers(bool set, uint32_t limit)
-{
-	cryptonote::COMMAND_RPC_OUT_PEERS::request req;
-	cryptonote::COMMAND_RPC_OUT_PEERS::response res;
-
-	epee::json_rpc::error error_resp;
-
-	req.set = set;
-	req.out_peers = limit;
-
-	std::string fail_message = "Unsuccessful";
-
-	if (m_is_rpc)
-	{
-		if (!m_rpc_client->rpc_request(req, res, "/out_peers", fail_message.c_str()))
-		{
-			return true;
-		}
-	}
-	else
-	{
-		if (!m_rpc_server->on_out_peers(req, res) || res.status != CORE_RPC_STATUS_OK)
-		{
-			tools::fail_msg_writer() << make_error(fail_message, res.status);
-			return true;
-		}
-	}
+    OUT_PEERS::request req{set, limit};
+	OUT_PEERS::response res{};
+    if (!invoke<OUT_PEERS>(std::move(req), res, "Failed to set max out peers"))
+      return false;
 
 	const std::string s = res.out_peers == (uint32_t)-1 ? "unlimited" : std::to_string(res.out_peers);
 	tools::msg_writer() << "Max number of out peers set to " << s << std::endl;
@@ -1812,33 +1148,12 @@ bool t_rpc_command_executor::out_peers(bool set, uint32_t limit)
 	return true;
 }
 
-bool t_rpc_command_executor::in_peers(bool set, uint32_t limit)
+bool rpc_command_executor::in_peers(bool set, uint32_t limit)
 {
-	cryptonote::COMMAND_RPC_IN_PEERS::request req;
-	cryptonote::COMMAND_RPC_IN_PEERS::response res;
-
-	epee::json_rpc::error error_resp;
-
-	req.set = set;
-	req.in_peers = limit;
-
-	std::string fail_message = "Unsuccessful";
-
-	if (m_is_rpc)
-	{
-		if (!m_rpc_client->rpc_request(req, res, "/in_peers", fail_message.c_str()))
-		{
-			return true;
-		}
-	}
-	else
-	{
-		if (!m_rpc_server->on_in_peers(req, res) || res.status != CORE_RPC_STATUS_OK)
-		{
-			tools::fail_msg_writer() << make_error(fail_message, res.status);
-			return true;
-		}
-	}
+    IN_PEERS::request req{set, limit};
+	IN_PEERS::response res{};
+    if (!invoke<IN_PEERS>(std::move(req), res, "Failed to set max in peers"))
+      return false;
 
 	const std::string s = res.in_peers == (uint32_t)-1 ? "unlimited" : std::to_string(res.in_peers);
 	tools::msg_writer() << "Max number of in peers set to " << s << std::endl;
@@ -1846,30 +1161,11 @@ bool t_rpc_command_executor::in_peers(bool set, uint32_t limit)
 	return true;
 }
 
-bool t_rpc_command_executor::hard_fork_info(uint8_t version)
+bool rpc_command_executor::hard_fork_info(uint8_t version)
 {
-    cryptonote::COMMAND_RPC_HARD_FORK_INFO::request req;
-    cryptonote::COMMAND_RPC_HARD_FORK_INFO::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
-
-    req.version = version;
-
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "hard_fork_info", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_hard_fork_info(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    HARD_FORK_INFO::response res{};
+    if (!invoke<HARD_FORK_INFO>({version}, res, "Failed to retrieve hard fork info"))
+      return false;
 
     version = version > 0 ? version : res.voting;
     tools::msg_writer() << "version " << (uint32_t)version << " " << (res.enabled ? "enabled" : "not enabled") <<
@@ -1879,138 +1175,59 @@ bool t_rpc_command_executor::hard_fork_info(uint8_t version)
     return true;
 }
 
-bool t_rpc_command_executor::print_bans()
+bool rpc_command_executor::print_bans()
 {
-    cryptonote::COMMAND_RPC_GETBANS::request req;
-    cryptonote::COMMAND_RPC_GETBANS::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    GETBANS::response res{};
 
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "get_bans", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_get_bans(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    if (!invoke<GETBANS>({}, res, "Failed to retrieve ban list"))
+      return false;
 
-    for (auto i = res.bans.begin(); i != res.bans.end(); ++i)
-    {
-        tools::msg_writer() << i->host << " banned for " << i->seconds << " seconds";
-    }
+    for (const auto& ban : res.bans)
+      tools::msg_writer() << ban.host << " banned for " << ban.seconds << " seconds";
 
     return true;
 }
 
 
-bool t_rpc_command_executor::ban(const std::string &address, time_t seconds)
+bool rpc_command_executor::ban(const std::string &address, time_t seconds, bool clear_ban)
 {
-    cryptonote::COMMAND_RPC_SETBANS::request req;
-    cryptonote::COMMAND_RPC_SETBANS::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    SETBANS::request req{};
+    SETBANS::response res{};
 
-    cryptonote::COMMAND_RPC_SETBANS::ban ban;
+    req.bans.emplace_back();
+    auto& ban = req.bans.back();
     ban.host = address;
     ban.ip = 0;
-    ban.ban = true;
+    ban.ban = !clear_ban;
     ban.seconds = seconds;
-    req.bans.push_back(ban);
 
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "set_bans", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_set_bans(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    if (!invoke<SETBANS>(std::move(req), res, clear_ban ? "Failed to clear ban" : "Failed to set ban"))
+      return false;
 
     // TODO(doyle): Work around because integration tests break when using
     // mlog_set_categories(""), so emit the block message using msg writer
     // instead of the logging system.
 #if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-    tools::success_msg_writer() << "Host " << address << " blocked.";
+    tools::success_msg_writer() << "Host " << address << (clear_ban ? " unblocked." : " blocked.");
 #endif
 
     return true;
 }
 
-bool t_rpc_command_executor::unban(const std::string &address)
+bool rpc_command_executor::unban(const std::string &address)
 {
-    cryptonote::COMMAND_RPC_SETBANS::request req;
-    cryptonote::COMMAND_RPC_SETBANS::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
-
-    cryptonote::COMMAND_RPC_SETBANS::ban ban;
-    ban.host = address;
-    ban.ip = 0;
-    ban.ban = false;
-    ban.seconds = 0;
-    req.bans.push_back(ban);
-
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "set_bans", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_set_bans(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
-
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-    tools::success_msg_writer() << "Host " << address << " unblocked.";
-#endif
-    return true;
+    return ban(std::move(address), 0, true);
 }
 
-bool t_rpc_command_executor::banned(const std::string &address)
+bool rpc_command_executor::banned(const std::string &address)
 {
-    cryptonote::COMMAND_RPC_BANNED::request req;
-    cryptonote::COMMAND_RPC_BANNED::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    BANNED::request req{};
+    BANNED::response res{};
 
     req.address = address;
 
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "banned", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_banned(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    if (!invoke<BANNED>({address}, res, "Failed to retrieve ban information"))
+      return false;
 
     if (res.banned)
       tools::msg_writer() << address << " is banned for " << res.seconds << " seconds";
@@ -2020,42 +1237,25 @@ bool t_rpc_command_executor::banned(const std::string &address)
     return true;
 }
 
-bool t_rpc_command_executor::flush_txpool(const std::string &txid)
+bool rpc_command_executor::flush_txpool(std::string txid)
 {
-    cryptonote::COMMAND_RPC_FLUSH_TRANSACTION_POOL::request req;
-    cryptonote::COMMAND_RPC_FLUSH_TRANSACTION_POOL::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    FLUSH_TRANSACTION_POOL::request req{};
+    FLUSH_TRANSACTION_POOL::response res{};
 
     if (!txid.empty())
-      req.txids.push_back(txid);
+      req.txids.push_back(std::move(txid));
 
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "flush_txpool", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_flush_txpool(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    if (!invoke<FLUSH_TRANSACTION_POOL>(std::move(req), res, "Failed to flush tx pool"))
+      return false;
 
     tools::success_msg_writer() << "Pool successfully flushed";
     return true;
 }
 
-bool t_rpc_command_executor::output_histogram(const std::vector<uint64_t> &amounts, uint64_t min_count, uint64_t max_count)
+bool rpc_command_executor::output_histogram(const std::vector<uint64_t> &amounts, uint64_t min_count, uint64_t max_count)
 {
-    cryptonote::COMMAND_RPC_GET_OUTPUT_HISTOGRAM::request req;
-    cryptonote::COMMAND_RPC_GET_OUTPUT_HISTOGRAM::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    GET_OUTPUT_HISTOGRAM::request req{};
+    GET_OUTPUT_HISTOGRAM::response res{};
 
     req.amounts = amounts;
     req.min_count = min_count;
@@ -2063,24 +1263,11 @@ bool t_rpc_command_executor::output_histogram(const std::vector<uint64_t> &amoun
     req.unlocked = false;
     req.recent_cutoff = 0;
 
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "get_output_histogram", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_get_output_histogram(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    if (!invoke<GET_OUTPUT_HISTOGRAM>(std::move(req), res, "Failed to retrieve output histogram"))
+      return false;
 
     std::sort(res.histogram.begin(), res.histogram.end(),
-        [](const cryptonote::COMMAND_RPC_GET_OUTPUT_HISTOGRAM::entry &e1, const cryptonote::COMMAND_RPC_GET_OUTPUT_HISTOGRAM::entry &e2)->bool { return e1.total_instances < e2.total_instances; });
+        [](const auto& e1, const auto& e2)->bool { return e1.total_instances < e2.total_instances; });
     for (const auto &e: res.histogram)
     {
         tools::msg_writer() << e.total_instances << "  " << cryptonote::print_money(e.amount);
@@ -2089,32 +1276,11 @@ bool t_rpc_command_executor::output_histogram(const std::vector<uint64_t> &amoun
     return true;
 }
 
-bool t_rpc_command_executor::print_coinbase_tx_sum(uint64_t height, uint64_t count)
+bool rpc_command_executor::print_coinbase_tx_sum(uint64_t height, uint64_t count)
 {
-  cryptonote::COMMAND_RPC_GET_COINBASE_TX_SUM::request req;
-  cryptonote::COMMAND_RPC_GET_COINBASE_TX_SUM::response res;
-  epee::json_rpc::error error_resp;
-
-  req.height = height;
-  req.count = count;
-
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "get_coinbase_tx_sum", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_coinbase_tx_sum(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  GET_COINBASE_TX_SUM::response res{};
+  if (!invoke<GET_COINBASE_TX_SUM>({height, count}, res, "Failed to retrieve coinbase info"))
+    return false;
 
   tools::msg_writer() << "Sum of coinbase transactions between block heights ["
     << height << ", " << (height + count) << ") is "
@@ -2124,40 +1290,14 @@ bool t_rpc_command_executor::print_coinbase_tx_sum(uint64_t height, uint64_t cou
   return true;
 }
 
-bool t_rpc_command_executor::alt_chain_info(const std::string &tip, size_t above, uint64_t last_blocks)
+bool rpc_command_executor::alt_chain_info(const std::string &tip, size_t above, uint64_t last_blocks)
 {
-  cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-  cryptonote::COMMAND_RPC_GET_INFO::response ires;
-  cryptonote::COMMAND_RPC_GET_ALTERNATE_CHAINS::request req;
-  cryptonote::COMMAND_RPC_GET_ALTERNATE_CHAINS::response res;
-  epee::json_rpc::error error_resp;
+  GET_INFO::response ires{};
+  GET_ALTERNATE_CHAINS::response res{};
 
-  std::string fail_message = "Unsuccessful";
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(ireq, ires, "/getinfo", fail_message.c_str()))
-    {
-      return true;
-    }
-    if (!m_rpc_client->json_rpc_request(req, res, "get_alternate_chains", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_info(ireq, ires) || ires.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, ires.status);
-      return true;
-    }
-    if (!m_rpc_server->on_get_alternate_chains(req, res, error_resp))
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_INFO>({}, ires, "Failed to retrieve node info") ||
+      !invoke<GET_ALTERNATE_CHAINS>({}, res, "Failed to retrieve alt chain data"))
+    return false;
 
   if (tip.empty())
   {
@@ -2186,7 +1326,7 @@ bool t_rpc_command_executor::alt_chain_info(const std::string &tip, size_t above
   else
   {
     const uint64_t now = time(NULL);
-    const auto i = std::find_if(res.chains.begin(), res.chains.end(), [&tip](cryptonote::COMMAND_RPC_GET_ALTERNATE_CHAINS::chain_info &info){ return info.block_hash == tip; });
+    const auto i = std::find_if(res.chains.begin(), res.chains.end(), [&tip](GET_ALTERNATE_CHAINS::chain_info &info){ return info.block_hash == tip; });
     if (i != res.chains.end())
     {
       const auto &chain = *i;
@@ -2247,55 +1387,16 @@ bool t_rpc_command_executor::alt_chain_info(const std::string &tip, size_t above
   return true;
 }
 
-bool t_rpc_command_executor::print_blockchain_dynamic_stats(uint64_t nblocks)
+bool rpc_command_executor::print_blockchain_dynamic_stats(uint64_t nblocks)
 {
-  cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-  cryptonote::COMMAND_RPC_GET_INFO::response ires;
-  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::request bhreq;
-  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::response bhres;
-  cryptonote::COMMAND_RPC_GET_BASE_FEE_ESTIMATE::request fereq;
-  cryptonote::COMMAND_RPC_GET_BASE_FEE_ESTIMATE::response feres;
-  cryptonote::COMMAND_RPC_HARD_FORK_INFO::request hfreq;
-  cryptonote::COMMAND_RPC_HARD_FORK_INFO::response hfres;
-  epee::json_rpc::error error_resp;
+  GET_INFO::response ires{};
+  GET_BASE_FEE_ESTIMATE::response feres{};
+  HARD_FORK_INFO::response hfres{};
 
-  std::string fail_message = "Problem fetching info";
-
-  fereq.grace_blocks = 0;
-  hfreq.version = HF_VERSION_PER_BYTE_FEE;
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(ireq, ires, "/getinfo", fail_message.c_str()))
-    {
-      return true;
-    }
-    if (!m_rpc_client->json_rpc_request(fereq, feres, "get_fee_estimate", fail_message.c_str()))
-    {
-      return true;
-    }
-    if (!m_rpc_client->json_rpc_request(hfreq, hfres, "hard_fork_info", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_info(ireq, ires) || ires.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, ires.status);
-      return true;
-    }
-    if (!m_rpc_server->on_get_base_fee_estimate(fereq, feres, error_resp) || feres.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, feres.status);
-      return true;
-    }
-    if (!m_rpc_server->on_hard_fork_info(hfreq, hfres, error_resp) || hfres.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, hfres.status);
-      return true;
-    }
-  }
+  if (!invoke<GET_INFO>({}, ires, "Failed to retrieve node info") ||
+      !invoke<GET_BASE_FEE_ESTIMATE>({}, feres, "Failed to retrieve current fee info") ||
+      !invoke<HARD_FORK_INFO>({HF_VERSION_PER_BYTE_FEE}, hfres, "Failed to retrieve hard fork info"))
+    return false;
 
   tools::msg_writer() << "Height: " << ires.height << ", diff " << ires.difficulty << ", cum. diff " << ires.cumulative_difficulty
       << ", target " << ires.target << " sec" << ", dyn fee " << cryptonote::print_money(feres.fee_per_byte) << "/" << (hfres.enabled ? "byte" : "kB")
@@ -2306,24 +1407,14 @@ bool t_rpc_command_executor::print_blockchain_dynamic_stats(uint64_t nblocks)
     if (nblocks > ires.height)
       nblocks = ires.height;
 
+    GET_BLOCK_HEADERS_RANGE::request bhreq{};
+    GET_BLOCK_HEADERS_RANGE::response bhres{};
+
     bhreq.start_height = ires.height - nblocks;
     bhreq.end_height = ires.height - 1;
     bhreq.fill_pow_hash = false;
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->json_rpc_request(bhreq, bhres, "getblockheadersrange", fail_message.c_str()))
-      {
-        return true;
-      }
-    }
-    else
-    {
-      if (!m_rpc_server->on_get_block_headers_range(bhreq, bhres, error_resp) || bhres.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(fail_message, bhres.status);
-        return true;
-      }
-    }
+    if (!invoke<GET_BLOCK_HEADERS_RANGE>(std::move(bhreq), bhres, "Failed to retrieve block headers"))
+      return false;
 
     double avgdiff = 0;
     double avgnumtxes = 0;
@@ -2331,17 +1422,15 @@ bool t_rpc_command_executor::print_blockchain_dynamic_stats(uint64_t nblocks)
     std::vector<uint64_t> weights;
     weights.reserve(nblocks);
     uint64_t earliest = std::numeric_limits<uint64_t>::max(), latest = 0;
-    std::vector<unsigned> major_versions(256, 0), minor_versions(256, 0);
+    std::map<unsigned, std::pair<unsigned, unsigned>> versions; // version -> {majorcount, minorcount}
     for (const auto &bhr: bhres.headers)
     {
       avgdiff += bhr.difficulty;
       avgnumtxes += bhr.num_txes;
       avgreward += bhr.reward;
       weights.push_back(bhr.block_weight);
-      static_assert(sizeof(bhr.major_version) == 1, "major_version expected to be uint8_t");
-      static_assert(sizeof(bhr.minor_version) == 1, "major_version expected to be uint8_t");
-      major_versions[(unsigned)bhr.major_version]++;
-      minor_versions[(unsigned)bhr.minor_version]++;
+      versions[bhr.major_version].first++;
+      versions[bhr.minor_version].second++;
       earliest = std::min(earliest, bhr.timestamp);
       latest = std::max(latest, bhr.timestamp);
     }
@@ -2352,47 +1441,24 @@ bool t_rpc_command_executor::print_blockchain_dynamic_stats(uint64_t nblocks)
     tools::msg_writer() << "Last " << nblocks << ": avg. diff " << (uint64_t)avgdiff << ", " << (latest - earliest) / nblocks << " avg sec/block, avg num txes " << avgnumtxes
         << ", avg. reward " << cryptonote::print_money(avgreward) << ", median block weight " << median_block_weight;
 
-    unsigned int max_major = 256, max_minor = 256;
-    while (max_major > 0 && !major_versions[--max_major]);
-    while (max_minor > 0 && !minor_versions[--max_minor]);
-    std::string s = "";
-    for (unsigned n = 0; n <= max_major; ++n)
-      if (major_versions[n])
-        s += (s.empty() ? "" : ", ") + boost::lexical_cast<std::string>(major_versions[n]) + std::string(" v") + boost::lexical_cast<std::string>(n);
-    tools::msg_writer() << "Block versions: " << s;
-    s = "";
-    for (unsigned n = 0; n <= max_minor; ++n)
-      if (minor_versions[n])
-        s += (s.empty() ? "" : ", ") + boost::lexical_cast<std::string>(minor_versions[n]) + std::string(" v") + boost::lexical_cast<std::string>(n);
-    tools::msg_writer() << "Voting for: " << s;
+    std::ostringstream s;
+    bool first = true;
+    for (auto& v : versions)
+    {
+      if (first) first = false;
+      else s << "; ";
+      s << "v" << v.first << " (" << v.second.first << "/" << v.second.second << ")";
+    }
+    tools::msg_writer() << "Block versions (major/minor): " << s.str();
   }
   return true;
 }
 
-bool t_rpc_command_executor::update(const std::string &command)
+bool rpc_command_executor::update(const std::string &command)
 {
-  cryptonote::COMMAND_RPC_UPDATE::request req;
-  cryptonote::COMMAND_RPC_UPDATE::response res;
-  epee::json_rpc::error error_resp;
-
-  std::string fail_message = "Problem fetching info";
-
-  req.command = command;
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/update", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_update(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
+  UPDATE::response res{};
+  if (!invoke<UPDATE>({command}, res, "Failed to fetch update info"))
+    return false;
 
   if (!res.update)
   {
@@ -2411,62 +1477,27 @@ bool t_rpc_command_executor::update(const std::string &command)
   if (command == "download")
     return true;
 
-  tools::msg_writer() << "'update' not implemented yet";
+  tools::msg_writer() << "'" << command << "' not implemented yet";
 
   return true;
 }
 
-bool t_rpc_command_executor::relay_tx(const std::string &txid)
+bool rpc_command_executor::relay_tx(const std::string &txid)
 {
-    cryptonote::COMMAND_RPC_RELAY_TX::request req;
-    cryptonote::COMMAND_RPC_RELAY_TX::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
-
-    req.txids.push_back(txid);
-
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "relay_tx", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_relay_tx(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    RELAY_TX::response res{};
+    if (!invoke<RELAY_TX>({{txid}}, res, "Failed to relay tx"))
+      return false;
 
     tools::success_msg_writer() << "Transaction successfully relayed";
     return true;
 }
 
-bool t_rpc_command_executor::sync_info()
+bool rpc_command_executor::sync_info()
 {
-    cryptonote::COMMAND_RPC_SYNC_INFO::request req;
-    cryptonote::COMMAND_RPC_SYNC_INFO::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    SYNC_INFO::response res{};
 
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "sync_info", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_sync_info(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    if (!invoke<SYNC_INFO>({}, res, "Failed to retrieve synchronization info"))
+      return false;
 
     uint64_t target = res.target_height < res.height ? res.height : res.target_height;
     tools::success_msg_writer() << "Height: " << res.height << ", target: " << target << " (" << (100.0 * res.height / target) << "%)";
@@ -2519,14 +1550,13 @@ static std::string to_string_rounded(double d, int precision) {
   return ss.str();
 }
 
-static void append_printable_service_node_list_entry(cryptonote::network_type nettype, bool detailed_view, uint64_t blockchain_height, uint64_t entry_index, cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry const &entry, std::string &buffer)
+static void append_printable_service_node_list_entry(cryptonote::network_type nettype, bool detailed_view, uint64_t blockchain_height, uint64_t entry_index, GET_SERVICE_NODES::response::entry const &entry, std::string &buffer)
 {
   const char indent1[] = "    ";
   const char indent2[] = "        ";
   const char indent3[] = "            ";
   bool is_registered = entry.total_contributed >= entry.staking_requirement;
 
-  buffer.reserve(buffer.size() + 2048);
   std::ostringstream stream;
 
   // Print Funding Status
@@ -2656,7 +1686,7 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
   {
     for (size_t j = 0; j < entry.contributors.size(); ++j)
     {
-      const cryptonote::service_node_contributor &contributor = entry.contributors[j];
+      const auto& contributor = entry.contributors[j];
       stream << indent2 << "[" << j << "] Contributor: " << contributor.address  << "\n";
       stream << indent3 << "Amount / Reserved: " << cryptonote::print_money(contributor.amount) << "/" << cryptonote::print_money(contributor.reserved) << "\n";
     }
@@ -2665,85 +1695,48 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
   buffer.append(stream.str());
 }
 
-bool t_rpc_command_executor::print_sn(const std::vector<std::string> &args)
+bool rpc_command_executor::print_sn(const std::vector<std::string> &args)
 {
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODES::request req = {};
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response res = {};
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    GET_SERVICE_NODES::request req{};
+    GET_SERVICE_NODES::response res{};
 
     bool detailed_view = false;
-    for (unsigned int i = 0; i < args.size(); ++i)
+    for (auto& arg : args)
     {
-      if (args[i] == "+json") 
-      {
+      if (arg == "+json")
         req.include_json = true;
-        continue;
-      }
-      else if (args[i] == "+detail")
-      {
+      else if (arg == "+detail")
         detailed_view = true;
-        continue;
-      }
-      req.service_node_pubkeys.push_back(args[i]);
+      else
+        req.service_node_pubkeys.push_back(arg);
     }
 
-    cryptonote::COMMAND_RPC_GET_INFO::request get_info_req;
-    cryptonote::COMMAND_RPC_GET_INFO::response get_info_res;
+    GET_INFO::response get_info_res{};
 
-    cryptonote::network_type nettype = cryptonote::UNDEFINED;
-    uint64_t curr_height  = 0;
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->rpc_request(get_info_req, get_info_res, "/getinfo", fail_message.c_str()))
-      {
-        tools::fail_msg_writer() << make_error(fail_message, get_info_res.status);
-        return true;
-      }
+    if (!invoke<GET_INFO>({}, get_info_res, "Failed to retrieve node info") ||
+        !invoke<GET_SERVICE_NODES>(std::move(req), res, "Failed to retrieve service node data"))
+      return false;
 
-      if (!m_rpc_client->json_rpc_request(req, res, "get_service_nodes", fail_message.c_str()))
-      {
-        tools::fail_msg_writer() << make_error(fail_message, res.status);
-        return true;
-      }
+    cryptonote::network_type nettype =
+      get_info_res.mainnet  ? cryptonote::MAINNET :
+      get_info_res.stagenet ? cryptonote::STAGENET :
+      get_info_res.testnet  ? cryptonote::TESTNET :
+      cryptonote::UNDEFINED;
+    uint64_t curr_height = get_info_res.height;
 
-      if (get_info_res.mainnet) nettype       = cryptonote::MAINNET;
-      else if (get_info_res.stagenet) nettype = cryptonote::STAGENET;
-      else if (get_info_res.testnet) nettype  = cryptonote::TESTNET;
-      curr_height = get_info_res.height;
-    }
-    else
-    {
-      if (m_rpc_server->on_get_info(get_info_req, get_info_res) || get_info_res.status == CORE_RPC_STATUS_OK)
-        curr_height = get_info_res.height;
-
-      if (!m_rpc_server->on_get_service_nodes(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-      {
-          tools::fail_msg_writer() << make_error(fail_message, error_resp.message);
-          return true;
-      }
-      nettype = m_rpc_server->nettype();
-    }
-
-    std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry *> unregistered;
-    std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry *> registered;
-    registered.reserve  (res.service_node_states.size());
-    unregistered.reserve(res.service_node_states.size() * 0.5f);
+    std::vector<const GET_SERVICE_NODES::response::entry*> unregistered;
+    std::vector<const GET_SERVICE_NODES::response::entry*> registered;
+    registered.reserve(res.service_node_states.size());
 
     for (auto &entry : res.service_node_states)
     {
       if (entry.total_contributed == entry.staking_requirement)
-      {
         registered.push_back(&entry);
-      }
       else
-      {
         unregistered.push_back(&entry);
-      }
     }
 
-    std::sort(unregistered.begin(), unregistered.end(),
-        [](const cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry *a, const cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry *b) {
+    std::sort(unregistered.begin(), unregistered.end(), [](auto *a, auto *b) {
         uint64_t a_remaining = a->staking_requirement - a->total_reserved;
         uint64_t b_remaining = b->staking_requirement - b->total_reserved;
 
@@ -2753,8 +1746,7 @@ bool t_rpc_command_executor::print_sn(const std::vector<std::string> &args)
         return b_remaining < a_remaining;
     });
 
-    std::sort(registered.begin(), registered.end(),
-        [](const cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry *a, const cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry *b) {
+    std::sort(registered.begin(), registered.end(), [](auto *a, auto *b) {
         return std::make_tuple(a->last_reward_block_height, a->last_reward_transaction_index, a->service_node_pubkey)
              < std::make_tuple(b->last_reward_block_height, b->last_reward_transaction_index, b->service_node_pubkey);
     });
@@ -2794,18 +1786,14 @@ bool t_rpc_command_executor::print_sn(const std::vector<std::string> &args)
     std::string registered_print_data;
     for (size_t i = 0; i < unregistered.size(); i++)
     {
-      cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry const &entry = (*unregistered[i]);
-      append_printable_service_node_list_entry(nettype, detailed_view, curr_height, i, entry, unregistered_print_data);
-      if (i < unregistered.size())
-        unregistered_print_data.append("\n");
+      if (i) unregistered_print_data.append("\n");
+      append_printable_service_node_list_entry(nettype, detailed_view, curr_height, i, *unregistered[i], unregistered_print_data);
     }
 
     for (size_t i = 0; i < registered.size(); i++)
     {
-      cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry const &entry = (*registered[i]);
-      append_printable_service_node_list_entry(nettype, detailed_view, curr_height, i, entry, registered_print_data);
-      if (i < registered.size())
-        registered_print_data.append("\n");
+      if (i) registered_print_data.append("\n");
+      append_printable_service_node_list_entry(nettype, detailed_view, curr_height, i, *registered[i], registered_print_data);
     }
 
     if (unregistered.size() > 0)
@@ -2817,130 +1805,54 @@ bool t_rpc_command_executor::print_sn(const std::vector<std::string> &args)
     return true;
 }
 
-bool t_rpc_command_executor::print_sn_status(const std::vector<std::string>& args)
+bool rpc_command_executor::print_sn_status(std::vector<std::string> args)
 {
-  cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::response res = {};
-  {
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::request req = {};
-    std::string fail_message = "Unsuccessful";
-
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->json_rpc_request(req, res, "get_service_node_key", fail_message.c_str()))
-      {
-        tools::fail_msg_writer() << make_error(fail_message, res.status);
-        return true;
-      }
-    }
-    else
-    {
-      epee::json_rpc::error error_resp;
-      if (!m_rpc_server->on_get_service_node_key(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(fail_message, error_resp.message);
-        return true;
-      }
-    }
-  }
-
   if (args.size() > 1)
   {
     tools::fail_msg_writer() << "Unexpected arguments";
     return false;
   }
 
-  std::vector<std::string> real_args = {};
-  real_args.reserve(1 + args.size());
-  real_args.push_back(res.service_node_pubkey);
-  for (const std::string &arg : args) real_args.push_back(arg);
+  GET_SERVICE_KEYS::response res{};
+  if (!invoke<GET_SERVICE_KEYS>({}, res, "Failed to retrieve service node keys"))
+    return false;
 
-  bool result = print_sn(real_args);
-  return result;
+  args.push_back(std::move(res.service_node_pubkey));
+
+  return print_sn(args);
 }
 
-bool t_rpc_command_executor::print_sr(uint64_t height)
+bool rpc_command_executor::print_sr(uint64_t height)
 {
-  cryptonote::COMMAND_RPC_GET_STAKING_REQUIREMENT::request req = {};
-  cryptonote::COMMAND_RPC_GET_STAKING_REQUIREMENT::response res = {};
-  std::string fail_message = "Unsuccessful";
-  epee::json_rpc::error error_resp;
-  req.height = height;
-
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "get_staking_requirement", fail_message.c_str()))
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
-  else
-  {
-    epee::json_rpc::error error_resp;
-    if (!m_rpc_server->on_get_staking_requirement(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, error_resp.message);
-      return true;
-    }
-  }
+  GET_STAKING_REQUIREMENT::response res{};
+  if (!invoke<GET_STAKING_REQUIREMENT>({height}, res, "Failed to retrieve staking requirements"))
+    return false;
 
   tools::success_msg_writer() << "Staking Requirement: " << cryptonote::print_money(res.staking_requirement);
   return true;
 }
 
-bool t_rpc_command_executor::pop_blocks(uint64_t num_blocks)
+bool rpc_command_executor::pop_blocks(uint64_t num_blocks)
 {
-  cryptonote::COMMAND_RPC_POP_BLOCKS::request req;
-  cryptonote::COMMAND_RPC_POP_BLOCKS::response res;
-  std::string fail_message = "pop_blocks failed";
-
-  req.nblocks = num_blocks;
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->rpc_request(req, res, "/pop_blocks", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_pop_blocks(req, res) || res.status != CORE_RPC_STATUS_OK)
-    {
-       tools::fail_msg_writer() << make_error(fail_message, res.status);
-       return true;
-    }
-  }
+  POP_BLOCKS::response res{};
+  if (!invoke<POP_BLOCKS>({num_blocks}, res, "Popping blocks failed"))
+    return false;
 
   tools::success_msg_writer() << "new height: " << res.height;
   return true;
 }
 
-bool t_rpc_command_executor::print_sn_key()
+bool rpc_command_executor::print_sn_key()
 {
-  cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::request req = {};
-  cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::response res = {};
-  std::string fail_message = "Unsuccessful";
-  epee::json_rpc::error error_resp;
+  GET_SERVICE_KEYS::response res{};
 
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "get_service_node_key", fail_message.c_str()))
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_service_node_key(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, error_resp.message);
-      return true;
-    }
-  }
+  if (!invoke<GET_SERVICE_KEYS>({}, res, "Failed to retrieve service node keys"))
+    return false;
 
-  std::string const msg_buf = "Service Node Public Key: " + res.service_node_pubkey;
-  tools::success_msg_writer() << msg_buf;
+  tools::success_msg_writer()
+    <<   "Service Node Public Key: " << res.service_node_pubkey
+    << "\n     Ed25519 Public Key: " << res.service_node_ed25519_pubkey
+    << "\n      X25519 Public Key: " << res.service_node_x25519_pubkey;
   return true;
 }
 
@@ -2964,7 +1876,7 @@ static uint64_t get_actual_amount(uint64_t amount, uint64_t portions)
   return resultlo;
 }
 
-bool t_rpc_command_executor::prepare_registration()
+bool rpc_command_executor::prepare_registration()
 {
   // RAII-style class to temporarily clear categories and restore upon destruction (i.e. upon returning).
   struct clear_log_categories {
@@ -2975,95 +1887,37 @@ bool t_rpc_command_executor::prepare_registration()
   auto scoped_log_cats = std::unique_ptr<clear_log_categories>(new clear_log_categories());
 
   // Check if the daemon was started in Service Node or not
-  {
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::request keyreq = {};
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODE_KEY::response keyres = {};
-    std::string const fail_msg = "Cannot get service node key. Make sure you are running daemon with --service-node flag";
+  GET_INFO::response res{};
+  GET_SERVICE_KEYS::response kres{};
+  HARD_FORK_INFO::response hf_res{};
+  if (!invoke<GET_INFO>({}, res, "Failed to get node info") ||
+      !invoke<HARD_FORK_INFO>({}, hf_res, "Failed to retrieve hard fork info") ||
+      !invoke<GET_SERVICE_KEYS>({}, kres, "Failed to retrieve service node keys"))
+    return false;
 
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->json_rpc_request(keyreq, keyres, "get_service_node_key", fail_msg))
-        return true;
-    }
-    else
-    {
-      epee::json_rpc::error error_resp;
-      if (!m_rpc_server->on_get_service_node_key(keyreq, keyres, error_resp) || keyres.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(fail_msg, error_resp.message);
-        return true;
-      }
-    }
+  if (!res.service_node)
+  {
+    tools::fail_msg_writer() << "Unable to prepare registration: this daemon is not running in --service-node mode";
+    return false;
   }
 
-  // Query the latest known block height and nettype
-  uint64_t block_height            = 0;
-  uint8_t hf_version               = cryptonote::network_version_9_service_nodes;
-  cryptonote::network_type nettype = cryptonote::UNDEFINED;
-  {
-    cryptonote::COMMAND_RPC_GET_INFO::request req;
-    cryptonote::COMMAND_RPC_GET_INFO::response res;
-    cryptonote::COMMAND_RPC_HARD_FORK_INFO::request hf_req;
-    cryptonote::COMMAND_RPC_HARD_FORK_INFO::response hf_res;
-    std::string const info_fail_message = "Could not get current blockchain info";
-
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->rpc_request(req, res, "/getinfo", info_fail_message.c_str()))
-        return true;
-
-      if (!m_rpc_client->json_rpc_request(hf_req, hf_res, "hard_fork_info", info_fail_message.c_str()))
-        return true;
-
-      if      (res.mainnet) nettype  = cryptonote::MAINNET;
-      else if (res.stagenet) nettype = cryptonote::STAGENET;
-      else if (res.testnet) nettype  = cryptonote::TESTNET;
-    }
-    else
-    {
-      if (!m_rpc_server->on_get_info(req, res) || res.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(info_fail_message, res.status);
-        return true;
-      }
-
-      epee::json_rpc::error error_resp;
-      if (!m_rpc_server->on_hard_fork_info(hf_req, hf_res, error_resp) || hf_res.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(info_fail_message, hf_res.status);
-        return true;
-      }
-
-      nettype = m_rpc_server->nettype();
-    }
-
-    hf_version   = hf_res.version;
-    block_height = std::max(res.height, res.target_height);
-  }
+  uint64_t block_height = std::max(res.height, res.target_height);
+  uint8_t hf_version = hf_res.version;
+  cryptonote::network_type nettype =
+    res.mainnet  ? cryptonote::MAINNET :
+    res.stagenet ? cryptonote::STAGENET :
+    res.testnet  ? cryptonote::TESTNET :
+    cryptonote::UNDEFINED;
 
   // Query the latest block we've synced and check that the timestamp is sensible, issue a warning if not
   {
-    cryptonote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::request req  = {};
-    cryptonote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::response res = {};
-    std::string const fail_msg = "Get latest block failed, unable to check sync status";
+    GET_LAST_BLOCK_HEADER::response res{};
 
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->json_rpc_request(req, res, "get_last_block_header", fail_msg))
-        return true;
-    }
-    else
-    {
-      epee::json_rpc::error error_resp;
-      if (!m_rpc_server->on_get_last_block_header(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(fail_msg, res.status);
-        return true;
-      }
-    }
+    if (!invoke<GET_LAST_BLOCK_HEADER>({}, res, "Get latest block failed, unable to check sync status"))
+      return false;
 
-    cryptonote::block_header_response const &header = res.block_header;
-    uint64_t const now                              = time(nullptr);
+    auto const& header = res.block_header;
+    uint64_t const now = time(nullptr);
 
     if (now >= header.timestamp)
     {
@@ -3528,30 +2382,16 @@ bool t_rpc_command_executor::prepare_registration()
   scoped_log_cats.reset();
 
   {
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODE_REGISTRATION_CMD_RAW::request req;
-    cryptonote::COMMAND_RPC_GET_SERVICE_NODE_REGISTRATION_CMD_RAW::response res;
-    std::string fail_message = "Unsuccessful";
+    GET_SERVICE_NODE_REGISTRATION_CMD_RAW::request req{};
+    GET_SERVICE_NODE_REGISTRATION_CMD_RAW::response res{};
 
     req.args = args;
     req.make_friendly = true;
     req.staking_requirement = staking_requirement;
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->json_rpc_request(req, res, "get_service_node_registration_cmd_raw", fail_message))
-      {
-        tools::fail_msg_writer() << "Failed to validate registration arguments; check the addresses and registration parameters and that the Daemon is running with the '--service-node' flag";
-        return true;
-      }
-    }
-    else
-    {
-      epee::json_rpc::error error_resp;
-      if (!m_rpc_server->on_get_service_node_registration_cmd_raw(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(fail_message, error_resp.message);
-        return true;
-      }
-    }
+
+    if (!invoke<GET_SERVICE_NODE_REGISTRATION_CMD_RAW>(std::move(req), res, "Failed to validate registration arguments; "
+          "check the addresses and registration parameters and that the Daemon is running with the '--service-node' flag"))
+      return false;
 
     tools::success_msg_writer() << res.registration_cmd;
   }
@@ -3559,31 +2399,12 @@ bool t_rpc_command_executor::prepare_registration()
   return true;
 }
 
-bool t_rpc_command_executor::prune_blockchain()
+bool rpc_command_executor::prune_blockchain()
 {
 #if 0
-    cryptonote::COMMAND_RPC_PRUNE_BLOCKCHAIN::request req;
-    cryptonote::COMMAND_RPC_PRUNE_BLOCKCHAIN::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
-
-    req.check = false;
-
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "prune_blockchain", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_prune_blockchain(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
+    PRUNE_BLOCKCHAIN::response res{};
+    if (!invoke<PRUNE_BLOCKCHAIN>({false}, res, "Failed to prune blockchain"))
+      return false;
 
     tools::success_msg_writer() << "Blockchain pruned";
 #else
@@ -3592,39 +2413,13 @@ bool t_rpc_command_executor::prune_blockchain()
     return true;
 }
 
-bool t_rpc_command_executor::check_blockchain_pruning()
+bool rpc_command_executor::check_blockchain_pruning()
 {
-    cryptonote::COMMAND_RPC_PRUNE_BLOCKCHAIN::request req;
-    cryptonote::COMMAND_RPC_PRUNE_BLOCKCHAIN::response res;
-    std::string fail_message = "Unsuccessful";
-    epee::json_rpc::error error_resp;
+    PRUNE_BLOCKCHAIN::response res{};
+    if (!invoke<PRUNE_BLOCKCHAIN>({true}, res, "Failed to check blockchain pruning status"))
+      return false;
 
-    req.check = true;
-
-    if (m_is_rpc)
-    {
-        if (!m_rpc_client->json_rpc_request(req, res, "prune_blockchain", fail_message.c_str()))
-        {
-            return true;
-        }
-    }
-    else
-    {
-        if (!m_rpc_server->on_prune_blockchain(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-        {
-            tools::fail_msg_writer() << make_error(fail_message, res.status);
-            return true;
-        }
-    }
-
-    if (res.pruning_seed)
-    {
-      tools::success_msg_writer() << "Blockchain is pruned";
-    }
-    else
-    {
-      tools::success_msg_writer() << "Blockchain is not pruned";
-    }
+    tools::success_msg_writer() << "Blockchain is" << (res.pruning_seed ? "" : " not") << " pruned";
     return true;
 }
 

@@ -76,6 +76,7 @@ namespace cryptonote
     typedef std::vector<std::string> command_type;
 
     simple_wallet();
+    ~simple_wallet();
     bool init(const boost::program_options::variables_map& vm);
     bool deinit();
     bool run();
@@ -146,7 +147,6 @@ namespace cryptonote
     bool set_segregation_height(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_ignore_fractional_outputs(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_track_uses(const std::vector<std::string> &args = std::vector<std::string>());
-    bool set_setup_background_mining(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_device_name(const std::vector<std::string> &args = std::vector<std::string>());
     bool help(const std::vector<std::string> &args = std::vector<std::string>());
     bool start_mining(const std::vector<std::string> &args);
@@ -280,7 +280,7 @@ namespace cryptonote
 
     bool cold_sign_tx(const std::vector<tools::wallet2::pending_tx>& ptx_vector, tools::wallet2::signed_tx_set &exported_txs, std::vector<cryptonote::address_parse_info> const &dsts_info, std::function<bool(const tools::wallet2::signed_tx_set &)> accept_func);
     uint64_t get_daemon_blockchain_height(std::string& err);
-    bool try_connect_to_daemon(bool silent = false, uint32_t* version = nullptr);
+    bool try_connect_to_daemon(bool silent = false, rpc::version_t* version = nullptr);
     bool ask_wallet_create_if_needed();
     bool accept_loaded_tx(const std::function<size_t()> get_num_txes, const std::function<const tools::wallet2::tx_construction_data&(size_t)> &get_tx, const std::string &extra_message = std::string());
     bool accept_loaded_tx(const tools::wallet2::unsigned_tx_set &txs);
@@ -318,13 +318,6 @@ namespace cryptonote
      */
     void commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_vector, bool do_not_relay, bool blink);
 
-    /*!
-     * \brief checks whether background mining is enabled, and asks to configure it if not
-     */
-    void check_background_mining(const epee::wipeable_string &password);
-    void start_background_mining();
-    void stop_background_mining();
-
     //----------------- i_wallet2_callback ---------------------
     virtual void on_new_block(uint64_t height, const cryptonote::block& block);
     virtual void on_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index, uint64_t unlock_time, bool blink);
@@ -336,40 +329,6 @@ namespace cryptonote
     virtual boost::optional<epee::wipeable_string> on_device_pin_request();
     virtual boost::optional<epee::wipeable_string> on_device_passphrase_request(bool on_device);
     //----------------------------------------------------------
-
-    class long_poll_thread_t
-    {
-    public:
-      long_poll_thread_t(cryptonote::simple_wallet& simple_wallet)
-        : m_simple_wallet(simple_wallet), m_polling_done(true) { }
-      ~long_poll_thread_t()
-      {
-        if (m_polling_done || !m_long_poll_thread.joinable()) return;
-        m_polling_done = true;
-        m_long_poll_thread.join();
-      }
-
-      void start()
-      {
-        m_polling_done = false;
-        m_long_poll_thread = boost::thread([&] {
-            while (!m_polling_done)
-            {
-              try
-              {
-                if (m_simple_wallet.m_auto_refresh_enabled && m_simple_wallet.m_wallet->long_poll_pool_state())
-                  m_simple_wallet.m_idle_cond.notify_one();
-              }
-              catch (...) { }
-            }
-          });
-      }
-
-    private:
-      cryptonote::simple_wallet& m_simple_wallet;
-      std::atomic<bool> m_polling_done;
-      boost::thread m_long_poll_thread;
-    };
 
     friend class refresh_progress_reporter_t;
 
@@ -469,6 +428,7 @@ namespace cryptonote
     bool m_long_payment_id_support;
     std::atomic<uint64_t> m_password_asked_on_height;
     crypto::hash          m_password_asked_on_checksum;
+    boost::thread         m_long_poll_thread;
     
     // MMS
     mms::message_store& get_message_store() const { return m_wallet->get_message_store(); };

@@ -51,12 +51,6 @@
 #define GET_IO_SERVICE(s) ((s).get_io_service())
 #endif
 
-namespace net
-{
-	class tor_address;
-	class i2p_address;
-}
-
 namespace epee
 {
 namespace net_utils
@@ -303,32 +297,22 @@ namespace net_utils
 		bool is_blockable() const { return self ? self->is_blockable() : false; }
 		template<typename Type> const Type &as() const { return as_mutable<const Type>(); }
 
-		BEGIN_KV_SERIALIZE_MAP()
-			// need to `#include "net/[i2p|tor]_address.h"` when serializing `network_address`
-			static constexpr std::integral_constant<bool, is_store> is_store_{};
-
-			std::uint8_t type = std::uint8_t(is_store ? this_ref.get_type_id() : address_type::invalid);
-			if (!epee::serialization::selector<is_store>::serialize(type, stg, hparent_section, "type"))
-				return false;
-
-			switch (address_type(type))
-			{
-				case address_type::ipv4:
-					return this_ref.template serialize_addr<ipv4_network_address>(is_store_, stg, hparent_section);
-				case address_type::ipv6:
-					return this_ref.template serialize_addr<ipv6_network_address>(is_store_, stg, hparent_section);
-				case address_type::tor:
-					return this_ref.template serialize_addr<net::tor_address>(is_store_, stg, hparent_section);
-				case address_type::i2p:
-					return this_ref.template serialize_addr<net::i2p_address>(is_store_, stg, hparent_section);
-				case address_type::invalid:
-				default:
-					break;
-			}
-
-			MERROR("Unsupported network address type: " << (unsigned)type);
-			return false;
-		END_KV_SERIALIZE_MAP()
+        // This serialization is unspeakably disgusting: someone (in Monero PR #5091) decided to add
+        // code outside of epee but then put a circular dependency inside this serialization code so
+        // that the code won't even compile unless epee links to code outside epee.  But because it
+        // was all hidden in templated code (with a template type that NEVER CHANGES) compilation
+        // got deferred -- but would fail if anything tried to access this serialization code
+        // *without* the external tor/i2p dependencies.  To deal with this unspeakably disgusting
+        // hack, this serialization implementation is outside of epee, in
+        // src/net/epee_network_address.cpp.
+        //
+        // They left this comment in the serialization code, which I preserve here as a HUGE red
+        // flag that the code stinks, and yet it was still approved by upstream Monero without even
+        // a comment about this garbage:
+        //
+        // // need to `#include "net/[i2p|tor]_address.h"` when serializing `network_address`
+        //
+        KV_MAP_SERIALIZABLE
 	};
 
 	inline bool operator==(const network_address& lhs, const network_address& rhs)

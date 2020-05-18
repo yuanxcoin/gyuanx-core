@@ -29,6 +29,7 @@
 #include "misc_log_ex.h"
 #include "enableable.h"
 #include "keyvalue_serialization_overloads.h"
+#include "../storages/portable_storage.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "serialization"
@@ -38,20 +39,59 @@ namespace epee
   /************************************************************************/
   /* Serialize map declarations                                           */
   /************************************************************************/
+
+/// New way: allows putting serialization implementation into cpp, like this:
+///
+/// blah.h:
+/// class Foo {
+///   int val;
+///   KV_MAP_SERIALIZABLE
+/// }:
+///
+/// blah.cpp:
+/// KV_SERIALIZE_MAP_CODE_BEGIN(Foo)
+///   KV_SERIALIZE(val)
+/// KV_SERIALIZE_MAP_CODE_END()
+#define KV_MAP_SERIALIZABLE \
+public: \
+  bool store(epee::serialization::portable_storage& st, epee::serialization::section* hparent_section = nullptr) const; \
+  bool _load(epee::serialization::portable_storage& st, epee::serialization::section* hparent_section = nullptr); \
+  bool load(epee::serialization::portable_storage& st, epee::serialization::section* hparent_section = nullptr); \
+  template <bool is_store> bool _serialize_map(epee::serialization::portable_storage& stg, epee::serialization::section* hparent_section) const;
+
+#define KV_SERIALIZE_MAP_CODE_BEGIN(Class) \
+  bool Class::store(epee::serialization::portable_storage& st, epee::serialization::section* hparent_section) const \
+  { return _serialize_map<true>(st, hparent_section); } \
+  bool Class::_load(epee::serialization::portable_storage& st, epee::serialization::section* hparent_section) \
+  { return _serialize_map<false>(st, hparent_section); } \
+  bool Class::load(epee::serialization::portable_storage& st, epee::serialization::section* hparent_section) \
+  { \
+    try { return _load(st, hparent_section); } \
+    catch (const std::exception& err) { LOG_ERROR("Deserialization exception: " << err.what()); } \
+    catch (...) { LOG_ERROR("Unknown deserialization exception"); } \
+    return false; \
+  } \
+  template <bool is_store> \
+  bool Class::_serialize_map(epee::serialization::portable_storage& stg, epee::serialization::section* hparent_section) const { \
+    /* de-const if we're being called (from the above non-const _load method) to deserialize */ \
+    auto& this_ref = const_cast<std::conditional_t<is_store, const Class, Class>&>(*this);
+
+#define KV_SERIALIZE_MAP_CODE_END() return true; }
+
+
+/// Old deprecated way: puts every last bit of serialization code in the header.  Use this if you
+/// are worried about having too much unused memory on your system.
 #define BEGIN_KV_SERIALIZE_MAP() \
 public: \
-  template<class t_storage> \
-  bool store( t_storage& st, typename t_storage::hsection hparent_section = nullptr) const\
+  bool store( epee::serialization::portable_storage& st, epee::serialization::section* hparent_section = nullptr) const\
   {\
     return serialize_map<true>(*this, st, hparent_section);\
   }\
-  template<class t_storage> \
-  bool _load( t_storage& stg, typename t_storage::hsection hparent_section = nullptr)\
+  bool _load( epee::serialization::portable_storage& stg, epee::serialization::section* hparent_section = nullptr)\
   {\
     return serialize_map<false>(*this, stg, hparent_section);\
   }\
-  template<class t_storage> \
-  bool load( t_storage& stg, typename t_storage::hsection hparent_section = nullptr)\
+  bool load( epee::serialization::portable_storage& stg, epee::serialization::section* hparent_section = nullptr)\
   {\
     try{\
     return serialize_map<false>(*this, stg, hparent_section);\
@@ -59,7 +99,7 @@ public: \
     catch(const std::exception& err) \
     { \
       (void)(err); \
-      LOG_ERROR("Exception on unserializing: " << err.what());\
+      LOG_ERROR("Exception on deserializing: " << err.what());\
       return false; \
     }\
   }\
@@ -87,7 +127,7 @@ do { \
   if (!epee::serialization::selector<is_store>::serialize(this_ref.variable, stg, hparent_section, val_name)) { \
     epee::serialize_default(this_ref.variable, default_value); \
   } else { \
-    this_ref.explicitly_set = true; \
+    this_ref.explicitly_set(); \
   } \
 } while (0);
 
@@ -117,8 +157,8 @@ do { \
 #define KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(variable)     KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE_N(variable, #variable) //skip is_pod compile time check
 #define KV_SERIALIZE_CONTAINER_POD_AS_BLOB(variable)     KV_SERIALIZE_CONTAINER_POD_AS_BLOB_N(variable, #variable)
 #define KV_SERIALIZE_OPT(variable,default_value)          KV_SERIALIZE_OPT_N(variable, #variable, default_value)
-/// same as KV_SERIALIZE_OPT, but will set `explicitly_set` to true if non-default value found
-#define KV_SERIALIZE_OPT2(variable,default_value)          KV_SERIALIZE_OPT_N2(variable, #variable, default_value)
+/// same as KV_SERIALIZE_OPT, but will call `explicitly_set()` if non-defaulted value found
+#define KV_SERIALIZE_OPT2(variable,default_value)         KV_SERIALIZE_OPT_N2(variable, #variable, default_value)
 #define KV_SERIALIZE_ENUM(enum_) do { \
   using enum_t = std::remove_const_t<decltype(this_ref.enum_)>; \
   using int_t = std::underlying_type_t<enum_t>; \
@@ -127,6 +167,15 @@ do { \
   if (!is_store) \
     const_cast<enum_t&>(this_ref.enum_) = static_cast<enum_t>(int_value); \
 } while(0);
+
+// Stashes `this` in the storage object's context for a dependent type that needs to access it.
+#define KV_SERIALIZE_DEPENDENT_N(variable, val_name) do { \
+  stg.set_context(&this_ref); \
+  KV_SERIALIZE_N(variable, val_name) \
+  stg.clear_context(); \
+  } while (0);
+
+#define KV_SERIALIZE_DEPENDENT(variable) KV_SERIALIZE_DEPENDENT_N(variable, #variable)
 
 }
 

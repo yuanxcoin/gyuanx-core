@@ -1204,7 +1204,7 @@ void message_store::send_message(const multisig_wallet_state &state, uint32_t id
   message &m = get_message_ref_by_id(id);
   const authorized_signer &me = m_signers[0];
   const authorized_signer &receiver = m_signers[m.signer_index];
-  transport_message dm;
+  transport_message dm{};
   crypto::public_key public_key;
 
   dm.timestamp = (uint64_t)time(NULL);
