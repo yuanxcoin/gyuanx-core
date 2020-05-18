@@ -253,7 +253,6 @@ namespace cryptonote { namespace rpc {
     TEST_TRIGGER_P2P_RESYNC::response                   invoke(TEST_TRIGGER_P2P_RESYNC::request&& req, rpc_context context);
     LNS_NAMES_TO_OWNERS::response                       invoke(LNS_NAMES_TO_OWNERS::request&& req, rpc_context context);
     LNS_OWNERS_TO_NAMES::response                       invoke(LNS_OWNERS_TO_NAMES::request&& req, rpc_context context);
->>>>>>> dev
 
 #if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
 
@@ -304,7 +303,7 @@ private:
     bool set_bootstrap_daemon(const std::string &address, const std::string &username_password);
     bool set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials);
     void fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash);
-    boost::unique_lock<boost::shared_mutex> should_bootstrap_lock();
+    boost::upgrade_lock<boost::shared_mutex> should_bootstrap_lock();
 
     template <typename COMMAND_TYPE>
     bool use_bootstrap_daemon_if_necessary(const typename COMMAND_TYPE::request& req, typename COMMAND_TYPE::response& res);

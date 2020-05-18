@@ -1302,7 +1302,7 @@ bool rpc_command_executor::alt_chain_info(const std::string &tip, size_t above, 
   if (tip.empty())
   {
     auto chains = res.chains;
-    std::sort(chains.begin(), chains.end(), [](const cryptonote::COMMAND_RPC_GET_ALTERNATE_CHAINS::chain_info &info0, cryptonote::COMMAND_RPC_GET_ALTERNATE_CHAINS::chain_info &info1){ return info0.height < info1.height; });
+    std::sort(chains.begin(), chains.end(), [](const GET_ALTERNATE_CHAINS::chain_info &info0, GET_ALTERNATE_CHAINS::chain_info &info1){ return info0.height < info1.height; });
     std::vector<size_t> display;
     for (size_t i = 0; i < chains.size(); ++i)
     {
@@ -1337,33 +1337,21 @@ bool rpc_command_executor::alt_chain_info(const std::string &tip, size_t above, 
       for (const std::string &block_id: chain.block_hashes)
         tools::msg_writer() << "  " << block_id;
       tools::msg_writer() << "Chain parent on main chain: " << chain.main_chain_parent_block;
-      cryptonote::COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::request bhreq;
-      cryptonote::COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::response bhres;
+      GET_BLOCK_HEADER_BY_HASH::request bhreq{};
+      GET_BLOCK_HEADER_BY_HASH::response bhres{};
       bhreq.hashes = chain.block_hashes;
       bhreq.hashes.push_back(chain.main_chain_parent_block);
       bhreq.fill_pow_hash = false;
-      if (m_is_rpc)
-      {
-        if (!m_rpc_client->json_rpc_request(bhreq, bhres, "getblockheaderbyhash", fail_message.c_str()))
-        {
-          return true;
-        }
-      }
-      else
-      {
-        if (!m_rpc_server->on_get_block_header_by_hash(bhreq, bhres, error_resp))
-        {
-          tools::fail_msg_writer() << make_error(fail_message, res.status);
-          return true;
-        }
-      }
+      if (!invoke<GET_BLOCK_HEADER_BY_HASH>(std::move(bhreq), bhres, "Failed to query block header by hash"))
+        return false;
+
       if (bhres.block_headers.size() != chain.length + 1)
       {
         tools::fail_msg_writer() << "Failed to get block header info for alt chain";
         return true;
       }
       uint64_t t0 = bhres.block_headers.front().timestamp, t1 = t0;
-      for (const cryptonote::block_header_response &block_header: bhres.block_headers)
+      for (const block_header_response &block_header: bhres.block_headers)
       {
         t0 = std::min<uint64_t>(t0, block_header.timestamp);
         t1 = std::max<uint64_t>(t1, block_header.timestamp);

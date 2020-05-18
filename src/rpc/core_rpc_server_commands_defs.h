@@ -1003,6 +1003,8 @@ namespace rpc {
       peer(uint64_t id, uint32_t ip, uint16_t port, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
         : id(id), host(epee::string_tools::get_ip_string_from_int32(ip)), ip(ip), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
       {}
+
+      KV_MAP_SERIALIZABLE
     };
 
     struct response
@@ -1022,11 +1024,8 @@ namespace rpc {
     uint64_t last_seen;
     uint16_t rpc_port;
 
-    public_node() = delete;
-
-    public_node(const GET_PEER_LIST::peer &peer)
-      : host(peer.host), last_seen(peer.last_seen), rpc_port(peer.rpc_port)
-    {}
+    public_node() = default;
+    public_node(const GET_PEER_LIST::peer &peer) : host(peer.host), last_seen(peer.last_seen), rpc_port(peer.rpc_port) {}
 
     KV_MAP_SERIALIZABLE
   };
@@ -1035,10 +1034,10 @@ namespace rpc {
   // Query the daemon's peerlist and retrieve peers who have set their public rpc port.
   struct GET_PUBLIC_NODES : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("get_public_nodes"); }
+
     struct request
     {
-      static constexpr auto names() { return NAMES("get_public_nodes"); }
-
       bool gray; // Get peers that have recently gone offline.
       bool white; // Get peers that are online
 
@@ -1338,9 +1337,9 @@ namespace rpc {
   // Set the bootstrap daemon to use for data on the blockchain whilst syncing the chain.
   struct SET_BOOTSTRAP_DAEMON : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("set_bootstrap_daemon"); }
     struct request
     {
-      static constexpr auto names() { return NAMES("set_bootstrap_daemon"); }
 
       std::string address;
       std::string username;
@@ -1349,12 +1348,7 @@ namespace rpc {
       KV_MAP_SERIALIZABLE
     };
 
-    struct response
-    {
-      std::string status;  // General RPC error code. "OK" means everything looks good.
-
-      KV_MAP_SERIALIZABLE
-    };
+    struct response : STATUS {};
   };
 
   LOKI_RPC_DOC_INTROSPECT

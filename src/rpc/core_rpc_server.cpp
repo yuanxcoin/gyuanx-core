@@ -245,26 +245,12 @@ namespace cryptonote { namespace rpc {
   //------------------------------------------------------------------------------------------------------------------------------
   void core_rpc_server::init(const boost::program_options::variables_map& vm)
   {
-    m_max_long_poll_connections = command_line::get_arg(vm, arg_rpc_long_poll_connections);
     m_bootstrap_daemon_address = command_line::get_arg(vm, arg_bootstrap_daemon_address);
     if (!set_bootstrap_daemon(command_line::get_arg(vm, arg_bootstrap_daemon_address),
                               command_line::get_arg(vm, arg_bootstrap_daemon_login)))
     {
       MERROR("Failed to parse bootstrap daemon address");
-      return false;
     }
-
-    boost::optional<epee::net_utils::http::login> http_login{};
-
-    if (rpc_config->login)
-      http_login.emplace(std::move(rpc_config->login->username), std::move(rpc_config->login->password).password());
-
-    auto rng = [](size_t len, uint8_t *ptr){ return crypto::rand(len, ptr); };
-    return epee::http_server_impl_base<core_rpc_server, connection_context>::init(
-      rng, std::move(port), std::move(rpc_config->bind_ip),
-      std::move(rpc_config->bind_ipv6_address), std::move(rpc_config->use_ipv6), std::move(rpc_config->require_ipv4),
-      std::move(rpc_config->access_control_origins), std::move(http_login), std::move(rpc_config->ssl_options)
-    );
     m_was_bootstrap_ever_used = false;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -1191,15 +1177,15 @@ namespace cryptonote { namespace rpc {
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  GET_PUBLIC_NODES::response core_rpc_server::on_get_public_nodes(GET_PUBLIC_NODES::request&& req, rpc_context context)
+  GET_PUBLIC_NODES::response core_rpc_server::invoke(GET_PUBLIC_NODES::request&& req, rpc_context context)
   {
     PERF_TIMER(on_get_public_nodes);
 
-    GET_PEER_LIST::response peer_list_res = invoke({}, context);
+    GET_PEER_LIST::response peer_list_res = invoke(GET_PEER_LIST::request{}, context);
     GET_PUBLIC_NODES::response res{};
     res.status = std::move(peer_list_res.status);
 
-    const auto collect = [](const std::vector<peer> &peer_list, std::vector<public_node> &public_nodes)
+    const auto collect = [](const std::vector<GET_PEER_LIST::peer> &peer_list, std::vector<public_node> &public_nodes)
     {
       for (const auto &entry : peer_list)
       {
@@ -1367,7 +1353,7 @@ namespace cryptonote { namespace rpc {
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  SET_BOOTSTRAP_DAEMON::response core_rpc_server::on_set_bootstrap_daemon(COMMAND_RPC_SET_BOOTSTRAP_DAEMON::request&& req, rpc_context context)
+  SET_BOOTSTRAP_DAEMON::response core_rpc_server::invoke(SET_BOOTSTRAP_DAEMON::request&& req, rpc_context context)
   {
     PERF_TIMER(on_set_bootstrap_daemon);
 
@@ -1380,6 +1366,7 @@ namespace cryptonote { namespace rpc {
     if (!set_bootstrap_daemon(req.address, credentials))
       throw rpc_error{ERROR_WRONG_PARAM, "Failed to set bootstrap daemon to address = " + req.address};
 
+    SET_BOOTSTRAP_DAEMON::response res{};
     res.status = STATUS_OK;
     return res;
   }
@@ -1480,18 +1467,10 @@ namespace cryptonote { namespace rpc {
       throw rpc_error{ERROR_TOO_BIG_RESERVE_SIZE, "Too big reserved size, maximum 255"};
 
     if(req.reserve_size && !req.extra_nonce.empty())
-    {
-      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
-      error_resp.message = "Cannot specify both a reserve_size and an extra_nonce";
-      return false;
-    }
+      throw rpc_error{ERROR_WRONG_PARAM, "Cannot specify both a reserve_size and an extra_nonce"};
 
     if(req.extra_nonce.size() > 510)
-    {
-      error_resp.code = CORE_RPC_ERROR_CODE_TOO_BIG_RESERVE_SIZE;
-      error_resp.message = "Too big extra_nonce size, maximum 510 hex chars";
-      return false;
-    }
+      throw rpc_error{ERROR_TOO_BIG_RESERVE_SIZE, "Too big extra_nonce size, maximum 510 hex chars"};
 
     cryptonote::address_parse_info info;
 
@@ -1505,11 +1484,7 @@ namespace cryptonote { namespace rpc {
     if(!req.extra_nonce.empty())
     {
       if(!string_tools::parse_hexstr_to_binbuff(req.extra_nonce, blob_reserve))
-      {
-        error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
-        error_resp.message = "Parameter extra_nonce should be a hex string";
-        return false;
-      }
+        throw rpc_error{ERROR_WRONG_PARAM, "Parameter extra_nonce should be a hex string"};
     }
     else
       blob_reserve.resize(req.reserve_size, 0);
@@ -1699,13 +1674,13 @@ namespace cryptonote { namespace rpc {
     if (m_bootstrap_daemon_address.empty() || !m_should_use_bootstrap_daemon)
       return {};
 
-    boost::upgrade_lock<boost::shared_mutex> upgrade_lock(m_bootstrap_daemon_mutex);
+    boost::upgrade_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
 
     auto current_time = std::chrono::system_clock::now();
     if (current_time - m_bootstrap_height_check_time > 30s)  // update every 30s
     {
       {
-        boost::upgrade_to_unique_lock<boost::shared_mutex> lock(upgrade_lock);
+        boost::upgrade_to_unique_lock<boost::shared_mutex> upgrade_lock(lock);
         m_bootstrap_height_check_time = current_time;
       }
 
@@ -1769,15 +1744,13 @@ namespace cryptonote { namespace rpc {
         res = std::move(json_resp.result);
     }
 
-    {
-      boost::upgrade_to_unique_lock<boost::shared_mutex> lock(upgrade_lock);
-      m_was_bootstrap_ever_used = true;
-    }
-
     if (!success)
       throw std::runtime_error{"Bootstrap request failed"};
 
-    m_was_bootstrap_ever_used = true;
+    {
+      boost::upgrade_to_unique_lock<boost::shared_mutex> lock(bs_lock);
+      m_was_bootstrap_ever_used = true;
+    }
     res.untrusted = true;
     return true;
   }
@@ -1811,31 +1784,30 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_BLOCK_HEADER_BY_HASH>(req, res))
       return res;
 
-    auto get = [this](const std::string &hash, bool fill_pow_hash, block_header_response &block_header, bool restricted, epee::json_rpc::error& error_resp) -> void {
+    auto get = [this](const std::string &hash, bool fill_pow_hash, block_header_response &block_header, bool admin) -> void {
       crypto::hash block_hash;
-      bool hash_parsed = parse_hash256(req.hash, block_hash);
+      bool hash_parsed = parse_hash256(hash, block_hash);
       if(!hash_parsed)
-        throw rpc_error{ERROR_WRONG_PARAM, "Failed to parse hex representation of block hash. Hex = " + req.hash + '.'};
+        throw rpc_error{ERROR_WRONG_PARAM, "Failed to parse hex representation of block hash. Hex = " + hash + '.'};
       block blk;
       bool orphan = false;
       bool have_block = m_core.get_block_by_hash(block_hash, blk, &orphan);
       if (!have_block)
-        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get block by hash. Hash = " + req.hash + '.'};
+        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get block by hash. Hash = " + hash + '.'};
       if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
         throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: coinbase transaction in the block has the wrong type"};
       uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
-      fill_block_header_response(blk, orphan, block_height, block_hash, res.block_header, req.fill_pow_hash && context.admin);
+      fill_block_header_response(blk, orphan, block_height, block_hash, block_header, fill_pow_hash && admin);
     };
 
-    const bool restricted = m_restricted && ctx;
     if (!req.hash.empty())
-      get(req.hash, req.fill_pow_hash, res.block_header, restricted, error_resp);
+      get(req.hash, req.fill_pow_hash, res.block_header, context.admin);
 
     res.block_headers.reserve(req.hashes.size());
     for (const std::string &hash: req.hashes)
     {
       res.block_headers.push_back({});
-      get(hash, req.fill_pow_hash, res.block_headers.back(), restricted, error_resp);
+      get(hash, req.fill_pow_hash, res.block_headers.back(), context.admin);
     }
 
     res.status = STATUS_OK;
