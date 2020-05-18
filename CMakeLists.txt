@@ -44,7 +44,7 @@ cmake_minimum_required(VERSION 3.7)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 project(loki
-    VERSION 7.1.8
+    VERSION 7.1.9
     LANGUAGES CXX C)
 set(LOKI_RELEASE_CODENAME "Valiant Vidar")
 

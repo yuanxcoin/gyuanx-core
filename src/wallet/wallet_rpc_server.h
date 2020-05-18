@@ -61,6 +61,7 @@ namespace tools
     bool run(bool /*interactive - ignored (rpc wallet is always non-interactive) */);
     void stop();
     void set_wallet(std::unique_ptr<wallet2> cr);
+    std::atomic<bool> m_long_poll_disabled;
 
   private:
     bool run_server_threads();
