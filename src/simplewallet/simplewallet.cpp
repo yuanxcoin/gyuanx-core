@@ -7978,10 +7978,9 @@ bool simple_wallet::get_transfers(std::vector<std::string>& local_args, std::vec
   {
     return false;
   }
+
   args.account_index = m_current_subaddress_account;
-
   m_wallet->get_transfers(args, transfers);
-
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -9450,7 +9449,7 @@ bool simple_wallet::show_transfer(const std::vector<std::string> &args)
       for (const auto &d: pd.m_dests) {
         if (!dests.empty())
           dests += ", ";
-        dests +=  get_account_address_as_str(m_wallet->nettype(), d.is_subaddress, d.addr) + ": " + print_money(d.amount);
+        dests +=  d.address(m_wallet->nettype(), pd.m_payment_id) + ": " + print_money(d.amount);
       }
       std::string payment_id = string_tools::pod_to_hex(i->second.m_payment_id);
       if (payment_id.substr(16).find_first_not_of('0') == std::string::npos)

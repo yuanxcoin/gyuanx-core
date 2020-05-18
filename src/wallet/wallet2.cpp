@@ -6002,7 +6002,7 @@ transfer_view wallet2::wallet2::make_transfer_view(const crypto::hash &txid, con
     result.destinations.push_back({});
     transfer_destination &td = result.destinations.back();
     td.amount = d.amount;
-    td.address = d.original.empty() ? get_account_address_as_str(nettype(), d.is_subaddress, d.addr) : d.original;
+    td.address = d.address(nettype(), pd.m_payment_id);
   }
 
   result.pay_type = pd.m_pay_type;
@@ -6037,7 +6037,7 @@ transfer_view wallet2::make_transfer_view(const crypto::hash &txid, const tools:
     result.destinations.push_back({});
     transfer_destination &td = result.destinations.back();
     td.amount = d.amount;
-    td.address = d.original.empty() ? get_account_address_as_str(nettype(), d.is_subaddress, d.addr) : d.original;
+    td.address = d.address(nettype(), pd.m_payment_id);
   }
 
   result.pay_type = pd.m_pay_type;
