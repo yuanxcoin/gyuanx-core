@@ -2468,13 +2468,8 @@ skip:
   template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::relay_transactions(NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& exclude_context)
   {
-    const bool hide_tx_broadcast =
-      1 < m_p2p->get_zone_count() && exclude_context.m_remote_address.get_zone() == epee::net_utils::zone::invalid;
-
-    if (hide_tx_broadcast)
-      MDEBUG("Attempting to conceal origin of tx via anonymity network connection(s)");
-
-    const bool pad_transactions = m_core.pad_transactions() || hide_tx_broadcast;
+    for(auto& tx_blob : arg.txs)
+      m_core.on_transaction_relayed(tx_blob);
 
     // no check for success, so tell core they're relayed unconditionally and snag a copy of the
     // hash so that we can look up any associated blink data we should include.
@@ -2504,36 +2499,8 @@ skip:
       }
     }
 
-    if (pad_transactions)
-    {
-      // stuff some dummy bytes in to stay safe from traffic volume analysis
-      arg._.clear();
-      arg._.resize(std::uniform_int_distribution<size_t>{0, 1024}(tools::rng), ' ');
-    }
-
-    std::vector<std::pair<epee::net_utils::zone, boost::uuids::uuid>> connections;
-    m_p2p->for_each_connection([hide_tx_broadcast, &exclude_context, &connections](connection_context& context, nodetool::peerid_type peer_id, uint32_t support_flags)
-    {
-      const epee::net_utils::zone current_zone = context.m_remote_address.get_zone();
-      const bool broadcast_to_peer =
-        peer_id &&
-        (hide_tx_broadcast != bool(current_zone == epee::net_utils::zone::public_)) &&
-        exclude_context.m_connection_id != context.m_connection_id;
-
-      if (broadcast_to_peer)
-        connections.push_back({current_zone, context.m_connection_id});
-
-      return true;
-    });
-
-    if (connections.empty())
-      MERROR("Transaction not relayed - no" << (hide_tx_broadcast ? " privacy": "") << " peers available");
-    else
-    {
-      std::string fullBlob;
-      epee::serialization::store_t_to_binary(arg, fullBlob);
-      m_p2p->relay_notify_to_list(NOTIFY_NEW_TRANSACTIONS::ID, epee::strspan<uint8_t>(fullBlob), std::move(connections));
-    }
+    // no check for success, so tell core they're relayed unconditionally
+    m_p2p->send_txs(std::move(arg.txs), exclude_context.m_remote_address.get_zone(), exclude_context.m_connection_id, m_core.pad_transactions());
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------

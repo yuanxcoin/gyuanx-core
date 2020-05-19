@@ -596,6 +596,8 @@ namespace net_utils
 		if (query_info.m_http_method != http::http_method_head)
 			for (auto& body_piece : response.m_body_pieces)
 				m_psnd_hndlr->do_send((void*) body_piece.data(), body_piece.size());
+
+		m_psnd_hndlr->do_send(byte_slice{std::move(response_data)});
 		m_psnd_hndlr->send_done();
 		return res;
 	}

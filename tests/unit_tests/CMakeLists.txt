@@ -53,6 +53,7 @@ add_executable(unit_tests
   hmac_keccak.cpp
   http.cpp
   keccak.cpp
+  levin.cpp
   logging.cpp
   loki_name_system.cpp
   long_term_block_weight.cpp
