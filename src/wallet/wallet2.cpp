@@ -2906,7 +2906,7 @@ bool wallet2::long_poll_pool_state()
   bool r               = false;
   {
     std::lock_guard<decltype(m_long_poll_mutex)> lock(m_long_poll_mutex);
-    r = epee::net_utils::invoke_http_json("/get_transaction_pool_hashes.bin",
+    r = epee::net_utils::invoke_http_bin("/get_transaction_pool_hashes.bin",
                                           req,
                                           res,
                                           m_long_poll_client,
@@ -2945,7 +2945,7 @@ void wallet2::update_pool_state(bool refreshed)
     cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::request req{};
     cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::response res{};
     m_daemon_rpc_mutex.lock();
-    bool r = invoke_http_json("/get_transaction_pool_hashes.bin", req, res, rpc_timeout);
+    bool r = invoke_http_bin("/get_transaction_pool_hashes.bin", req, res, rpc_timeout);
     m_daemon_rpc_mutex.unlock();
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "get_transaction_pool_hashes.bin");
@@ -5406,6 +5406,7 @@ bool wallet2::is_connected() const
 bool wallet2::check_connection(rpc::version_t *version, bool *ssl, uint32_t timeout)
 {
   THROW_WALLET_EXCEPTION_IF(!m_is_initialized, error::wallet_not_initialized);
+  if (version) *version = {};
 
   if (m_offline)
   {
@@ -5442,13 +5443,10 @@ bool wallet2::check_connection(rpc::version_t *version, bool *ssl, uint32_t time
 
   if (!m_rpc_version)
   {
-    *version = {};
     cryptonote::rpc::GET_VERSION::request req_t{};
     cryptonote::rpc::GET_VERSION::response resp_t{};
     bool r = invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t);
     if(!r) {
-      if(version)
-        *version = {};
       return false;
     }
     if (resp_t.status == rpc::STATUS_OK)
