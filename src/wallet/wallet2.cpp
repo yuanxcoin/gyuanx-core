@@ -2906,7 +2906,7 @@ bool wallet2::long_poll_pool_state()
   bool r               = false;
   {
     std::lock_guard<decltype(m_long_poll_mutex)> lock(m_long_poll_mutex);
-    r = epee::net_utils::invoke_http_json("/get_transaction_pool_hashes.bin",
+    r = epee::net_utils::invoke_http_bin("/get_transaction_pool_hashes.bin",
                                           req,
                                           res,
                                           m_long_poll_client,
@@ -2945,7 +2945,7 @@ void wallet2::update_pool_state(bool refreshed)
     cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::request req{};
     cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::response res{};
     m_daemon_rpc_mutex.lock();
-    bool r = invoke_http_json("/get_transaction_pool_hashes.bin", req, res, rpc_timeout);
+    bool r = invoke_http_bin("/get_transaction_pool_hashes.bin", req, res, rpc_timeout);
     m_daemon_rpc_mutex.unlock();
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "get_transaction_pool_hashes.bin");
