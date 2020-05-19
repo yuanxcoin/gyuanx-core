@@ -127,7 +127,7 @@ namespace cryptonote { namespace rpc {
         if (!request.body.is<string_view>())
           throw std::runtime_error{"Internal error: can't load binary a RPC command with non-string body"};
         auto data = request.body.get_unchecked<string_view>();
-        if (!epee::serialization::load_t_from_binary(req, epee::span<const uint8_t>{reinterpret_cast<uint8_t*>(data[0]), data.size()}))
+        if (!epee::serialization::load_t_from_binary(req, epee::span<const uint8_t>{reinterpret_cast<uint8_t const*>(&data[0]), data.size()}))
           throw parse_error{"Failed to parse binary data parameters"};
         return req;
       }
