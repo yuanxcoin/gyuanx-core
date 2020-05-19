@@ -5406,6 +5406,7 @@ bool wallet2::is_connected() const
 bool wallet2::check_connection(rpc::version_t *version, bool *ssl, uint32_t timeout)
 {
   THROW_WALLET_EXCEPTION_IF(!m_is_initialized, error::wallet_not_initialized);
+  if (version) *version = {};
 
   if (m_offline)
   {
@@ -5442,13 +5443,10 @@ bool wallet2::check_connection(rpc::version_t *version, bool *ssl, uint32_t time
 
   if (!m_rpc_version)
   {
-    *version = {};
     cryptonote::rpc::GET_VERSION::request req_t{};
     cryptonote::rpc::GET_VERSION::response resp_t{};
     bool r = invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t);
     if(!r) {
-      if(version)
-        *version = {};
       return false;
     }
     if (resp_t.status == rpc::STATUS_OK)
