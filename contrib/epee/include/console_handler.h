@@ -45,6 +45,9 @@
   #include "readline_buffer.h"
 #endif
 
+#undef MONERO_DEFAULT_LOG_CATEGORY
+#define MONERO_DEFAULT_LOG_CATEGORY "console_handler"
+
 namespace epee
 {
   class async_stdin_reader
@@ -93,7 +96,7 @@ namespace epee
         res = true;
       }
 
-      if (!eos())
+      if (!eos() && m_read_status != state_cancelled)
         m_read_status = state_init;
 
       return res;
@@ -117,6 +120,14 @@ namespace epee
         m_readline_buffer.stop();
 #endif
       }
+    }
+
+    void cancel()
+    {
+      std::unique_lock<std::mutex> lock(m_response_mutex);
+      m_read_status = state_cancelled;
+      m_has_read_request = false;
+      m_response_cv.notify_one();
     }
 
   private:
@@ -156,6 +167,9 @@ namespace epee
 
       while (m_run.load(std::memory_order_relaxed))
       {
+        if (m_read_status == state_cancelled)
+          return false;
+
         fd_set read_set;
         FD_ZERO(&read_set);
         FD_SET(stdin_fileno, &read_set);
@@ -173,6 +187,9 @@ namespace epee
 #else
       while (m_run.load(std::memory_order_relaxed))
       {
+        if (m_read_status == state_cancelled)
+          return false;
+
         int retval = ::WaitForSingleObject(::GetStdHandle(STD_INPUT_HANDLE), 100);
         switch (retval)
         {
@@ -213,7 +230,8 @@ reread:
             case rdln::full:    break;
             }
 #else
-            std::getline(std::cin, line);
+            if (m_read_status != state_cancelled)
+              std::getline(std::cin, line);
 #endif
             read_ok = !std::cin.eof() && !std::cin.fail();
           }
@@ -289,13 +307,19 @@ eof:
     template<class chain_handler>
     bool run(chain_handler ch_handler, std::function<std::string(void)> prompt, const std::string& usage = "", std::function<void(void)> exit_handler = NULL)
     {
-      return run(prompt, usage, [&](const std::string& cmd) { return ch_handler(cmd); }, exit_handler);
+      return run(prompt, usage, [&](const boost::optional<std::string>& cmd) { return ch_handler(cmd); }, exit_handler);
     }
 
     void stop()
     {
       m_running = false;
       m_stdin_reader.stop();
+    }
+
+    void cancel()
+    {
+      m_cancel = true;
+      m_stdin_reader.cancel();
     }
 
     void print_prompt()
@@ -346,10 +370,19 @@ eof:
             std::cout << std::endl;
             break;
           }
+
+          if (m_cancel)
+          {
+            MDEBUG("Input cancelled");
+            cmd_handler(boost::none);
+            m_cancel = false;
+            continue;
+          }
           if (!get_line_ret)
           {
             MERROR("Failed to read line.");
           }
+
           string_tools::trim(command);
 
           LOG_PRINT_L2("Read command: " << command);
@@ -379,12 +412,14 @@ eof:
   private:
     async_stdin_reader m_stdin_reader;
     std::atomic<bool> m_running = {true};
+    std::atomic<bool> m_cancel = {false};
     std::function<std::string(void)> m_prompt;
   };
 
   class command_handler {
   public:
     typedef std::function<bool(const std::vector<std::string> &)> callback;
+    typedef boost::function<bool (void)> empty_callback;
     typedef std::map<std::string, std::pair<callback, std::pair<std::string, std::string>>> lookup;
 
     /// Go through registered commands in sorted order, call the function with three string
@@ -457,15 +492,23 @@ eof:
       return false;
     }
 
-    bool process_command_and_log(const std::string &cmd)
+    bool process_command_and_log(const boost::optional<std::string>& cmd)
     {
+      if (!cmd)
+        return m_cancel_handler();
       std::vector<std::string> cmd_v;
-      boost::split(cmd_v,cmd,boost::is_any_of(" "), boost::token_compress_on);
+      boost::split(cmd_v,*cmd,boost::is_any_of(" "), boost::token_compress_on);
       return process_command_and_log(cmd_v);
+    }
+
+    void set_cancel_handler(const empty_callback& hndlr)
+    {
+      m_cancel_handler = hndlr;
     }
 
   private:
     lookup m_command_handlers;
+    empty_callback m_cancel_handler;
   };
 
   /************************************************************************/
@@ -502,6 +545,11 @@ eof:
     void print_prompt()
     {
       m_console_handler.print_prompt();
+    }
+
+    void cancel_input()
+    {
+      m_console_handler.cancel();
     }
   };
 }

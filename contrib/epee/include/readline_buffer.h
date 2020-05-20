@@ -31,5 +31,7 @@ namespace rdln
     size_t m_prompt_length;
     static std::vector<std::string>& completion_commands();
   };
+
+  void clear_screen();
 }
 

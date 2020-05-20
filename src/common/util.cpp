@@ -31,6 +31,7 @@
 
 #include <unistd.h>
 #include <cstdio>
+#include <wchar.h>
 
 #ifdef __GLIBC__
 #include <gnu/libc-version.h>
@@ -66,6 +67,7 @@
 #include "memwipe.h"
 #include "cryptonote_config.h"
 #include "net/http_client.h"                        // epee::net_utils::...
+#include "readline_buffer.h"
 
 #ifdef WIN32
 #ifndef STRSAFE_NO_DEPRECATE
@@ -831,5 +833,28 @@ namespace tools
     for (char &ch : src)
       if (ch >= 'A' && ch <= 'Z') ch = ch + ('a' - 'A');
     return src;
+  }
+
+  void clear_screen()
+  {
+    std::cout << "\033[2K"; // clear whole line
+    std::cout << "\033c";   // clear current screen and scrollback
+    std::cout << "\033[2J"; // clear current screen only, scrollback is still around
+    std::cout << "\033[3J"; // does nothing, should clear current screen and scrollback
+    std::cout << "\033[1;1H"; // move cursor top/left
+    std::cout << "\r                                                \r" << std::flush; // erase odd chars if the ANSI codes were printed raw
+#ifdef _WIN32
+    COORD coord{0, 0};
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (GetConsoleScreenBufferInfo(h, &csbi))
+    {
+      DWORD cbConSize = csbi.dwSize.X * csbi.dwSize.Y, w;
+      FillConsoleOutputCharacter(h, (TCHAR)' ', cbConSize, coord, &w);
+      if (GetConsoleScreenBufferInfo(h, &csbi))
+        FillConsoleOutputAttribute(h, csbi.wAttributes, cbConSize, coord, &w);
+      SetConsoleCursorPosition(h, coord);
+    }
+#endif
   }
 }

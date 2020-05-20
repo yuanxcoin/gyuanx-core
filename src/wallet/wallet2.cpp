@@ -144,6 +144,8 @@ namespace string_tools = epee::string_tools;
 #define DEFAULT_MIN_OUTPUT_COUNT 5
 #define DEFAULT_MIN_OUTPUT_VALUE (2*COIN)
 
+#define DEFAULT_INACTIVITY_LOCK_TIMEOUT 90 // a minute and a half
+
 static const std::string MULTISIG_SIGNATURE_MAGIC = "SigMultisigPkV1";
 static const std::string MULTISIG_EXTRA_INFO_MAGIC = "MultisigxV1";
 
@@ -1079,6 +1081,7 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended):
   m_segregation_height(0),
   m_ignore_fractional_outputs(true),
   m_track_uses(false),
+  m_inactivity_lock_timeout(DEFAULT_INACTIVITY_LOCK_TIMEOUT),
   m_is_initialized(false),
   m_kdf_rounds(kdf_rounds),
   is_old_file_format(false),
@@ -3891,6 +3894,9 @@ bool wallet2::store_keys(const std::string& keys_file_name, const epee::wipeable
   value2.SetInt(m_track_uses ? 1 : 0);
   json.AddMember("track_uses", value2, json.GetAllocator());
 
+  value2.SetInt(m_inactivity_lock_timeout);
+  json.AddMember("inactivity_lock_timeout", value2, json.GetAllocator());
+
   value2.SetUint(m_subaddress_lookahead_major);
   json.AddMember("subaddress_lookahead_major", value2, json.GetAllocator());
 
@@ -4040,6 +4046,7 @@ bool wallet2::load_keys(const std::string& keys_file_name, const epee::wipeable_
     m_segregation_height = 0;
     m_ignore_fractional_outputs = true;
     m_track_uses = false;
+    m_inactivity_lock_timeout = DEFAULT_INACTIVITY_LOCK_TIMEOUT;
     m_subaddress_lookahead_major = SUBADDRESS_LOOKAHEAD_MAJOR;
     m_subaddress_lookahead_minor = SUBADDRESS_LOOKAHEAD_MINOR;
     m_original_keys_available = false;
@@ -4189,6 +4196,8 @@ bool wallet2::load_keys(const std::string& keys_file_name, const epee::wipeable_
     m_ignore_fractional_outputs = field_ignore_fractional_outputs;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, track_uses, int, Int, false, false);
     m_track_uses = field_track_uses;
+    GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, inactivity_lock_timeout, uint32_t, Uint, false, DEFAULT_INACTIVITY_LOCK_TIMEOUT);
+    m_inactivity_lock_timeout = field_inactivity_lock_timeout;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, subaddress_lookahead_major, uint32_t, Uint, false, SUBADDRESS_LOOKAHEAD_MAJOR);
     m_subaddress_lookahead_major = field_subaddress_lookahead_major;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, subaddress_lookahead_minor, uint32_t, Uint, false, SUBADDRESS_LOOKAHEAD_MINOR);

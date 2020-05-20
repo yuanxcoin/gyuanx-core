@@ -45,6 +45,7 @@
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "wallet/wallet2.h"
 #include "console_handler.h"
+#include "math_helper.h"
 #include "wipeable_string.h"
 #include "common/i18n.h"
 #include "common/password.h"
@@ -147,6 +148,7 @@ namespace cryptonote
     bool set_segregation_height(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_ignore_fractional_outputs(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_track_uses(const std::vector<std::string> &args = std::vector<std::string>());
+    bool set_inactivity_lock_timeout(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_device_name(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_export_format(const std::vector<std::string> &args = std::vector<std::string>());
     bool help(const std::vector<std::string> &args = std::vector<std::string>());
@@ -265,6 +267,7 @@ namespace cryptonote
     bool freeze(const std::vector<std::string>& args);
     bool thaw(const std::vector<std::string>& args);
     bool frozen(const std::vector<std::string>& args);
+    bool lock(const std::vector<std::string>& args);
     bool net_stats(const std::vector<std::string>& args);
     bool welcome(const std::vector<std::string>& args);
     bool version(const std::vector<std::string>& args);
@@ -294,6 +297,10 @@ namespace cryptonote
     std::pair<std::string, std::string> show_outputs_line(const std::vector<uint64_t> &heights, uint64_t blockchain_height, uint64_t highlight_height = std::numeric_limits<uint64_t>::max()) const;
     bool freeze_thaw(const std::vector<std::string>& args, bool freeze);
 
+    bool on_command(bool (simple_wallet::*cmd)(const std::vector<std::string>&), const std::vector<std::string> &args);
+    bool on_cancelled_command();
+    void check_for_inactivity_lock(bool user);
+
     bool get_transfers(std::vector<std::string>& args_, std::vector<tools::transfer_view>& transfers);
 
     /*!
@@ -318,6 +325,11 @@ namespace cryptonote
      * \param blink true if this should be submitted as a blink tx
      */
     void commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_vector, bool do_not_relay, bool blink);
+
+    // idle thread workers
+    bool check_inactivity();
+    bool check_refresh();
+    bool check_mms();
 
     //----------------- i_wallet2_callback ---------------------
     virtual void on_new_block(uint64_t height, const cryptonote::block& block);
@@ -427,10 +439,19 @@ namespace cryptonote
     uint32_t m_current_subaddress_account;
 
     bool m_long_payment_id_support;
+
     std::atomic<uint64_t> m_password_asked_on_height;
     crypto::hash          m_password_asked_on_checksum;
     boost::thread         m_long_poll_thread;
-    
+
+    std::atomic<time_t> m_last_activity_time;
+    std::atomic<bool> m_locked;
+    std::atomic<bool> m_in_command;
+
+    epee::math_helper::periodic_task m_inactivity_checker{1s};
+    epee::math_helper::periodic_task m_refresh_checker{90s};
+    epee::math_helper::periodic_task m_mms_checker{90s};
+
     // MMS
     mms::message_store& get_message_store() const { return m_wallet->get_message_store(); };
     mms::multisig_wallet_state get_multisig_wallet_state() const { return m_wallet->get_multisig_wallet_state(); };
