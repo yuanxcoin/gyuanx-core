@@ -9527,11 +9527,6 @@ bool simple_wallet::show_transfer(const std::vector<std::string> &args)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::process_command(const std::vector<std::string> &args)
-{
-  return m_cmd_binder.process_command(args);
-}
-//----------------------------------------------------------------------------------------------------
 void simple_wallet::interrupt()
 {
   if (m_in_manual_refresh.load(std::memory_order_relaxed))
@@ -9659,37 +9654,35 @@ int main(int argc, char* argv[])
   std::vector<std::string> command = command_line::get_arg(*vm, arg_command);
   if (!command.empty())
   {
-    if (!w.process_command(command))
-      fail_msg_writer() << sw::tr("Unknown command: ") << command.front();
+    bool success = w.process_command_and_log(command);
     w.stop();
     w.deinit();
+    return success ? 0 : 1;
   }
-  else
-  {
-    tools::signal_handler::install([&w](int type) {
-      if (tools::password_container::is_prompting.load())
-      {
-        // must be prompting for password so return and let the signal stop prompt
-        return;
-      }
-#ifdef WIN32
-      if (type == CTRL_C_EVENT)
-#else
-      if (type == SIGINT)
-#endif
-      {
-        // if we're pressing ^C when refreshing, just stop refreshing
-        w.interrupt();
-      }
-      else
-      {
-        w.stop();
-      }
-    });
-    w.run();
 
-    w.deinit();
-  }
+  tools::signal_handler::install([&w](int type) {
+    if (tools::password_container::is_prompting.load())
+    {
+      // must be prompting for password so return and let the signal stop prompt
+      return;
+    }
+#ifdef WIN32
+    if (type == CTRL_C_EVENT)
+#else
+    if (type == SIGINT)
+#endif
+    {
+      // if we're pressing ^C when refreshing, just stop refreshing
+      w.interrupt();
+    }
+    else
+    {
+      w.stop();
+    }
+  });
+  w.run();
+
+  w.deinit();
   return 0;
   CATCH_ENTRY_L0("main", 1);
 }

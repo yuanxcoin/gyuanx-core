@@ -271,17 +271,7 @@ int main(int argc, char const * argv[])
           return 1;
 
         daemonize::command_server rpc_commands{rpc_ip, rpc_port, std::move(login), std::move(*ssl_options)};
-
-        try {
-          if (rpc_commands.process_command(command))
-            return 0;
-        } catch (const std::out_of_range& e) {
-#ifdef HAVE_READLINE
-          rdln::suspend_readline pause_readline;
-#endif
-          std::cout << "Unknown command: " << e.what() << ".  Try 'help' for available commands\n";
-        }
-        return 1;
+        return rpc_commands.process_command_and_log(command) ? 0 : 1;
       }
     }
 

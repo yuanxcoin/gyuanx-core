@@ -361,17 +361,9 @@ eof:
           {
             continue_handle = false;
           }
-          else if(cmd_handler(command))
-          {
-            continue;
-          }
           else
           {
-#ifdef HAVE_READLINE
-            rdln::suspend_readline pause_readline;
-#endif
-            std::cout << "unknown command: " << command << std::endl;
-            std::cout << usage;
+            cmd_handler(command);
           }
         }
         catch (const std::exception &ex)
@@ -428,24 +420,50 @@ eof:
 #endif
     }
 
-    /// Throws std::out_of_range on bad command with what() set to the command name, otherwise
+    /// Throws invalid_command on bad command with what() set to the command name, otherwise
     /// returns the result of the command (true generally means success, false means failure).
+    struct invalid_command : std::invalid_argument { using std::invalid_argument::invalid_argument; };
     bool process_command(const std::vector<std::string>& cmd)
     {
       if(!cmd.size())
-        throw std::out_of_range{"(empty)"};
+        throw invalid_command{"(empty)"};
       auto it = m_command_handlers.find(cmd.front());
       if (it == m_command_handlers.end())
-        throw std::out_of_range{cmd.front()};
+        throw invalid_command{cmd.front()};
       return it->second.first(std::vector<std::string>{cmd.begin()+1, cmd.end()});
     }
 
-    bool process_command(const std::string& cmd)
+    bool process_command_and_log(const std::vector<std::string> &cmd)
+    {
+      try
+      {
+        return process_command(cmd);
+      }
+      catch (const invalid_command &e)
+      {
+#ifdef HAVE_READLINE
+        rdln::suspend_readline pause_readline;
+#endif
+        std::cout << "Unknown command: " << e.what() << ". Try 'help' for available commands\n";
+      }
+      catch (const std::exception &e)
+      {
+#ifdef HAVE_READLINE
+        rdln::suspend_readline pause_readline;
+#endif
+        std::cout << "Command errored: " << cmd.front() << ", " << e.what();
+      }
+
+      return false;
+    }
+
+    bool process_command_and_log(const std::string &cmd)
     {
       std::vector<std::string> cmd_v;
       boost::split(cmd_v,cmd,boost::is_any_of(" "), boost::token_compress_on);
-      return process_command(cmd_v);
+      return process_command_and_log(cmd_v);
     }
+
   private:
     lookup m_command_handlers;
   };
@@ -478,7 +496,7 @@ eof:
 
     bool run_handling(std::function<std::string(void)> prompt, const std::string& usage_string, std::function<void(void)> exit_handler = NULL)
     {
-      return m_console_handler.run([this](const auto& arg) { return process_command(arg); }, prompt, usage_string, exit_handler);
+      return m_console_handler.run([this](const auto& arg) { return process_command_and_log(arg); }, prompt, usage_string, exit_handler);
     }
 
     void print_prompt()
