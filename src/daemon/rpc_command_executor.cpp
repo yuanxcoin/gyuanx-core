@@ -70,9 +70,7 @@ namespace {
     integration_test::write_buffered_stdout();
     result = integration_test::read_from_pipe();
 #else
-  #ifdef HAVE_READLINE
     rdln::suspend_readline pause_readline;
-  #endif
     std::cin >> result;
 #endif
 
