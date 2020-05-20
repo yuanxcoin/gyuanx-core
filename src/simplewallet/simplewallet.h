@@ -84,7 +84,8 @@ namespace cryptonote
     void interrupt();
 
     //wallet *create_wallet();
-    bool process_command(const std::vector<std::string> &args);
+    bool process_command_and_log(const std::vector<std::string> &args) { return m_cmd_binder.process_command_and_log(args); }
+//----------------------------------------------------------------------------------------------------
     std::string get_commands_str();
     std::string get_command_usage(const std::vector<std::string> &args);
   private:
@@ -92,8 +93,6 @@ namespace cryptonote
     enum ResetType { ResetNone, ResetSoft, ResetHard, ResetSoftKeepKI };
 
     bool handle_command_line(const boost::program_options::variables_map& vm);
-
-    bool run_console_handler();
 
     void wallet_idle_thread();
 

@@ -56,7 +56,7 @@ public:
   command_server(cryptonote::rpc::core_rpc_server& rpc_server);
 
   template <typename... T>
-  bool process_command(T&&... args) { return m_command_lookup.process_command(std::forward<T>(args)...); }
+  bool process_command_and_log(T&&... args) { return m_command_lookup.process_command_and_log(std::forward<T>(args)...); }
 
   bool start_handling(std::function<void(void)> exit_handler = {});
 
