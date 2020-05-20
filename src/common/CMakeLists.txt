@@ -75,7 +75,6 @@ target_link_libraries(common
     Boost::regex
     OpenSSL::SSL
     OpenSSL::Crypto
-    epee_readline
     extra)
 
 target_include_directories(common PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/../../translations")

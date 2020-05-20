@@ -44,7 +44,6 @@ target_link_libraries(daemon
     daemonizer
     serialization
     daemon_rpc_server
-    epee_readline
     version
     Boost::chrono
     Boost::filesystem

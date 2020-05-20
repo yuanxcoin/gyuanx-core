@@ -79,6 +79,7 @@
 #include "version.h"
 #include <stdexcept>
 #include "int-util.h"
+#include "readline_suspend.h"
 #include "wallet/message_store.h"
 #include "wallet/wallet_rpc_server_commands_defs.h"
 #include "string_coding.h"
@@ -92,14 +93,6 @@ extern "C"
 {
 #include <sodium.h>
 }
-
-#ifdef HAVE_READLINE
-  #include "readline_buffer.h"
-  #define PAUSE_READLINE() \
-    rdln::suspend_readline pause_readline; 
-#else
-  #define PAUSE_READLINE()
-#endif
 
 using namespace cryptonote;
 namespace po = boost::program_options;
@@ -291,9 +284,7 @@ namespace
   {
     std::string buf;
 
-#ifdef HAVE_READLINE
     rdln::suspend_readline pause_readline;
-#endif
     std::cout << prompt;
     if (yesno)
       std::cout << " (Y/Yes/N/No)";
@@ -317,9 +308,7 @@ namespace
     epee::wipeable_string buf = integration_test::read_from_pipe();
 #else
 
-#ifdef HAVE_READLINE
     rdln::suspend_readline pause_readline;
-#endif
     auto pwd_container = tools::password_container::prompt(false, prompt, false);
     if (!pwd_container)
     {
@@ -341,9 +330,7 @@ namespace
     integration_test::write_buffered_stdout();
     tools::password_container pwd_container(std::string(""));
 #else
-  #ifdef HAVE_READLINE
     rdln::suspend_readline pause_readline;
-  #endif
     auto pwd_container = tools::password_container::prompt(verify, prompt);
     if (!pwd_container)
     {
@@ -684,7 +671,7 @@ std::string simple_wallet::get_command_usage(const std::vector<std::string> &arg
 bool simple_wallet::viewkey(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   // don't log
-  PAUSE_READLINE();
+  rdln::suspend_readline pause_readline;
   if (m_wallet->key_on_device()) {
     std::cout << "secret: On device. Not available" << std::endl;
   } else {
@@ -706,7 +693,7 @@ bool simple_wallet::spendkey(const std::vector<std::string> &args/* = std::vecto
     return true;
   }
   // don't log
-  PAUSE_READLINE();
+  rdln::suspend_readline pause_readline;
   if (m_wallet->key_on_device()) {
     std::cout << "secret: On device. Not available" << std::endl;
   } else {
@@ -4145,7 +4132,7 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
     recovery_val = m_wallet->generate(m_wallet_file, std::move(rc.second).password(), recovery_key, recover, two_random, create_address_file);
     message_writer(epee::console_color_white, true) << tr("Generated new wallet: ")
       << m_wallet->get_account().get_public_address_str(m_wallet->nettype());
-    PAUSE_READLINE();
+    rdln::suspend_readline pause_readline;
     std::cout << tr("View key: ");
     print_secret_key(m_wallet->get_account().get_keys().m_view_secret_key);
     std::cout << '\n';
@@ -4741,9 +4728,7 @@ boost::optional<epee::wipeable_string> simple_wallet::on_get_password(const char
     return boost::none;
   }
 
-#ifdef HAVE_READLINE
   rdln::suspend_readline pause_readline;
-#endif
   std::string msg = tr("Enter password ");
   if (reason && *reason)
     msg += reason;
@@ -4764,9 +4749,7 @@ void simple_wallet::on_device_button_request(uint64_t code)
 //----------------------------------------------------------------------------------------------------
 boost::optional<epee::wipeable_string> simple_wallet::on_device_pin_request()
 {
-#ifdef HAVE_READLINE
   rdln::suspend_readline pause_readline;
-#endif
   std::string msg = tr("Enter device PIN");
   auto pwd_container = tools::password_container::prompt(false, msg.c_str());
   THROW_WALLET_EXCEPTION_IF(!pwd_container, tools::error::password_entry_failed, tr("Failed to read device PIN"));
@@ -4780,9 +4763,7 @@ boost::optional<epee::wipeable_string> simple_wallet::on_device_passphrase_reque
     return boost::none;
   }
 
-#ifdef HAVE_READLINE
   rdln::suspend_readline pause_readline;
-#endif
   std::string msg = tr("Enter device passphrase");
   auto pwd_container = tools::password_container::prompt(false, msg.c_str());
   THROW_WALLET_EXCEPTION_IF(!pwd_container, tools::error::password_entry_failed, tr("Failed to read device passphrase"));
@@ -4829,9 +4810,7 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
     m_wallet->rescan_blockchain(reset == ResetHard, false, reset == ResetSoftKeepKI);
   }
 
-#ifdef HAVE_READLINE
   rdln::suspend_readline pause_readline;
-#endif
 
   message_writer() << tr("Starting refresh...");
 
@@ -5016,7 +4995,7 @@ bool simple_wallet::show_incoming_transfers(const std::vector<std::string>& args
 
   const uint64_t blockchain_height = m_wallet->get_blockchain_current_height();
 
-  PAUSE_READLINE();
+  rdln::suspend_readline pause_readline;
 
   std::set<uint32_t> subaddr_indices;
   if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
@@ -5110,7 +5089,7 @@ bool simple_wallet::show_payments(const std::vector<std::string> &args)
 
   LOCK_IDLE_SCOPE();
 
-  PAUSE_READLINE();
+  rdln::suspend_readline pause_readline;
 
   message_writer() << boost::format("%68s%68s%12s%21s%16s%16s") %
     tr("payment") % tr("transaction") % tr("height") % tr("amount") % tr("unlock time") % tr("addr index");
@@ -7985,7 +7964,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
   if (!get_transfers(local_args, all_transfers))
     return true;
 
-  PAUSE_READLINE();
+  rdln::suspend_readline pause_readline;
   for (const auto& transfer : all_transfers)
   {
     auto color = epee::console_color_white;
