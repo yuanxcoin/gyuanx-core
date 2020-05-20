@@ -164,7 +164,7 @@ namespace cryptonote { namespace rpc {
 
     auto remote = context.m_remote_address.str();
     rpc_request request{};
-    request.context.admin = m_restricted;
+    request.context.admin = !m_restricted;
     request.context.source = rpc_source::http;
     request.context.remote = remote;
 

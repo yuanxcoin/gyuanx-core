@@ -273,14 +273,6 @@ eof:
     std::condition_variable m_response_cv;
   };
 
-
-  template<class t_server>
-  bool empty_commands_handler(t_server* psrv, const std::string& command)
-  {
-    return true;
-  }
-
-
   class async_console_handler
   {
   public:
@@ -365,21 +357,13 @@ eof:
           {
             continue;
           }
-          else if(cmd_handler(command))
-          {
-            continue;
-          }
           else if(0 == command.compare("exit") || 0 == command.compare("q"))
           {
             continue_handle = false;
           }
           else
           {
-#ifdef HAVE_READLINE
-            rdln::suspend_readline pause_readline;
-#endif
-            std::cout << "unknown command: " << command << std::endl;
-            std::cout << usage;
+            cmd_handler(command);
           }
         }
         catch (const std::exception &ex)
@@ -397,59 +381,6 @@ eof:
     std::atomic<bool> m_running = {true};
     std::function<std::string(void)> m_prompt;
   };
-
-
-  template<class t_server, class t_handler>
-  bool start_default_console(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    std::shared_ptr<async_console_handler> console_handler = std::make_shared<async_console_handler>();
-    std::thread([=](){console_handler->run<t_server, t_handler>(ptsrv, handlr, prompt, usage);}).detach();
-    return true;
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console(ptsrv, handlr, [prompt](){ return prompt; }, usage);
-  }
-
-  template<class t_server>
-  bool start_default_console(t_server* ptsrv, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console(ptsrv, empty_commands_handler<t_server>, prompt, usage);
-  }
-
-  template<class t_server, class t_handler>
-    bool no_srv_param_adapter(t_server* ptsrv, const std::string& cmd, t_handler handlr)
-    {
-      return handlr(cmd);
-    }
-
-  template<class t_server, class t_handler>
-  bool run_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    async_console_handler console_handler;
-    return console_handler.run(ptsrv, [=](auto& a, auto& b) { return no_srv_param_adapter<t_server, t_handler>(a, b, handlr); }, prompt, usage);
-  }
-
-  template<class t_server, class t_handler>
-  bool run_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return run_default_console_handler_no_srv_param(ptsrv, handlr, [prompt](){return prompt;},usage);
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    std::thread( std::bind(run_default_console_handler_no_srv_param<t_server, t_handler>, ptsrv, handlr, prompt, usage) );
-    return true;
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console_handler_no_srv_param(ptsrv, handlr, [prompt](){return prompt;}, usage);
-  }
 
   class command_handler {
   public:
@@ -489,24 +420,50 @@ eof:
 #endif
     }
 
-    /// Throws std::out_of_range on bad command with what() set to the command name, otherwise
+    /// Throws invalid_command on bad command with what() set to the command name, otherwise
     /// returns the result of the command (true generally means success, false means failure).
+    struct invalid_command : std::invalid_argument { using std::invalid_argument::invalid_argument; };
     bool process_command(const std::vector<std::string>& cmd)
     {
       if(!cmd.size())
-        throw std::out_of_range{"(empty)"};
+        throw invalid_command{"(empty)"};
       auto it = m_command_handlers.find(cmd.front());
       if (it == m_command_handlers.end())
-        throw std::out_of_range{cmd.front()};
+        throw invalid_command{cmd.front()};
       return it->second.first(std::vector<std::string>{cmd.begin()+1, cmd.end()});
     }
 
-    bool process_command(const std::string& cmd)
+    bool process_command_and_log(const std::vector<std::string> &cmd)
+    {
+      try
+      {
+        return process_command(cmd);
+      }
+      catch (const invalid_command &e)
+      {
+#ifdef HAVE_READLINE
+        rdln::suspend_readline pause_readline;
+#endif
+        std::cout << "Unknown command: " << e.what() << ". Try 'help' for available commands\n";
+      }
+      catch (const std::exception &e)
+      {
+#ifdef HAVE_READLINE
+        rdln::suspend_readline pause_readline;
+#endif
+        std::cout << "Command errored: " << cmd.front() << ", " << e.what();
+      }
+
+      return false;
+    }
+
+    bool process_command_and_log(const std::string &cmd)
     {
       std::vector<std::string> cmd_v;
       boost::split(cmd_v,cmd,boost::is_any_of(" "), boost::token_compress_on);
-      return process_command(cmd_v);
+      return process_command_and_log(cmd_v);
     }
+
   private:
     lookup m_command_handlers;
   };
@@ -539,7 +496,7 @@ eof:
 
     bool run_handling(std::function<std::string(void)> prompt, const std::string& usage_string, std::function<void(void)> exit_handler = NULL)
     {
-      return m_console_handler.run([this](const auto& arg) { return process_command(arg); }, prompt, usage_string, exit_handler);
+      return m_console_handler.run([this](const auto& arg) { return process_command_and_log(arg); }, prompt, usage_string, exit_handler);
     }
 
     void print_prompt()
