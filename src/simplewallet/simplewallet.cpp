@@ -216,7 +216,7 @@ namespace
   const char* USAGE_IMPORT_KEY_IMAGES("import_key_images <filename>");
   const char* USAGE_HW_KEY_IMAGES_SYNC("hw_key_images_sync");
   const char* USAGE_HW_RECONNECT("hw_reconnect");
-  const char* USAGE_EXPORT_OUTPUTS("export_outputs <filename>");
+  const char* USAGE_EXPORT_OUTPUTS("export_outputs [all] <filename>");
   const char* USAGE_IMPORT_OUTPUTS("import_outputs <filename>");
   const char* USAGE_SHOW_TRANSFER("show_transfer <txid>");
   const char* USAGE_MAKE_MULTISIG("make_multisig <threshold> <string1> [<string>...]");
@@ -9339,13 +9339,22 @@ bool simple_wallet::export_outputs(const std::vector<std::string> &args)
     fail_msg_writer() << tr("command not supported by HW wallet");
     return true;
   }
-  if (args.size() != 1)
+
+  if (args.size() >= 3 || args.empty())
   {
     PRINT_USAGE(USAGE_EXPORT_OUTPUTS);
     return true;
   }
 
-  std::string filename = args[0];
+  int filename_index = 0;
+  bool all           = false;
+  if (args.size() == 2 && args[0] == "all")
+  {
+    filename_index++;
+    all = true;
+  }
+
+  std::string const &filename = args[filename_index];
   if (m_wallet->confirm_export_overwrite() && !check_file_overwrite(filename))
     return true;
 
