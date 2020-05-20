@@ -273,14 +273,6 @@ eof:
     std::condition_variable m_response_cv;
   };
 
-
-  template<class t_server>
-  bool empty_commands_handler(t_server* psrv, const std::string& command)
-  {
-    return true;
-  }
-
-
   class async_console_handler
   {
   public:
@@ -397,59 +389,6 @@ eof:
     std::atomic<bool> m_running = {true};
     std::function<std::string(void)> m_prompt;
   };
-
-
-  template<class t_server, class t_handler>
-  bool start_default_console(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    std::shared_ptr<async_console_handler> console_handler = std::make_shared<async_console_handler>();
-    std::thread([=](){console_handler->run<t_server, t_handler>(ptsrv, handlr, prompt, usage);}).detach();
-    return true;
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console(ptsrv, handlr, [prompt](){ return prompt; }, usage);
-  }
-
-  template<class t_server>
-  bool start_default_console(t_server* ptsrv, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console(ptsrv, empty_commands_handler<t_server>, prompt, usage);
-  }
-
-  template<class t_server, class t_handler>
-    bool no_srv_param_adapter(t_server* ptsrv, const std::string& cmd, t_handler handlr)
-    {
-      return handlr(cmd);
-    }
-
-  template<class t_server, class t_handler>
-  bool run_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    async_console_handler console_handler;
-    return console_handler.run(ptsrv, [=](auto& a, auto& b) { return no_srv_param_adapter<t_server, t_handler>(a, b, handlr); }, prompt, usage);
-  }
-
-  template<class t_server, class t_handler>
-  bool run_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return run_default_console_handler_no_srv_param(ptsrv, handlr, [prompt](){return prompt;},usage);
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    std::thread( std::bind(run_default_console_handler_no_srv_param<t_server, t_handler>, ptsrv, handlr, prompt, usage) );
-    return true;
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console_handler_no_srv_param(ptsrv, handlr, [prompt](){return prompt;}, usage);
-  }
 
   class command_handler {
   public:
