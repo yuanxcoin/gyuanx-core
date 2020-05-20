@@ -357,13 +357,13 @@ eof:
           {
             continue;
           }
-          else if(cmd_handler(command))
-          {
-            continue;
-          }
           else if(0 == command.compare("exit") || 0 == command.compare("q"))
           {
             continue_handle = false;
+          }
+          else if(cmd_handler(command))
+          {
+            continue;
           }
           else
           {
