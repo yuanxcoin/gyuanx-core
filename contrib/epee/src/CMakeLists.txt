@@ -29,15 +29,9 @@
 add_library(epee hex.cpp http_auth.cpp mlog.cpp net_helper.cpp net_utils_base.cpp string_tools.cpp wipeable_string.cpp memwipe.c
     connection_basic.cpp network_throttle.cpp network_throttle-detail.cpp mlocker.cpp buffer.cpp net_ssl.cpp portable_storage.cpp)
 
-if (USE_READLINE AND (GNU_READLINE_FOUND OR (DEPENDS AND NOT MINGW)))
-  add_library(epee_readline readline_buffer.cpp)
-  target_link_libraries(epee_readline
-      PUBLIC
-      easylogging
-      readline
-      )
-else()
-  add_library(epee_readline INTERFACE)
+if (TARGET readline)
+  target_sources(epee PRIVATE readline_buffer.cpp)
+  target_link_libraries(epee PUBLIC readline)
 endif()
 
 set_property(SOURCE memwipe.c PROPERTY C_STANDARD 11)
@@ -51,10 +45,6 @@ if (BUILD_GUI_DEPS)
     endif()
     install(TARGETS epee
         ARCHIVE DESTINATION ${lib_folder})
-    if (USE_READLINE AND GNU_READLINE_FOUND)
-      install(TARGETS epee_readline
-          ARCHIVE DESTINATION ${lib_folder})
-    endif()
 endif()
 
 target_link_libraries(epee
