@@ -560,7 +560,7 @@ namespace cryptonote
     MLOGIF_P2P_MESSAGE(crypto::hash hash; cryptonote::block b; bool ret = cryptonote::parse_and_validate_block_from_blob(arg.b.block, b, &hash);, ret, "Received NOTIFY_NEW_FLUFFY_BLOCK " << hash << " (height " << arg.current_blockchain_height << ", " << arg.b.txs.size() << " txes)");
     if(context.m_state != cryptonote_connection_context::state_normal)
       return 1;
-    if(!is_synchronized()) // can happen if a peer connection goes to normal but another thread still hasn't finished adding queued blocks
+    if(!is_synchronized() || m_no_sync) // can happen if a peer connection goes to normal but another thread still hasn't finished adding queued blocks
     {
       LOG_DEBUG_CC(context, "Received new block while syncing, ignored");
       return 1;
@@ -889,7 +889,7 @@ namespace cryptonote
     if(context.m_state != cryptonote_connection_context::state_normal)
       return 1;
 
-    if(!is_synchronized())
+    if(!is_synchronized() || m_no_sync)
     {
       LOG_DEBUG_CC(context, "Received new service node vote while syncing, ignored");
       return 1;
@@ -1039,7 +1039,7 @@ namespace cryptonote
     // needed anyway, and avoid a long block before replying.  (Not for .requested though: in that
     // case we specifically asked for these txes).
     bool syncing = !is_synchronized();
-    if(syncing && !arg.requested)
+    if((syncing && !arg.requested) || m_no_sync)
     {
       LOG_DEBUG_CC(context, "Received new tx while syncing, ignored");
       return 1;
