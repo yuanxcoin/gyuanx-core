@@ -2409,4 +2409,24 @@ bool rpc_command_executor::check_blockchain_pruning()
     return true;
 }
 
+bool rpc_command_executor::set_bootstrap_daemon(
+  const std::string &address,
+  const std::string &username,
+  const std::string &password)
+{
+    SET_BOOTSTRAP_DAEMON::request req{};
+    req.address = address;
+    req.username = username;
+    req.password = password;
+
+    SET_BOOTSTRAP_DAEMON::response res{};
+    if (!invoke<SET_BOOTSTRAP_DAEMON>(std::move(req), res, "Failed to set bootstrap daemon to: " + address))
+        return false;
+
+    tools::success_msg_writer()
+      << "Successfully set bootstrap daemon address to "
+      << (!req.address.empty() ? req.address : "none");
+    return true;
+}
+
 }// namespace daemonize
