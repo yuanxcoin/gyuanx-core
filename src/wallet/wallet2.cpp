@@ -11202,6 +11202,19 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
 
+  // determine threshold for fractional amount
+  uint64_t fractional_threshold = 0;
+  {
+    const auto NUM_OUTPUTS           = 2;
+    const auto base_fee = get_base_fees();
+    const uint64_t fee_multiplier = get_fee_percent(priority, tx_type);
+    const size_t tx_weight_one_ring = estimate_tx_weight(1, fake_outs_count, NUM_OUTPUTS, 0);
+    const size_t tx_weight_two_rings = estimate_tx_weight(2, fake_outs_count, NUM_OUTPUTS, 0);
+    THROW_WALLET_EXCEPTION_IF(tx_weight_one_ring > tx_weight_two_rings, error::wallet_internal_error, "Estimated tx weight with 1 input is larger than with 2 inputs!");
+    const size_t tx_weight_per_ring = tx_weight_two_rings - tx_weight_one_ring;
+    fractional_threshold = fee_multiplier * ((base_fee.first * tx_weight_per_ring) + (base_fee.second * NUM_OUTPUTS));
+  }
+
   THROW_WALLET_EXCEPTION_IF(unlocked_balance(subaddr_account, false) == 0, error::wallet_internal_error, "No unlocked balance in the entire wallet");
 
   std::map<uint32_t, std::pair<std::vector<size_t>, std::vector<size_t>>> unused_transfer_dust_indices_per_subaddr;
@@ -11211,6 +11224,11 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   for (size_t i = 0; i < m_transfers.size(); ++i)
   {
     const transfer_details& td = m_transfers[i];
+    if (m_ignore_fractional_outputs && td.amount() < fractional_threshold)
+    {
+      MDEBUG("Ignoring output " << i << " of amount " << print_money(td.amount()) << " which is below threshold " << print_money(fractional_threshold));
+      continue;
+    }
     if (!is_spent(td, false) && !td.m_frozen && !td.m_key_image_partial && is_transfer_unlocked(td) && td.m_subaddr_index.major == subaddr_account && (subaddr_indices.empty() || subaddr_indices.count(td.m_subaddr_index.minor) == 1))
     {
       fund_found = true;
