@@ -3314,7 +3314,7 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
 
     // MyMonero get_address_info needs to be called occasionally to trigger wallet sync.
     // This call is not really needed for other purposes and can be removed if mymonero changes their backend.
-    tools::COMMAND_RPC_GET_ADDRESS_INFO::response res{};
+    light_rpc::GET_ADDRESS_INFO::response res{};
 
     // Get basic info
     if(light_wallet_get_address_info(res)) {
@@ -6778,8 +6778,8 @@ void wallet2::commit_tx(pending_tx& ptx, bool blink)
   
   if(m_light_wallet) 
   {
-    cryptonote::rpc::SUBMIT_RAW_TX::request oreq{};
-    cryptonote::rpc::SUBMIT_RAW_TX::response ores{};
+    light_rpc::SUBMIT_RAW_TX::request oreq{};
+    light_rpc::SUBMIT_RAW_TX::response ores{};
     oreq.address = get_account().get_public_address_str(m_nettype);
     oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
     oreq.tx = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(ptx.tx));
@@ -8935,8 +8935,8 @@ void wallet2::light_wallet_get_outs(std::vector<std::vector<tools::wallet2::get_
   
   MDEBUG("LIGHTWALLET - Getting random outs");
       
-  cryptonote::rpc::GET_RANDOM_OUTS::request oreq{};
-  cryptonote::rpc::GET_RANDOM_OUTS::response ores{};
+  light_rpc::GET_RANDOM_OUTS::request oreq{};
+  light_rpc::GET_RANDOM_OUTS::response ores{};
   
   size_t light_wallet_requested_outputs_count = (size_t)((fake_outputs_count + 1) * 1.5 + 1);
   
@@ -10072,8 +10072,8 @@ bool wallet2::light_wallet_login(bool &new_address)
 {
   MDEBUG("Light wallet login request");
   m_light_wallet_connected = false;
-  tools::COMMAND_RPC_LOGIN::request request{};
-  tools::COMMAND_RPC_LOGIN::response response{};
+  light_rpc::LOGIN::request request{};
+  light_rpc::LOGIN::response response{};
   request.address = get_account().get_public_address_str(m_nettype);
   request.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
   // Always create account if it doesn't exist.
@@ -10097,10 +10097,10 @@ bool wallet2::light_wallet_login(bool &new_address)
   return m_light_wallet_connected;
 }
 
-bool wallet2::light_wallet_import_wallet_request(tools::COMMAND_RPC_IMPORT_WALLET_REQUEST::response &response)
+bool wallet2::light_wallet_import_wallet_request(light_rpc::IMPORT_WALLET_REQUEST::response &response)
 {
   MDEBUG("Light wallet import wallet request");
-  tools::COMMAND_RPC_IMPORT_WALLET_REQUEST::request oreq{};
+  light_rpc::IMPORT_WALLET_REQUEST::request oreq{};
   oreq.address = get_account().get_public_address_str(m_nettype);
   oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
   m_daemon_rpc_mutex.lock();
@@ -10116,8 +10116,8 @@ void wallet2::light_wallet_get_unspent_outs()
 {
   MDEBUG("Getting unspent outs");
   
-  tools::COMMAND_RPC_GET_UNSPENT_OUTS::request oreq{};
-  tools::COMMAND_RPC_GET_UNSPENT_OUTS::response ores{};
+  light_rpc::GET_UNSPENT_OUTS::request oreq{};
+  light_rpc::GET_UNSPENT_OUTS::response ores{};
   
   oreq.amount = "0";
   oreq.address = get_account().get_public_address_str(m_nettype);
@@ -10268,11 +10268,11 @@ void wallet2::light_wallet_get_unspent_outs()
   }
 }
 
-bool wallet2::light_wallet_get_address_info(tools::COMMAND_RPC_GET_ADDRESS_INFO::response &response)
+bool wallet2::light_wallet_get_address_info(light_rpc::GET_ADDRESS_INFO::response &response)
 {
   MTRACE(__FUNCTION__);
   
-  tools::COMMAND_RPC_GET_ADDRESS_INFO::request request{};
+  light_rpc::GET_ADDRESS_INFO::request request{};
   
   request.address = get_account().get_public_address_str(m_nettype);
   request.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
@@ -10288,8 +10288,8 @@ void wallet2::light_wallet_get_address_txs()
 {
   MDEBUG("Refreshing light wallet");
   
-  tools::COMMAND_RPC_GET_ADDRESS_TXS::request ireq{};
-  tools::COMMAND_RPC_GET_ADDRESS_TXS::response ires{};
+  light_rpc::GET_ADDRESS_TXS::request ireq{};
+  light_rpc::GET_ADDRESS_TXS::response ires{};
   
   ireq.address = get_account().get_public_address_str(m_nettype);
   ireq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);

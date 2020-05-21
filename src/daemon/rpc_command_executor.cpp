@@ -598,9 +598,9 @@ bool rpc_command_executor::mining_status() {
     tools::msg_writer() << "Mining at " << get_mining_speed(mres.speed) << " with " << mres.threads_count << " threads";
   }
 
+  tools::msg_writer() << "PoW algorithm: " << mres.pow_algorithm;
   if (mres.active)
   {
-    tools::msg_writer() << "PoW algorithm: " << mres.pow_algorithm;
     tools::msg_writer() << "Mining address: " << mres.address;
   }
 
