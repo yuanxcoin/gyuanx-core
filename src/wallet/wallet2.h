@@ -259,6 +259,7 @@ private:
     std::list<transfer_destination> destinations;              // Array of transfer destinations.
     std::string type;                                          // Type of transfer, one of the following: "in", "out", "stake", "miner", "snode", "gov", "pending", "failed", "pool".
     uint64_t unlock_time;                                      // Number of blocks until transfer is safely spendable.
+    bool locked;                                               // If the transfer is locked or not
     cryptonote::subaddress_index subaddr_index;                // Major & minor index, account and subaddress index respectively.
     std::vector<cryptonote::subaddress_index> subaddr_indices;
     std::string address;                                       // Address that transferred the funds.

@@ -48,7 +48,7 @@
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
 #define WALLET_RPC_VERSION_MAJOR 1
-#define WALLET_RPC_VERSION_MINOR 13
+#define WALLET_RPC_VERSION_MINOR 14
 #define MAKE_WALLET_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define WALLET_RPC_VERSION MAKE_WALLET_RPC_VERSION(WALLET_RPC_VERSION_MAJOR, WALLET_RPC_VERSION_MINOR)
 namespace tools
@@ -918,6 +918,7 @@ namespace wallet_rpc
     uint64_t amount;                            // Amount for this payment.
     uint64_t block_height;                      // Height of the block that first confirmed this payment.
     uint64_t unlock_time;                       // Time (in block height) until this payment is safe to spend.
+    bool locked;                                // If the payment is spendable or not
     cryptonote::subaddress_index subaddr_index; // Major & minor index, account and subaddress index respectively.
     std::string address;                        // Address receiving the payment.
 
@@ -927,6 +928,7 @@ namespace wallet_rpc
       KV_SERIALIZE(amount)
       KV_SERIALIZE(block_height)
       KV_SERIALIZE(unlock_time)
+      KV_SERIALIZE(locked)
       KV_SERIALIZE(subaddr_index)
       KV_SERIALIZE(address)
     END_KV_SERIALIZE_MAP()

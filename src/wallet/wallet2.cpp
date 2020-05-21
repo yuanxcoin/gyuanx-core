@@ -6030,6 +6030,7 @@ transfer_view wallet2::make_transfer_view(const crypto::hash &txid, const crypto
   result.was_blink = pd.m_was_blink;
   // TODO(sacha): is this just for in or also coinbase?
   const bool unlocked = is_transfer_unlocked(result.unlock_time, result.height, result.blink_mempool);
+  result.locked = !unlocked;
   result.lock_msg = unlocked ? "unlocked" : "locked";
   set_confirmations(result, get_blockchain_current_height(), get_last_block_reward());
   result.checkpointed = (result.height == 0 && pd.m_unmined_blink ? false : result.height <= m_immutable_height);
@@ -6047,6 +6048,7 @@ transfer_view wallet2::wallet2::make_transfer_view(const crypto::hash &txid, con
   result.height = pd.m_block_height;
   result.timestamp = pd.m_timestamp;
   result.unlock_time = pd.m_unlock_time;
+  result.locked = !is_transfer_unlocked(pd.m_unlock_time, pd.m_block_height, false);
   result.fee = pd.m_amount_in - pd.m_amount_out;
   uint64_t change = pd.m_change == (uint64_t)-1 ? 0 : pd.m_change; // change may not be known
   result.amount = pd.m_amount_in - change - result.fee;
@@ -6085,6 +6087,7 @@ transfer_view wallet2::make_transfer_view(const crypto::hash &txid, const tools:
   result.fee = pd.m_amount_in - pd.m_amount_out;
   result.amount = pd.m_amount_in - pd.m_change - result.fee;
   result.unlock_time = pd.m_tx.unlock_time;
+  result.locked = true;
   result.note = get_tx_note(txid);
 
   for (const auto &d: pd.m_dests) {
@@ -6117,6 +6120,7 @@ transfer_view wallet2::make_transfer_view(const crypto::hash &payment_id, const 
   result.timestamp = pd.m_timestamp;
   result.amount = pd.m_amount;
   result.unlock_time = pd.m_unlock_time;
+  result.locked = true;
   result.fee = pd.m_fee;
   result.note = get_tx_note(pd.m_tx_hash);
   result.double_spend_seen = ppd.m_double_spend_seen;

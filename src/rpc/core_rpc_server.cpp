@@ -1157,7 +1157,8 @@ namespace cryptonote { namespace rpc {
       res.block_reward = lMiner.get_block_reward();
     }
     const account_public_address& lMiningAdr = lMiner.get_mining_address();
-    res.address = get_account_address_as_str(nettype(), false, lMiningAdr);
+    if (lMiner.is_mining())
+      res.address = get_account_address_as_str(nettype(), false, lMiningAdr);
     const uint8_t major_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
 
     res.pow_algorithm =
