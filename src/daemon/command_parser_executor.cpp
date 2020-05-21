@@ -134,12 +134,14 @@ bool command_parser_executor::print_peer_list(const std::vector<std::string>& ar
 {
   if (args.size() > 3)
   {
-    std::cout << "use: print_pl [white] [gray] [<limit>]" << std::endl;
+    std::cout << "use: print_pl [white] [gray] [<limit>] [pruned] [publicrpc]" << std::endl;
     return true;
   }
 
   bool white = false;
   bool gray = false;
+  bool pruned = false;
+  bool publicrpc = false;
   size_t limit = 0;
   for (size_t i = 0; i < args.size(); ++i)
   {
@@ -151,6 +153,14 @@ bool command_parser_executor::print_peer_list(const std::vector<std::string>& ar
     {
       gray = true;
     }
+    else if (args[i] == "pruned")
+    {
+      pruned = true;
+    }
+    else if (args[i] == "publicrpc")
+    {
+      publicrpc = true;
+    }
     else if (!epee::string_tools::get_xtype_from_string(limit, args[i]))
     {
       std::cout << "unexpected argument: " << args[i] << std::endl;
@@ -159,7 +169,7 @@ bool command_parser_executor::print_peer_list(const std::vector<std::string>& ar
   }
 
   const bool print_both = !white && !gray;
-  return m_executor.print_peer_list(white | print_both, gray | print_both, limit);
+  return m_executor.print_peer_list(white | print_both, gray | print_both, limit, pruned, publicrpc);
 }
 
 bool command_parser_executor::print_peer_list_stats(const std::vector<std::string>& args)

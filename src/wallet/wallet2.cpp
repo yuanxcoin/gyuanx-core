@@ -6999,7 +6999,7 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, std::vector<wallet2::pendin
     // normally, the tx keys are saved in commit_tx, when the tx is actually sent to the daemon.
     // we can't do that here since the tx will be sent from the compromised wallet, which we don't want
     // to see that info, so we save it here
-    if (store_tx_info() && ptx.tx_key != crypto::null_skey)
+    if (store_tx_info() && tx_key != crypto::null_skey)
     {
       const crypto::hash txid = get_transaction_hash(ptx.tx);
       m_tx_keys.insert(std::make_pair(txid, tx_key));
@@ -7804,9 +7804,7 @@ bool wallet2::unset_ring(const crypto::hash &txid)
   bool ok = invoke_http_json("/gettransactions", req, res, rpc_timeout);
   m_daemon_rpc_mutex.unlock();
   THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to get transaction from daemon");
-  if (res.txs.empty())
-    return false;
-  THROW_WALLET_EXCEPTION_IF(res.txs.size(), error::wallet_internal_error, "Failed to get transaction from daemon");
+  THROW_WALLET_EXCEPTION_IF(res.txs.size() != 1, error::wallet_internal_error, "Failed to get transaction from daemon");
 
   cryptonote::transaction tx;
   crypto::hash tx_hash;
