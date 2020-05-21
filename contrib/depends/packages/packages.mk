@@ -24,7 +24,7 @@ packages += gtest
 endif
 
 ifneq ($(host_arch),riscv64)
-	packages += unwind
+linux_packages += unwind
 endif
 
 ifeq ($(host_os),mingw32)
