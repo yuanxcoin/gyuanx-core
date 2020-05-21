@@ -298,16 +298,10 @@ eof:
     {
     }
 
-    template<class t_server, class chain_handler>
-    bool run(t_server* psrv, chain_handler ch_handler, std::function<std::string(void)> prompt, const std::string& usage = "")
-    {
-      return run(prompt, usage, [&](const std::string& cmd) { return ch_handler(psrv, cmd); }, [&] { psrv->send_stop_signal(); });
-    }
-
     template<class chain_handler>
     bool run(chain_handler ch_handler, std::function<std::string(void)> prompt, const std::string& usage = "", std::function<void(void)> exit_handler = NULL)
     {
-      return run(prompt, usage, [&](const boost::optional<std::string>& cmd) { return ch_handler(cmd); }, exit_handler);
+      return run(prompt, usage, [&](const std::string& cmd) { return ch_handler(cmd); }, exit_handler);
     }
 
     void stop()
@@ -374,7 +368,6 @@ eof:
           if (m_cancel)
           {
             MDEBUG("Input cancelled");
-            cmd_handler(boost::none);
             m_cancel = false;
             continue;
           }
@@ -419,7 +412,6 @@ eof:
   class command_handler {
   public:
     typedef std::function<bool(const std::vector<std::string> &)> callback;
-    typedef boost::function<bool (void)> empty_callback;
     typedef std::map<std::string, std::pair<callback, std::pair<std::string, std::string>>> lookup;
 
     /// Go through registered commands in sorted order, call the function with three string
@@ -492,23 +484,15 @@ eof:
       return false;
     }
 
-    bool process_command_and_log(const boost::optional<std::string>& cmd)
+    bool process_command_and_log(const std::string& cmd)
     {
-      if (!cmd)
-        return m_cancel_handler();
       std::vector<std::string> cmd_v;
-      boost::split(cmd_v,*cmd,boost::is_any_of(" "), boost::token_compress_on);
+      boost::split(cmd_v, cmd, boost::is_any_of(" "), boost::token_compress_on);
       return process_command_and_log(cmd_v);
-    }
-
-    void set_cancel_handler(const empty_callback& hndlr)
-    {
-      m_cancel_handler = hndlr;
     }
 
   private:
     lookup m_command_handlers;
-    empty_callback m_cancel_handler;
   };
 
   /************************************************************************/
