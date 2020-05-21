@@ -213,6 +213,7 @@ namespace cryptonote { namespace rpc {
     )
     : m_core(cr)
     , m_p2p(p2p)
+    , m_was_bootstrap_ever_used(false)
   {}
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const std::string &username_password)
