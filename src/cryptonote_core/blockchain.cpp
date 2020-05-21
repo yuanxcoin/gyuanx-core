@@ -1287,7 +1287,7 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
 //   one input, of type txin_gen, with height set to the block's height
 //   correct miner tx unlock time
 //   a non-overflowing tx amount (dubious necessity on this check)
-bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height)
+bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, uint8_t hf_version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   CHECK_AND_ASSERT_MES(b.miner_tx.vin.size() == 1, false, "coinbase transaction in the block has no inputs");
@@ -1299,6 +1299,26 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height)
   }
   MDEBUG("Miner tx hash: " << get_transaction_hash(b.miner_tx));
   CHECK_AND_ASSERT_MES(b.miner_tx.unlock_time == height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "coinbase transaction transaction has the wrong unlock time=" << b.miner_tx.unlock_time << ", expected " << height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+
+  if (hf_version >= cryptonote::network_version_12_checkpointing)
+  {
+    if (b.miner_tx.type != txtype::standard)
+    {
+      MERROR("Coinbase invalid transaction type for coinbase transaction.");
+      return false;
+    }
+
+    txversion min_version = transaction::get_max_version_for_hf(hf_version);
+    txversion max_version = transaction::get_min_version_for_hf(hf_version);
+    if (b.miner_tx.version < min_version || b.miner_tx.version > max_version)
+    {
+      MERROR_VER("Coinbase invalid version: " << b.miner_tx.version << " for hardfork: " << hf_version << " min/max version:  " << min_version << "/" << max_version);
+      return false;
+    }
+  }
+
+  if (hf_version >= HF_VERSION_REJECT_SIGS_IN_COINBASE) // Enforce empty rct signatures for miner transactions,
+    CHECK_AND_ASSERT_MES(b.miner_tx.rct_signatures.type == rct::RCTTypeNull, false, "RingCT signatures not allowed in coinbase transactions");
 
   //check outs overflow
   //NOTE: not entirely sure this is necessary, given that this function is
@@ -1370,23 +1390,6 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     if (!validate_governance_reward_key(m_db->height(), *cryptonote::get_config(m_nettype, version).GOVERNANCE_WALLET_ADDRESS, b.miner_tx.vout.size() - 1, boost::get<txout_to_key>(b.miner_tx.vout.back().target).key, m_nettype))
     {
       MERROR("Governance reward public key incorrect.");
-      return false;
-    }
-  }
-
-  if (version >= cryptonote::network_version_12_checkpointing)
-  {
-    if (b.miner_tx.type != txtype::standard)
-    {
-      MERROR("Coinbase invalid transaction type for coinbase transaction.");
-      return false;
-    }
-
-    txversion min_version = transaction::get_max_version_for_hf(version);
-    txversion max_version = transaction::get_min_version_for_hf(version);
-    if (b.miner_tx.version < min_version || b.miner_tx.version > max_version)
-    {
-      MERROR_VER("Coinbase invalid version: " << b.miner_tx.version << " for hardfork: " << version << " min/max version:  " << min_version << "/" << max_version);
       return false;
     }
   }
@@ -1849,9 +1852,10 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
   }
 
   // this is a cheap test
+  const uint8_t hf_version = get_current_hard_fork_version();
   if (!m_hardfork->check_for_height(b, block_height))
   {
-    LOG_PRINT_L1("Block with id: " << id << std::endl << "has old version for height " << block_height);
+    LOG_PRINT_L1("Block with id: " << id << "\nhas old version: " << b.major_version << "current: " << hf_version << " for height " << block_height);
     bvc.m_verifivation_failed = true;
     return false;
   }
@@ -1923,7 +1927,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
       return false;
     }
 
-    if(!prevalidate_miner_transaction(b, block_height))
+    if(!prevalidate_miner_transaction(b, block_height, hf_version))
     {
       MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) has incorrect miner transaction.");
       bvc.m_verifivation_failed = true;
@@ -3992,7 +3996,8 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   TIME_MEASURE_START(t3);
 
   // sanity check basic miner tx properties;
-  if(!prevalidate_miner_transaction(bl, blockchain_height))
+  const uint8_t hf_version = get_current_hard_fork_version();
+  if(!prevalidate_miner_transaction(bl, blockchain_height, hf_version))
   {
     MERROR_VER("Block with id: " << id << " failed to pass prevalidation");
     bvc.m_verifivation_failed = true;
