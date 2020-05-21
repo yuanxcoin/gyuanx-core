@@ -67,11 +67,12 @@ namespace wallet_rpc
       uint32_t account_index;             // Return balance for this account.
       std::set<uint32_t> address_indices; // (Optional) Return balance detail for those subaddresses.
       bool all_accounts;                  // If true, return balance for all accounts, subaddr_indices and account_index are ignored
-
+      bool strict;                        // If true, only return the balance for transactions that have been spent and are not pending (i.e. excluding any transactions sitting in the TX pool)
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(address_indices)
         KV_SERIALIZE_OPT(all_accounts, false);
+        KV_SERIALIZE_OPT(strict, false);
       END_KV_SERIALIZE_MAP()
     };
 
@@ -237,9 +238,11 @@ namespace wallet_rpc
     struct request
     {
       std::string tag;      // (Optional) Tag for filtering accounts. All accounts if empty, otherwise those accounts with this tag
+      bool strict_balances; // If true, only return the balance for transactions that have been spent and are not pending (i.e. excluding any transactions sitting in the TX pool)
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(tag)
+        KV_SERIALIZE_OPT(strict_balances, false)
       END_KV_SERIALIZE_MAP()
     };
 
