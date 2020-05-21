@@ -36,6 +36,7 @@ add_library(rpc_args
   )
 
 add_library(rpc
+  bootstrap_daemon.cpp
   core_rpc_server.cpp
   rpc_handler.cpp
   )

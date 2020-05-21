@@ -32,6 +32,13 @@
 #pragma once
 
 #include <mapbox/variant.hpp>
+#include <memory>
+
+#include <boost/program_options/options_description.hpp>
+#include <boost/program_options/variables_map.hpp>
+
+#include "bootstrap_daemon.h"
+#include "net/http_server_impl_base.h"
 #include "net/http_client.h"
 #include "core_rpc_server_commands_defs.h"
 #include "cryptonote_core/cryptonote_core.h"
@@ -300,6 +307,7 @@ private:
 
     //utils
     uint64_t get_block_reward(const block& blk);
+    boost::optional<std::string> get_random_public_node();
     bool set_bootstrap_daemon(const std::string &address, const std::string &username_password);
     bool set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials);
     void fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash);
@@ -310,10 +318,9 @@ private:
     
     core& m_core;
     nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> >& m_p2p;
-    std::string m_bootstrap_daemon_address;
-    epee::net_utils::http::http_simple_client m_http_client;
     boost::shared_mutex m_bootstrap_daemon_mutex;
     std::atomic<bool> m_should_use_bootstrap_daemon;
+    std::unique_ptr<bootstrap_daemon> m_bootstrap_daemon;
     std::chrono::system_clock::time_point m_bootstrap_height_check_time;
     bool m_was_bootstrap_ever_used;
     network_type m_nettype;

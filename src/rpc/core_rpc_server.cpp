@@ -188,7 +188,8 @@ namespace cryptonote { namespace rpc {
 
   const command_line::arg_descriptor<std::string> core_rpc_server::arg_bootstrap_daemon_address = {
       "bootstrap-daemon-address"
-    , "URL of a 'bootstrap' remote daemon that the connected wallets can use while this daemon is still not fully synced"
+    , "URL of a 'bootstrap' remote daemon that the connected wallets can use while this daemon is still not fully synced.\n"
+      "Use 'auto' to enable automatic public nodes discovering and bootstrap daemon switching"
     , ""
     };
 
@@ -225,27 +226,70 @@ namespace cryptonote { namespace rpc {
     return set_bootstrap_daemon(address, credentials);
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  boost::optional<std::string> core_rpc_server::get_random_public_node()
+  {
+    GET_PUBLIC_NODES::response response{};
+    try
+    {
+      GET_PUBLIC_NODES::request request{};
+      request.gray  = true;
+      request.white = true;
+
+      rpc_context context = {};
+      context.admin       = true;
+      response            = invoke(std::move(request), context);
+    }
+    catch(const std::exception &e)
+    {
+      return boost::none;
+    }
+
+    const auto get_random_node_address = [](const std::vector<public_node>& public_nodes) -> std::string {
+      const auto& random_node = public_nodes[crypto::rand_idx(public_nodes.size())];
+      const auto address = random_node.host + ":" + std::to_string(random_node.rpc_port);
+      return address;
+    };
+
+    if (!response.white.empty())
+    {
+      return get_random_node_address(response.white);
+    }
+
+    MDEBUG("No white public node found, checking gray peers");
+
+    if (!response.gray.empty())
+    {
+      return get_random_node_address(response.gray);
+    }
+
+    MERROR("Failed to find any suitable public node");
+    return boost::none;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials)
   {
     boost::unique_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
 
-    if (!address.empty())
+    if (address.empty())
     {
-      if (!m_http_client.set_server(address, credentials, epee::net_utils::ssl_support_t::e_ssl_support_autodetect))
-      {
-        return false;
-      }
+      m_bootstrap_daemon.reset(nullptr);
+    }
+    else if (address == "auto")
+    {
+      m_bootstrap_daemon.reset(new bootstrap_daemon([this]{ return get_random_public_node(); }));
+    }
+    else
+    {
+      m_bootstrap_daemon.reset(new bootstrap_daemon(address, credentials));
     }
 
-    m_bootstrap_daemon_address = address;   
-    m_should_use_bootstrap_daemon = !m_bootstrap_daemon_address.empty();
+    m_should_use_bootstrap_daemon = m_bootstrap_daemon.get() != nullptr;
 
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   void core_rpc_server::init(const boost::program_options::variables_map& vm)
   {
-    m_bootstrap_daemon_address = command_line::get_arg(vm, arg_bootstrap_daemon_address);
     if (!set_bootstrap_daemon(command_line::get_arg(vm, arg_bootstrap_daemon_address),
                               command_line::get_arg(vm, arg_bootstrap_daemon_login)))
     {
@@ -297,7 +341,10 @@ namespace cryptonote { namespace rpc {
     {
       {
         boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
-        res.bootstrap_daemon_address = m_bootstrap_daemon_address;
+        if (m_bootstrap_daemon.get() != nullptr)
+        {
+          res.bootstrap_daemon_address = m_bootstrap_daemon->address();
+        }
       }
       crypto::hash top_hash;
       m_core.get_blockchain_top(res.height_without_bootstrap, top_hash);
@@ -369,7 +416,10 @@ namespace cryptonote { namespace rpc {
     else
     {
       boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
-      res.bootstrap_daemon_address = m_bootstrap_daemon_address;
+      if (m_bootstrap_daemon.get() != nullptr)
+      {
+        res.bootstrap_daemon_address = m_bootstrap_daemon->address();
+      }
       res.was_bootstrap_ever_used = m_was_bootstrap_ever_used;
     }
     res.database_size = m_core.get_blockchain_storage().get_db().get_database_size();
@@ -1670,11 +1720,12 @@ namespace cryptonote { namespace rpc {
   boost::upgrade_lock<boost::shared_mutex> core_rpc_server::should_bootstrap_lock()
   {
     // TODO - support bootstrapping via a remote LMQ RPC; requires some argument fiddling
-
-    if (m_bootstrap_daemon_address.empty() || !m_should_use_bootstrap_daemon)
-      return {};
-
     boost::upgrade_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+    if (!m_should_use_bootstrap_daemon || m_bootstrap_daemon.get() == nullptr)
+    {
+      lock.unlock();
+      return lock;
+    }
 
     auto current_time = std::chrono::system_clock::now();
     if (current_time - m_bootstrap_height_check_time > 30s)  // update every 30s
@@ -1684,20 +1735,27 @@ namespace cryptonote { namespace rpc {
         m_bootstrap_height_check_time = current_time;
       }
 
-      uint64_t top_height;
-      crypto::hash top_hash;
-      m_core.get_blockchain_top(top_height, top_hash);
-      ++top_height; // turn top block height into blockchain height
+      boost::optional<uint64_t> bootstrap_daemon_height = m_bootstrap_daemon->get_height();
+      if (!bootstrap_daemon_height)
+      {
+        MERROR("Failed to fetch bootstrap daemon height");
+        lock.unlock();
+        return lock;
+      }
 
-      // query bootstrap daemon's height
-      cryptonote::rpc::GET_HEIGHT::request getheight_req{};
-      cryptonote::rpc::GET_HEIGHT::response getheight_res{};
-      m_should_use_bootstrap_daemon = (
-          epee::net_utils::invoke_http_json("/getheight", getheight_req, getheight_res, m_http_client)
-          && getheight_res.status == STATUS_OK
-          && top_height + 10 < getheight_res.height);
+      uint64_t target_height = m_core.get_target_blockchain_height();
+      if (bootstrap_daemon_height < target_height)
+      {
+        MINFO("Bootstrap daemon is out of sync");
+        lock.unlock();
+        m_bootstrap_daemon->handle_result(false);
+        return lock;
+      }
 
-      MINFO((m_should_use_bootstrap_daemon ? "Using" : "Not using") << " the bootstrap daemon (our height: " << top_height << ", bootstrap daemon's height: " << getheight_res.height << ")");
+      uint64_t top_height           = m_core.get_current_blockchain_height();
+      m_should_use_bootstrap_daemon = top_height + 10 < bootstrap_daemon_height;
+      MINFO((m_should_use_bootstrap_daemon ? "Using" : "Not using") << " the bootstrap daemon (our height: " << top_height << ", bootstrap daemon's height: " << *bootstrap_daemon_height << ")");
+
     }
 
     if (!m_should_use_bootstrap_daemon)
@@ -1705,6 +1763,7 @@ namespace cryptonote { namespace rpc {
       MINFO("The local daemon is fully synced; disabling bootstrap daemon requests");
       lock.unlock();
     }
+
     return lock;
   }
 
@@ -1727,7 +1786,7 @@ namespace cryptonote { namespace rpc {
 
     bool success;
     if (std::is_base_of<BINARY, RPC>::value)
-      success = epee::net_utils::invoke_http_bin(command_name, req, res, m_http_client);
+      success = m_bootstrap_daemon->invoke_http_bin(command_name, req, res);
     else
     {
       // FIXME: this type explosion of having to instantiate nested types is an epee pain point:
@@ -1739,7 +1798,7 @@ namespace cryptonote { namespace rpc {
       json_req.id = epee::serialization::storage_entry(0);
       json_req.method = command_name;
       json_req.params = req;
-      success = epee::net_utils::invoke_http_json("/json_rpc", json_req, json_resp, m_http_client);
+      success = m_bootstrap_daemon->invoke_http_json_rpc(command_name, json_req, json_resp);
       if (success)
         res = std::move(json_resp.result);
     }
