@@ -169,6 +169,7 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define HF_VERSION_BLINK                        cryptonote::network_version_14_blink
 #define HF_VERSION_MIN_2_OUTPUTS                cryptonote::network_version_16
 #define HF_VERSION_REJECT_SIGS_IN_COINBASE      cryptonote::network_version_16
+#define HF_VERSION_ENFORCE_MIN_AGE              cryptonote::network_version_16
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
 

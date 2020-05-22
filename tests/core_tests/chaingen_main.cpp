@@ -212,6 +212,58 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_double_spend_in_alt_chain_in_the_same_block);
     GENERATE_AND_PLAY(gen_double_spend_in_alt_chain_in_different_blocks);
 
+<<<<<<< HEAD
+=======
+    GENERATE_AND_PLAY(gen_v2_tx_mixable_0_mixin);
+    GENERATE_AND_PLAY(gen_v2_tx_mixable_low_mixin);
+//    GENERATE_AND_PLAY(gen_v2_tx_unmixable_only);
+//    GENERATE_AND_PLAY(gen_v2_tx_unmixable_one);
+//    GENERATE_AND_PLAY(gen_v2_tx_unmixable_two);
+    GENERATE_AND_PLAY(gen_v2_tx_dust);
+
+    GENERATE_AND_PLAY(gen_rct_tx_valid_from_pre_rct);
+    GENERATE_AND_PLAY(gen_rct_tx_valid_from_rct);
+    GENERATE_AND_PLAY(gen_rct_tx_valid_from_mixed);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_real_dest);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_real_mask);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_fake_dest);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_bad_fake_mask);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_bad_real_dest);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_bad_real_mask);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_bad_fake_dest);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_bad_fake_mask);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_spend_with_zero_commit);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_zero_vin_amount);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_non_zero_vin_amount);
+    GENERATE_AND_PLAY(gen_rct_tx_non_zero_vout_amount);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_duplicate_key_image);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_duplicate_key_image);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_wrong_key_image);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_wrong_key_image);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_wrong_fee);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_wrong_fee);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_remove_vin);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_remove_vin);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_add_vout);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_add_vout);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_increase_vin_and_fee);
+    GENERATE_AND_PLAY(gen_rct_tx_pre_rct_altered_extra);
+    GENERATE_AND_PLAY(gen_rct_tx_rct_altered_extra);
+    GENERATE_AND_PLAY(gen_rct_tx_uses_output_too_early);
+
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2_many_inputs);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_22_2_1);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_33_1_23);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_33_3_21);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_23_1_2);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_23_1_3);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_23_2_1);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_23_2_3);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_45_1_234);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_45_4_135_many_inputs);
+    GENERATE_AND_PLAY(gen_multisig_tx_valid_89_3_1245789);
+>>>>>>> 44aa7d543941c0e79e59046591d7ca0cd3b4383a
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_23_1__no_threshold);
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_45_5_23_no_threshold);
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_22_1__no_threshold);
