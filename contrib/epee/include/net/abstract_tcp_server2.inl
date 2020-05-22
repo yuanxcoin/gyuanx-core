@@ -628,17 +628,20 @@ PRAGMA_WARNING_DISABLE_VS(4355)
             return false; // aborted
         }*/
 
-        using engine = std::mt19937;
+        using engine           = std::mt19937;
+        static bool initialized = false;
+        static engine rng;
+        if (!initialized)
+        {
+          initialized = true;
+          std::random_device dev;
+          std::seed_seq::result_type rand[engine::state_size]{}; // Use complete bit space
+          std::generate_n(rand, engine::state_size, std::ref(dev));
+          std::seed_seq seed(rand, rand + engine::state_size);
+          rng.seed(seed);
+        }
 
-        engine rng;
-        std::random_device dev;
-        std::seed_seq::result_type rand[engine::state_size]{};  // Use complete bit space
-
-        std::generate_n(rand, engine::state_size, std::ref(dev));
-        std::seed_seq seed(rand, rand + engine::state_size);
-        rng.seed(seed);
-
-        long int ms = 250 + (rng() % 50);
+        int ms = std::uniform_int_distribution<>{250, 299}(rng);
         MDEBUG("Sleeping because QUEUE is FULL, in " << __FUNCTION__ << " for " << ms << " ms before packet_size="<<chunk.size()); // XXX debug sleep
         m_send_que_lock.unlock();
         boost::this_thread::sleep(boost::posix_time::milliseconds( ms ) );
