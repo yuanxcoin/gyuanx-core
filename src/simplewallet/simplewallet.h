@@ -445,9 +445,9 @@ namespace cryptonote
     std::atomic<bool> m_locked;
     std::atomic<bool> m_in_command;
 
-    epee::math_helper::periodic_task m_inactivity_checker{10s};
-    epee::math_helper::periodic_task m_refresh_checker{90s};
-    epee::math_helper::periodic_task m_mms_checker{90s};
+    epee::math_helper::periodic_task m_inactivity_checker{std::chrono::seconds(10)};
+    epee::math_helper::periodic_task m_refresh_checker{std::chrono::seconds(90)};
+    epee::math_helper::periodic_task m_mms_checker{std::chrono::seconds(90)};
 
     // MMS
     mms::message_store& get_message_store() const { return m_wallet->get_message_store(); };

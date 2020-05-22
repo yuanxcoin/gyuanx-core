@@ -703,7 +703,6 @@ void Blockchain::pop_blocks(uint64_t nblocks)
       }
 
       pop_block_from_blockchain();
-      ++i;
     }
   }
   catch (const std::exception& e)

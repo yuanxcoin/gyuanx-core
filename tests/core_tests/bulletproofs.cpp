@@ -51,10 +51,24 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
   GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, ts_start);
 
+  // NOTE: Monero tests use multiple null terminated entries in their arrays
+  int amounts_paid_len = 0;
+  for (int i = 0; amounts_paid[i] != (uint64_t)-1; ++i)
+    ++amounts_paid_len;
+
+  int target_hf = cryptonote::network_version_count - 1;
+  if (amounts_paid_len == 1) // NOTE: Number of destinations/outputs to generate
+  {
+      // NOTE: If we want 1 output then, in HF_VERSION_MIN_2_OUTPUTS, we enforce
+      // 2 outputs causing the test to fail. For that case, we set the target
+      // hardfork to 1 before.
+      target_hf = HF_VERSION_MIN_2_OUTPUTS - 1;
+  }
+
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = {
       std::make_pair(7, 0),
       std::make_pair(8, 1),
-      std::make_pair(cryptonote::network_version_count - 1, NUM_UNLOCKED_BLOCKS + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW + 1),
+      std::make_pair(target_hf, NUM_UNLOCKED_BLOCKS + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW + 1),
   };
   event_replay_settings settings = {};
   settings.hard_forks            = hard_forks;
@@ -160,10 +174,6 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
     cryptonote::account_base const &from = miner_accounts[n];
     cryptonote::account_base const &to   = miner_accounts[n+1];
     assert(n + 1 < NUM_MINERS);
-
-    // NOTE: Monero tests use multiple null terminated entries in their arrays
-    int amounts_paid_len = 0;
-    for(int i = 0; amounts_paid[i] != (uint64_t)-1; ++i) ++amounts_paid_len;
 
     uint64_t change_amount;
     fill_tx_sources_and_multi_destinations(events,
