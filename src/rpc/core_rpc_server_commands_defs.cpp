@@ -591,7 +591,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(txpool_stats)
   KV_SERIALIZE(num_10m)
   KV_SERIALIZE(num_not_relayed)
   KV_SERIALIZE(histo_98pc)
-  KV_SERIALIZE_CONTAINER_POD_AS_BLOB(histo)
+  KV_SERIALIZE(histo)
   KV_SERIALIZE(num_double_spends)
 KV_SERIALIZE_MAP_CODE_END()
 
