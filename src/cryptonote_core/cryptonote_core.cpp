@@ -638,7 +638,6 @@ namespace cryptonote
     /// during deinitialization... TODO: fix that
     CHECK_AND_ASSERT_MES(r, false, "Failed to apply command line options.");
 
-    std::string db_type = command_line::get_arg(vm, cryptonote::arg_db_type);
     std::string db_sync_mode = command_line::get_arg(vm, cryptonote::arg_db_sync_mode);
     bool db_salvage = command_line::get_arg(vm, cryptonote::arg_db_salvage) != 0;
     bool fast_sync = command_line::get_arg(vm, arg_fast_block_sync) != 0;
@@ -664,10 +663,10 @@ namespace cryptonote
     CHECK_AND_ASSERT_MES (boost::filesystem::exists(folder) || boost::filesystem::create_directories(folder), false,
       std::string("Failed to create directory ").append(folder.string()).c_str());
 
-    std::unique_ptr<BlockchainDB> db(new_db(db_type));
+    std::unique_ptr<BlockchainDB> db(new_db());
     if (db == NULL)
     {
-      LOG_ERROR("Attempted to use non-existent database type");
+      LOG_ERROR("Failed to initialize a database");
       return false;
     }
 

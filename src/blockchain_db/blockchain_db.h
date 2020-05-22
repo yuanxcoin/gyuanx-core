@@ -107,7 +107,6 @@ struct checkpoint_t;
 /** a pair of <transaction hash, output index>, typedef for convenience */
 typedef std::pair<crypto::hash, uint64_t> tx_out_index;
 
-extern const command_line::arg_descriptor<std::string> arg_db_type;
 extern const command_line::arg_descriptor<std::string> arg_db_sync_mode;
 extern const command_line::arg_descriptor<bool, false> arg_db_salvage;
 
@@ -1914,7 +1913,7 @@ public:
   explicit db_wtxn_guard(BlockchainDB* db) : db_wtxn_guard{*db} {}
 };
 
-BlockchainDB *new_db(const std::string& db_type);
+BlockchainDB *new_db();
 
 }  // namespace cryptonote
 
