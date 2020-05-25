@@ -1964,9 +1964,35 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
         num_checkpoints_on_alt_chain++;
       }
 
-      alt_data.height                   = block_height;
-      // TODO(loki): Block cumulative weight wasn't being set in the fist place in bei?
-      // alt_data.cumulative_weight       = bei.block_cumulative_weight;
+      alt_data.height            = block_height;
+      alt_data.cumulative_weight = cryptonote::get_transaction_weight(b.miner_tx);
+      for (const crypto::hash &txid: b.tx_hashes)
+      {
+        cryptonote::txpool_tx_meta_t tx_meta;
+        cryptonote::blobdata blob;
+        if (get_txpool_tx_meta(txid, tx_meta))
+        {
+          alt_data.cumulative_weight += tx_meta.weight;
+        }
+        else if (m_db->get_pruned_tx_blob(txid, blob))
+        {
+          cryptonote::transaction tx;
+          if (!cryptonote::parse_and_validate_tx_base_from_blob(blob, tx))
+          {
+            MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) refers to unparsable transaction hash " << txid << ".");
+            bvc.m_verifivation_failed = true;
+            return false;
+          }
+          // alt_data.cumulative_weight += cryptonote::get_pruned_transaction_weight(tx);
+        }
+        else
+        {
+          // we can't determine the block weight, set it to 0 and break out of the loop
+          alt_data.cumulative_weight = 0;
+          break;
+        }
+      }
+
       uint64_t block_reward = get_outs_money_amount(b.miner_tx);
       const uint64_t prev_generated_coins = alt_chain.size() ? prev_data.already_generated_coins : m_db->get_block_already_generated_coins(block_height - 1);
       alt_data.already_generated_coins = (block_reward < (MONEY_SUPPLY - prev_generated_coins)) ? prev_generated_coins + block_reward : MONEY_SUPPLY;

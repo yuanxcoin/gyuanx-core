@@ -566,6 +566,7 @@ namespace cryptonote
      * @param bytes the max cumulative txpool weight in bytes
      */
     void set_txpool_max_weight(size_t bytes);
+
   private:
 
     /**
