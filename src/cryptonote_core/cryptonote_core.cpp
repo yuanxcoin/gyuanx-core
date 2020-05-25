@@ -1922,8 +1922,8 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   block_complete_entry get_block_complete_entry(block& b, tx_memory_pool &pool)
   {
-    block_complete_entry bce;
-    bce.block = cryptonote::block_to_blob(b);
+    block_complete_entry bce = {};
+    bce.block                = cryptonote::block_to_blob(b);
     for (const auto &tx_hash: b.tx_hashes)
     {
       cryptonote::blobdata txblob;
