@@ -1906,7 +1906,8 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     }
 
     CHECK_AND_ASSERT_MES(required_diff, false, "!!!!!!! DIFFICULTY OVERHEAD !!!!!!!");
-    crypto::hash proof_of_work = null_hash;
+    crypto::hash proof_of_work;
+    std::memset(proof_of_work.data, 0xff, sizeof(proof_of_work.data));
     if (b.major_version >= cryptonote::network_version_12_checkpointing)
     {
       crypto::hash seedhash = null_hash;
@@ -3965,7 +3966,8 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
 
   TIME_MEASURE_START(longhash_calculating_time);
 
-  crypto::hash proof_of_work = null_hash;
+  crypto::hash proof_of_work;
+  std::memset(proof_of_work.data, 0xff, sizeof(proof_of_work.data));
 
   // Formerly the code below contained an if loop with the following condition
   // !m_checkpoints.is_in_checkpoint_zone(get_current_blockchain_height())
