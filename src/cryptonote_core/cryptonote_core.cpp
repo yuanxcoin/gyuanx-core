@@ -295,7 +295,9 @@ namespace cryptonote
   , m_service_node_list(m_blockchain_storage)
   , m_blockchain_storage(m_mempool, m_service_node_list)
   , m_quorum_cop(*this)
-  , m_miner(this, &m_blockchain_storage)
+  , m_miner(this, [this](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash) {
+    return cryptonote::get_block_longhash(&m_blockchain_storage, b, hash, height, threads);
+  })
   , m_pprotocol(&m_protocol_stub)
   , m_starter_message_showed(false)
   , m_target_blockchain_height(0)

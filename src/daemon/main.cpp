@@ -35,7 +35,6 @@
 #include "common/password.h"
 #include "common/util.h"
 #include "cryptonote_core/cryptonote_core.h"
-#include "cryptonote_core/miner.h"
 #include "daemonizer/daemonizer.h"
 #include "misc_log_ex.h"
 #include "p2p/net_node.h"

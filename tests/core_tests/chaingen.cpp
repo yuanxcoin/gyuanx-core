@@ -44,7 +44,7 @@
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "cryptonote_core/miner.h"
+#include "cryptonote_basic/miner.h"
 #include "loki_economy.h"
 
 #include "chaingen.h"
@@ -643,7 +643,9 @@ loki_chain_generator::create_loki_name_system_tx_update_w_extra(cryptonote::acco
 static void fill_nonce(cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
 {
   blk.nonce = 0;
-  while (!cryptonote::miner::find_nonce_for_given_block(NULL, blk, diffic, height))
+  while (!cryptonote::miner::find_nonce_for_given_block([](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash){
+    return cryptonote::get_block_longhash(NULL, b, hash, height, threads);
+  }, blk, TESTS_DEFAULT_FEE, height))
     blk.timestamp++;
 }
 
@@ -1112,7 +1114,6 @@ bool test_generator::construct_block(cryptonote::block &blk,
 
   //blk.tree_root_hash = get_tx_tree_hash(blk);
   fill_nonce(blk, TEST_DEFAULT_DIFFICULTY, height);
-  add_block(blk, txs_weight, block_weights, already_generated_coins);
 
   return true;
 }

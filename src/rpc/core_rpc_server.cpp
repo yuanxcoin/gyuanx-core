@@ -1669,7 +1669,9 @@ namespace cryptonote { namespace rpc {
       if(!parse_and_validate_block_from_blob(blockblob, b))
         throw rpc_error{ERROR_WRONG_BLOCKBLOB, "Wrong block blob"};
       b.nonce = req.starting_nonce;
-      miner::find_nonce_for_given_block(&(m_core.get_blockchain_storage()), b, template_res.difficulty, template_res.height);
+      miner::find_nonce_for_given_block([this](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash) {
+        return cryptonote::get_block_longhash(&(m_core.get_blockchain_storage()), b, hash, height, threads);
+      }, b, template_res.difficulty, template_res.height);
 
       submit_req.blob[0] = string_tools::buff_to_hex_nodelimer(block_to_blob(b));
       auto submit_res = invoke(std::move(submit_req), context);
