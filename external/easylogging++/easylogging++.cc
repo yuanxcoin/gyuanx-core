@@ -624,6 +624,13 @@ void LogBuilder::convertToColoredOutput(base::type::string_t* logLine, Level lev
     *logLine = ELPP_LITERAL("\x1b[35m") + *logLine + resetColor;
 }
 
+void LogBuilder::setColor(Color color, bool bright) {
+#if !ELPP_OS_WINDOWS
+  if (m_termSupportsColor)
+#endif
+    el::base::utils::setConsoleColor(color, bright);
+}
+
 // Logger
 
 Logger::Logger(const std::string& id, base::LogStreamsReferenceMap* logStreamsReference) :
