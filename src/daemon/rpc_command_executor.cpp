@@ -164,7 +164,8 @@ namespace {
       << "num txes: " << header.num_txes << "\n"
       << "reward: " << cryptonote::print_money(header.reward) << "\n"
       << "miner reward: " << cryptonote::print_money(header.miner_reward) << "\n"
-      << "service node winner: " << header.service_node_winner << std::endl;
+      << "service node winner: " << header.service_node_winner << "\n"
+      << "miner tx hash: " << header.miner_tx_hash;
   }
 
   std::string get_human_time_ago(time_t t, time_t now, bool abbreviate = false)
@@ -830,10 +831,11 @@ bool rpc_command_executor::print_transaction(const crypto::hash& transaction_has
     if (1 == res.txs.size())
     {
       // only available for new style answers
+      bool pruned = res.txs.front().prunable_as_hex.empty() && res.txs.front().prunable_hash != epee::string_tools::pod_to_hex(crypto::null_hash);
       if (res.txs.front().in_pool)
         tools::success_msg_writer() << "Found in pool";
       else
-        tools::success_msg_writer() << "Found in blockchain at height " << res.txs.front().block_height << (res.txs.front().prunable_as_hex.empty() ? " (pruned)" : "");
+        tools::success_msg_writer() << "Found in blockchain at height " << res.txs.front().block_height << (pruned ? " (pruned)" : "");
     }
 
     const std::string &as_hex = (1 == res.txs.size()) ? res.txs.front().as_hex : res.txs_as_hex.front();
