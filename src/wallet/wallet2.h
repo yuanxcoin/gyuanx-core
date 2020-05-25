@@ -1224,6 +1224,10 @@ private:
     void ignore_fractional_outputs(bool value) { m_ignore_fractional_outputs = value; }
     bool confirm_non_default_ring_size() const { return m_confirm_non_default_ring_size; }
     void confirm_non_default_ring_size(bool always) { m_confirm_non_default_ring_size = always; }
+    uint64_t ignore_outputs_above() const { return m_ignore_outputs_above; }
+    void ignore_outputs_above(uint64_t value) { m_ignore_outputs_above = value; }
+    uint64_t ignore_outputs_below() const { return m_ignore_outputs_below; }
+    void ignore_outputs_below(uint64_t value) { m_ignore_outputs_below = value; }
     bool track_uses() const { return m_track_uses; }
     void track_uses(bool value) { m_track_uses = value; }
     uint32_t inactivity_lock_timeout() const { return m_inactivity_lock_timeout; }
@@ -1783,6 +1787,8 @@ private:
     bool m_key_reuse_mitigation2;
     uint64_t m_segregation_height;
     bool m_ignore_fractional_outputs;
+    uint64_t m_ignore_outputs_above;
+    uint64_t m_ignore_outputs_below;
     bool m_track_uses;
     uint32_t m_inactivity_lock_timeout;
     bool m_is_initialized;

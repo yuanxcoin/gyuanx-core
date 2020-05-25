@@ -2124,8 +2124,8 @@ bool simple_wallet::welcome(const std::vector<std::string> &args)
   message_writer() << tr("Welcome to Loki, the private cryptocurrency based on Monero");
   message_writer() << "";
   message_writer() << tr("Loki, like Bitcoin, is a cryptocurrency. That is, it is digital money.");
-  message_writer() << tr("Unlike Bitcoin, your Loki transactions and balance stay private, and not visible to the world by default.");
-  message_writer() << tr("However, you have the option of making those available to select parties, if you choose to.");
+  message_writer() << tr("Unlike Bitcoin, your Loki transactions and balance stay private and are not visible to the world by default.");
+  message_writer() << tr("However, you have the option of making those available to select parties if you choose to.");
   message_writer() << "";
   message_writer() << tr("Loki protects your privacy on the blockchain, and while Loki strives to improve all the time,");
   message_writer() << tr("no privacy technology can be 100% perfect, Monero and consequently Loki included.");
@@ -2488,6 +2488,43 @@ bool simple_wallet::set_ignore_fractional_outputs(const std::vector<std::string>
   return true;
 }
 
+
+bool simple_wallet::set_ignore_outputs_above(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
+{
+  const auto pwd_container = get_and_verify_password();
+  if (pwd_container)
+  {
+    uint64_t amount;
+    if (!cryptonote::parse_amount(amount, args[1]))
+    {
+      fail_msg_writer() << tr("Invalid amount");
+      return true;
+    }
+    if (amount == 0)
+      amount = MONEY_SUPPLY;
+    m_wallet->ignore_outputs_above(amount);
+    m_wallet->rewrite(m_wallet_file, pwd_container->password());
+  }
+  return true;
+}
+
+bool simple_wallet::set_ignore_outputs_below(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
+{
+  const auto pwd_container = get_and_verify_password();
+  if (pwd_container)
+  {
+    uint64_t amount;
+    if (!cryptonote::parse_amount(amount, args[1]))
+    {
+      fail_msg_writer() << tr("Invalid amount");
+      return true;
+    }
+    m_wallet->ignore_outputs_below(amount);
+    m_wallet->rewrite(m_wallet_file, pwd_container->password());
+  }
+  return true;
+}
+
 bool simple_wallet::set_track_uses(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   const auto pwd_container = get_and_verify_password();
@@ -2772,6 +2809,10 @@ simple_wallet::simple_wallet()
    Set this if you are not sure whether you will spend on a key reusing Loki fork later.
  segregation-height <n>
    Set to the height of a key reusing fork you want to use, 0 to use default.
+ignore-outputs-above <amount>
+  Ignore outputs of amount above this threshold when spending. Value 0 is translated to the maximum value (18 million) which disables this filter.
+ignore-outputs-below <amount>
+  Ignore outputs of amount below this threshold when spending.
  track-uses <1|0>
    Whether to keep track of owned outputs uses.
  device-name <device_name[:device_spec]>
@@ -3189,6 +3230,8 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     success_msg_writer() << "subaddress-lookahead = " << lookahead.first << ":" << lookahead.second;
     success_msg_writer() << "segregation-height = " << m_wallet->segregation_height();
     success_msg_writer() << "ignore-fractional-outputs = " << m_wallet->ignore_fractional_outputs();
+    success_msg_writer() << "ignore-outputs-above = " << cryptonote::print_money(m_wallet->ignore_outputs_above());
+    success_msg_writer() << "ignore-outputs-below = " << cryptonote::print_money(m_wallet->ignore_outputs_below());
     success_msg_writer() << "track-uses = " << m_wallet->track_uses();
     success_msg_writer() << "device_name = " << m_wallet->device_name();
     success_msg_writer() << "export-format = " << (m_wallet->export_format() == tools::wallet2::ExportFormat::Ascii ? "ascii" : "binary");
@@ -3247,6 +3290,8 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     CHECK_SIMPLE_VARIABLE("subaddress-lookahead", set_subaddress_lookahead, tr("<major>:<minor>"));
     CHECK_SIMPLE_VARIABLE("segregation-height", set_segregation_height, tr("unsigned integer"));
     CHECK_SIMPLE_VARIABLE("ignore-fractional-outputs", set_ignore_fractional_outputs, tr("0 or 1"));
+    CHECK_SIMPLE_VARIABLE("ignore-outputs-above", set_ignore_outputs_above, tr("amount"));
+    CHECK_SIMPLE_VARIABLE("ignore-outputs-below", set_ignore_outputs_below, tr("amount"));
     CHECK_SIMPLE_VARIABLE("track-uses", set_track_uses, tr("0 or 1"));
     CHECK_SIMPLE_VARIABLE("inactivity-lock-timeout", set_inactivity_lock_timeout, tr("unsigned integer (seconds, 0 to disable)"));
     CHECK_SIMPLE_VARIABLE("device-name", set_device_name, tr("<device_name[:device_spec]>"));
