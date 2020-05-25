@@ -1993,7 +1993,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
             bvc.m_verifivation_failed = true;
             return false;
           }
-          // alt_data.cumulative_weight += cryptonote::get_pruned_transaction_weight(tx);
+          alt_data.cumulative_weight += cryptonote::get_pruned_transaction_weight(tx);
         }
         else
         {

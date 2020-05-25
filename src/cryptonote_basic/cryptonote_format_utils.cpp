@@ -430,7 +430,7 @@ namespace cryptonote
   uint64_t get_pruned_transaction_weight(const transaction &tx)
   {
     CHECK_AND_ASSERT_MES(tx.pruned, std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support non pruned txes");
-    CHECK_AND_ASSERT_MES(tx.version >= 2, std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support v1 txes");
+    CHECK_AND_ASSERT_MES(tx.version >= txversion::v2_ringct, std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support v1 txes");
     CHECK_AND_ASSERT_MES(tx.rct_signatures.type >= rct::RCTTypeBulletproof2,
         std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support older range proof types");
     CHECK_AND_ASSERT_MES(!tx.vin.empty(), std::numeric_limits<uint64_t>::max(), "empty vin");
