@@ -968,6 +968,13 @@ namespace cryptonote
       */
      void set_service_node_votes_relayed(const std::vector<service_nodes::quorum_vote_t> &votes);
 
+     bool has_block_weights(uint64_t height, uint64_t nblocks) const;
+
+     /**
+      * @brief flushes the bad txs cache
+      */
+     void flush_bad_txs_cache();
+
      /**
       * @brief Record if the service node has checkpointed at this point in time
       */

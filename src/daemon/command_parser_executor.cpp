@@ -958,4 +958,13 @@ bool command_parser_executor::set_bootstrap_daemon(const std::vector<std::string
     args_count > 2 ? args[2] : std::string());
 }
 
+bool command_parser_executor::flush_cache(const std::vector<std::string>& args)
+{
+  if (args.size () && args[0] == "bad-txs")
+    return m_executor.flush_cache(true);
+
+  std::cout << "Cache type needed: bad-txs\n";
+  return true;
+}
+
 } // namespace daemonize

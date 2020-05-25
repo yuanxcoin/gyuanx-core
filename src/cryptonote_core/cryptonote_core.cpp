@@ -2517,6 +2517,14 @@ namespace cryptonote
     return m_service_node_list.set_storage_server_peer_reachable(pubkey, value);
   }
   //-----------------------------------------------------------------------------------------------
+  void core::flush_bad_txs_cache()
+  {
+    bad_semantics_txes_lock.lock();
+    for (int idx = 0; idx < 2; ++idx)
+      bad_semantics_txes[idx].clear();
+    bad_semantics_txes_lock.unlock();
+  }
+  //-----------------------------------------------------------------------------------------------
   bool core::update_blockchain_pruning()
   {
     return m_blockchain_storage.update_blockchain_pruning();

@@ -1798,6 +1798,12 @@ bool rpc_command_executor::print_sn(const std::vector<std::string> &args)
     return true;
 }
 
+bool rpc_command_executor::flush_cache(bool bad_txs)
+{
+  FLUSH_CACHE::response res{};
+  return invoke<FLUSH_CACHE>(FLUSH_CACHE::request{bad_txs}, res, "Failed to flush TX cache");
+}
+
 bool rpc_command_executor::print_sn_status(std::vector<std::string> args)
 {
   if (args.size() > 1)

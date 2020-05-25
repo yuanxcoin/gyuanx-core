@@ -382,6 +382,13 @@ void command_server::init_commands(cryptonote::rpc::core_rpc_server* rpc_server)
     , "URL of a 'bootstrap' remote daemon that the connected wallets can use while this daemon is still not fully synced.\n"
       "Use 'auto' to enable automatic public nodes discovering and bootstrap daemon switching"
     );
+    m_command_lookup.set_handler(
+      "flush_cache"
+    , [this](const auto &x) { return m_parser.flush_cache(x); }
+    , "flush_cache bad-txs"
+    , "Flush the specified cache(s)."
+    );
+
 #if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
     m_command_lookup.set_handler(
       "relay_votes_and_uptime", [rpc_server](const auto&) {

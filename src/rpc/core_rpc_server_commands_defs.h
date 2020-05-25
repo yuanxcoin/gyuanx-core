@@ -2446,6 +2446,20 @@ namespace rpc {
     };
   };
 
+  LOKI_RPC_DOC_INTROSPECT
+  // Clear TXs from the daemon cache, currently only the cache storing TX hashes that were previously verified bad by the daemon.
+  struct FLUSH_CACHE : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("flush_cache"); }
+    struct request
+    {
+      bool bad_txs; // Clear the cache storing TXs with bad verification info.
+      KV_MAP_SERIALIZABLE;
+    };
+
+    struct response : STATUS { };
+  };
+
   template <typename...> struct type_list {};
 
   /// List of all supported rpc command structs to allow compile-time enumeration of all supported
@@ -2533,7 +2547,8 @@ namespace rpc {
     REPORT_PEER_SS_STATUS,
     TEST_TRIGGER_P2P_RESYNC,
     LNS_NAMES_TO_OWNERS,
-    LNS_OWNERS_TO_NAMES
+    LNS_OWNERS_TO_NAMES,
+    FLUSH_CACHE
   >;
 
 } } // namespace cryptonote::rpc

@@ -2742,6 +2742,15 @@ namespace cryptonote { namespace rpc {
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  FLUSH_CACHE::response core_rpc_server::invoke(FLUSH_CACHE::request&& req, rpc_context context)
+  {
+    FLUSH_CACHE::response res{};
+    if (req.bad_txs)
+      m_core.flush_bad_txs_cache();
+    res.status = STATUS_OK;
+    return res;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   GET_SERVICE_NODE_REGISTRATION_CMD_RAW::response core_rpc_server::invoke(GET_SERVICE_NODE_REGISTRATION_CMD_RAW::request&& req, rpc_context context)
   {
     GET_SERVICE_NODE_REGISTRATION_CMD_RAW::response res{};
