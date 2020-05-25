@@ -1347,10 +1347,19 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     return false;
   }
 
-  uint64_t height = cryptonote::get_block_height(b);
-  std::vector<uint64_t> last_blocks_weights;
-  get_last_n_blocks_weights(last_blocks_weights, CRYPTONOTE_REWARD_BLOCKS_WINDOW);
+  uint64_t median_weight;
+  if (version >= HF_VERSION_EFFECTIVE_SHORT_TERM_MEDIAN_IN_PENALTY)
+  {
+    median_weight = m_current_block_cumul_weight_median;
+  }
+  else
+  {
+    std::vector<uint64_t> last_blocks_weights;
+    get_last_n_blocks_weights(last_blocks_weights, CRYPTONOTE_REWARD_BLOCKS_WINDOW);
+    median_weight = epee::misc_utils::median(last_blocks_weights);
+  }
 
+  uint64_t height                                = cryptonote::get_block_height(b);
   loki_block_reward_context block_reward_context = {};
   block_reward_context.fee                       = fee;
   block_reward_context.height                    = height;
@@ -1361,7 +1370,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   }
 
   block_reward_parts reward_parts;
-  if (!get_loki_block_reward(epee::misc_utils::median(last_blocks_weights), cumulative_block_weight, already_generated_coins, version, reward_parts, block_reward_context))
+  if (!get_loki_block_reward(median_weight, cumulative_block_weight, already_generated_coins, version, reward_parts, block_reward_context))
   {
     MERROR_VER("block weight " << cumulative_block_weight << " is bigger than allowed for this blockchain");
     return false;
