@@ -427,7 +427,7 @@ namespace cryptonote { namespace rpc {
     if (restricted)
       res.database_size = round_up(res.database_size, 1'000'000'000);
     res.update_available = restricted ? false : m_core.is_update_available();
-    res.version = restricted ? std::to_string(LOKI_VERSION[0]) : LOKI_VERSION_STR;
+    res.version = restricted ? std::to_string(LOKI_VERSION[0]) : LOKI_VERSION_FULL;
     res.status_line = !restricted ? m_core.get_status_string() :
       "v" + std::to_string(LOKI_VERSION[0]) + "; Height: " + std::to_string(res.height);
 
