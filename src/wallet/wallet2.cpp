@@ -3445,7 +3445,7 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   // since that might cause a password prompt, which would introduce a data
   // leak allowing a passive adversary with traffic analysis capability to
   // infer when we get an incoming output
-  std::vector<get_pool_state_tx> process_pool_txs = get_pool_state(refreshed);
+  std::vector<get_pool_state_tx> process_pool_txs = get_pool_state(true);
 
   bool first = true, last = false;
   while(m_run.load(std::memory_order_relaxed))
