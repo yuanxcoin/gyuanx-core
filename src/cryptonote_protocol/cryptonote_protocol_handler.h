@@ -38,7 +38,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "math_helper.h"
+#include "common/periodic_task.h"
 #include "storages/levin_abstract_invoke2.h"
 #include "warnings.h"
 #include "cryptonote_protocol_defs.h"
@@ -179,9 +179,9 @@ namespace cryptonote
     std::atomic<bool> m_no_sync;
     boost::mutex m_sync_lock;
     block_queue m_block_queue;
-    epee::math_helper::periodic_task m_idle_peer_kicker{30s};
-    epee::math_helper::periodic_task m_standby_checker{100ms};
-    epee::math_helper::periodic_task m_sync_search_checker{101s};
+    tools::periodic_task m_idle_peer_kicker{30s};
+    tools::periodic_task m_standby_checker{100ms};
+    tools::periodic_task m_sync_search_checker{101s};
     std::atomic<unsigned int> m_max_out_peers;
     tools::PerformanceTimer m_sync_timer, m_add_timer;
     uint64_t m_last_add_end_time;

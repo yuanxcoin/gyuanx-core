@@ -48,6 +48,7 @@ extern "C" {
 #include "common/util.h"
 #include "common/random.h"
 #include "common/lock.h"
+#include "misc_os_dependent.h"
 #include "blockchain.h"
 #include "service_node_quorum_cop.h"
 

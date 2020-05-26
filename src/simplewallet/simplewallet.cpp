@@ -8558,7 +8558,7 @@ bool simple_wallet::check_refresh()
         uint64_t fetched_blocks;
         bool received_money;
         if (try_connect_to_daemon(true))
-          m_wallet->refresh(m_wallet->is_trusted_daemon(), 0, fetched_blocks, received_money);
+          m_wallet->refresh(m_wallet->is_trusted_daemon(), 0, fetched_blocks, received_money, false /*don't check pool in background*/);
       }
       catch(...) {}
       m_auto_refresh_refreshing = false;

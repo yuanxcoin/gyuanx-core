@@ -30,6 +30,7 @@
 #include "jsonrpc_structs.h"
 #include "storages/portable_storage.h"
 #include "storages/portable_storage_template_helper.h"
+#include "misc_os_dependent.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net.http"

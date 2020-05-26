@@ -45,7 +45,7 @@
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "wallet/wallet2.h"
 #include "console_handler.h"
-#include "math_helper.h"
+#include "common/periodic_task.h"
 #include "wipeable_string.h"
 #include "common/i18n.h"
 #include "common/password.h"
@@ -447,9 +447,9 @@ namespace cryptonote
     std::atomic<bool> m_locked;
     std::atomic<bool> m_in_command;
 
-    epee::math_helper::periodic_task m_inactivity_checker{std::chrono::seconds(10)};
-    epee::math_helper::periodic_task m_refresh_checker{std::chrono::seconds(90)};
-    epee::math_helper::periodic_task m_mms_checker{std::chrono::seconds(90)};
+    tools::periodic_task m_inactivity_checker{std::chrono::seconds(10)};
+    tools::periodic_task m_refresh_checker{std::chrono::seconds(90)};
+    tools::periodic_task m_mms_checker{std::chrono::seconds(90)};
 
     // MMS
     mms::message_store& get_message_store() const { return m_wallet->get_message_store(); };

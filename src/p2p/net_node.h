@@ -56,6 +56,7 @@
 #include "net/enums.h"
 #include "net/fwd.h"
 #include "common/command_line.h"
+#include "common/periodic_task.h"
 
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
@@ -447,11 +448,11 @@ namespace nodetool
     t_payload_net_handler& m_payload_handler;
     peerlist_storage m_peerlist_storage;
 
-    epee::math_helper::periodic_task m_peer_handshake_idle_maker_interval{std::chrono::seconds{P2P_DEFAULT_HANDSHAKE_INTERVAL}};
-    epee::math_helper::periodic_task m_connections_maker_interval{1s};
-    epee::math_helper::periodic_task m_peerlist_store_interval{30min};
-    epee::math_helper::periodic_task m_gray_peerlist_housekeeping_interval{1min};
-    epee::math_helper::periodic_task m_incoming_connections_interval{1h};
+    tools::periodic_task m_peer_handshake_idle_maker_interval{std::chrono::seconds{P2P_DEFAULT_HANDSHAKE_INTERVAL}};
+    tools::periodic_task m_connections_maker_interval{1s};
+    tools::periodic_task m_peerlist_store_interval{30min};
+    tools::periodic_task m_gray_peerlist_housekeeping_interval{1min};
+    tools::periodic_task m_incoming_connections_interval{1h};
 
     uint64_t m_last_stat_request_time;
     std::list<epee::net_utils::network_address>   m_priority_peers;

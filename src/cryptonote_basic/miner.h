@@ -37,7 +37,7 @@
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/verification_context.h"
 #include "cryptonote_basic/difficulty.h"
-#include "math_helper.h"
+#include "common/periodic_task.h"
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -130,9 +130,9 @@ namespace cryptonote
     i_miner_handler* m_phandler;
     get_block_hash_t m_gbh;
     account_public_address m_mine_address;
-    epee::math_helper::periodic_task m_update_block_template_interval{5s};
-    epee::math_helper::periodic_task m_update_merge_hr_interval{2s};
-    epee::math_helper::periodic_task m_autodetect_interval{1s};
+    tools::periodic_task m_update_block_template_interval{5s};
+    tools::periodic_task m_update_merge_hr_interval{2s};
+    tools::periodic_task m_autodetect_interval{1s};
     std::vector<blobdata> m_extra_messages;
     miner_config m_config;
     std::string m_config_folder_path;    
