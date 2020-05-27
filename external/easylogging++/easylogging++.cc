@@ -1178,7 +1178,7 @@ bool OS::termSupportsColor(void) {
   return term == "xterm" || term == "xterm-color" || term == "xterm-256color"
          || term == "screen" || term == "linux" || term == "cygwin"
          || term == "tmux" || term == "tmux-256color"
-         || term == "screen-256color";
+         || term == "screen-256color" || term == "screen.xterm-256color";
 }
 
 // DateTime
