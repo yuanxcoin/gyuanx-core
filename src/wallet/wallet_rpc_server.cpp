@@ -1056,7 +1056,6 @@ namespace tools
       }
     }
 
-    std::vector<tools::wallet2::pending_tx> ptx;
     try
     {
       // gather info to ask the user
