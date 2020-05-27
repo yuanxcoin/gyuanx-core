@@ -45,6 +45,7 @@
 #include "include_base_utils.h"
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
+#include "common/threadpool.h"
 
 #include "cryptonote_basic/account_boost_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
@@ -964,6 +965,7 @@ inline bool do_replay_events_get_core(std::vector<test_event_entry>& events, cry
   }
   c.get_blockchain_storage().get_db().set_batch_transactions(true);
   bool ret = replay_events_through_core_plain<t_test_class>(c, events, validator, true);
+  tools::threadpool::getInstance().recycle();
   return ret;
 }
 //--------------------------------------------------------------------------
