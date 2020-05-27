@@ -2442,4 +2442,13 @@ bool rpc_command_executor::set_bootstrap_daemon(
     return true;
 }
 
+bool rpc_command_executor::version()
+{
+    GET_INFO::response response{};
+    if (!invoke<GET_INFO>(GET_INFO::request{}, response, "Failed to query daemon info"))
+        return false;
+    tools::success_msg_writer() << response.version;
+    return true;
+}
+
 }// namespace daemonize

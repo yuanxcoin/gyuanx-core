@@ -208,6 +208,8 @@ public:
     const std::string &password);
 
   bool flush_cache(bool bad_txs);
+
+  bool version();
 };
 
 } // namespace daemonize

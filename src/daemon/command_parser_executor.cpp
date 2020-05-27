@@ -919,8 +919,7 @@ bool command_parser_executor::pop_blocks(const std::vector<std::string>& args)
 
 bool command_parser_executor::version(const std::vector<std::string>& args)
 {
-  std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << std::endl;
-  return true;
+  return m_executor.version();
 }
 
 bool command_parser_executor::prune_blockchain(const std::vector<std::string>& args)
