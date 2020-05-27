@@ -644,7 +644,7 @@ bool rpc_command_executor::print_connections() {
      << std::setw(30) << std::left << address
      << std::setw(8) << (get_address_type_name((epee::net_utils::address_type)info.address_type))
      << std::setw(6) << (info.ssl ? "yes" : "no")
-     << std::setw(20) << epee::string_tools::pad_string(info.peer_id, 16, '0', true)
+     << std::setw(20) << info.peer_id
      << std::setw(20) << info.support_flags
      << std::setw(30) << std::to_string(info.recv_count) + "("  + std::to_string(info.recv_idle_time) + ")/" + std::to_string(info.send_count) + "(" + std::to_string(info.send_idle_time) + ")"
      << std::setw(25) << info.state
@@ -698,16 +698,72 @@ bool rpc_command_executor::print_net_stats()
   return true;
 }
 
+<<<<<<< HEAD
 bool rpc_command_executor::print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index) {
   GET_BLOCK_HEADERS_RANGE::request req{};
   GET_BLOCK_HEADERS_RANGE::response res{};
+=======
+bool t_rpc_command_executor::print_blockchain_info(int64_t start_block_index, uint64_t end_block_index) {
+  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::request req;
+  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::response res;
+  epee::json_rpc::error error_resp;
+  std::string fail_message = "Problem fetching info";
+
+  // negative: relative to the end
+  if (start_block_index < 0)
+  {
+    cryptonote::COMMAND_RPC_GET_INFO::request ireq;
+    cryptonote::COMMAND_RPC_GET_INFO::response ires;
+    if (m_is_rpc)
+    {
+      if (!m_rpc_client->rpc_request(ireq, ires, "/getinfo", fail_message.c_str()))
+      {
+        return true;
+      }
+    }
+    else
+    {
+      if (!m_rpc_server->on_get_info(ireq, ires) || ires.status != CORE_RPC_STATUS_OK)
+      {
+        tools::fail_msg_writer() << make_error(fail_message, ires.status);
+        return true;
+      }
+    }
+    if (start_block_index < 0 && (uint64_t)-start_block_index >= ires.height)
+    {
+      tools::fail_msg_writer() << "start offset is larger than blockchain height";
+      return true;
+    }
+    start_block_index = ires.height + start_block_index;
+    end_block_index = start_block_index + end_block_index - 1;
+  }
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
 
   req.start_height = start_block_index;
   req.end_height = end_block_index;
   req.fill_pow_hash = false;
 
+<<<<<<< HEAD
   if (!invoke<GET_BLOCK_HEADERS_RANGE>(std::move(req), res, "Failed to retrieve block headers"))
     return false;
+=======
+  fail_message = "Failed calling getblockheadersrange";
+  if (m_is_rpc)
+  {
+    if (!m_rpc_client->json_rpc_request(req, res, "getblockheadersrange", fail_message.c_str()))
+    {
+      return true;
+    }
+  }
+  else
+  {
+    if (!m_rpc_server->on_get_block_headers_range(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
+    {
+      tools::fail_msg_writer() << make_error(fail_message, res.status);
+      return true;
+    }
+  }
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
 
   bool first = true;
   for (auto & header : res.headers)
@@ -813,7 +869,12 @@ bool rpc_command_executor::print_block_by_height(uint64_t height, bool include_h
   return print_block(std::move(req), include_hex);
 }
 
+<<<<<<< HEAD
 bool rpc_command_executor::print_transaction(const crypto::hash& transaction_hash,
+=======
+bool t_rpc_command_executor::print_transaction(crypto::hash transaction_hash,
+  bool include_metadata,
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
   bool include_hex,
   bool include_json) {
   GET_TRANSACTIONS::request req{};
@@ -841,6 +902,29 @@ bool rpc_command_executor::print_transaction(const crypto::hash& transaction_has
     const std::string &as_hex = (1 == res.txs.size()) ? res.txs.front().as_hex : res.txs_as_hex.front();
     const std::string &pruned_as_hex = (1 == res.txs.size()) ? res.txs.front().pruned_as_hex : "";
     const std::string &prunable_as_hex = (1 == res.txs.size()) ? res.txs.front().prunable_as_hex : "";
+    // Print metadata if requested
+    if (include_metadata)
+    {
+      if (!res.txs.front().in_pool)
+      {
+        tools::msg_writer() << "Block timestamp: " << res.txs.front().block_timestamp << " (" << tools::get_human_readable_timestamp(res.txs.front().block_timestamp) << ")";
+      }
+      cryptonote::blobdata blob;
+      if (epee::string_tools::parse_hexstr_to_binbuff(pruned_as_hex + prunable_as_hex, blob))
+      {
+        cryptonote::transaction tx;
+        if (cryptonote::parse_and_validate_tx_from_blob(blob, tx))
+        {
+          tools::msg_writer() << "Size: " << blob.size();
+          tools::msg_writer() << "Weight: " << cryptonote::get_transaction_weight(tx);
+        }
+        else
+          tools::fail_msg_writer() << "Error parsing transaction blob";
+      }
+      else
+        tools::fail_msg_writer() << "Error parsing transaction from hex";
+    }
+
     // Print raw hex if requested
     if (include_hex)
     {
@@ -1509,7 +1593,7 @@ bool rpc_command_executor::sync_info()
       for (const auto &s: res.spans)
         if (s.connection_id == p.info.connection_id)
           nblocks += s.nblocks, size += s.size;
-      tools::success_msg_writer() << address << "  " << epee::string_tools::pad_string(p.info.peer_id, 16, '0', true) << "  " <<
+      tools::success_msg_writer() << address << "  " << p.info.peer_id << "  " <<
           epee::string_tools::pad_string(p.info.state, 16) << "  " <<
           epee::string_tools::pad_string(epee::string_tools::to_string_hex(p.info.pruning_seed), 8) << "  " << p.info.height << "  "  <<
           p.info.current_download << " kB/s, " << nblocks << " blocks / " << size/1e6 << " MB queued";

@@ -1590,10 +1590,18 @@ namespace wallet_rpc
   {
     struct request
     {
+<<<<<<< HEAD
       std::string data; // Anything you need to sign.
+=======
+      std::string data;
+      uint32_t account_index;
+      uint32_t address_index;
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(data);
+        KV_SERIALIZE(data)
+        KV_SERIALIZE_OPT(account_index, 0u)
+        KV_SERIALIZE_OPT(address_index, 0u)
       END_KV_SERIALIZE_MAP()
     };
 

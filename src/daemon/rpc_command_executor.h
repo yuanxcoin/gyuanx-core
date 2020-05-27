@@ -112,7 +112,7 @@ public:
 
   bool print_connections();
 
-  bool print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index);
+  bool print_blockchain_info(int64_t start_block_index, uint64_t end_block_index);
 
   bool print_quorum_state(uint64_t start_height, uint64_t end_height);
 
@@ -130,7 +130,11 @@ public:
 
   bool print_block_by_height(uint64_t height, bool include_hex);
 
+<<<<<<< HEAD
   bool print_transaction(const crypto::hash& transaction_hash, bool include_hex, bool include_json);
+=======
+  bool print_transaction(crypto::hash transaction_hash, bool include_metadata, bool include_hex, bool include_json);
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
 
   bool is_key_image_spent(const crypto::key_image &ki);
 

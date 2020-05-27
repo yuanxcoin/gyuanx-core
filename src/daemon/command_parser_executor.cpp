@@ -237,6 +237,16 @@ bool command_parser_executor::print_blockchain_info(const std::vector<std::strin
   }
   uint64_t start_index = 0;
   uint64_t end_index = 0;
+  if (args[0][0] == '-')
+  {
+    int64_t nblocks;
+    if(!epee::string_tools::get_xtype_from_string(nblocks, args[0]))
+    {
+      std::cout << "wrong number of blocks" << std::endl;
+      return false;
+    }
+    return m_executor.print_blockchain_info(nblocks, (uint64_t)-nblocks);
+  }
   if(!epee::string_tools::get_xtype_from_string(start_index, args[0]))
   {
     std::cout << "wrong starter block index parameter" << std::endl;
@@ -393,12 +403,15 @@ bool command_parser_executor::print_block(const std::vector<std::string>& args)
 
 bool command_parser_executor::print_transaction(const std::vector<std::string>& args)
 {
+  bool include_metadata = false;
   bool include_hex = false;
   bool include_json = false;
 
   // Assumes that optional flags come after mandatory argument <transaction_hash>
   for (unsigned int i = 1; i < args.size(); ++i) {
-    if (args[i] == "+hex")
+    if (args[i] == "+meta")
+      include_metadata = true;
+    else if (args[i] == "+hex")
       include_hex = true;
     else if (args[i] == "+json")
       include_json = true;
@@ -410,7 +423,7 @@ bool command_parser_executor::print_transaction(const std::vector<std::string>& 
   }
   if (args.empty())
   {
-    std::cout << "expected: print_tx <transaction_hash> [+hex] [+json]" << std::endl;
+    std::cout << "expected: print_tx <transaction_hash> [+meta] [+hex] [+json]" << std::endl;
     return true;
   }
 
@@ -418,7 +431,7 @@ bool command_parser_executor::print_transaction(const std::vector<std::string>& 
   crypto::hash tx_hash;
   if (parse_hash256(str_hash, tx_hash))
   {
-    m_executor.print_transaction(tx_hash, include_hex, include_json);
+    m_executor.print_transaction(tx_hash, include_metadata, include_hex, include_json);
   }
 
   return true;

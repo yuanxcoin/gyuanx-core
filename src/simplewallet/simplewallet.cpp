@@ -202,7 +202,7 @@ namespace
   const char* USAGE_GET_TX_NOTE("get_tx_note <txid>");
   const char* USAGE_GET_DESCRIPTION("get_description");
   const char* USAGE_SET_DESCRIPTION("set_description [free text note]");
-  const char* USAGE_SIGN("sign <filename>");
+  const char* USAGE_SIGN("sign [<account_index>,<address_index>] <filename>");
   const char* USAGE_VERIFY("verify <filename> <address> <signature>");
   const char* USAGE_EXPORT_KEY_IMAGES("export_key_images <filename> [requested-only]");
   const char* USAGE_IMPORT_KEY_IMAGES("import_key_images <filename>");
@@ -2756,6 +2756,7 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("set",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::set_variable, _1),
                            tr(USAGE_SET_VARIABLE),
+<<<<<<< HEAD
                            tr(R"(Available options:
  seed language
    Set the wallet's seed language.
@@ -2809,6 +2810,77 @@ ignore-outputs-below <amount>
    Device name for hardware wallet.
  export-format <\"binary\"|\"ascii\">
    Save all exported files as binary (cannot be copied and pasted) or ascii (can be).)"));
+=======
+                           tr("Available options:\n "
+                                  "seed language\n "
+                                  "  Set the wallet's seed language.\n "
+                                  "always-confirm-transfers <1|0>\n "
+                                  "  Whether to confirm unsplit txes.\n "
+                                  "print-ring-members <1|0>\n "
+                                  "  Whether to print detailed information about ring members during confirmation.\n "
+                                  "store-tx-info <1|0>\n "
+                                  "  Whether to store outgoing tx info (destination address, payment ID, tx secret key) for future reference.\n "
+                                  "default-ring-size <n>\n "
+                                  "  Set the default ring size (obsolete).\n "
+                                  "auto-refresh <1|0>\n "
+                                  "  Whether to automatically synchronize new blocks from the daemon.\n "
+                                  "refresh-type <full|optimize-coinbase|no-coinbase|default>\n "
+                                  "  Set the wallet's refresh behaviour.\n "
+                                  "priority [0|1|2|3|4]\n "
+                                  "  Set the fee to default/unimportant/normal/elevated/priority.\n "
+                                  "confirm-missing-payment-id <1|0> (obsolete)\n "
+                                  "ask-password <0|1|2   (or never|action|decrypt)>\n "
+                                  "  action: ask the password before many actions such as transfer, etc\n "
+                                  "  decrypt: same as action, but keeps the spend key encrypted in memory when not needed\n "
+                                  "unit <monero|millinero|micronero|nanonero|piconero>\n "
+                                  "  Set the default monero (sub-)unit.\n "
+                                  "min-outputs-count [n]\n "
+                                  "  Try to keep at least that many outputs of value at least min-outputs-value.\n "
+                                  "min-outputs-value [n]\n "
+                                  "  Try to keep at least min-outputs-count outputs of at least that value.\n "
+                                  "merge-destinations <1|0>\n "
+                                  "  Whether to merge multiple payments to the same destination address.\n "
+                                  "confirm-backlog <1|0>\n "
+                                  "  Whether to warn if there is transaction backlog.\n "
+                                  "confirm-backlog-threshold [n]\n "
+                                  "  Set a threshold for confirm-backlog to only warn if the transaction backlog is greater than n blocks.\n "
+                                  "confirm-export-overwrite <1|0>\n "
+                                  "  Whether to warn if the file to be exported already exists.\n "
+                                  "refresh-from-block-height [n]\n "
+                                  "  Set the height before which to ignore blocks.\n "
+                                  "auto-low-priority <1|0>\n "
+                                  "  Whether to automatically use the low priority fee level when it's safe to do so.\n "
+                                  "segregate-pre-fork-outputs <1|0>\n "
+                                  "  Set this if you intend to spend outputs on both Monero AND a key reusing fork.\n "
+                                  "key-reuse-mitigation2 <1|0>\n "
+                                  "  Set this if you are not sure whether you will spend on a key reusing Monero fork later.\n "
+                                  "subaddress-lookahead <major>:<minor>\n "
+                                  "  Set the lookahead sizes for the subaddress hash table.\n "
+                                  "segregation-height <n>\n "
+                                  "  Set to the height of a key reusing fork you want to use, 0 to use default.\n "
+                                  "ignore-fractional-outputs <1|0>\n "
+                                  "  Whether to ignore fractional outputs that result in net loss when spending due to fee.\n "
+                                  "ignore-outputs-above <amount>\n "
+                                  "  Ignore outputs of amount above this threshold when spending. Value 0 is translated to the maximum value (18 million) which disables this filter.\n "
+                                  "ignore-outputs-below <amount>\n "
+                                  "  Ignore outputs of amount below this threshold when spending.\n "
+                                  "track-uses <1|0>\n "
+                                  "  Whether to keep track of owned outputs uses.\n "
+                                  "setup-background-mining <1|0>\n "
+                                  "  Whether to enable background mining. Set this to support the network and to get a chance to receive new monero.\n "
+                                  "device-name <device_name[:device_spec]>\n "
+                                  "  Device name for hardware wallet.\n "
+                                  "export-format <\"binary\"|\"ascii\">\n "
+                                  "  Save all exported files as binary (cannot be copied and pasted) or ascii (can be).\n "
+                                  "persistent-client-id <1|0>\n "
+                                  "  Whether to keep using the same client id for RPC payment over wallet restarts.\n"
+                                  "auto-mine-for-rpc-payment-threshold <float>\n "
+                                  "  Whether to automatically start mining for RPC payment if the daemon requires it.\n"
+                                  "credits-target <unsigned int>\n"
+                                  "  The RPC payment credits balance to target (0 for default).\n "
+                                  "inactivity-lock-timeout <unsigned int>\n "
+                                  "  How many seconds to wait before locking the wallet (0 to disable)."));
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
   m_cmd_binder.set_handler("encrypted_seed",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::encrypted_seed, _1),
                            tr("Display the encrypted Electrum-style mnemonic seed."));
@@ -2904,7 +2976,7 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
   m_cmd_binder.set_handler("sign",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sign, _1),
                            tr(USAGE_SIGN),
-                           tr("Sign the contents of a file."));
+                           tr("Sign the contents of a file with the given subaddress (or the main address if not specified)"));
   m_cmd_binder.set_handler("verify",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::verify, _1),
                            tr(USAGE_VERIFY),
@@ -5563,7 +5635,8 @@ void simple_wallet::check_for_inactivity_lock(bool user)
 
     while (1)
     {
-      tools::msg_writer() << tr("Locked due to inactivity. The wallet password is required to unlock the console.");
+      const char *inactivity_msg = user ? "" : tr("Locked due to inactivity.");
+      tools::msg_writer() << inactivity_msg << (inactivity_msg[0] ? " " : "") << tr("The wallet password is required to unlock the console.");
       try
       {
         if (get_and_verify_password())
@@ -9265,7 +9338,7 @@ bool simple_wallet::sign(const std::vector<std::string> &args)
     fail_msg_writer() << tr("command not supported by HW wallet");
     return true;
   }
-  if (args.size() != 1)
+  if (args.size() != 1 && args.size() != 2)
   {
     PRINT_USAGE(USAGE_SIGN);
     return true;
@@ -9281,7 +9354,20 @@ bool simple_wallet::sign(const std::vector<std::string> &args)
     return true;
   }
 
-  std::string filename = args[0];
+  subaddress_index index{0, 0};
+  if (args.size() == 2)
+  {
+    unsigned int a, b;
+    if (sscanf(args[0].c_str(), "%u,%u", &a, &b) != 2)
+    {
+      fail_msg_writer() << tr("Invalid subaddress index format");
+      return true;
+    }
+    index.major = a;
+    index.minor = b;
+  }
+
+  const std::string &filename = args.back();
   std::string data;
   bool r = m_wallet->load_from_file(filename, data);
   if (!r)
@@ -9292,7 +9378,7 @@ bool simple_wallet::sign(const std::vector<std::string> &args)
 
   SCOPED_WALLET_UNLOCK();
 
-  std::string signature = m_wallet->sign(data);
+  std::string signature = m_wallet->sign(data, index);
   success_msg_writer() << signature;
   return true;
 }

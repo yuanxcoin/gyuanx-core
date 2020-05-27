@@ -102,6 +102,11 @@ namespace cryptonote
   , "Run in a regression testing mode."
   , false
   };
+  const command_line::arg_descriptor<bool> arg_keep_fakechain = {
+    "keep-fakechain"
+  , "Don't delete any existing database when in fakechain mode."
+  , false
+  };
   const command_line::arg_descriptor<difficulty_type> arg_fixed_difficulty  = {
     "fixed-difficulty"
   , "Fixed difficulty used for testing."
@@ -366,6 +371,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_testnet_on);
     command_line::add_arg(desc, arg_stagenet_on);
     command_line::add_arg(desc, arg_regtest_on);
+    command_line::add_arg(desc, arg_keep_fakechain);
     command_line::add_arg(desc, arg_fixed_difficulty);
     command_line::add_arg(desc, arg_dev_allow_local);
     command_line::add_arg(desc, arg_prep_blocks_threads);
@@ -648,6 +654,7 @@ namespace cryptonote
     size_t max_txpool_weight = command_line::get_arg(vm, arg_max_txpool_weight);
     bool const prune_blockchain = false; /* command_line::get_arg(vm, arg_prune_blockchain); */
     bool keep_alt_blocks = command_line::get_arg(vm, arg_keep_alt_blocks);
+    bool keep_fakechain = command_line::get_arg(vm, arg_keep_fakechain);
 
     r = init_service_keys();
     CHECK_AND_ASSERT_MES(r, false, "Failed to create or load service keys");
@@ -681,9 +688,13 @@ namespace cryptonote
     bool sync_on_blocks = true;
     uint64_t sync_threshold = 1;
 
+<<<<<<< HEAD
     std::string const lns_db_file_path = m_config_folder + "/lns.db";
 #if !defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS) // In integration mode, don't delete the DB. This should be explicitly done in the tests. Otherwise the more likely behaviour is persisting the DB across multiple daemons in the same test.
     if (m_nettype == FAKECHAIN)
+=======
+    if (m_nettype == FAKECHAIN && !keep_fakechain)
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
     {
       // reset the db by removing the database file before opening it
       if (!db->remove_data_file(filename))
@@ -2484,9 +2495,10 @@ namespace cryptonote
 #endif
 
     static constexpr double threshold = 1. / (864000 / DIFFICULTY_TARGET_V2); // one false positive every 10 days
+    static constexpr unsigned int max_blocks_checked = 150;
 
     const time_t now = time(NULL);
-    const std::vector<time_t> timestamps = m_blockchain_storage.get_last_block_timestamps(60);
+    const std::vector<time_t> timestamps = m_blockchain_storage.get_last_block_timestamps(max_blocks_checked);
 
     static const unsigned int seconds[] = { 5400, 3600, 1800, 1200, 600 };
     for (size_t n = 0; n < sizeof(seconds)/sizeof(seconds[0]); ++n)
@@ -2498,7 +2510,11 @@ namespace cryptonote
       MDEBUG("blocks in the last " << seconds[n] / 60 << " minutes: " << b << " (probability " << p << ")");
       if (p < threshold)
       {
+<<<<<<< HEAD
         MWARNING("There were " << b << " blocks in the last " << seconds[n] / 60 << " minutes, there might be large hash rate changes, or we might be partitioned, cut off from the Loki network or under attack. Or it could be just sheer bad luck.");
+=======
+        MWARNING("There were " << b << (b == max_blocks_checked ? " or more" : "") << " blocks in the last " << seconds[n] / 60 << " minutes, there might be large hash rate changes, or we might be partitioned, cut off from the Monero network or under attack. Or it could be just sheer bad luck.");
+>>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
 
         std::shared_ptr<tools::Notify> block_rate_notify = m_block_rate_notify;
         if (block_rate_notify)
