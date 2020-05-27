@@ -8932,6 +8932,8 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(std::stri
 
 bool wallet2::lock_keys_file()
 {
+  if (m_wallet_file.empty())
+    return true;
   if (m_keys_file_locker)
   {
     MDEBUG(m_keys_file << " is already locked.");
@@ -8943,6 +8945,8 @@ bool wallet2::lock_keys_file()
 
 bool wallet2::unlock_keys_file()
 {
+  if (m_wallet_file.empty())
+    return true;
   if (!m_keys_file_locker)
   {
     MDEBUG(m_keys_file << " is already unlocked.");
@@ -8977,6 +8981,8 @@ bool wallet2::lns_make_update_mapping_signature(lns::mapping_type type,
 
 bool wallet2::is_keys_file_locked() const
 {
+  if (m_wallet_file.empty())
+    return false;
   return m_keys_file_locker->locked();
 }
 
