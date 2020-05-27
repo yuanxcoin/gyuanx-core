@@ -1824,12 +1824,10 @@ namespace wallet_rpc
     struct request
     {
       std::string address;     // Public address of the entry.
-      std::string payment_id;  // (Optional), defaults to "0000000000000000000000000000000000000000000000000000000000000000".
       std::string description; // (Optional), defaults to "".
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
-        KV_SERIALIZE(payment_id)
         KV_SERIALIZE(description)
       END_KV_SERIALIZE_MAP()
     };
@@ -1853,8 +1851,6 @@ namespace wallet_rpc
       uint64_t index;
       bool set_address;
       std::string address;
-      bool set_payment_id;
-      std::string payment_id;
       bool set_description;
       std::string description;
 
@@ -1862,8 +1858,6 @@ namespace wallet_rpc
         KV_SERIALIZE(index)
         KV_SERIALIZE(set_address)
         KV_SERIALIZE(address)
-        KV_SERIALIZE(set_payment_id)
-        KV_SERIALIZE(payment_id)
         KV_SERIALIZE(set_description)
         KV_SERIALIZE(description)
       END_KV_SERIALIZE_MAP()
@@ -1893,13 +1887,11 @@ namespace wallet_rpc
     {
       uint64_t index;          // Index of entry.
       std::string address;     // Public address of the entry
-      std::string payment_id;  // (Optional) 64-character hex string to identify a transaction.
       std::string description; // Description of this address entry.
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(index)
         KV_SERIALIZE(address)
-        KV_SERIALIZE(payment_id)
         KV_SERIALIZE(description)
       END_KV_SERIALIZE_MAP()
     };
