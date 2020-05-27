@@ -125,6 +125,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::entry)
   else
   {
     KV_SERIALIZE(relayed)
+    KV_SERIALIZE(received_timestamp)
   }
   KV_SERIALIZE(blink)
 KV_SERIALIZE_MAP_CODE_END()

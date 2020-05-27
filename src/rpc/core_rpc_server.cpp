@@ -860,11 +860,13 @@ namespace cryptonote { namespace rpc {
         e.block_height = e.block_timestamp = std::numeric_limits<uint64_t>::max();
         e.double_spend_seen = ptx_it->second.double_spend_seen;
         e.relayed = ptx_it->second.relayed;
+        e.received_timestamp = ptx_it->second.receive_time;
       }
       else
       {
         e.block_height = m_core.get_blockchain_storage().get_db().get_tx_block_height(tx_hash);
         e.block_timestamp = m_core.get_blockchain_storage().get_db().get_block_timestamp(e.block_height);
+        e.received_timestamp = 0;
         e.double_spend_seen = false;
         e.relayed = false;
         if (e.block_height <= immutable_height)

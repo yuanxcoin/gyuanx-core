@@ -64,7 +64,7 @@ namespace rpc {
 // has its own version, and that clients can just test major to see
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
-  constexpr version_t VERSION = {3, 7};
+  constexpr version_t VERSION = {3, 8};
 
   /// Makes a version array from a packed 32-bit integer version
   constexpr version_t make_version(uint32_t version)
@@ -294,8 +294,9 @@ namespace rpc {
       bool in_pool;                         // States if the transaction is in pool (`true`) or included in a block (`false`).
       bool double_spend_seen;               // States if the transaction is a double-spend (`true`) or not (`false`).
       uint64_t block_height;                // Block height including the transaction.
-      uint64_t block_timestamp;             // Unix time at chich the block has been added to the blockchain.
+      uint64_t block_timestamp;             // Unix time at which the block has been added to the blockchain.
       std::vector<uint64_t> output_indices; // List of transaction indexes.
+      uint64_t received_timestamp;          // Timestamp transaction was received in the pool.
       bool relayed;
       bool blink;                           // True if this is an approved, blink transaction (only for in_pool transactions or txes in recent blocks)
 
