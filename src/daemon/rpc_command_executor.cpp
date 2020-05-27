@@ -698,72 +698,33 @@ bool rpc_command_executor::print_net_stats()
   return true;
 }
 
-<<<<<<< HEAD
 bool rpc_command_executor::print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index) {
   GET_BLOCK_HEADERS_RANGE::request req{};
   GET_BLOCK_HEADERS_RANGE::response res{};
-=======
-bool t_rpc_command_executor::print_blockchain_info(int64_t start_block_index, uint64_t end_block_index) {
-  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::request req;
-  cryptonote::COMMAND_RPC_GET_BLOCK_HEADERS_RANGE::response res;
-  epee::json_rpc::error error_resp;
-  std::string fail_message = "Problem fetching info";
 
   // negative: relative to the end
   if (start_block_index < 0)
   {
-    cryptonote::COMMAND_RPC_GET_INFO::request ireq;
-    cryptonote::COMMAND_RPC_GET_INFO::response ires;
-    if (m_is_rpc)
-    {
-      if (!m_rpc_client->rpc_request(ireq, ires, "/getinfo", fail_message.c_str()))
-      {
-        return true;
-      }
-    }
-    else
-    {
-      if (!m_rpc_server->on_get_info(ireq, ires) || ires.status != CORE_RPC_STATUS_OK)
-      {
-        tools::fail_msg_writer() << make_error(fail_message, ires.status);
-        return true;
-      }
-    }
+    GET_INFO::response ires;
+    if (!invoke<GET_INFO>(GET_INFO::request{}, ires, "Failed to query daemon info"))
+        return false;
+
     if (start_block_index < 0 && (uint64_t)-start_block_index >= ires.height)
     {
       tools::fail_msg_writer() << "start offset is larger than blockchain height";
-      return true;
+      return false;
     }
+
     start_block_index = ires.height + start_block_index;
     end_block_index = start_block_index + end_block_index - 1;
   }
->>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
 
   req.start_height = start_block_index;
   req.end_height = end_block_index;
   req.fill_pow_hash = false;
 
-<<<<<<< HEAD
   if (!invoke<GET_BLOCK_HEADERS_RANGE>(std::move(req), res, "Failed to retrieve block headers"))
     return false;
-=======
-  fail_message = "Failed calling getblockheadersrange";
-  if (m_is_rpc)
-  {
-    if (!m_rpc_client->json_rpc_request(req, res, "getblockheadersrange", fail_message.c_str()))
-    {
-      return true;
-    }
-  }
-  else
-  {
-    if (!m_rpc_server->on_get_block_headers_range(req, res, error_resp) || res.status != CORE_RPC_STATUS_OK)
-    {
-      tools::fail_msg_writer() << make_error(fail_message, res.status);
-      return true;
-    }
-  }
->>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
 
   bool first = true;
   for (auto & header : res.headers)
@@ -869,12 +830,8 @@ bool rpc_command_executor::print_block_by_height(uint64_t height, bool include_h
   return print_block(std::move(req), include_hex);
 }
 
-<<<<<<< HEAD
 bool rpc_command_executor::print_transaction(const crypto::hash& transaction_hash,
-=======
-bool t_rpc_command_executor::print_transaction(crypto::hash transaction_hash,
   bool include_metadata,
->>>>>>> 8136bf37e2c0a76851c0bb6482b6e4c2b653f5d7
   bool include_hex,
   bool include_json) {
   GET_TRANSACTIONS::request req{};
