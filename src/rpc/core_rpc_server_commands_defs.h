@@ -2454,7 +2454,8 @@ namespace rpc {
     static constexpr auto names() { return NAMES("flush_cache"); }
     struct request
     {
-      bool bad_txs; // Clear the cache storing TXs with bad verification info.
+      bool bad_txs; // Clear the cache storing TXs that failed verification.
+      bool bad_blocks; // Clear the cache storing blocks that failed verfication.
       KV_MAP_SERIALIZABLE;
     };
 

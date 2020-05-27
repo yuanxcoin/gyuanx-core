@@ -976,6 +976,11 @@ namespace cryptonote
      void flush_bad_txs_cache();
 
      /**
+      * @brief flushes the invalid block cache
+      */
+     void flush_invalid_blocks();
+
+     /**
       * @brief Record if the service node has checkpointed at this point in time
       */
      void record_checkpoint_vote(crypto::public_key const &pubkey, uint64_t height, bool voted) { m_service_node_list.record_checkpoint_vote(pubkey, height, voted); }

@@ -2751,6 +2751,8 @@ namespace cryptonote { namespace rpc {
     FLUSH_CACHE::response res{};
     if (req.bad_txs)
       m_core.flush_bad_txs_cache();
+    if (req.bad_blocks)
+      m_core.flush_invalid_blocks();
     res.status = STATUS_OK;
     return res;
   }

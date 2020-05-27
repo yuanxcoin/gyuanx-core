@@ -1059,6 +1059,11 @@ namespace cryptonote
 
     const lns::name_system_db &name_system_db() const { return m_lns_db; }
 
+    /**
+     * @brief flush the invalid blocks set
+     */
+    void flush_invalid_blocks();
+
 #ifndef IN_UNIT_TESTS
   private:
 #endif

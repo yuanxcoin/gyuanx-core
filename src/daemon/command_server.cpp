@@ -385,7 +385,7 @@ void command_server::init_commands(cryptonote::rpc::core_rpc_server* rpc_server)
     m_command_lookup.set_handler(
       "flush_cache"
     , [this](const auto &x) { return m_parser.flush_cache(x); }
-    , "flush_cache bad-txs"
+    , "flush_cache [bad-txs] [bad-blocks]"
     , "Flush the specified cache(s)."
     );
 

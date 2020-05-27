@@ -112,7 +112,7 @@ public:
 
   bool print_connections();
 
-  bool print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index);
+  bool print_blockchain_info(int64_t start_block_index, uint64_t end_block_index);
 
   bool print_quorum_state(uint64_t start_height, uint64_t end_height);
 
@@ -207,7 +207,7 @@ public:
     const std::string &username,
     const std::string &password);
 
-  bool flush_cache(bool bad_txs);
+  bool flush_cache(bool bad_txs, bool invalid_blocks);
 
   bool version();
 };

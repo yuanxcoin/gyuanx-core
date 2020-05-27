@@ -698,7 +698,7 @@ bool rpc_command_executor::print_net_stats()
   return true;
 }
 
-bool rpc_command_executor::print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index) {
+bool rpc_command_executor::print_blockchain_info(int64_t start_block_index, uint64_t end_block_index) {
   GET_BLOCK_HEADERS_RANGE::request req{};
   GET_BLOCK_HEADERS_RANGE::response res{};
 
@@ -1839,10 +1839,15 @@ bool rpc_command_executor::print_sn(const std::vector<std::string> &args)
     return true;
 }
 
-bool rpc_command_executor::flush_cache(bool bad_txs)
+bool rpc_command_executor::flush_cache(bool bad_txs, bool bad_blocks)
 {
   FLUSH_CACHE::response res{};
-  return invoke<FLUSH_CACHE>(FLUSH_CACHE::request{bad_txs}, res, "Failed to flush TX cache");
+  FLUSH_CACHE::request req{};
+  req.bad_txs    = bad_txs;
+  req.bad_blocks = bad_blocks;
+  if (!invoke<FLUSH_CACHE>(std::move(req), res, "Failed to flush TX cache"))
+      return false;
+  return true;
 }
 
 bool rpc_command_executor::print_sn_status(std::vector<std::string> args)
