@@ -2479,7 +2479,7 @@ namespace wallet_rpc
       bool               get_tx_metadata;  // Return the metadata needed to relay the transaction. (Defaults to false)
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT(subaddr_indices, {});
+        KV_SERIALIZE    (subaddr_indices);
         KV_SERIALIZE    (destination);
         KV_SERIALIZE    (amount);
         KV_SERIALIZE    (service_node_key);
@@ -2755,7 +2755,7 @@ For information on updating & signing, refer to COMMAND_RPC_LNS_UPDATE_MAPPING)"
         KV_SERIALIZE    (name);
         KV_SERIALIZE    (value);
         KV_SERIALIZE_OPT(account_index,   (uint32_t)0);
-        KV_SERIALIZE_OPT(subaddr_indices, {});
+        KV_SERIALIZE    (subaddr_indices);
         KV_SERIALIZE_OPT(priority,        (uint32_t)0);
         KV_SERIALIZE    (get_tx_key)
         KV_SERIALIZE_OPT(do_not_relay,    false)
@@ -2828,7 +2828,7 @@ Providing the signature is an optional field and if not provided, will default t
         KV_SERIALIZE    (signature);
 
         KV_SERIALIZE_OPT(account_index,   (uint32_t)0);
-        KV_SERIALIZE_OPT(subaddr_indices, {});
+        KV_SERIALIZE    (subaddr_indices);
         KV_SERIALIZE_OPT(priority,        (uint32_t)0);
         KV_SERIALIZE    (get_tx_key)
         KV_SERIALIZE_OPT(do_not_relay,    false)
