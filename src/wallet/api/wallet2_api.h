@@ -877,6 +877,17 @@ struct Wallet
      */
     virtual void disposeTransaction(PendingTransaction * t) = 0;
 
+    /*!
+     * \brief Estimates transaction fee.
+     * \param destinations Vector consisting of <address, amount> pairs.
+     * \return Estimated fee.
+     */
+    // TODO(loki): Implement
+#if 0
+    virtual uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations,
+                                            uint32_t priority) const = 0;
+#endif
+
    /*!
     * \brief exportKeyImages - exports key images to file
     * \param filename

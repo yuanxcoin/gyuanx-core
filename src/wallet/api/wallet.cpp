@@ -1703,6 +1703,28 @@ void WalletImpl::disposeTransaction(PendingTransaction *t)
     delete t;
 }
 
+#if 0
+uint64_t WalletImpl::estimateTransactionFee(const std::vector<std::tuple<std::string, uint64_t>> &destinations, uint32_t priority) const
+{
+#if 0
+    const size_t pubkey_size = 33;
+    const size_t encrypted_paymentid_size = 11;
+    const size_t extra_size = pubkey_size + encrypted_paymentid_size;
+
+    return m_wallet->estimate_fee(
+        1 /*inputs*/,
+        CRYPTONOTE_DEFAULT_TX_MIXIN /*mixin*/,
+        destinations.size() + 1 /*outputs*/,
+        extra_size,
+        m_wallet->get_base_fees(),
+        m_wallet->get_fee_percent(priority),
+        m_wallet->get_fee_quantization_mask());
+#else
+    return 0; // TODO: IMPLEMENT
+#endif
+}
+#endif
+
 TransactionHistory *WalletImpl::history()
 {
     return m_history.get();
