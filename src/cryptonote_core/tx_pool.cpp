@@ -40,6 +40,7 @@
 #include "cryptonote_core/service_node_list.h"
 #include "cryptonote_config.h"
 #include "blockchain.h"
+#include "blockchain_db/locked_txn.h"
 #include "blockchain_db/blockchain_db.h"
 #include "common/boost_serialization_helper.h"
 #include "common/lock.h"
@@ -94,28 +95,6 @@ namespace cryptonote
       else
         return get_min_block_weight(version) - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     }
-
-    // This class is meant to create a batch when none currently exists.
-    // If a batch exists, it can't be from another thread, since we can
-    // only be called with the txpool lock taken, and it is held during
-    // the whole prepare/handle/cleanup incoming block sequence.
-    class LockedTXN {
-    public:
-      LockedTXN(Blockchain &b): m_db{b.get_db()} {
-        m_batch = m_db.batch_start();
-      }
-      LockedTXN(const LockedTXN &) = delete;
-      LockedTXN &operator=(const LockedTXN &) = delete;
-      LockedTXN(LockedTXN &&o) : m_db{o.m_db}, m_batch{o.m_batch} { o.m_batch = false; }
-      LockedTXN &operator=(LockedTXN &&) = delete;
-
-      void commit() { try { if (m_batch) { m_db.batch_stop(); m_batch = false; } } catch (const std::exception &e) { MWARNING("LockedTXN::commit filtering exception: " << e.what()); } }
-      void abort() { try { if (m_batch) { m_db.batch_abort(); m_batch = false; } } catch (const std::exception &e) { MWARNING("LockedTXN::abort filtering exception: " << e.what()); } }
-      ~LockedTXN() { this->abort(); }
-    private:
-      BlockchainDB &m_db;
-      bool m_batch;
-    };
   }
   //---------------------------------------------------------------------------------
   // warning: bchs is passed here uninitialized, so don't do anything but store it
@@ -417,7 +396,8 @@ namespace cryptonote
         memset(meta.padding, 0, sizeof(meta.padding));
         try
         {
-          m_parsed_tx_cache.insert(std::make_pair(id, tx));
+          if (opts.kept_by_block)
+            m_parsed_tx_cache.insert(std::make_pair(id, tx));
           auto b_lock = tools::unique_lock(m_blockchain);
           LockedTXN lock(m_blockchain);
           m_blockchain.add_txpool_tx(id, blob, meta);
