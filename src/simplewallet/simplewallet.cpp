@@ -168,8 +168,8 @@ namespace
   const char* USAGE_PAYMENT_ID("payment_id");
   const char* USAGE_TRANSFER("transfer [index=<N1>[,<N2>,...]] [blink|unimportant] (<URI> | <address> <amount>) [<payment_id>]");
   const char* USAGE_LOCKED_TRANSFER("locked_transfer [index=<N1>[,<N2>,...]] [<priority>] (<URI> | <addr> <amount>) <lockblocks> [<payment_id (obsolete)>]");
-  const char* USAGE_LOCKED_SWEEP_ALL("locked_sweep_all [index=<N1>[,<N2>,...]] [<priority>] [<address>] <lockblocks> [<payment_id (obsolete)>]");
-  const char* USAGE_SWEEP_ALL("sweep_all [index=<N1>[,<N2>,...]] [blink|unimportant] [outputs=<N>] [<address> [<payment_id (obsolete)>]] [use_v1_tx]");
+  const char* USAGE_LOCKED_SWEEP_ALL("locked_sweep_all [index=<N1>[,<N2>,...] | index=all] [<priority>] [<address>] <lockblocks> [<payment_id (obsolete)>]");
+  const char* USAGE_SWEEP_ALL("sweep_all [index=<N1>[,<N2>,...] | index=all] [blink|unimportant] [outputs=<N>] [<address> [<payment_id (obsolete)>]] [use_v1_tx]");
   const char* USAGE_SWEEP_BELOW("sweep_below <amount_threshold> [index=<N1>[,<N2>,...]] [blink|unimportant] [<address> [<payment_id (obsolete)>]]");
   const char* USAGE_SWEEP_SINGLE("sweep_single [blink|unimportant] [outputs=<N>] <key_image> <address> [<payment_id (obsolete)>]");
   const char* USAGE_SIGN_TRANSFER("sign_transfer [export_raw]");
@@ -2682,13 +2682,13 @@ simple_wallet::simple_wallet()
   m_cmd_binder.set_handler("locked_sweep_all",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::locked_sweep_all,_1),
                            tr(USAGE_LOCKED_SWEEP_ALL),
-                           tr("Send all unlocked balance to an address and lock it for <lockblocks> (max. 1000000).If no address is specified the address of the currently selected account will be used. If the parameter \"index<N1>[,<N2>,...]\" is specified, the wallet sweeps outputs received by those address indices. If omitted, the wallet randomly chooses an address index to be used. <priority> is the priority of the sweep. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used."));
+                           tr("Send all unlocked balance to an address and lock it for <lockblocks> (max. 1000000). If no address is specified the address of the currently selected account will be used. If the parameter \"index<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those address indices. If omitted, the wallet randomly chooses an address index to be used. <priority> is the priority of the sweep. The higher the priority, the higher the transaction fee. Valid values in priority order (from lowest to highest) are: unimportant, normal, elevated, priority. If omitted, the default value (see the command \"set priority\") is used."));
   m_cmd_binder.set_handler("sweep_unmixable",
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::sweep_unmixable, _1),
                            tr("Deprecated"));
   m_cmd_binder.set_handler("sweep_all", boost::bind(&simple_wallet::sweep_all, this, _1),
                            tr(USAGE_SWEEP_ALL),
-                           tr("Send all unlocked balance to an address.If no address is specified the address of the currently selected account will be used. If the parameter \"index<N1>[,<N2>,...]\" is specified, the wallet sweeps outputs received by those address indices. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."
+                           tr("Send all unlocked balance to an address.If no address is specified the address of the currently selected account will be used. If the parameter \"index<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those address indices. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."
                               " If \"use_v1_tx\" is placed at the end, sweep_all will include version 1 transactions into the sweeping process as well, otherwise exclude them"
                              ));
   m_cmd_binder.set_handler("sweep_below",
@@ -4952,7 +4952,7 @@ void simple_wallet::on_refresh_finished(uint64_t start_height, uint64_t fetched_
   const uint64_t dh = m_wallet->get_daemon_blockchain_height(err);
   if (err.empty() && rfbh > dh)
   {
-    message_writer(console_color_yellow, false) << tr("The wallet's refresh-from-block-height setting is higher than the daemon's height: this may mean your wallet will skip over transactions");
+    message_writer(epee::console_color_yellow, false) << tr("The wallet's refresh-from-block-height setting is higher than the daemon's height: this may mean your wallet will skip over transactions");
   }
 
   // Key image sync after the first refresh
@@ -5542,12 +5542,17 @@ static bool locked_blocks_arg_valid(const std::string& arg, uint64_t& duration)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-static bool parse_subaddr_indices_and_priority(tools::wallet2 &wallet, std::vector<std::string> &args, std::set<uint32_t> &subaddr_indices, uint32_t &priority)
+static bool parse_subaddr_indices_and_priority(tools::wallet2 &wallet, std::vector<std::string> &args, std::set<uint32_t> &subaddr_indices, uint32_t &priority, uint32_t subaddress_account, bool allow_parse_all_argument = false)
 {
   if (args.size() > 0 && args[0].substr(0, 6) == "index=")
   {
     std::string parse_subaddr_err;
-    if (!tools::parse_subaddress_indices(args[0], subaddr_indices, &parse_subaddr_err))
+    if (allow_parse_all_argument && args[0] == "index=all")
+    {
+      for (uint32_t i = 0; i < wallet.get_num_subaddresses(subaddress_account); ++i)
+        subaddr_indices.insert(i);
+    }
+    else if (!tools::parse_subaddress_indices(args[0], subaddr_indices, &parse_subaddr_err))
     {
       fail_msg_writer() << parse_subaddr_err;
       return false;
@@ -5790,7 +5795,7 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
   std::vector<std::string> local_args = args_;
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
+  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, m_current_subaddress_account, priority)) return false;
 
   const size_t min_args = (transfer_type == Transfer::Locked) ? 2 : 1;
   if(local_args.size() < min_args)
@@ -6061,7 +6066,7 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
     std::vector<std::string> local_args = args_;
     uint32_t priority                   = 0;
     std::set<uint32_t> subaddr_indices  = {};
-    if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority))
+    if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, m_current_subaddress_account))
       return false;
 
     if (local_args.size() < 2)
@@ -6408,7 +6413,7 @@ bool simple_wallet::lns_buy_mapping(const std::vector<std::string>& args)
   std::vector<std::string> local_args = args;
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
+  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, m_current_subaddress_account)) return false;
 
   std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
   std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, loki::char_count(LNS_BACKUP_OWNER_PREFIX));
@@ -6482,7 +6487,7 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
   std::vector<std::string> local_args = args;
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
+  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, m_current_subaddress_account)) return false;
 
 
   std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
@@ -7047,7 +7052,9 @@ bool simple_wallet::sweep_main(uint64_t below, Transfer transfer_type, const std
   std::vector<std::string> local_args = args_;
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
+
+  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, true /*allow_parse_all_argument*/))
+    return false;
 
   uint64_t unlock_block = 0;
   if (transfer_type == Transfer::Locked) {

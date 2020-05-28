@@ -755,6 +755,7 @@ namespace wallet_rpc
       std::string address;                // Destination public address.
       uint32_t account_index;             // Sweep transactions from this account.
       std::set<uint32_t> subaddr_indices; // (Optional) Sweep from this set of subaddresses in the account.
+      bool subaddr_indices_all;           //
       uint32_t priority;                  // Set a priority for the transaction. Accepted values are: 1 for unimportant or 5 for blink.  (0 and 2-4 are accepted for backwards compatibility and are equivalent to 5)
       bool blink;                         // (Deprecated) Set priority to 5 for blink, field is deprecated: specifies that the tx should be blinked (`priority` will be ignored).
       uint64_t outputs;                   // 
@@ -770,6 +771,7 @@ namespace wallet_rpc
         KV_SERIALIZE(address)
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(subaddr_indices)
+        KV_SERIALIZE_OPT(subaddr_indices_all, false)
         KV_SERIALIZE(priority)
         KV_SERIALIZE_OPT(blink, false)
         KV_SERIALIZE_OPT(outputs, (uint64_t)1)

@@ -1292,13 +1292,24 @@ namespace tools
       return  false;
     }
 
+    std::set<uint32_t> subaddr_indices;
+    if (req.subaddr_indices_all)
+    {
+      for (uint32_t i = 0; i < m_wallet->get_num_subaddresses(req.account_index); ++i)
+        subaddr_indices.insert(i);
+    }
+    else
+    {
+      subaddr_indices = std::move(req.subaddr_indices);
+    }
+
     try
     {
       uint32_t priority = req.priority;
       if (req.blink || priority != tx_priority_unimportant)
         priority = tx_priority_blink;
 
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_all(req.below_amount, dsts[0].addr, dsts[0].is_subaddress, req.outputs, CRYPTONOTE_DEFAULT_TX_MIXIN, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_all(req.below_amount, dsts[0].addr, dsts[0].is_subaddress, req.outputs, CRYPTONOTE_DEFAULT_TX_MIXIN, req.unlock_time, priority, extra, req.account_index, subaddr_indices);
 
       return fill_response(ptx_vector, req.get_tx_keys, res.tx_key_list, res.amount_list, res.fee_list, res.multisig_txset, res.unsigned_txset, req.do_not_relay, priority == tx_priority_blink,
           res.tx_hash_list, req.get_tx_hex, res.tx_blob_list, req.get_tx_metadata, res.tx_metadata_list, er);

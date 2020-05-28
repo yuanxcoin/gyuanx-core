@@ -445,7 +445,6 @@ KV_SERIALIZE_MAP_CODE_END()
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_BLOCK::response)
   KV_SERIALIZE(block_header)
-  KV_SERIALIZE(miner_tx_hash)
   KV_SERIALIZE(tx_hashes)
   KV_SERIALIZE(status)
   KV_SERIALIZE(blob)

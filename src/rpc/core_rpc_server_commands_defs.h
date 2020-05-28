@@ -851,7 +851,6 @@ namespace rpc {
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information. See get_last_block_header.
-      std::string miner_tx_hash;          // Miner transaction information
       std::vector<std::string> tx_hashes; // List of hashes of non-coinbase transactions in the block. If there are no other transactions, this will be an empty list.
       std::string blob;                   // Hexadecimal blob of block information.
       std::string json;                   // JSON formatted block details.

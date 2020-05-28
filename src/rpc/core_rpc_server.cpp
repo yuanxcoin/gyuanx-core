@@ -480,15 +480,14 @@ namespace cryptonote { namespace rpc {
       return res;
     }
 
-    size_t pruned_size = 0, unpruned_size = 0, ntxes = 0;
+    size_t size = 0, ntxes = 0;
     res.blocks.reserve(bs.size());
     res.output_indices.reserve(bs.size());
     for(auto& bd: bs)
     {
       res.blocks.resize(res.blocks.size()+1);
       res.blocks.back().block = bd.first.first;
-      pruned_size += bd.first.first.size();
-      unpruned_size += bd.first.first.size();
+      size += bd.first.first.size();
       res.output_indices.push_back(GET_BLOCKS_FAST::block_output_indices());
       ntxes += bd.second.size();
       res.output_indices.back().indices.reserve(1 + bd.second.size());
@@ -497,11 +496,10 @@ namespace cryptonote { namespace rpc {
       res.blocks.back().txs.reserve(bd.second.size());
       for (std::vector<std::pair<crypto::hash, cryptonote::blobdata>>::iterator i = bd.second.begin(); i != bd.second.end(); ++i)
       {
-        unpruned_size += i->second.size();
-        res.blocks.back().txs.push_back(std::move(i->second));
+        res.blocks.back().txs.push_back({std::move(i->second), crypto::null_hash});
         i->second.clear();
         i->second.shrink_to_fit();
-        pruned_size += res.blocks.back().txs.back().size();
+        size += res.blocks.back().txs.back().size();
       }
 
       const size_t n_txes_to_lookup = bd.second.size() + (req.no_miner_tx ? 0 : 1);
@@ -519,7 +517,7 @@ namespace cryptonote { namespace rpc {
       }
     }
 
-    MDEBUG("on_get_blocks: " << bs.size() << " blocks, " << ntxes << " txes, pruned size " << pruned_size << ", unpruned size " << unpruned_size);
+    MDEBUG("on_get_blocks: " << bs.size() << " blocks, " << ntxes << " txes, size " << size);
     res.status = STATUS_OK;
     return res;
   }
