@@ -213,6 +213,17 @@ namespace config
     "LDBEN6Ut4NkMwyaXWZ7kBEAx8X64o6YtDhLXUP26uLHyYT4nFmcaPU2Z2fauqrhTLh4Qfr61pUUZVLaTHqAdycETKM1STrz", // hardfork v11
   };
 
+  // Hash domain separators
+  const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
+  const char HASH_KEY_RINGDB[] = "ringdsb";
+  const char HASH_KEY_SUBADDRESS[] = "SubAddr";
+  const unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
+  const unsigned char HASH_KEY_WALLET = 0x8c;
+  const unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
+  const unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
+  const unsigned char HASH_KEY_MEMORY = 'k';
+  const unsigned char HASH_KEY_MULTISIG[] = {'M', 'u', 'l', 't' , 'i', 's', 'i', 'g', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
   namespace testnet
   {
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 156;

@@ -1009,15 +1009,18 @@ namespace nodetool
 
     epee::simple_event ev;
     std::atomic<bool> hsh_result(false);
+    bool timeout = false;
 
     bool r = epee::net_utils::async_invoke_remote_command2<typename COMMAND_HANDSHAKE::response>(context_.m_connection_id, COMMAND_HANDSHAKE::ID, arg, zone.m_net_server.get_config_object(),
-      [this, &pi, &ev, &hsh_result, &just_take_peerlist, &context_](int code, typename COMMAND_HANDSHAKE::response&& rsp, p2p_connection_context& context)
+      [this, &pi, &ev, &hsh_result, &just_take_peerlist, &context_, &timeout](int code, typename COMMAND_HANDSHAKE::response&& rsp, p2p_connection_context& context)
     {
       LOKI_DEFER { ev.raise(); };
 
       if(code < 0)
       {
         LOG_WARNING_CC(context, "COMMAND_HANDSHAKE invoke failed. (" << code <<  ", " << epee::levin::get_err_descr(code) << ")");
+        if (code == LEVIN_ERROR_CONNECTION_TIMEDOUT || code == LEVIN_ERROR_CONNECTION_DESTROYED)
+          timeout = true;
         return;
       }
 
@@ -1074,7 +1077,8 @@ namespace nodetool
     if(!hsh_result)
     {
       LOG_WARNING_CC(context_, "COMMAND_HANDSHAKE Failed");
-      m_network_zones.at(context_.m_remote_address.get_zone()).m_net_server.get_config_object().close(context_.m_connection_id);
+      if (!timeout)
+        zone.m_net_server.get_config_object().close(context_.m_connection_id);
     }
     else if (!just_take_peerlist)
     {
@@ -1261,7 +1265,6 @@ namespace nodetool
       LOG_PRINT_CC_PRIORITY_NODE(is_priority, *con, "Failed to HANDSHAKE with peer "
         << na.str()
         /*<< ", try " << try_count*/);
-      zone.m_net_server.get_config_object().close(con->m_connection_id);
       record_addr_failed(na);
       return false;
     }
@@ -1324,7 +1327,6 @@ namespace nodetool
       bool is_priority = is_priority_node(na);
 
       LOG_PRINT_CC_PRIORITY_NODE(is_priority, *con, "Failed to HANDSHAKE with peer " << na.str());
-      zone.m_net_server.get_config_object().close(con->m_connection_id);
       record_addr_failed(na);
       return false;
     }

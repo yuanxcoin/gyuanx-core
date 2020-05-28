@@ -48,8 +48,6 @@
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "cn"
 
-#define ENCRYPTED_PAYMENT_ID_TAIL 0x8d
-
 // #define ENABLE_HASH_CASH_INTEGRITY_CHECK
 
 using namespace crypto;
@@ -1292,7 +1290,6 @@ namespace cryptonote
     if (tvc.m_too_big)                   os << "TX too big, ";
     if (tvc.m_overspend)                 os << "Overspend, ";
     if (tvc.m_fee_too_low)               os << "Fee too low, ";
-    if (tvc.m_not_rct)                   os << "TX is not a valid RCT TX., ";
     if (tvc.m_invalid_version)           os << "TX has invalid version, ";
     if (tvc.m_invalid_type)              os << "TX has invalid type, ";
     if (tvc.m_key_image_locked_by_snode) os << "Key image is locked by service node, ";

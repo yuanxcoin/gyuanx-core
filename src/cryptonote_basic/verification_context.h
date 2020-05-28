@@ -79,7 +79,6 @@ namespace cryptonote
     bool m_too_big;
     bool m_overspend;
     bool m_fee_too_low;
-    bool m_not_rct;
     bool m_invalid_version;
     bool m_invalid_type;
     bool m_key_image_locked_by_snode;
@@ -100,7 +99,6 @@ namespace cryptonote
       KV_SERIALIZE(m_too_big)
       KV_SERIALIZE(m_overspend)
       KV_SERIALIZE(m_fee_too_low)
-      KV_SERIALIZE(m_not_rct)
       KV_SERIALIZE(m_invalid_version)
       KV_SERIALIZE(m_invalid_type);
       KV_SERIALIZE(m_key_image_locked_by_snode);

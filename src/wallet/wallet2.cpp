@@ -109,10 +109,6 @@ namespace string_tools = epee::string_tools;
 // used to target a given block weight (additional outputs may be added on top to build fee)
 #define TX_WEIGHT_TARGET(bytes) (bytes*2/3)
 
-// arbitrary, used to generate different hashes from the same input
-#define CHACHA8_KEY_TAIL 0x8c
-#define CACHE_KEY_TAIL 0x8d
-
 #define UNSIGNED_TX_PREFIX "Loki unsigned tx set\004"
 #define SIGNED_TX_PREFIX "Loki signed tx set\004"
 #define MULTISIG_UNSIGNED_TX_PREFIX "Loki multisig unsigned tx set\001"
@@ -424,6 +420,7 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
       verification_required && !ssl_options.has_strong_verification(real_daemon),
       tools::error::wallet_internal_error,
       tools::wallet2::tr("Enabling --") + std::string{use_proxy ? opts.proxy.name : opts.daemon_ssl.name} + tools::wallet2::tr(" requires --") +
+        opts.daemon_ssl_allow_any_cert.name + tools::wallet2::tr(" or --") +
         opts.daemon_ssl_ca_certificates.name + tools::wallet2::tr(" or --") + opts.daemon_ssl_allowed_fingerprints.name + tools::wallet2::tr(" or use of a .onion/.i2p domain")
     );
   }
@@ -4109,7 +4106,7 @@ void wallet2::setup_keys(const epee::wipeable_string &password)
   static_assert(HASH_SIZE == sizeof(crypto::chacha_key), "Mismatched sizes of hash and chacha key");
   epee::mlocked<tools::scrubbed_arr<char, HASH_SIZE+1>> cache_key_data;
   memcpy(cache_key_data.data(), &key, HASH_SIZE);
-  cache_key_data[HASH_SIZE] = CACHE_KEY_TAIL;
+  cache_key_data[HASH_SIZE] = config::HASH_KEY_WALLET_CACHE;
   cn_fast_hash(cache_key_data.data(), HASH_SIZE+1, (crypto::hash&)m_cache_key);
   get_ringdb_key();
 }

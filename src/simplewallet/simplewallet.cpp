@@ -115,7 +115,10 @@ using sw = cryptonote::simple_wallet;
   m_wallet->stop(); \
   boost::unique_lock<boost::mutex> lock(m_idle_mutex); \
   m_idle_cond.notify_all(); \
-  LOKI_DEFER { m_auto_refresh_enabled.store(auto_refresh_enabled, std::memory_order_relaxed); }
+  LOKI_DEFER { \
+      m_auto_refresh_enabled.store(auto_refresh_enabled, std::memory_order_relaxed); \
+      m_idle_cond.notify_one(); \
+  }
 
 #define SCOPED_WALLET_UNLOCK_ON_BAD_PASSWORD(code) \
   LOCK_IDLE_SCOPE(); \
