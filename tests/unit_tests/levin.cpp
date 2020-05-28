@@ -458,8 +458,8 @@ TEST_F(levin_notify, flood)
     }
 
     std::vector<cryptonote::blobdata> txs(2);
-    txs[0].resize(100, 'e');
-    txs[1].resize(200, 'f');
+    txs[0].resize(100, 'f');
+    txs[1].resize(200, 'e');
 
     ASSERT_EQ(10u, contexts_.size());
     {
@@ -472,6 +472,7 @@ TEST_F(levin_notify, flood)
         for (++context; context != contexts_.end(); ++context)
             EXPECT_EQ(1u, context->process_send_queue());
 
+        std::sort(txs.begin(), txs.end());
         ASSERT_EQ(9u, receiver_.notified_size());
         for (unsigned count = 0; count < 9; ++count)
         {
@@ -492,6 +493,7 @@ TEST_F(levin_notify, flood)
         for (++context; context != contexts_.end(); ++context)
             EXPECT_EQ(1u, context->process_send_queue());
 
+        std::sort(txs.begin(), txs.end());
         ASSERT_EQ(9u, receiver_.notified_size());
         for (unsigned count = 0; count < 9; ++count)
         {
@@ -523,8 +525,8 @@ TEST_F(levin_notify, private_flood)
     }
 
     std::vector<cryptonote::blobdata> txs(2);
-    txs[0].resize(100, 'e');
-    txs[1].resize(200, 'f');
+    txs[0].resize(100, 'f');
+    txs[1].resize(200, 'e');
 
     ASSERT_EQ(10u, contexts_.size());
     {
