@@ -44,6 +44,7 @@
 #include "include_base_utils.h"
 #include "common/rules.h"
 #include "cryptonote_config.h"
+#include "cryptonote_core/tx_sanity_check.h"
 #include "wallet2.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -3086,7 +3087,6 @@ std::vector<wallet2::get_pool_state_tx> wallet2::get_pool_state(bool refreshed)
         pit->second.m_state = wallet2::unconfirmed_transfer_details::failed;
 
         // the inputs aren't spent anymore, since the tx failed
-        remove_rings(pit->second.m_tx);
         for (size_t vini = 0; vini < pit->second.m_tx.vin.size(); ++vini)
         {
           if (pit->second.m_tx.vin[vini].type() == typeid(txin_to_key))
@@ -9145,7 +9145,49 @@ void wallet2::light_wallet_get_outs(std::vector<std::vector<tools::wallet2::get_
   }
 }
 
+std::pair<std::set<uint64_t>, size_t> outs_unique(const std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs)
+{
+  std::set<uint64_t> unique;
+  size_t total = 0;
+
+  for (const auto &it : outs)
+  {
+    for (const auto &out : it)
+    {
+      const uint64_t global_index = std::get<0>(out);
+      unique.insert(global_index);
+    }
+    total += it.size();
+  }
+
+  return std::make_pair(std::move(unique), total);
+}
+
 void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, bool has_rct)
+{
+  std::vector<uint64_t> rct_offsets;
+  for (size_t attempts = 3; attempts > 0; --attempts)
+  {
+    get_outs(outs, selected_transfers, fake_outputs_count, rct_offsets, has_rct);
+
+    const auto unique = outs_unique(outs);
+    if (tx_sanity_check(unique.first, unique.second, rct_offsets.empty() ? 0 : rct_offsets.back()))
+    {
+      return;
+    }
+
+    std::vector<crypto::key_image> key_images;
+    key_images.reserve(selected_transfers.size());
+    std::for_each(selected_transfers.begin(), selected_transfers.end(), [this, &key_images](size_t index) {
+      key_images.push_back(m_transfers[index].m_key_image);
+    });
+    unset_ring(key_images);
+  }
+
+  THROW_WALLET_EXCEPTION(error::wallet_internal_error, tr("Transaction sanity check failed"));
+}
+
+void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs, const std::vector<size_t> &selected_transfers, size_t fake_outputs_count, std::vector<uint64_t> &rct_offsets, bool has_rct)
 {
   LOG_PRINT_L2("fake_outputs_count: " << fake_outputs_count);
   outs.clear();

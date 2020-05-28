@@ -498,7 +498,7 @@ namespace cryptonote
     if(have_block)
     {
       context.m_state = cryptonote_connection_context::state_normal;
-      if(is_inital && target == curr_height)
+      if(is_inital  && hshd.current_height >= target && target == m_core.get_current_blockchain_height())
         on_connection_synchronized();
     }
     else
