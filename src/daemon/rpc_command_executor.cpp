@@ -1228,12 +1228,18 @@ bool rpc_command_executor::print_bans()
     if (!invoke<GETBANS>({}, res, "Failed to retrieve ban list"))
       return false;
 
-    for (const auto& ban : res.bans)
-      tools::msg_writer() << ban.host << " banned for " << ban.seconds << " seconds";
+    if (!res.bans.empty())
+    {
+        for (auto i = res.bans.begin(); i != res.bans.end(); ++i)
+        {
+            tools::msg_writer() << i->host << " banned for " << i->seconds << " seconds";
+        }
+    }
+    else 
+        tools::msg_writer() << "No IPs are banned";
 
     return true;
 }
-
 
 bool rpc_command_executor::ban(const std::string &address, time_t seconds, bool clear_ban)
 {
