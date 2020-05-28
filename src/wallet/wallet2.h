@@ -1623,6 +1623,8 @@ private:
 
 
     std::atomic<bool> m_long_poll_disabled;
+    static std::string get_default_daemon_address() { CRITICAL_REGION_LOCAL(default_daemon_address_lock); return default_daemon_address; }
+
   private:
     /*!
      * \brief  Stores wallet information to wallet file.
@@ -1858,6 +1860,9 @@ private:
     std::unique_ptr<wallet_device_callback> m_device_callback;
 
     ExportFormat m_export_format;
+
+    static boost::mutex default_daemon_address_lock;
+    static std::string default_daemon_address;
   };
 
   // TODO(loki): Hmm. We need this here because we make register_service_node do

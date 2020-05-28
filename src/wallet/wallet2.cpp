@@ -154,6 +154,9 @@ static const std::string MULTISIG_EXTRA_INFO_MAGIC = "MultisigxV1";
 
 static const std::string ASCII_OUTPUT_MAGIC = "MoneroAsciiDataV1";
 
+boost::mutex tools::wallet2::default_daemon_address_lock;
+std::string tools::wallet2::default_daemon_address = "";
+
 namespace
 {
   std::string get_default_ringdb_path()
@@ -396,6 +399,15 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
     daemon_port = get_config(nettype).RPC_DEFAULT_PORT;
   }
 
+  // if no daemon settings are given and we have a previous one, reuse that one
+  if (command_line::is_arg_defaulted(vm, opts.daemon_host) && command_line::is_arg_defaulted(vm, opts.daemon_port) && command_line::is_arg_defaulted(vm, opts.daemon_address))
+  {
+    // not a bug: taking a const ref to a temporary in this way is actually ok in a recent C++ standard
+    const std::string &def = tools::wallet2::get_default_daemon_address();
+    if (!def.empty())
+      daemon_address = def;
+  }
+
   if (daemon_address.empty())
     daemon_address = std::string("http://") + daemon_host + ":" + std::to_string(daemon_port);
 
@@ -572,6 +584,8 @@ std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_f
       }
       viewkey = *reinterpret_cast<const crypto::secret_key*>(viewkey_data.data());
       crypto::public_key pkey;
+      if (viewkey == crypto::null_skey)
+        THROW_WALLET_EXCEPTION(tools::error::wallet_internal_error, tools::wallet2::tr("view secret key may not be all zeroes"));
       if (!crypto::secret_key_to_public_key(viewkey, pkey)) {
         THROW_WALLET_EXCEPTION(tools::error::wallet_internal_error, tools::wallet2::tr("failed to verify view key secret key"));
       }
@@ -588,6 +602,8 @@ std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_f
       }
       spendkey = *reinterpret_cast<const crypto::secret_key*>(spendkey_data.data());
       crypto::public_key pkey;
+      if (spendkey == crypto::null_skey)
+        THROW_WALLET_EXCEPTION(tools::error::wallet_internal_error, tools::wallet2::tr("spend secret key may not be all zeroes"));
       if (!crypto::secret_key_to_public_key(spendkey, pkey)) {
         THROW_WALLET_EXCEPTION(tools::error::wallet_internal_error, tools::wallet2::tr("failed to verify spend key secret key"));
       }
@@ -1257,8 +1273,15 @@ bool wallet2::set_daemon(std::string daemon_address, boost::optional<epee::net_u
   m_trusted_daemon        = trusted_daemon;
   m_long_poll_ssl_options = ssl_options;
 
-  MINFO("setting daemon to " << get_daemon_address());
-  return m_http_client.set_server(get_daemon_address(), get_daemon_login(), std::move(ssl_options));
+  const std::string address = get_daemon_address();
+  MINFO("setting daemon to " << address);
+  bool ret =  m_http_client.set_server(address, get_daemon_login(), std::move(ssl_options));
+  if (ret)
+  {
+    CRITICAL_REGION_LOCAL(default_daemon_address_lock);
+    default_daemon_address = address;
+  }
+  return ret;
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::init(std::string daemon_address, boost::optional<epee::net_utils::http::login> daemon_login, boost::asio::ip::tcp::endpoint proxy, uint64_t upper_transaction_weight_limit, bool trusted_daemon, epee::net_utils::ssl_options_t ssl_options)
