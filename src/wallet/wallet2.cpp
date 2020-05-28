@@ -3206,7 +3206,7 @@ std::vector<wallet2::get_pool_state_tx> wallet2::get_pool_state(bool refreshed)
                     [tx_hash](const std::pair<crypto::hash, bool> &e) { return e.first == tx_hash; });
                 if (i != txids.end())
                 {
-                  process_txs.push_back({std::move(tx), tx_entry.double_spend_seen, tx_entry.blink});
+                  process_txs.push_back({std::move(tx), tx_hash, tx_entry.double_spend_seen, tx_entry.blink});
                 }
                 else
                 {
@@ -3243,9 +3243,8 @@ void wallet2::process_pool_state(const std::vector<get_pool_state_tx> &txs)
   const time_t now = time(NULL);
   for (const auto &e: txs)
   {
-    const crypto::hash tx_hash = get_transaction_hash(e.tx);
-    process_new_transaction(tx_hash, e.tx, std::vector<uint64_t>(), 0, 0, now, false, true, e.blink, e.double_spend_seen, {});
-    m_scanned_pool_txs[0].insert(tx_hash);
+    process_new_transaction(e.tx_hash, e.tx, std::vector<uint64_t>(), 0, 0, now, false, true, e.blink, e.double_spend_seen, {});
+    m_scanned_pool_txs[0].insert(e.tx_hash);
     if (m_scanned_pool_txs[0].size() > 5000)
     {
       std::swap(m_scanned_pool_txs[0], m_scanned_pool_txs[1]);

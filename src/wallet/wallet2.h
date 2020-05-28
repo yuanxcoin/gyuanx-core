@@ -1394,6 +1394,7 @@ private:
     struct get_pool_state_tx
     {
         cryptonote::transaction tx;
+        crypto::hash tx_hash;
         bool double_spend_seen;
         bool blink;
     };
