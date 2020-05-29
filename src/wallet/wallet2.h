@@ -1746,6 +1746,8 @@ private:
     std::string get_rpc_status(const std::string &s) const;
     void throw_on_rpc_response_error(const boost::optional<std::string> &status, const char *method) const;
 
+    bool should_expand(const cryptonote::subaddress_index &index) const;
+
     cryptonote::account_base m_account;
     boost::optional<epee::net_utils::http::login> m_daemon_login;
     std::string m_daemon_address;
