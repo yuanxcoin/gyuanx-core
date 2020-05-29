@@ -49,6 +49,7 @@
 
 #include "chaingen.h"
 #include "device/device.hpp"
+#include "crypto/crypto.h"
 
 extern "C"
 {
@@ -642,11 +643,36 @@ loki_chain_generator::create_loki_name_system_tx_update_w_extra(cryptonote::acco
 
 static void fill_nonce(cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
 {
+  // TODO(loki): Currently doesn't work for any monero tests using >=HF12, see fill_nonce_with_loki_generator, we need RandomX context to be set.
   blk.nonce = 0;
-  while (!cryptonote::miner::find_nonce_for_given_block([](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash){
-    return cryptonote::get_block_longhash(NULL, b, hash, height, threads);
-  }, blk, TESTS_DEFAULT_FEE, height))
+  auto get_block_hash = [](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash) {
+    hash = cryptonote::get_block_longhash(cryptonote::randomx_longhash_context(NULL, b, height), b, height, threads);
+    return true;
+  };
+
+  while (!cryptonote::miner::find_nonce_for_given_block(get_block_hash, blk, diffic, height))
     blk.timestamp++;
+}
+
+static void fill_nonce_with_loki_generator(loki_chain_generator const *generator, cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
+{
+  cryptonote::randomx_longhash_context randomx_context = {};
+  if (generator->blocks().size())
+  {
+    randomx_context.seed_height                          = crypto::rx_seedheight(height);
+    randomx_context.seed_block_hash                      = cryptonote::get_block_hash(generator->blocks()[randomx_context.seed_height].block);
+    randomx_context.current_blockchain_height            = height;
+  }
+
+  blk.nonce = 0;
+  auto get_block_hash = [&randomx_context](const cryptonote::block &blk, uint64_t height, unsigned int threads, crypto::hash &hash) {
+    hash = cryptonote::get_block_longhash(randomx_context, blk, height, threads);
+    return true;
+  };
+
+  while (!cryptonote::miner::find_nonce_for_given_block(get_block_hash, blk, TEST_DEFAULT_DIFFICULTY, height))
+    blk.timestamp++;
+
 }
 
 loki_blockchain_entry loki_chain_generator::create_genesis_block(const cryptonote::account_base &miner, uint64_t timestamp)
@@ -715,7 +741,7 @@ loki_blockchain_entry loki_chain_generator::create_genesis_block(const cryptonot
     }
   }
 
-  fill_nonce(blk, TEST_DEFAULT_DIFFICULTY, height);
+  fill_nonce_with_loki_generator(this, blk, TEST_DEFAULT_DIFFICULTY, height);
   result.block_weight = get_transaction_weight(blk.miner_tx);
   uint64_t block_reward, block_reward_unpenalized;
   cryptonote::get_base_block_reward(0 /*median_weight*/, result.block_weight, 0 /*already_generated_coins*/, block_reward, block_reward_unpenalized, hf_version_, height);
@@ -834,7 +860,7 @@ bool loki_chain_generator::create_block(loki_blockchain_entry &entry,
     }
   }
 
-  fill_nonce(blk, TEST_DEFAULT_DIFFICULTY, height);
+  fill_nonce_with_loki_generator(this, blk, TEST_DEFAULT_DIFFICULTY, height);
   entry.txs = tx_list;
   entry.service_node_state = prev.service_node_state;
   entry.service_node_state.update_from_block(db_, cryptonote::FAKECHAIN, state_history_, {} /*state_archive*/, {} /*alt_states*/, entry.block, entry.txs, nullptr);

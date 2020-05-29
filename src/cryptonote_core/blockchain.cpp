@@ -1915,27 +1915,30 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     std::memset(proof_of_work.data, 0xff, sizeof(proof_of_work.data));
     if (b.major_version >= cryptonote::network_version_12_checkpointing)
     {
-      crypto::hash seedhash = null_hash;
-      uint64_t seedheight = rx_seedheight(block_height);
+      randomx_longhash_context randomx_context  = {};
+      randomx_context.current_blockchain_height = curr_blockchain_height;
+      randomx_context.seed_height               = rx_seedheight(block_height);
+
       // seedblock is on the alt chain somewhere
-      if (alt_chain.size() && alt_chain.front().height <= seedheight)
+      if (alt_chain.size() && alt_chain.front().height <= randomx_context.seed_height)
       {
         for (auto it=alt_chain.begin(); it != alt_chain.end(); it++)
         {
-          if (it->height == seedheight+1)
+          if (it->height == randomx_context.seed_height+1)
           {
-            seedhash = it->bl.prev_id;
+            randomx_context.seed_block_hash = it->bl.prev_id;
             break;
           }
         }
       } else
       {
-        seedhash = get_block_id_by_height(seedheight);
+        randomx_context.seed_block_hash = get_block_id_by_height(randomx_context.seed_height);
       }
-      get_altblock_longhash(b, proof_of_work, curr_blockchain_height, block_height, seedheight, seedhash);
+
+      proof_of_work = get_altblock_longhash(randomx_context, b, block_height);
     } else
     {
-      get_block_longhash(this, b, proof_of_work, block_height, 0);
+      proof_of_work = get_block_longhash_w_blockchain(this, b, block_height, 0);
     }
     if(!check_hash(proof_of_work, required_diff))
     {
@@ -4028,7 +4031,7 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
       proof_of_work = it->second;
     }
     else
-      proof_of_work = get_block_longhash(this, bl, blockchain_height, 0);
+      proof_of_work = get_block_longhash_w_blockchain(this, bl, blockchain_height, 0);
 
     // validate proof_of_work versus difficulty target
     if(!check_hash(proof_of_work, required_diff))
@@ -4593,7 +4596,7 @@ void Blockchain::block_longhash_worker(uint64_t height, const epee::span<const b
     if (m_cancel)
       break;
     crypto::hash id = get_block_hash(block);
-    crypto::hash pow = get_block_longhash(this, block, height++, 0);
+    crypto::hash pow = get_block_longhash_w_blockchain(this, block, height++, 0);
     map.emplace(id, pow);
   }
 
