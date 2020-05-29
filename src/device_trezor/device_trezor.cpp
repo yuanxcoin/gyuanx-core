@@ -524,7 +524,7 @@ namespace trezor {
 
         // Transaction check
         try {
-          MDEBUG("signed transaction: " << cryptonote::get_transaction_hash(cpend.tx) << ENDL << cryptonote::obj_to_json_str(cpend.tx) << ENDL);
+          MDEBUG("signed transaction: " << cryptonote::get_transaction_hash(cpend.tx) << "\n" << cryptonote::obj_to_json_str(cpend.tx) << "\n");
           transaction_check(cdata, aux_data);
         } catch(const std::exception &e){
           throw exc::ProtocolException(std::string("Transaction verification failed: ") + e.what());
