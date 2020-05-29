@@ -277,9 +277,11 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
     {
       if (m_listener) {
         auto passphrase = m_listener->onDevicePassphraseRequest(on_device);
-        if (!on_device && passphrase) {
+        if (passphrase) {
           return boost::make_optional(epee::wipeable_string((*passphrase).data(), (*passphrase).size()));
         }
+      } else {
+        on_device = true;
       }
       return boost::none;
     }
