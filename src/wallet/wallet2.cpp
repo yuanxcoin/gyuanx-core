@@ -7539,14 +7539,14 @@ uint64_t wallet2::get_fee_percent(uint32_t priority, txtype type) const
 
   const bool blinkable = type == txtype::standard;
 
-  if (priority == 0)
+  if (priority == 0) // 0 means no explicit priority was given, so use the wallet default
   {
-    priority = m_default_priority;
-    if ((priority == tx_priority_blink && !blinkable) || priority == 0)
-      priority = tx_priority_unimportant;
+    priority = m_default_priority > 0 ? m_default_priority : (uint32_t) tx_priority_blink;
+    if (priority == tx_priority_blink && !blinkable)
+      priority = tx_priority_unimportant; // The blink default is unusable for this tx, so fall back to unimportant
   }
 
-  // If it's a blinkable tx then we only have two relevant priorities: unimportant, and blink.
+  // If it's a blinkable tx then we blink it for everything priority other than unimportant.
   if (blinkable && priority != tx_priority_unimportant)
     priority = tx_priority_blink;
 
