@@ -404,6 +404,7 @@ namespace cryptonote
     command_line::add_arg(desc, integration_test::arg_hardforks_override);
     command_line::add_arg(desc, integration_test::arg_pipe_name);
 #endif
+    command_line::add_arg(desc, arg_lmq_quorumnet_public);
 
     miner::init_options(desc);
     BlockchainDB::init_options(desc);
@@ -1894,9 +1895,9 @@ namespace cryptonote
     return m_blockchain_storage.get_output_distribution(amount, from_height, to_height, start_height, distribution, base);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_output_blacklist(std::vector<uint64_t> &blacklist) const
+  void core::get_output_blacklist(std::vector<uint64_t> &blacklist) const
   {
-    return m_blockchain_storage.get_output_blacklist(blacklist);
+    m_blockchain_storage.get_output_blacklist(blacklist);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs) const

@@ -3742,7 +3742,7 @@ bool wallet2::get_output_blacklist(std::vector<uint64_t> &blacklist)
   {
     if (rpc_version >= rpc::version_t{2, 3})
     {
-      MDEBUG("Daemon is recent enough, not requesting output blacklist");
+      MDEBUG("Daemon is recent enough, requesting output blacklist");
     }
     else
     {
@@ -3753,9 +3753,7 @@ bool wallet2::get_output_blacklist(std::vector<uint64_t> &blacklist)
 
   cryptonote::rpc::GET_OUTPUT_BLACKLIST::request req  = {};
   cryptonote::rpc::GET_OUTPUT_BLACKLIST::response res = {};
-  m_daemon_rpc_mutex.lock();
   bool r = invoke_http_bin("/get_output_blacklist.bin", req, res, rpc_timeout);
-  m_daemon_rpc_mutex.unlock();
 
   if (!r)
   {
@@ -9344,8 +9342,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     }
 
     std::vector<uint64_t> output_blacklist;
-    if (bool get_output_blacklist_failed = !get_output_blacklist(output_blacklist))
-      THROW_WALLET_EXCEPTION_IF(get_output_blacklist_failed, error::get_output_blacklist, "Couldn't retrive list of outputs that are to be exlcuded from selection");
+    if (!get_output_blacklist(output_blacklist))
+      THROW_WALLET_EXCEPTION_IF(true, error::get_output_blacklist, "Couldn't retrive list of outputs that are to be exlcuded from selection");
 
     std::sort(output_blacklist.begin(), output_blacklist.end());
     if (output_blacklist.size() * 0.05 > (double)rct_offsets.size())

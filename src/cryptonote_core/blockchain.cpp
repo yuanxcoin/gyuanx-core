@@ -2432,9 +2432,9 @@ bool Blockchain::get_output_distribution(uint64_t amount, uint64_t from_height, 
   }
 }
 //------------------------------------------------------------------
-bool Blockchain::get_output_blacklist(std::vector<uint64_t> &blacklist) const
+void Blockchain::get_output_blacklist(std::vector<uint64_t> &blacklist) const
 {
-  return m_db->get_output_blacklist(blacklist);
+  m_db->get_output_blacklist(blacklist);
 }
 //------------------------------------------------------------------
 // This function takes a list of block hashes from another node

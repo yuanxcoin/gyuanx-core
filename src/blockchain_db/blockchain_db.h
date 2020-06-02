@@ -1839,7 +1839,7 @@ public:
   };
   virtual void fixup(fixup_context const context = {});
 
-  virtual bool get_output_blacklist(std::vector<uint64_t> &blacklist) const   = 0;
+  virtual void get_output_blacklist(std::vector<uint64_t> &blacklist) const   = 0;
   virtual void add_output_blacklist(std::vector<uint64_t> const &blacklist)   = 0;
   virtual void set_service_node_data(const std::string& data, bool long_term) = 0;
   virtual bool get_service_node_data(std::string &data, bool long_term) const = 0;

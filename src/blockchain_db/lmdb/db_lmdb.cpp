@@ -4459,7 +4459,7 @@ bool BlockchainLMDB::get_output_distribution(uint64_t amount, uint64_t from_heig
   return true;
 }
 
-bool BlockchainLMDB::get_output_blacklist(std::vector<uint64_t> &blacklist) const
+void BlockchainLMDB::get_output_blacklist(std::vector<uint64_t> &blacklist) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -4497,8 +4497,6 @@ bool BlockchainLMDB::get_output_blacklist(std::vector<uint64_t> &blacklist) cons
         blacklist.push_back(outputs[i]);
     }
   }
-
-  return true;
 }
 
 void BlockchainLMDB::add_output_blacklist(std::vector<uint64_t> const &blacklist)

@@ -544,7 +544,7 @@ namespace cryptonote
      *
      * @param return-by-reference blacklist global indexes of rct outputs to ignore
      */
-    bool get_output_blacklist(std::vector<uint64_t> &blacklist) const;
+    void get_output_blacklist(std::vector<uint64_t> &blacklist) const;
 
     /**
      * @brief gets the global indices for outputs from a given transaction

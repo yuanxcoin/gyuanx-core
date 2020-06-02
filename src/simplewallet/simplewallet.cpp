@@ -8730,7 +8730,7 @@ bool simple_wallet::run()
       integration_test::use_redirected_cout();
     }
 
-    this->process_command(args);
+    this->process_command_and_log(args);
     if (args.size() == 1 && args[0] == "exit")
     {
       integration_test::deinit();

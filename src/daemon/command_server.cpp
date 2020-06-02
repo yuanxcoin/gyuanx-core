@@ -470,7 +470,7 @@ bool command_server::start_handling(std::function<void(void)> exit_handler)
         integration_test::use_redirected_cout();
       }
 
-      process_command(args);
+      process_command_and_log(args);
       if (args.size() == 1 && args[0] == "exit")
       {
         integration_test::deinit();

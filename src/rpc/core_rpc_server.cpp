@@ -1446,15 +1446,14 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_OUTPUT_BLACKLIST>(req, res))
       return res;
 
-    res.status = "Failed";
     try
     {
       m_core.get_output_blacklist(res.blacklist);
     }
     catch (const std::exception &e)
     {
-      res.status = "Failed to get output blacklist";
-      return res;
+        res.status = std::string("Failed to get output blacklist: ") + e.what();
+        return res;
     }
 
     res.status = STATUS_OK;
