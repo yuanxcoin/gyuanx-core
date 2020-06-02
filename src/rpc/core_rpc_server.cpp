@@ -1453,8 +1453,8 @@ namespace cryptonote { namespace rpc {
     }
     catch (const std::exception &e)
     {
-        res.status = std::string("Failed to get output blacklist: ") + e.what();
-        return res;
+      res.status = std::string("Failed to get output blacklist: ") + e.what();
+      return res;
     }
 
     res.status = STATUS_OK;

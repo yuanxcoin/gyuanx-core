@@ -2203,7 +2203,7 @@ namespace rpc {
   // Get information on output blacklist.
   struct GET_OUTPUT_BLACKLIST : PUBLIC, BINARY
   {
-    static constexpr auto names() { return NAMES("get_output_blacklist"); }
+    static constexpr auto names() { return NAMES("get_output_blacklist.bin"); }
 
     struct request : EMPTY {};
 
