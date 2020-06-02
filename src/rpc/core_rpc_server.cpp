@@ -401,6 +401,7 @@ namespace cryptonote { namespace rpc {
       return res;
     }
 
+    res.service_node = m_core.service_node();
     res.block_size_limit = res.block_weight_limit = m_core.get_blockchain_storage().get_current_cumulative_block_weight_limit();
     res.block_size_median = res.block_weight_median = m_core.get_blockchain_storage().get_current_cumulative_block_weight_median();
     res.start_time = restricted ? 0 : (uint64_t)m_core.get_start_time();
