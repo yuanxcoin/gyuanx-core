@@ -340,10 +340,9 @@ public:
 
 
   int m_hf_version;
-
-private:
   std::unordered_map<crypto::hash, block_info> m_blocks_info;
 
+  private:
   friend class boost::serialization::access;
 
   template<class Archive>

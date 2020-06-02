@@ -641,12 +641,26 @@ loki_chain_generator::create_loki_name_system_tx_update_w_extra(cryptonote::acco
   return result;
 }
 
-static void fill_nonce(cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
+static void fill_nonce_with_test_generator(test_generator *generator, cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
 {
-  // TODO(loki): Currently doesn't work for any monero tests using >=HF12, see fill_nonce_with_loki_generator, we need RandomX context to be set.
+  cryptonote::randomx_longhash_context randomx_context = {};
+  if (generator->m_hf_version >= cryptonote::network_version_12_checkpointing)
+  {
+    randomx_context.seed_height = crypto::rx_seedheight(height);
+    cryptonote::block prev      = blk;
+    do
+    {
+      prev = generator->m_blocks_info[prev.prev_id].block;
+    }
+    while (cryptonote::get_block_height(prev) != randomx_context.seed_height);
+
+    randomx_context.seed_block_hash           = cryptonote::get_block_hash(prev);
+    randomx_context.current_blockchain_height = height;
+  }
+
   blk.nonce = 0;
-  auto get_block_hash = [](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash) {
-    hash = cryptonote::get_block_longhash(cryptonote::randomx_longhash_context(NULL, b, height), b, height, threads);
+  auto get_block_hash = [&randomx_context](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash) {
+    hash = cryptonote::get_block_longhash(randomx_context, b, height, threads);
     return true;
   };
 
@@ -657,11 +671,11 @@ static void fill_nonce(cryptonote::block& blk, const cryptonote::difficulty_type
 static void fill_nonce_with_loki_generator(loki_chain_generator const *generator, cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
 {
   cryptonote::randomx_longhash_context randomx_context = {};
-  if (generator->blocks().size())
+  if (generator->blocks().size() && generator->hardfork() >= cryptonote::network_version_12_checkpointing)
   {
-    randomx_context.seed_height                          = crypto::rx_seedheight(height);
-    randomx_context.seed_block_hash                      = cryptonote::get_block_hash(generator->blocks()[randomx_context.seed_height].block);
-    randomx_context.current_blockchain_height            = height;
+    randomx_context.seed_height = crypto::rx_seedheight(height);
+    randomx_context.seed_block_hash = cryptonote::get_block_hash(generator->blocks()[randomx_context.seed_height].block);
+    randomx_context.current_blockchain_height = height;
   }
 
   blk.nonce = 0;
@@ -1139,7 +1153,8 @@ bool test_generator::construct_block(cryptonote::block &blk,
   }
 
   //blk.tree_root_hash = get_tx_tree_hash(blk);
-  fill_nonce(blk, TEST_DEFAULT_DIFFICULTY, height);
+  fill_nonce_with_test_generator(this, blk, TEST_DEFAULT_DIFFICULTY, height);
+  add_block(blk, txs_weight, block_weights, already_generated_coins);
 
   return true;
 }
@@ -1206,7 +1221,7 @@ bool test_generator::construct_block_manually(cryptonote::block& blk, const cryp
   //blk.tree_root_hash = get_tx_tree_hash(blk);
 
   cryptonote::difficulty_type a_diffic = actual_params & bf_diffic ? diffic : TEST_DEFAULT_DIFFICULTY;
-  fill_nonce(blk, a_diffic, height);
+  fill_nonce_with_test_generator(this, blk, a_diffic, height);
 
   add_block(blk, txs_weight, block_weights, already_generated_coins);
 
