@@ -301,6 +301,7 @@ namespace cryptonote
     bool freeze_thaw(const std::vector<std::string>& args, bool freeze);
 
     bool on_command(bool (simple_wallet::*cmd)(const std::vector<std::string>&), const std::vector<std::string> &args);
+    bool on_cancelled_command();
     void check_for_inactivity_lock(bool user);
 
     bool get_transfers(std::vector<std::string>& args_, std::vector<tools::transfer_view>& transfers);

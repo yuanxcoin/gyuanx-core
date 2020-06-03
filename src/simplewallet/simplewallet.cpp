@@ -2137,6 +2137,12 @@ bool simple_wallet::version(const std::vector<std::string> &args)
   return true;
 }
 
+bool simple_wallet::on_cancelled_command()
+{
+  check_for_inactivity_lock(false);
+  return true;
+}
+
 bool simple_wallet::cold_sign_tx(const std::vector<tools::wallet2::pending_tx>& ptx_vector, tools::wallet2::signed_tx_set &exported_txs, std::vector<cryptonote::address_parse_info> const &dsts_info, std::function<bool(const tools::wallet2::signed_tx_set &)> accept_func)
 {
   std::vector<std::string> tx_aux;
@@ -3138,6 +3144,8 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
                            boost::bind(&simple_wallet::on_command, this, &simple_wallet::help, _1),
                            tr(USAGE_HELP),
                            tr("Show the help section or the documentation about a <command>."));
+
+  m_cmd_binder.set_cancel_handler(boost::bind(&simple_wallet::on_cancelled_command, this));
 
   //
   // Loki
@@ -8617,7 +8625,6 @@ bool simple_wallet::check_inactivity()
       {
         m_locked = true;
         m_cmd_binder.cancel_input();
-        check_for_inactivity_lock(false);
       }
     }
     return true;
