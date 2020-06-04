@@ -343,6 +343,11 @@ namespace rpc
         if (!res.error_details.empty()) res.error_details += " and ";
         res.error_details = "tx is not ringct";
       }
+      if (tvc.m_too_few_outputs)
+      {
+        if (!res.error_details.empty()) res.error_details += " and ";
+        res.error_details = "too few outputs";
+      }
       if (tvc.m_invalid_version)
       {
         if (!res.error_details.empty()) res.error_details += " and ";

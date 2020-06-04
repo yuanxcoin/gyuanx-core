@@ -130,15 +130,11 @@ namespace {
     time_t now = std::time(nullptr);
     time_t last_seen = static_cast<time_t>(peer.last_seen);
 
-    std::string id_str;
+    std::string elapsed = epee::misc_utils::get_time_interval_string(now - last_seen);
+    std::string id_str = epee::string_tools::pad_string(epee::string_tools::to_string_hex(peer.id), 16, '0', true);
     std::string port_str;
-    std::string elapsed = peer.last_seen == 0 ? "never" : epee::misc_utils::get_time_interval_string(now - last_seen);
-    std::string ip_str = peer.ip != 0 ? epee::string_tools::get_ip_string_from_int32(peer.ip) : std::string("[") + peer.host + "]";
-    std::stringstream peer_id_str;
-    peer_id_str << std::hex << std::setw(16) << peer.id;
-    peer_id_str >> id_str;
     epee::string_tools::xtype_to_string(peer.port, port_str);
-    std::string addr_str = ip_str + ":" + port_str;
+    std::string addr_str = peer.host + ":" + port_str;
     std::string rpc_port = peer.rpc_port ? std::to_string(peer.rpc_port) : "-";
     std::string pruning_seed = epee::string_tools::to_string_hex(peer.pruning_seed);
     tools::msg_writer() << boost::format("%-10s %-25s %-25s %-5s %-4s %s") % prefix % id_str % addr_str % rpc_port % pruning_seed % elapsed;
@@ -1292,7 +1288,7 @@ bool rpc_command_executor::print_coinbase_tx_sum(uint64_t height, uint64_t count
   return true;
 }
 
-bool rpc_command_executor::alt_chain_info(const std::string &tip)
+bool rpc_command_executor::alt_chain_info(const std::string &tip, size_t above, uint64_t last_blocks)
 {
   GET_INFO::response ires{};
   GET_ALTERNATE_CHAINS::response res{};
@@ -1303,16 +1299,31 @@ bool rpc_command_executor::alt_chain_info(const std::string &tip)
 
   if (tip.empty())
   {
-    tools::msg_writer() << boost::lexical_cast<std::string>(res.chains.size()) << " alternate chains found:";
-    for (const auto &chain: res.chains)
+    auto chains = res.chains;
+    std::sort(chains.begin(), chains.end(), [](const GET_ALTERNATE_CHAINS::chain_info &info0, GET_ALTERNATE_CHAINS::chain_info &info1){ return info0.height < info1.height; });
+    std::vector<size_t> display;
+    for (size_t i = 0; i < chains.size(); ++i)
     {
-      uint64_t start_height = (chain.height - chain.length + 1);
+      const auto &chain = chains[i];
+      if (chain.length <= above)
+        continue;
+      const uint64_t start_height = (chain.height - chain.length + 1);
+      if (last_blocks > 0 && ires.height - 1 - start_height >= last_blocks)
+        continue;
+      display.push_back(i);
+    }
+    tools::msg_writer() << boost::lexical_cast<std::string>(display.size()) << " alternate chains found:";
+    for (const size_t idx: display)
+    {
+      const auto &chain = chains[idx];
+      const uint64_t start_height = (chain.height - chain.length + 1);
       tools::msg_writer() << chain.length << " blocks long, from height " << start_height << " (" << (ires.height - start_height - 1)
           << " deep), diff " << chain.difficulty << ": " << chain.block_hash;
     }
   }
   else
   {
+    const uint64_t now = time(NULL);
     const auto i = std::find_if(res.chains.begin(), res.chains.end(), [&tip](GET_ALTERNATE_CHAINS::chain_info &info){ return info.block_hash == tip; });
     if (i != res.chains.end())
     {
@@ -1324,6 +1335,37 @@ bool rpc_command_executor::alt_chain_info(const std::string &tip)
       for (const std::string &block_id: chain.block_hashes)
         tools::msg_writer() << "  " << block_id;
       tools::msg_writer() << "Chain parent on main chain: " << chain.main_chain_parent_block;
+      GET_BLOCK_HEADER_BY_HASH::request bhreq{};
+      GET_BLOCK_HEADER_BY_HASH::response bhres{};
+      bhreq.hashes = chain.block_hashes;
+      bhreq.hashes.push_back(chain.main_chain_parent_block);
+      bhreq.fill_pow_hash = false;
+      if (!invoke<GET_BLOCK_HEADER_BY_HASH>(std::move(bhreq), bhres, "Failed to query block header by hash"))
+        return false;
+
+      if (bhres.block_headers.size() != chain.length + 1)
+      {
+        tools::fail_msg_writer() << "Failed to get block header info for alt chain";
+        return true;
+      }
+      uint64_t t0 = bhres.block_headers.front().timestamp, t1 = t0;
+      for (const block_header_response &block_header: bhres.block_headers)
+      {
+        t0 = std::min<uint64_t>(t0, block_header.timestamp);
+        t1 = std::max<uint64_t>(t1, block_header.timestamp);
+      }
+      const uint64_t dt = t1 - t0;
+      const uint64_t age = std::max(dt, t0 < now ? now - t0 : 0);
+      tools::msg_writer() << "Age: " << tools::get_human_readable_timespan(std::chrono::seconds(age));
+      if (chain.length > 1)
+      {
+        tools::msg_writer() << "Time span: " << tools::get_human_readable_timespan(std::chrono::seconds(dt));
+        cryptonote::difficulty_type start_difficulty = bhres.block_headers.back().difficulty;
+        if (start_difficulty > 0)
+          tools::msg_writer() << "Approximated " << 100.f * DIFFICULTY_TARGET_V2 * chain.length / dt << "% of network hash rate";
+        else
+          tools::fail_msg_writer() << "Bad cmumulative difficulty reported by dameon";
+      }
     }
     else
       tools::fail_msg_writer() << "Block hash " << tip << " is not the tip of any known alternate chain";

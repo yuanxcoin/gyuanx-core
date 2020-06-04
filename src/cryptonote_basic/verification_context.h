@@ -75,6 +75,7 @@ namespace cryptonote
     bool m_double_spend;
     bool m_invalid_input;
     bool m_invalid_output;
+    bool m_too_few_outputs;
     bool m_too_big;
     bool m_overspend;
     bool m_fee_too_low;
@@ -95,6 +96,7 @@ namespace cryptonote
       KV_SERIALIZE(m_double_spend)
       KV_SERIALIZE(m_invalid_input)
       KV_SERIALIZE(m_invalid_output)
+      KV_SERIALIZE(m_too_few_outputs)
       KV_SERIALIZE(m_too_big)
       KV_SERIALIZE(m_overspend)
       KV_SERIALIZE(m_fee_too_low)

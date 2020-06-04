@@ -214,29 +214,42 @@ namespace cryptonote { namespace rpc {
     , m_p2p(p2p)
   {}
   //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const std::string &username_password)
+  {
+    boost::optional<epee::net_utils::http::login> credentials;
+    const auto loc = username_password.find(':');
+    if (loc != std::string::npos)
+    {
+      credentials = epee::net_utils::http::login(username_password.substr(0, loc), username_password.substr(loc + 1));
+    }
+    return set_bootstrap_daemon(address, credentials);
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials)
+  {
+    boost::unique_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+
+    if (!address.empty())
+    {
+      if (!m_http_client.set_server(address, credentials, epee::net_utils::ssl_support_t::e_ssl_support_autodetect))
+      {
+        return false;
+      }
+    }
+
+    m_bootstrap_daemon_address = address;   
+    m_should_use_bootstrap_daemon = !m_bootstrap_daemon_address.empty();
+
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   void core_rpc_server::init(const boost::program_options::variables_map& vm)
   {
     m_bootstrap_daemon_address = command_line::get_arg(vm, arg_bootstrap_daemon_address);
-    if (!m_bootstrap_daemon_address.empty())
+    if (!set_bootstrap_daemon(command_line::get_arg(vm, arg_bootstrap_daemon_address),
+                              command_line::get_arg(vm, arg_bootstrap_daemon_login)))
     {
-      const std::string &bootstrap_daemon_login = command_line::get_arg(vm, arg_bootstrap_daemon_login);
-      const auto loc = bootstrap_daemon_login.find(':');
-      if (!bootstrap_daemon_login.empty() && loc != std::string::npos)
-      {
-        epee::net_utils::http::login login;
-        login.username = bootstrap_daemon_login.substr(0, loc);
-        login.password = bootstrap_daemon_login.substr(loc + 1);
-        m_http_client.set_server(m_bootstrap_daemon_address, login, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
-      }
-      else
-      {
-        m_http_client.set_server(m_bootstrap_daemon_address, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
-      }
-      m_should_use_bootstrap_daemon = true;
-    }
-    else
-    {
-      m_should_use_bootstrap_daemon = false;
+      MERROR("Failed to parse bootstrap daemon address");
     }
     m_was_bootstrap_ever_used = false;
   }
@@ -282,7 +295,10 @@ namespace cryptonote { namespace rpc {
     PERF_TIMER(on_get_info);
     if (use_bootstrap_daemon_if_necessary<GET_INFO>(req, res))
     {
-      res.bootstrap_daemon_address = m_bootstrap_daemon_address;
+      {
+        boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+        res.bootstrap_daemon_address = m_bootstrap_daemon_address;
+      }
       crypto::hash top_hash;
       m_core.get_blockchain_top(res.height_without_bootstrap, top_hash);
       ++res.height_without_bootstrap; // turn top block height into blockchain height
@@ -344,13 +360,16 @@ namespace cryptonote { namespace rpc {
     res.last_lokinet_ping = restricted ? 0 : (uint64_t)m_core.m_last_lokinet_ping;
     res.free_space = restricted ? std::numeric_limits<uint64_t>::max() : m_core.get_free_space();
     res.offline = m_core.offline();
-    res.bootstrap_daemon_address = restricted ? "" : m_bootstrap_daemon_address;
     res.height_without_bootstrap = restricted ? 0 : res.height;
     if (restricted)
+    {
+      res.bootstrap_daemon_address = "";
       res.was_bootstrap_ever_used = false;
+    }
     else
     {
       boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+      res.bootstrap_daemon_address = m_bootstrap_daemon_address;
       res.was_bootstrap_ever_used = m_was_bootstrap_ever_used;
     }
     res.database_size = m_core.get_blockchain_storage().get_db().get_database_size();
@@ -1120,37 +1139,72 @@ namespace cryptonote { namespace rpc {
     PERF_TIMER(on_get_peer_list);
     std::vector<nodetool::peerlist_entry> white_list;
     std::vector<nodetool::peerlist_entry> gray_list;
-    m_p2p.get_public_peerlist(gray_list, white_list);
 
-    res.white_list.reserve(white_list.size());
+    if (req.public_only)
+    {
+      m_p2p.get_public_peerlist(gray_list, white_list);
+    }
+    else
+    {
+      m_p2p.get_peerlist(gray_list, white_list);
+    }
+
     for (auto & entry : white_list)
     {
       if (entry.adr.get_type_id() == epee::net_utils::ipv4_network_address::get_type_id())
         res.white_list.emplace_back(entry.id, entry.adr.as<epee::net_utils::ipv4_network_address>().ip(),
             entry.adr.as<epee::net_utils::ipv4_network_address>().port(), entry.last_seen, entry.pruning_seed, entry.rpc_port);
       else if (entry.adr.get_type_id() == epee::net_utils::ipv6_network_address::get_type_id())
-      {
         res.white_list.emplace_back(entry.id, entry.adr.as<epee::net_utils::ipv6_network_address>().host_str(),
             entry.adr.as<epee::net_utils::ipv6_network_address>().port(), entry.last_seen, entry.pruning_seed, entry.rpc_port);
-      }
       else
         res.white_list.emplace_back(entry.id, entry.adr.str(), entry.last_seen, entry.pruning_seed, entry.rpc_port);
     }
 
-    res.gray_list.reserve(gray_list.size());
     for (auto & entry : gray_list)
     {
       if (entry.adr.get_type_id() == epee::net_utils::ipv4_network_address::get_type_id())
         res.gray_list.emplace_back(entry.id, entry.adr.as<epee::net_utils::ipv4_network_address>().ip(),
             entry.adr.as<epee::net_utils::ipv4_network_address>().port(), entry.last_seen, entry.pruning_seed, entry.rpc_port);
       else if (entry.adr.get_type_id() == epee::net_utils::ipv6_network_address::get_type_id())
-        res.white_list.emplace_back(entry.id, entry.adr.as<epee::net_utils::ipv6_network_address>().host_str(),
+        res.gray_list.emplace_back(entry.id, entry.adr.as<epee::net_utils::ipv6_network_address>().host_str(),
             entry.adr.as<epee::net_utils::ipv6_network_address>().port(), entry.last_seen, entry.pruning_seed, entry.rpc_port);
       else
         res.gray_list.emplace_back(entry.id, entry.adr.str(), entry.last_seen, entry.pruning_seed, entry.rpc_port);
     }
 
     res.status = STATUS_OK;
+    return res;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  GET_PUBLIC_NODES::response core_rpc_server::invoke(GET_PUBLIC_NODES::request&& req, rpc_context context)
+  {
+    PERF_TIMER(on_get_public_nodes);
+
+    GET_PEER_LIST::response peer_list_res = invoke(GET_PEER_LIST::request{}, context);
+    GET_PUBLIC_NODES::response res{};
+    res.status = std::move(peer_list_res.status);
+
+    const auto collect = [](const std::vector<GET_PEER_LIST::peer> &peer_list, std::vector<public_node> &public_nodes)
+    {
+      for (const auto &entry : peer_list)
+      {
+        if (entry.rpc_port != 0)
+        {
+          public_nodes.emplace_back(entry);
+        }
+      }
+    };
+
+    if (req.white)
+    {
+      collect(peer_list_res.white_list, res.white);
+    }
+    if (req.gray)
+    {
+      collect(peer_list_res.gray_list, res.gray);
+    }
+
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -1299,6 +1353,24 @@ namespace cryptonote { namespace rpc {
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  SET_BOOTSTRAP_DAEMON::response core_rpc_server::invoke(SET_BOOTSTRAP_DAEMON::request&& req, rpc_context context)
+  {
+    PERF_TIMER(on_set_bootstrap_daemon);
+
+    boost::optional<epee::net_utils::http::login> credentials;
+    if (!req.username.empty() || !req.password.empty())
+    {
+      credentials = epee::net_utils::http::login(req.username, req.password);
+    }
+
+    if (!set_bootstrap_daemon(req.address, credentials))
+      throw rpc_error{ERROR_WRONG_PARAM, "Failed to set bootstrap daemon to address = " + req.address};
+
+    SET_BOOTSTRAP_DAEMON::response res{};
+    res.status = STATUS_OK;
+    return res;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   STOP_DAEMON::response core_rpc_server::invoke(STOP_DAEMON::request&& req, rpc_context context)
   {
     STOP_DAEMON::response res{};
@@ -1394,6 +1466,12 @@ namespace cryptonote { namespace rpc {
     if(req.reserve_size > 255)
       throw rpc_error{ERROR_TOO_BIG_RESERVE_SIZE, "Too big reserved size, maximum 255"};
 
+    if(req.reserve_size && !req.extra_nonce.empty())
+      throw rpc_error{ERROR_WRONG_PARAM, "Cannot specify both a reserve_size and an extra_nonce"};
+
+    if(req.extra_nonce.size() > 510)
+      throw rpc_error{ERROR_TOO_BIG_RESERVE_SIZE, "Too big extra_nonce size, maximum 510 hex chars"};
+
     cryptonote::address_parse_info info;
 
     if(!req.wallet_address.size() || !cryptonote::get_account_address_from_str(info, m_core.get_nettype(), req.wallet_address))
@@ -1403,7 +1481,13 @@ namespace cryptonote { namespace rpc {
 
     block b;
     cryptonote::blobdata blob_reserve;
-    blob_reserve.resize(req.reserve_size, 0);
+    if(!req.extra_nonce.empty())
+    {
+      if(!string_tools::parse_hexstr_to_binbuff(req.extra_nonce, blob_reserve))
+        throw rpc_error{ERROR_WRONG_PARAM, "Parameter extra_nonce should be a hex string"};
+    }
+    else
+      blob_reserve.resize(req.reserve_size, 0);
     cryptonote::difficulty_type diff;
     crypto::hash prev_block;
     if (!req.prev_block.empty())
@@ -1583,19 +1667,22 @@ namespace cryptonote { namespace rpc {
 
   /// All the common (untemplated) code for use_bootstrap_daemon_if_necessary.  Returns a held lock
   /// if we need to bootstrap, an unheld one if we don't.
-  boost::unique_lock<boost::shared_mutex> core_rpc_server::should_bootstrap_lock()
+  boost::upgrade_lock<boost::shared_mutex> core_rpc_server::should_bootstrap_lock()
   {
     // TODO - support bootstrapping via a remote LMQ RPC; requires some argument fiddling
 
     if (m_bootstrap_daemon_address.empty() || !m_should_use_bootstrap_daemon)
       return {};
 
-    boost::unique_lock<boost::shared_mutex> lock{m_bootstrap_daemon_mutex};
+    boost::upgrade_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
 
     auto current_time = std::chrono::system_clock::now();
     if (current_time - m_bootstrap_height_check_time > 30s)  // update every 30s
     {
-      m_bootstrap_height_check_time = current_time;
+      {
+        boost::upgrade_to_unique_lock<boost::shared_mutex> upgrade_lock(lock);
+        m_bootstrap_height_check_time = current_time;
+      }
 
       uint64_t top_height;
       crypto::hash top_hash;
@@ -1660,7 +1747,10 @@ namespace cryptonote { namespace rpc {
     if (!success)
       throw std::runtime_error{"Bootstrap request failed"};
 
-    m_was_bootstrap_ever_used = true;
+    {
+      boost::upgrade_to_unique_lock<boost::shared_mutex> lock(bs_lock);
+      m_was_bootstrap_ever_used = true;
+    }
     res.untrusted = true;
     return true;
   }
@@ -1694,19 +1784,32 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_BLOCK_HEADER_BY_HASH>(req, res))
       return res;
 
-    crypto::hash block_hash;
-    bool hash_parsed = parse_hash256(req.hash, block_hash);
-    if(!hash_parsed)
-      throw rpc_error{ERROR_WRONG_PARAM, "Failed to parse hex representation of block hash. Hex = " + req.hash + '.'};
-    block blk;
-    bool orphan = false;
-    bool have_block = m_core.get_block_by_hash(block_hash, blk, &orphan);
-    if (!have_block)
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get block by hash. Hash = " + req.hash + '.'};
-    if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: coinbase transaction in the block has the wrong type"};
-    uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
-    fill_block_header_response(blk, orphan, block_height, block_hash, res.block_header, req.fill_pow_hash && context.admin);
+    auto get = [this](const std::string &hash, bool fill_pow_hash, block_header_response &block_header, bool admin) -> void {
+      crypto::hash block_hash;
+      bool hash_parsed = parse_hash256(hash, block_hash);
+      if(!hash_parsed)
+        throw rpc_error{ERROR_WRONG_PARAM, "Failed to parse hex representation of block hash. Hex = " + hash + '.'};
+      block blk;
+      bool orphan = false;
+      bool have_block = m_core.get_block_by_hash(block_hash, blk, &orphan);
+      if (!have_block)
+        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get block by hash. Hash = " + hash + '.'};
+      if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
+        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: coinbase transaction in the block has the wrong type"};
+      uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
+      fill_block_header_response(blk, orphan, block_height, block_hash, block_header, fill_pow_hash && admin);
+    };
+
+    if (!req.hash.empty())
+      get(req.hash, req.fill_pow_hash, res.block_header, context.admin);
+
+    res.block_headers.reserve(req.hashes.size());
+    for (const std::string &hash: req.hashes)
+    {
+      res.block_headers.push_back({});
+      get(hash, req.fill_pow_hash, res.block_headers.back(), context.admin);
+    }
+
     res.status = STATUS_OK;
     return res;
   }
@@ -2114,7 +2217,7 @@ namespace cryptonote { namespace rpc {
     PERF_TIMER(on_get_alternate_chains);
     try
     {
-      std::list<std::pair<Blockchain::block_extended_info, std::vector<crypto::hash>>> chains = m_core.get_blockchain_storage().get_alternative_chains();
+      std::vector<std::pair<Blockchain::block_extended_info, std::vector<crypto::hash>>> chains = m_core.get_blockchain_storage().get_alternative_chains();
       for (const auto &i: chains)
       {
         res.chains.push_back(GET_ALTERNATE_CHAINS::chain_info{epee::string_tools::pod_to_hex(get_block_hash(i.first.bl)), i.first.height, i.second.size(), i.first.cumulative_difficulty, {}, std::string()});

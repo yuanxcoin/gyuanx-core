@@ -6774,7 +6774,7 @@ void wallet2::commit_tx(pending_tx& ptx, bool blink)
       amount_in += m_transfers[idx].amount();
   }
   add_unconfirmed_tx(ptx.tx, amount_in, dests, payment_id, ptx.change_dts.amount, ptx.construction_data.subaddr_account, ptx.construction_data.subaddr_indices);
-  if (store_tx_info())
+  if (store_tx_info() && ptx.tx_key != crypto::null_skey)
   {
     m_tx_keys.insert(std::make_pair(txid, ptx.tx_key));
     m_additional_tx_keys.insert(std::make_pair(txid, ptx.additional_tx_keys));
@@ -6967,7 +6967,7 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, std::vector<wallet2::pendin
     // normally, the tx keys are saved in commit_tx, when the tx is actually sent to the daemon.
     // we can't do that here since the tx will be sent from the compromised wallet, which we don't want
     // to see that info, so we save it here
-    if (store_tx_info())
+    if (store_tx_info() && ptx.tx_key != crypto::null_skey)
     {
       const crypto::hash txid = get_transaction_hash(ptx.tx);
       m_tx_keys.insert(std::make_pair(txid, tx_key));
@@ -8928,7 +8928,7 @@ void wallet2::light_wallet_get_outs(std::vector<std::vector<tools::wallet2::get_
     order.resize(light_wallet_requested_outputs_count);
     for (size_t n = 0; n < order.size(); ++n)
       order[n] = n;
-    std::shuffle(order.begin(), order.end(), std::default_random_engine(crypto::rand<unsigned>()));
+    std::shuffle(order.begin(), order.end(), crypto::random_device{});
     
     
     LOG_PRINT_L2("Looking for " << (fake_outputs_count+1) << " outputs with amounts " << print_money(td.is_rct() ? 0 : td.amount()));
@@ -9528,7 +9528,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       order.resize(requested_outputs_count);
       for (size_t n = 0; n < order.size(); ++n)
         order[n] = n;
-      std::shuffle(order.begin(), order.end(), std::default_random_engine(crypto::rand<unsigned>()));
+      std::shuffle(order.begin(), order.end(), crypto::random_device{});
 
       LOG_PRINT_L2("Looking for " << (fake_outputs_count+1) << " outputs of size " << print_money(td.is_rct() ? 0 : td.amount()));
       for (size_t o = 0; o < requested_outputs_count && outs.back().size() < fake_outputs_count + 1; ++o)
@@ -11713,6 +11713,8 @@ bool wallet2::get_tx_key_cached(const crypto::hash &txid, crypto::secret_key &tx
   if (i == m_tx_keys.end())
     return false;
   tx_key = i->second;
+  if (tx_key == crypto::null_skey)
+    return false;
   const auto j = m_additional_tx_keys.find(txid);
   if (j != m_additional_tx_keys.end())
     additional_tx_keys = j->second;
@@ -11724,6 +11726,7 @@ bool wallet2::get_tx_key(const crypto::hash &txid, crypto::secret_key &tx_key, s
   bool r = get_tx_key_cached(txid, tx_key, additional_tx_keys);
   if (r)
   {
+    MDEBUG("tx key cached for txid: " << txid);
     return true;
   }
 
@@ -11785,13 +11788,18 @@ bool wallet2::get_tx_key(const crypto::hash &txid, crypto::secret_key &tx_key, s
   dev_cold->get_tx_key(tx_keys, tx_key_data, m_account.get_keys().m_view_secret_key);
   if (tx_keys.empty())
   {
+    MDEBUG("Empty tx keys for txid: " << txid);
+    return false;
+  }
+
+  if (tx_keys[0] == crypto::null_skey)
+  {
     return false;
   }
 
   tx_key = tx_keys[0];
   tx_keys.erase(tx_keys.begin());
   additional_tx_keys = tx_keys;
-
   return true;
 }
 //----------------------------------------------------------------------------------------------------

@@ -30,6 +30,9 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
+
+#include "string_tools.h"
+
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/verification_context.h"
@@ -61,7 +64,7 @@ namespace rpc {
 // has its own version, and that clients can just test major to see
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
-  constexpr version_t VERSION = {3, 5};
+  constexpr version_t VERSION = {3, 6};
 
   /// Makes a version array from a packed 32-bit integer version
   constexpr version_t make_version(uint32_t version)
@@ -772,6 +775,7 @@ namespace rpc {
       uint64_t reserve_size;      // Max 255 bytes
       std::string wallet_address; // Address of wallet to receive coinbase transactions if block is successfully mined.
       std::string prev_block;
+      std::string extra_nonce;
 
       KV_MAP_SERIALIZABLE
     };
@@ -895,6 +899,7 @@ namespace rpc {
     struct request
     {
       std::string hash;   // The block's SHA256 hash.
+      std::vector<std::string> hashes; // Request multiple blocks via an array of hashes
       bool fill_pow_hash; // Tell the daemon if it should fill out pow_hash field.
 
       KV_MAP_SERIALIZABLE
@@ -904,6 +909,7 @@ namespace rpc {
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information.
+      std::vector<block_header_response> block_headers; // Result of multiple blocks requested via hashes
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
       KV_MAP_SERIALIZABLE
@@ -970,7 +976,11 @@ namespace rpc {
   {
     static constexpr auto names() { return NAMES("get_peer_list"); }
 
-    struct request : EMPTY {};
+    struct request
+    {
+      bool public_only;
+      KV_MAP_SERIALIZABLE
+    };
 
     struct peer
     {
@@ -991,7 +1001,7 @@ namespace rpc {
         : id(id), host(host), ip(0), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
       {}
       peer(uint64_t id, uint32_t ip, uint16_t port, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
-        : id(id), host(std::to_string(ip)), ip(ip), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
+        : id(id), host(epee::string_tools::get_ip_string_from_int32(ip)), ip(ip), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
       {}
 
       KV_MAP_SERIALIZABLE
@@ -1002,6 +1012,43 @@ namespace rpc {
       std::string status;           // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
       std::vector<peer> white_list; // Array of online peer structure.
       std::vector<peer> gray_list;  // Array of offline peer structure.
+
+      KV_MAP_SERIALIZABLE
+    };
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
+  struct public_node
+  {
+    std::string host;
+    uint64_t last_seen;
+    uint16_t rpc_port;
+
+    public_node() = default;
+    public_node(const GET_PEER_LIST::peer &peer) : host(peer.host), last_seen(peer.last_seen), rpc_port(peer.rpc_port) {}
+
+    KV_MAP_SERIALIZABLE
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
+  // Query the daemon's peerlist and retrieve peers who have set their public rpc port.
+  struct GET_PUBLIC_NODES : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("get_public_nodes"); }
+
+    struct request
+    {
+      bool gray; // Get peers that have recently gone offline.
+      bool white; // Get peers that are online
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response
+    {
+      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
+      std::vector<public_node> gray; // Graylist peers
+      std::vector<public_node> white; // Whitelist peers
 
       KV_MAP_SERIALIZABLE
     };
@@ -1284,6 +1331,24 @@ namespace rpc {
 
       KV_MAP_SERIALIZABLE
     };
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
+  // Set the bootstrap daemon to use for data on the blockchain whilst syncing the chain.
+  struct SET_BOOTSTRAP_DAEMON : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("set_bootstrap_daemon"); }
+    struct request
+    {
+
+      std::string address;
+      std::string username;
+      std::string password;
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response : STATUS {};
   };
 
   LOKI_RPC_DOC_INTROSPECT
@@ -1632,8 +1697,8 @@ namespace rpc {
 
     struct response
     {
-      std::string status;           // General RPC error code. "OK" means everything looks good.
-      std::list<chain_info> chains; // Array of Chains.
+      std::string status;             // General RPC error code. "OK" means everything looks good.
+      std::vector<chain_info> chains; // Array of Chains.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2526,6 +2591,7 @@ namespace rpc {
     GET_BLOCK_HEADER_BY_HEIGHT,
     GET_BLOCK,
     GET_PEER_LIST,
+    GET_PUBLIC_NODES,
     SET_LOG_HASH_RATE,
     SET_LOG_LEVEL,
     SET_LOG_CATEGORIES,
@@ -2536,6 +2602,7 @@ namespace rpc {
     GET_TRANSACTION_POOL_STATS,
     GET_CONNECTIONS,
     GET_BLOCK_HEADERS_RANGE,
+    SET_BOOTSTRAP_DAEMON,
     STOP_DAEMON,
     GET_LIMIT,
     SET_LIMIT,

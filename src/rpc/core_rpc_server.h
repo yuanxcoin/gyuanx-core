@@ -191,6 +191,7 @@ namespace cryptonote { namespace rpc {
     GET_NET_STATS::response                             invoke(GET_NET_STATS::request&& req, rpc_context context);
     SAVE_BC::response                                   invoke(SAVE_BC::request&& req, rpc_context context);
     GET_PEER_LIST::response                             invoke(GET_PEER_LIST::request&& req, rpc_context context);
+    GET_PUBLIC_NODES::response                          invoke(GET_PUBLIC_NODES::request&& req, rpc_context context);
     SET_LOG_HASH_RATE::response                         invoke(SET_LOG_HASH_RATE::request&& req, rpc_context context);
     SET_LOG_LEVEL::response                             invoke(SET_LOG_LEVEL::request&& req, rpc_context context);
     SET_LOG_CATEGORIES::response                        invoke(SET_LOG_CATEGORIES::request&& req, rpc_context context);
@@ -198,6 +199,7 @@ namespace cryptonote { namespace rpc {
     GET_TRANSACTION_POOL_HASHES_BIN::response           invoke(GET_TRANSACTION_POOL_HASHES_BIN::request&& req, rpc_context context);
     GET_TRANSACTION_POOL_HASHES::response               invoke(GET_TRANSACTION_POOL_HASHES::request&& req, rpc_context context);
     GET_TRANSACTION_POOL_STATS::response                invoke(GET_TRANSACTION_POOL_STATS::request&& req, rpc_context context);
+    SET_BOOTSTRAP_DAEMON::response                      invoke(SET_BOOTSTRAP_DAEMON::request&& req, rpc_context context);
     STOP_DAEMON::response                               invoke(STOP_DAEMON::request&& req, rpc_context context);
     GET_LIMIT::response                                 invoke(GET_LIMIT::request&& req, rpc_context context);
     SET_LIMIT::response                                 invoke(SET_LIMIT::request&& req, rpc_context context);
@@ -298,8 +300,11 @@ private:
 
     //utils
     uint64_t get_block_reward(const block& blk);
+    bool set_bootstrap_daemon(const std::string &address, const std::string &username_password);
+    bool set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials);
     void fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash);
-    boost::unique_lock<boost::shared_mutex> should_bootstrap_lock();
+    boost::upgrade_lock<boost::shared_mutex> should_bootstrap_lock();
+
     template <typename COMMAND_TYPE>
     bool use_bootstrap_daemon_if_necessary(const typename COMMAND_TYPE::request& req, typename COMMAND_TYPE::response& res);
     
