@@ -361,10 +361,6 @@ namespace cryptonote
     }
   }
   //-----------------------------------------------------------------------------------------------------
-  void miner::send_stop_signal()
-  {
-    m_stop = true;
-  }
   extern "C" void rx_stop_mining(void);
   //-----------------------------------------------------------------------------------------------------
   bool miner::stop()
@@ -379,7 +375,9 @@ namespace cryptonote
       return true;
     }
 
-    send_stop_signal();
+    m_stop = true;
+    for (auto &thread : m_threads)
+      if (thread.joinable()) thread.join();
 
     MINFO("Mining has been stopped, " << m_threads.size() << " finished" );
     m_threads.clear();

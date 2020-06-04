@@ -5830,6 +5830,13 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
   std::set<uint32_t> subaddr_indices  = {};
   if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, m_current_subaddress_account, priority)) return false;
 
+  if (priority == 0)
+  {
+    priority = m_wallet->get_default_priority();
+    if (priority == 0)
+      priority = transfer_type == Transfer::Locked ? tools::tx_priority_unimportant : tools::tx_priority_blink;
+  }
+
   const size_t min_args = (transfer_type == Transfer::Locked) ? 2 : 1;
   if(local_args.size() < min_args)
   {
@@ -7091,6 +7098,13 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, Transfer transf
   if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, true /*allow_parse_all_argument*/))
     return false;
 
+  if (priority == 0)
+  {
+    priority = m_wallet->get_default_priority();
+    if (priority == 0)
+      priority = transfer_type == Transfer::Locked ? tools::tx_priority_unimportant : tools::tx_priority_blink;
+  }
+
   uint64_t unlock_block = 0;
   if (transfer_type == Transfer::Locked) {
     if (priority == tools::tx_priority_blink) {
@@ -7237,6 +7251,13 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
   uint32_t priority = 0;
   if (local_args.size() > 0 && tools::parse_priority(local_args[0], priority))
     local_args.erase(local_args.begin());
+
+  if (priority == 0)
+  {
+    priority = m_wallet->get_default_priority();
+    if (priority == 0)
+      priority = tools::tx_priority_blink;
+  }
 
   size_t outputs = 1;
   if (local_args.size() > 0 && local_args[0].substr(0, 8) == "outputs=")
