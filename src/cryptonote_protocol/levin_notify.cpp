@@ -546,6 +546,9 @@ namespace levin
     if (!zone_)
       return false;
 
+    if (zone_->is_public)
+        std::sort(txs.begin(), txs.end()); // don't leak receive order
+
     if (!zone_->noise.empty() && !zone_->channels.empty())
     {
       // covert send in "noise" channel
