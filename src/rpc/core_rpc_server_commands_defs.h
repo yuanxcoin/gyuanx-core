@@ -1969,14 +1969,9 @@ namespace rpc {
   {
     static constexpr auto names() { return NAMES("get_service_nodes", "get_n_service_nodes", "get_all_service_nodes"); }
 
-    // Boolean values indicate whether corresponding
-    // fields should be included in the response
+    // Boolean values indicate whether corresponding fields should be included in the response
     struct requested_fields_t {
-
-      bool all = true; // internal use only: indicates whether none of the other parameters have been explicitly set
-      void explicitly_set() { all = false; }
-      void explicitly_set() const { /* no-op, but needs to be here to compile serialization code */ }
-
+      bool all = true; // If set, overrides any individual requested fields
       bool service_node_pubkey;
       bool registration_height;
       bool registration_hf_version;
@@ -2016,7 +2011,6 @@ namespace rpc {
       bool height;
       bool target_height;
       bool hardfork;
-
       KV_MAP_SERIALIZABLE
     };
 
