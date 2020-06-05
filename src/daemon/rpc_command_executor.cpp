@@ -1954,11 +1954,15 @@ bool rpc_command_executor::prepare_registration()
 
   uint64_t block_height = std::max(res.height, res.target_height);
   uint8_t hf_version = hf_res.version;
-  cryptonote::network_type nettype =
+#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+  cryptonote::network_type const nettype = cryptonote::FAKECHAIN;
+#else
+  cryptonote::network_type const nettype =
     res.mainnet  ? cryptonote::MAINNET :
     res.stagenet ? cryptonote::STAGENET :
     res.testnet  ? cryptonote::TESTNET :
     cryptonote::UNDEFINED;
+#endif
 
   // Query the latest block we've synced and check that the timestamp is sensible, issue a warning if not
   {
