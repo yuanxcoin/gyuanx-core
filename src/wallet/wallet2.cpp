@@ -1121,7 +1121,6 @@ wallet2::wallet2(network_type nettype, uint64_t kdf_rounds, bool unattended, std
   m_segregate_pre_fork_outputs(true),
   m_key_reuse_mitigation2(true),
   m_segregation_height(0),
-  m_ignore_fractional_outputs(true),
   m_ignore_outputs_above(MONEY_SUPPLY),
   m_ignore_outputs_below(0),
   m_track_uses(false),
@@ -4048,9 +4047,6 @@ boost::optional<wallet2::keys_file_data> wallet2::get_keys_file_data(const epee:
   value2.SetUint(m_segregation_height);
   json.AddMember("segregation_height", value2, json.GetAllocator());
 
-  value2.SetInt(m_ignore_fractional_outputs ? 1 : 0);
-  json.AddMember("ignore_fractional_outputs", value2, json.GetAllocator());
-
   value2.SetUint64(m_ignore_outputs_above);
   json.AddMember("ignore_outputs_above", value2, json.GetAllocator());
 
@@ -4222,7 +4218,6 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_segregate_pre_fork_outputs = true;
     m_key_reuse_mitigation2 = true;
     m_segregation_height = 0;
-    m_ignore_fractional_outputs = true;
     m_ignore_outputs_above = MONEY_SUPPLY;
     m_ignore_outputs_below = 0;
     m_track_uses = false;
@@ -4381,8 +4376,6 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_key_reuse_mitigation2 = field_key_reuse_mitigation2;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, segregation_height, int, Uint, false, 0);
     m_segregation_height = field_segregation_height;
-    GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, ignore_fractional_outputs, int, Int, false, true);
-    m_ignore_fractional_outputs = field_ignore_fractional_outputs;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, ignore_outputs_above, uint64_t, Uint64, false, MONEY_SUPPLY);
     m_ignore_outputs_above = field_ignore_outputs_above;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, ignore_outputs_below, uint64_t, Uint64, false, 0);
@@ -10984,11 +10977,6 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_2(std::vector<cryp
   for (size_t i = 0; i < m_transfers.size(); ++i)
   {
     const transfer_details& td = m_transfers[i];
-    if (m_ignore_fractional_outputs && td.amount() < fractional_threshold)
-    {
-      MDEBUG("Ignoring output " << i << " of amount " << print_money(td.amount()) << " which is below fractional threshold " << print_money(fractional_threshold));
-      continue;
-    }
     if (!is_spent(td, false) && !td.m_frozen && !td.m_key_image_partial && is_transfer_unlocked(td) && td.m_subaddr_index.major == subaddr_account && subaddr_indices.count(td.m_subaddr_index.minor) == 1)
     {
       if (td.amount() > m_ignore_outputs_above || td.amount() < m_ignore_outputs_below)
@@ -11464,19 +11452,6 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   std::vector<size_t> unused_transfers_indices;
   std::vector<size_t> unused_dust_indices;
 
-  // determine threshold for fractional amount
-  uint64_t fractional_threshold = 0;
-  {
-    const auto NUM_OUTPUTS           = 2;
-    const auto base_fee = get_base_fees();
-    const uint64_t fee_multiplier = get_fee_percent(priority, tx_type);
-    const size_t tx_weight_one_ring = estimate_tx_weight(1, fake_outs_count, NUM_OUTPUTS, 0);
-    const size_t tx_weight_two_rings = estimate_tx_weight(2, fake_outs_count, NUM_OUTPUTS, 0);
-    THROW_WALLET_EXCEPTION_IF(tx_weight_one_ring > tx_weight_two_rings, error::wallet_internal_error, "Estimated tx weight with 1 input is larger than with 2 inputs!");
-    const size_t tx_weight_per_ring = tx_weight_two_rings - tx_weight_one_ring;
-    fractional_threshold = fee_multiplier * ((base_fee.first * tx_weight_per_ring) + (base_fee.second * NUM_OUTPUTS));
-  }
-
   THROW_WALLET_EXCEPTION_IF(unlocked_balance(subaddr_account, false) == 0, error::wallet_internal_error, "No unlocked balance in the entire wallet");
 
   std::map<uint32_t, std::pair<std::vector<size_t>, std::vector<size_t>>> unused_transfer_dust_indices_per_subaddr;
@@ -11486,11 +11461,6 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_all(uint64_t below
   for (size_t i = 0; i < m_transfers.size(); ++i)
   {
     const transfer_details& td = m_transfers[i];
-    if (m_ignore_fractional_outputs && td.amount() < fractional_threshold)
-    {
-      MDEBUG("Ignoring output " << i << " of amount " << print_money(td.amount()) << " which is below threshold " << print_money(fractional_threshold));
-      continue;
-    }
     if (!is_spent(td, false) && !td.m_frozen && !td.m_key_image_partial && is_transfer_unlocked(td) && td.m_subaddr_index.major == subaddr_account && (subaddr_indices.empty() || subaddr_indices.count(td.m_subaddr_index.minor) == 1))
     {
       fund_found = true;
