@@ -5828,7 +5828,7 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
   std::vector<std::string> local_args = args_;
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, m_current_subaddress_account, priority)) return false;
+  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, m_current_subaddress_account)) return false;
 
   if (priority == 0)
   {
@@ -7095,7 +7095,7 @@ bool simple_wallet::sweep_main(uint32_t account, uint64_t below, Transfer transf
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
 
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, true /*allow_parse_all_argument*/))
+  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, m_current_subaddress_account, true /*allow_parse_all_argument*/))
     return false;
 
   if (priority == 0)
