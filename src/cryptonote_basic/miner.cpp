@@ -376,8 +376,8 @@ namespace cryptonote
     }
 
     m_stop = true;
-    for (auto &thread : m_threads)
-      if (thread.joinable()) thread.join();
+    while (m_threads_active > 0)
+      epee::misc_utils::sleep_no_w(100);
 
     MINFO("Mining has been stopped, " << m_threads.size() << " finished" );
     m_threads.clear();
