@@ -1,3 +1,9 @@
+loki (7.1.9-1.1) unstable; urgency=medium
+
+  * Rebuild for newer deps.
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Sun, 07 Jun 2020 11:41:20 -0300
+
 loki (7.1.9-1) unstable; urgency=medium
 
   * Add grace to required difficulty - fix 526484
