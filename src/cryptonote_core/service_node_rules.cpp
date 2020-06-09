@@ -183,7 +183,7 @@ static bool get_portions_from_percent(double cur_percent, uint64_t& portions) {
   }
   else
   {
-    portions = (cur_percent / 100.0) * STAKING_PORTIONS;
+    portions = (cur_percent / 100.0) * (double)STAKING_PORTIONS;
   }
 
   return true;
