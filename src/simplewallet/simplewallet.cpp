@@ -6554,7 +6554,7 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
     lokimq::from_hex(response[0].encrypted_value.begin(), response[0].encrypted_value.end(), encrypted_value.buffer.begin());
 
     lns::mapping_value old_value = {};
-    if (!lns::decrypt_mapping_value(name, encrypted_value, old_value))
+    if (!lns::decrypt_mapping_value(tools::lowercase_ascii_string(name), encrypted_value, old_value))
     {
       fail_msg_writer() << "Failed to decrypt the mapping value=" << response[0].encrypted_value;
       return false;
