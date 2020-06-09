@@ -33,7 +33,7 @@ target_link_libraries(net_load_tests_clt
     p2p
     cryptonote_core
     epee
-    ${GTEST_LIBRARIES}
+    gtest
     Boost::chrono
     Boost::date_time
     Boost::thread
@@ -47,7 +47,7 @@ target_link_libraries(net_load_tests_srv
     p2p
     cryptonote_core
     epee
-    ${GTEST_LIBRARIES}
+    gtest
     Boost::chrono
     Boost::date_time
     Boost::regex

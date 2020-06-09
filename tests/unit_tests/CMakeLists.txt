@@ -109,7 +109,7 @@ target_link_libraries(unit_tests
     Boost::chrono
     Boost::thread
     miniupnpc
-    ${GTEST_LIBRARIES}
+    gtest
     extra)
 set_property(TARGET unit_tests
   PROPERTY

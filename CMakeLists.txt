@@ -205,6 +205,14 @@ else()
   message(STATUS "Building without build tag")
 endif()
 
+enable_testing()
+
+option(BUILD_DOCUMENTATION "Build the Doxygen documentation." ON)
+option(BUILD_TESTS "Build tests." OFF)
+if (BUILD_TESTS)
+  add_definitions(-DUNIT_TEST)
+endif()
+
 if(NOT MANUAL_SUBMODULES)
   find_package(Git)
   if(GIT_FOUND)
@@ -236,6 +244,9 @@ if(NOT MANUAL_SUBMODULES)
     check_submodule(external/trezor-common)
     check_submodule(external/randomx)
     check_submodule(external/loki-mq mapbox-variant cppzmq)
+    if(BUILD_TESTS)
+      check_submodule(external/googletest)
+    endif()
   endif()
 endif()
 
@@ -272,13 +283,6 @@ else()
 endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-enable_testing()
-
-option(BUILD_DOCUMENTATION "Build the Doxygen documentation." ON)
-option(BUILD_TESTS "Build tests." OFF)
-if (BUILD_TESTS)
-  add_definitions(-DUNIT_TEST)
-endif()
 
 # Check whether we're on a 32-bit or 64-bit system
 if(CMAKE_SIZEOF_VOID_P EQUAL "8")
