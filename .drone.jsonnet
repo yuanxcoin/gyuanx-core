@@ -10,7 +10,7 @@ local debian_pipeline(name, image,
         deps=default_deps,
         build_type='Release',
         lto=false,
-        werror=true,
+        werror=false, // FIXME
         build_tests=true,
         run_tests=false,
         cmake_extra='',
@@ -105,7 +105,7 @@ local deb_builder(image, distro, distro_branch, arch='amd64', imaginary_repo=fal
 local mac_builder(name,
         build_type='Release',
         lto=false,
-        werror=true,
+        werror=false, // FIXME
         build_tests=true,
         run_tests=false,
         cmake_extra='',
