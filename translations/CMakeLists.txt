@@ -26,7 +26,7 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 3.0)
 
 project(translations)
 
@@ -42,7 +42,7 @@ IF(NOT CMAKE_CROSSCOMPILING)
   add_executable(generate_translations_header generate_translations_header.c)
 ENDIF(NOT CMAKE_CROSSCOMPILING)
 
-if(LRELEASE_PATH STREQUAL "")
+if(NOT LRELEASE_PATH OR LRELEASE_PATH STREQUAL "")
   find_program(LRELEASE lrelease)
 else()
   set(LRELEASE ${LRELEASE_PATH}/lrelease)
