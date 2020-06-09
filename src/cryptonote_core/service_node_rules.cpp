@@ -49,7 +49,7 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
         15000000000000,
     };
 
-    assert(height >= heights[0]);
+    assert(static_cast<int64_t>(height) >= heights[0]);
     constexpr uint64_t LAST_HEIGHT      = heights[loki::array_count(heights) - 1];
     constexpr uint64_t LAST_REQUIREMENT = lsr    [loki::array_count(lsr) - 1];
     if (height >= LAST_HEIGHT)
