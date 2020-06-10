@@ -42,8 +42,14 @@ local debian_pipeline(name, image,
                     (if werror then '-DWARNINGS_AS_ERRORS=ON ' else '') +
                     (if lto then '' else '-DUSE_LTO=OFF ') +
                     (if build_tests || run_tests then '-DBUILD_TESTS=ON ' else '') +
-                    cmake_extra,
-                'ninja -j' + jobs + ' -v',
+                    cmake_extra
+            ] + (if arch == 'arm64' && jobs > 1 then
+                    // The wallet code is too bloated to be compiled at -j2 with only 4GB ram, so do
+                    // the huge bloated jobs at -j1 and the rest at -j2
+                    ['ninja -j1 rpc wallet -v', 'ninja -j2 daemon device_trezor -v', 'ninja -j1 wallet_rpc_server -v', 'ninja -j2 -v']
+                else
+                    ['ninja -j' + jobs + ' -v']
+            ) + [
                 '(sleep 3; echo "status\ndiff\nexit") | TERM=xterm ./bin/lokid --offline --data-dir=startuptest'
             ] + (
                 if run_tests then [
@@ -157,10 +163,10 @@ local mac_builder(name,
     debian_pipeline("Ubuntu focal (amd64)", "ubuntu:focal"),
 
     // ARM builds (ARM64 and armhf)
-    debian_pipeline("Ubuntu bionic (ARM64)", "ubuntu:bionic", arch="arm64", jobs=2, deps='g++-8 ' + default_deps_base,
+    debian_pipeline("Ubuntu bionic (ARM64)", "ubuntu:bionic", arch="arm64", build_tests=false, deps='g++-8 ' + default_deps_base,
                     cmake_extra='-DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 -DDOWNLOAD_SODIUM=ON'),
-    debian_pipeline("Debian sid (ARM64)", "debian:sid", arch="arm64", jobs=2),
-    debian_pipeline("Debian buster (armhf)", "arm32v7/debian:buster", arch="arm64", jobs=2, cmake_extra='-DDOWNLOAD_SODIUM=ON -DARCH_ID=armhf'),
+    debian_pipeline("Debian sid (ARM64)", "debian:sid", arch="arm64", build_tests=false),
+    debian_pipeline("Debian buster (armhf)", "arm32v7/debian:buster", arch="arm64", build_tests=false, cmake_extra='-DDOWNLOAD_SODIUM=ON -DARCH_ID=armhf'),
 
 /*
     // Static build (on bionic) which gets uploaded to builds.lokinet.dev:
