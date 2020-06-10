@@ -4,6 +4,8 @@ local default_deps_base='libsystemd-dev libboost-filesystem-dev libboost-thread-
     'pkg-config libsqlite3-dev';
 local default_deps='g++ ' + default_deps_base; // g++ sometimes needs replacement
 
+local gtest_filter='-AddressFromURL.Failure:DNSResolver.DNSSEC*:is_hdd.linux_os_root';
+
 // Regular build on a debian-like system:
 local debian_pipeline(name, image,
         arch='amd64',
@@ -27,7 +29,7 @@ local debian_pipeline(name, image,
             name: 'build',
             image: image,
             [if allow_fail then "failure"]: "ignore",
-            environment: { SSH_KEY: { from_secret: "SSH_KEY" } },
+            environment: { SSH_KEY: { from_secret: "SSH_KEY" }, GTEST_FILTER: gtest_filter },
             commands: [
                 'echo "man-db man-db/auto-update boolean false" | debconf-set-selections',
                 'apt-get update',
@@ -125,7 +127,7 @@ local mac_builder(name,
     steps: [
         {
             name: 'build',
-            environment: { SSH_KEY: { from_secret: "SSH_KEY" } },
+            environment: { SSH_KEY: { from_secret: "SSH_KEY" }, GTEST_FILTER: gtest_filter },
             commands: [
                 // If you don't do this then the C compiler doesn't have an include path containing
                 // basic system headers.  WTF apple:
