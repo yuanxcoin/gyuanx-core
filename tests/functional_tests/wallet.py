@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#encoding=utf-8
 
 # Copyright (c) 2019 The Monero Project
 # 
@@ -32,7 +31,6 @@
 """Test basic wallet functionality
 """
 
-from __future__ import print_function
 import sys
 import os
 import errno

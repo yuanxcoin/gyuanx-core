@@ -48,12 +48,15 @@ namespace epee
   namespace serialization
   {
 
-    template <typename T, typename SFINAE = void> constexpr bool is_basic_serializable = false;
-    template <typename T> constexpr bool is_basic_serializable<T, std::enable_if_t<std::is_integral<T>::value>> = true;
-    template <typename T> constexpr bool is_basic_serializable<const T> = is_basic_serializable<T>;
-    template <> constexpr bool is_basic_serializable<std::string> = true;
-    template <> constexpr bool is_basic_serializable<double> = true;
-    template <> constexpr bool is_basic_serializable<storage_entry> = true;
+    template <typename T, typename SFINAE = void>
+    struct is_basic_serializable_type : std::false_type {};
+    template <typename T> struct is_basic_serializable_type<T, std::enable_if_t<std::is_integral<T>::value>> : std::true_type {};
+    template <typename T> struct is_basic_serializable_type<is_basic_serializable_type<const T>> : is_basic_serializable_type<T> {};
+    template <> struct is_basic_serializable_type<std::string> : std::true_type {};
+    template <> struct is_basic_serializable_type<double> : std::true_type {};
+    template <> struct is_basic_serializable_type<storage_entry> : std::true_type {};
+
+    template <typename T> constexpr bool is_basic_serializable = is_basic_serializable_type<T>::value;
 
     template <typename T> constexpr bool is_serialize_stl_container = false;
     template <typename T> constexpr bool is_serialize_stl_container<std::vector<T>> = true;

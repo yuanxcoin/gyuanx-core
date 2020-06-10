@@ -42,7 +42,7 @@ target_link_libraries(libwallet_api_tests
     Boost::filesystem
     Boost::locale
     icu
-    ${GTEST_LIBRARIES}
+    gtest
     extra)
 
 set_property(TARGET libwallet_api_tests
