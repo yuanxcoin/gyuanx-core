@@ -42,7 +42,13 @@ file(COPY
   data/signed_loki_tx
   DESTINATION data)
 
-find_package(PythonInterp 3)
+if(NOT CMAKE_VERSION VERSION_LESS 3.12)
+  find_package(Python COMPONENTS Interpreter)
+else()
+  set(Python_ADDITIONAL_VERSIONS 3)
+  find_package(PythonInterp)
+  set(Python_EXECUTABLE ${PYTHON_EXECUTABLE})
+endif()
 
 add_subdirectory(core_tests)
 add_subdirectory(fuzz)
