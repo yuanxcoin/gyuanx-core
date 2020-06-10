@@ -30,7 +30,6 @@ add_executable(unit_tests
   account.cpp
   apply_permutation.cpp
   address_from_url.cpp
-  ban.cpp
   base58.cpp
   blockchain_db.cpp
   block_queue.cpp
@@ -53,6 +52,7 @@ add_executable(unit_tests
   hmac_keccak.cpp
   http.cpp
   keccak.cpp
+  levin.cpp
   logging.cpp
   loki_name_system.cpp
   long_term_block_weight.cpp
@@ -65,6 +65,7 @@ add_executable(unit_tests
   multiexp.cpp
   multisig.cpp
   net.cpp
+  node_server.cpp
   notify.cpp
   output_distribution.cpp
   parse_amount.cpp

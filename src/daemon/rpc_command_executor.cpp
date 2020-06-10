@@ -125,12 +125,17 @@ namespace {
     }
   }
 
-  void print_peer(std::string const& prefix, GET_PEER_LIST::peer const& peer)
+  void print_peer(std::string const & prefix, GET_PEER_LIST::peer const & peer, bool pruned_only, bool publicrpc_only)
   {
+    if (pruned_only && peer.pruning_seed == 0)
+      return;
+    if (publicrpc_only && peer.rpc_port == 0)
+      return;
+
     time_t now = std::time(nullptr);
     time_t last_seen = static_cast<time_t>(peer.last_seen);
 
-    std::string elapsed = epee::misc_utils::get_time_interval_string(now - last_seen);
+    std::string elapsed = peer.last_seen == 0 ? "never" : epee::misc_utils::get_time_interval_string(now - last_seen);
     std::string id_str = epee::string_tools::pad_string(epee::string_tools::to_string_hex(peer.id), 16, '0', true);
     std::string port_str;
     epee::string_tools::xtype_to_string(peer.port, port_str);
@@ -159,7 +164,8 @@ namespace {
       << "num txes: " << header.num_txes << "\n"
       << "reward: " << cryptonote::print_money(header.reward) << "\n"
       << "miner reward: " << cryptonote::print_money(header.miner_reward) << "\n"
-      << "service node winner: " << header.service_node_winner << std::endl;
+      << "service node winner: " << header.service_node_winner << "\n"
+      << "miner tx hash: " << header.miner_tx_hash;
   }
 
   std::string get_human_time_ago(time_t t, time_t now, bool abbreviate = false)
@@ -308,7 +314,7 @@ bool rpc_command_executor::print_sn_state_changes(uint64_t start_height, uint64_
   return true;
 }
 
-bool rpc_command_executor::print_peer_list(bool white, bool gray, size_t limit) {
+bool rpc_command_executor::print_peer_list(bool white, bool gray, size_t limit, bool pruned_only, bool publicrpc_only) {
   GET_PEER_LIST::response res{};
 
   if (!invoke<GET_PEER_LIST>({}, res, "Couldn't retrieve peer list"))
@@ -320,7 +326,7 @@ bool rpc_command_executor::print_peer_list(bool white, bool gray, size_t limit) 
     const auto end = limit ? peer + std::min(limit, res.white_list.size()) : res.white_list.cend();
     for (; peer != end; ++peer)
     {
-      print_peer("white", *peer);
+      print_peer("white", *peer, pruned_only, publicrpc_only);
     }
   }
 
@@ -330,7 +336,7 @@ bool rpc_command_executor::print_peer_list(bool white, bool gray, size_t limit) 
     const auto end = limit ? peer + std::min(limit, res.gray_list.size()) : res.gray_list.cend();
     for (; peer != end; ++peer)
     {
-      print_peer("gray", *peer);
+      print_peer("gray", *peer, pruned_only, publicrpc_only);
     }
   }
 
@@ -593,9 +599,9 @@ bool rpc_command_executor::mining_status() {
     tools::msg_writer() << "Mining at " << get_mining_speed(mres.speed) << " with " << mres.threads_count << " threads";
   }
 
+  tools::msg_writer() << "PoW algorithm: " << mres.pow_algorithm;
   if (mres.active)
   {
-    tools::msg_writer() << "PoW algorithm: " << mres.pow_algorithm;
     tools::msg_writer() << "Mining address: " << mres.address;
   }
 
@@ -638,7 +644,7 @@ bool rpc_command_executor::print_connections() {
      << std::setw(30) << std::left << address
      << std::setw(8) << (get_address_type_name((epee::net_utils::address_type)info.address_type))
      << std::setw(6) << (info.ssl ? "yes" : "no")
-     << std::setw(20) << epee::string_tools::pad_string(info.peer_id, 16, '0', true)
+     << std::setw(20) << info.peer_id
      << std::setw(20) << info.support_flags
      << std::setw(30) << std::to_string(info.recv_count) + "("  + std::to_string(info.recv_idle_time) + ")/" + std::to_string(info.send_count) + "(" + std::to_string(info.send_idle_time) + ")"
      << std::setw(25) << info.state
@@ -692,9 +698,26 @@ bool rpc_command_executor::print_net_stats()
   return true;
 }
 
-bool rpc_command_executor::print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index) {
+bool rpc_command_executor::print_blockchain_info(int64_t start_block_index, uint64_t end_block_index) {
   GET_BLOCK_HEADERS_RANGE::request req{};
   GET_BLOCK_HEADERS_RANGE::response res{};
+
+  // negative: relative to the end
+  if (start_block_index < 0)
+  {
+    GET_INFO::response ires;
+    if (!invoke<GET_INFO>(GET_INFO::request{}, ires, "Failed to query daemon info"))
+        return false;
+
+    if (start_block_index < 0 && (uint64_t)-start_block_index >= ires.height)
+    {
+      tools::fail_msg_writer() << "start offset is larger than blockchain height";
+      return false;
+    }
+
+    start_block_index = ires.height + start_block_index;
+    end_block_index = start_block_index + end_block_index - 1;
+  }
 
   req.start_height = start_block_index;
   req.end_height = end_block_index;
@@ -808,6 +831,7 @@ bool rpc_command_executor::print_block_by_height(uint64_t height, bool include_h
 }
 
 bool rpc_command_executor::print_transaction(const crypto::hash& transaction_hash,
+  bool include_metadata,
   bool include_hex,
   bool include_json) {
   GET_TRANSACTIONS::request req{};
@@ -825,15 +849,39 @@ bool rpc_command_executor::print_transaction(const crypto::hash& transaction_has
     if (1 == res.txs.size())
     {
       // only available for new style answers
+      bool pruned = res.txs.front().prunable_as_hex.empty() && res.txs.front().prunable_hash != epee::string_tools::pod_to_hex(crypto::null_hash);
       if (res.txs.front().in_pool)
         tools::success_msg_writer() << "Found in pool";
       else
-        tools::success_msg_writer() << "Found in blockchain at height " << res.txs.front().block_height << (res.txs.front().prunable_as_hex.empty() ? " (pruned)" : "");
+        tools::success_msg_writer() << "Found in blockchain at height " << res.txs.front().block_height << (pruned ? " (pruned)" : "");
     }
 
     const std::string &as_hex = (1 == res.txs.size()) ? res.txs.front().as_hex : res.txs_as_hex.front();
     const std::string &pruned_as_hex = (1 == res.txs.size()) ? res.txs.front().pruned_as_hex : "";
     const std::string &prunable_as_hex = (1 == res.txs.size()) ? res.txs.front().prunable_as_hex : "";
+    // Print metadata if requested
+    if (include_metadata)
+    {
+      if (!res.txs.front().in_pool)
+      {
+        tools::msg_writer() << "Block timestamp: " << res.txs.front().block_timestamp << " (" << tools::get_human_readable_timestamp(res.txs.front().block_timestamp) << ")";
+      }
+      cryptonote::blobdata blob;
+      if (epee::string_tools::parse_hexstr_to_binbuff(pruned_as_hex + prunable_as_hex, blob))
+      {
+        cryptonote::transaction tx;
+        if (cryptonote::parse_and_validate_tx_from_blob(blob, tx))
+        {
+          tools::msg_writer() << "Size: " << blob.size();
+          tools::msg_writer() << "Weight: " << cryptonote::get_transaction_weight(tx);
+        }
+        else
+          tools::fail_msg_writer() << "Error parsing transaction blob";
+      }
+      else
+        tools::fail_msg_writer() << "Error parsing transaction from hex";
+    }
+
     // Print raw hex if requested
     if (include_hex)
     {
@@ -1180,12 +1228,18 @@ bool rpc_command_executor::print_bans()
     if (!invoke<GETBANS>({}, res, "Failed to retrieve ban list"))
       return false;
 
-    for (const auto& ban : res.bans)
-      tools::msg_writer() << ban.host << " banned for " << ban.seconds << " seconds";
+    if (!res.bans.empty())
+    {
+        for (auto i = res.bans.begin(); i != res.bans.end(); ++i)
+        {
+            tools::msg_writer() << i->host << " banned for " << i->seconds << " seconds";
+        }
+    }
+    else 
+        tools::msg_writer() << "No IPs are banned";
 
     return true;
 }
-
 
 bool rpc_command_executor::ban(const std::string &address, time_t seconds, bool clear_ban)
 {
@@ -1502,7 +1556,7 @@ bool rpc_command_executor::sync_info()
       for (const auto &s: res.spans)
         if (s.connection_id == p.info.connection_id)
           nblocks += s.nblocks, size += s.size;
-      tools::success_msg_writer() << address << "  " << epee::string_tools::pad_string(p.info.peer_id, 16, '0', true) << "  " <<
+      tools::success_msg_writer() << address << "  " << p.info.peer_id << "  " <<
           epee::string_tools::pad_string(p.info.state, 16) << "  " <<
           epee::string_tools::pad_string(epee::string_tools::to_string_hex(p.info.pruning_seed), 8) << "  " << p.info.height << "  "  <<
           p.info.current_download << " kB/s, " << nblocks << " blocks / " << size/1e6 << " MB queued";
@@ -1791,6 +1845,17 @@ bool rpc_command_executor::print_sn(const std::vector<std::string> &args)
     return true;
 }
 
+bool rpc_command_executor::flush_cache(bool bad_txs, bool bad_blocks)
+{
+  FLUSH_CACHE::response res{};
+  FLUSH_CACHE::request req{};
+  req.bad_txs    = bad_txs;
+  req.bad_blocks = bad_blocks;
+  if (!invoke<FLUSH_CACHE>(std::move(req), res, "Failed to flush TX cache"))
+      return false;
+  return true;
+}
+
 bool rpc_command_executor::print_sn_status(std::vector<std::string> args)
 {
   if (args.size() > 1)
@@ -1889,11 +1954,15 @@ bool rpc_command_executor::prepare_registration()
 
   uint64_t block_height = std::max(res.height, res.target_height);
   uint8_t hf_version = hf_res.version;
-  cryptonote::network_type nettype =
+#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+  cryptonote::network_type const nettype = cryptonote::FAKECHAIN;
+#else
+  cryptonote::network_type const nettype =
     res.mainnet  ? cryptonote::MAINNET :
     res.stagenet ? cryptonote::STAGENET :
     res.testnet  ? cryptonote::TESTNET :
     cryptonote::UNDEFINED;
+#endif
 
   // Query the latest block we've synced and check that the timestamp is sensible, issue a warning if not
   {
@@ -2406,6 +2475,35 @@ bool rpc_command_executor::check_blockchain_pruning()
       return false;
 
     tools::success_msg_writer() << "Blockchain is" << (res.pruning_seed ? "" : " not") << " pruned";
+    return true;
+}
+
+bool rpc_command_executor::set_bootstrap_daemon(
+  const std::string &address,
+  const std::string &username,
+  const std::string &password)
+{
+    SET_BOOTSTRAP_DAEMON::request req{};
+    req.address = address;
+    req.username = username;
+    req.password = password;
+
+    SET_BOOTSTRAP_DAEMON::response res{};
+    if (!invoke<SET_BOOTSTRAP_DAEMON>(std::move(req), res, "Failed to set bootstrap daemon to: " + address))
+        return false;
+
+    tools::success_msg_writer()
+      << "Successfully set bootstrap daemon address to "
+      << (!req.address.empty() ? req.address : "none");
+    return true;
+}
+
+bool rpc_command_executor::version()
+{
+    GET_INFO::response response{};
+    if (!invoke<GET_INFO>(GET_INFO::request{}, response, "Failed to query daemon info"))
+        return false;
+    tools::success_msg_writer() << response.version;
     return true;
 }
 

@@ -289,6 +289,11 @@ int main(int argc, char* argv[])
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_altered_extra);
       GENERATE_AND_PLAY(gen_rct_tx_rct_altered_extra);
 
+      // NOTE: For loki we should re-write this which is trivial to do with
+      // generating some funds and attempting to spend them immediately instead
+      // of the minutia of the monero framework.
+      GENERATE_AND_PLAY(gen_rct_tx_uses_output_too_early);
+
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2);
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2_many_inputs);
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_2_1);

@@ -15,7 +15,7 @@ darwin_packages = sodium ncurses readline $(hardware_packages)
 freebsd_native_packages = freebsd_base
 freebsd_packages = ncurses readline sodium
 
-linux_packages = eudev ncurses readline sodium $(hardware_packages)
+linux_packages = eudev ncurses readline sodium
 linux_native_packages = $(hardware_native_packages)
 qt_packages = qt
 
@@ -25,6 +25,11 @@ endif
 
 ifneq ($(host_arch),riscv64)
 linux_packages += unwind
+endif
+
+ifeq ($(host_os),mingw32)
+packages += icu4c
+packages += sodium
 endif
 
 mingw32_packages = icu4c sodium $(hardware_packages)

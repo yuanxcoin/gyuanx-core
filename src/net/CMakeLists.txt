@@ -27,6 +27,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(net
+  dandelionpp.cpp
   error.cpp
   i2p_address.cpp
   parse.cpp

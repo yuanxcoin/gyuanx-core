@@ -48,7 +48,7 @@
 namespace mms
 {
 
-message_store::message_store()
+message_store::message_store(std::unique_ptr<epee::net_utils::http::abstract_http_client> http_client) : m_transporter(std::move(http_client))
 {
   m_active = false;
   m_auto_send = false;
@@ -397,10 +397,9 @@ void message_store::stop_auto_config()
   for (uint32_t i = 0; i < m_num_authorized_signers; ++i)
   {
     authorized_signer &m = m_signers[i];
-    if (!m.me && !m.auto_config_transport_address.empty())
+    if (!m.auto_config_transport_address.empty())
     {
-      // Try to delete those "unused API" addresses in PyBitmessage, especially since
-      // it seems it's not possible to delete them interactively, only to "disable" them
+      // Try to delete the chan that was used for auto-config
       m_transporter.delete_transport_address(m.auto_config_transport_address);
     }
     m.auto_config_token.clear();
@@ -429,14 +428,7 @@ void message_store::setup_signer_for_auto_config(uint32_t index, const std::stri
   m.auto_config_token = token;
   crypto::hash_to_scalar(token.data(), token.size(), m.auto_config_secret_key);
   crypto::secret_key_to_public_key(m.auto_config_secret_key, m.auto_config_public_key);
-  if (receiving)
-  {
-    m.auto_config_transport_address = m_transporter.derive_and_receive_transport_address(m.auto_config_token);
-  }
-  else
-  {
-    m.auto_config_transport_address = m_transporter.derive_transport_address(m.auto_config_token);
-  }
+  m.auto_config_transport_address = m_transporter.derive_transport_address(m.auto_config_token);
 }
 
 bool message_store::get_signer_index_by_monero_address(const cryptonote::account_public_address &monero_address, uint32_t &index) const
@@ -732,7 +724,7 @@ void message_store::read_from_file(const multisig_wallet_state &state, const std
   {
     // Simply do nothing if the file is not there; allows e.g. easy recovery
     // from problems with the MMS by deleting the file
-    MERROR("No message store file found: " << filename);
+    MINFO("No message store file found: " << filename);
     return;
   }
 

@@ -34,9 +34,9 @@
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "net/http_server_impl_base.h"
 #include "net/http_client.h"
+#include "net/abstract_http_client.h"
 #include "common/util.h"
 #include "wipeable_string.h"
-#include "serialization/keyvalue_serialization.h"
 #include <vector>
 
 namespace mms
@@ -82,7 +82,7 @@ struct transport_message
 class message_transporter
 {
 public:
-  message_transporter();
+  message_transporter(std::unique_ptr<epee::net_utils::http::abstract_http_client> http_client);
   void set_options(const std::string &bitmessage_address, const epee::wipeable_string &bitmessage_login);
   bool send_message(const transport_message &message);
   bool receive_messages(const std::vector<std::string> &destination_transport_addresses,
@@ -90,11 +90,10 @@ public:
   bool delete_message(const std::string &transport_id);
   void stop() { m_run.store(false, std::memory_order_relaxed); }
   std::string derive_transport_address(const std::string &seed);
-  std::string derive_and_receive_transport_address(const std::string &seed);
   bool delete_transport_address(const std::string &transport_address);
 
 private:
-  epee::net_utils::http::http_simple_client m_http_client;
+  const std::unique_ptr<epee::net_utils::http::abstract_http_client> m_http_client;
   std::string m_bitmessage_url;
   epee::wipeable_string m_bitmessage_login;
   std::atomic<bool> m_run;

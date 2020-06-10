@@ -99,75 +99,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_HASHES_FAST::response)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_RANDOM_OUTS::request)
-  KV_SERIALIZE(amounts)
-  KV_SERIALIZE(count)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_RANDOM_OUTS::output)
-  KV_SERIALIZE(public_key)
-  KV_SERIALIZE(global_index)
-  KV_SERIALIZE(rct)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_RANDOM_OUTS::amount_out)
-  KV_SERIALIZE(amount)
-  KV_SERIALIZE(outputs)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_RANDOM_OUTS::response)
-  KV_SERIALIZE(amount_outs)
-  KV_SERIALIZE(Error)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(SUBMIT_RAW_TX::request)
-  KV_SERIALIZE(address)
-  KV_SERIALIZE(view_key)
-  KV_SERIALIZE(tx)
-  KV_SERIALIZE_OPT(blink, false)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(SUBMIT_RAW_TX::response)
-  KV_SERIALIZE(status)
-  KV_SERIALIZE(error)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(LOGIN::request)
-  KV_SERIALIZE(address)
-  KV_SERIALIZE(view_key)
-  KV_SERIALIZE(create_account)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(LOGIN::response)
-  KV_SERIALIZE(status)
-  KV_SERIALIZE(reason)
-  KV_SERIALIZE(new_address)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(IMPORT_WALLET_REQUEST::request)
-  KV_SERIALIZE(address)
-  KV_SERIALIZE(view_key)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(IMPORT_WALLET_REQUEST::response)
-  KV_SERIALIZE(payment_id)
-  KV_SERIALIZE(import_fee)
-  KV_SERIALIZE(new_request)
-  KV_SERIALIZE(request_fulfilled)
-  KV_SERIALIZE(payment_address)
-  KV_SERIALIZE(status)
-KV_SERIALIZE_MAP_CODE_END()
-
-
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::request)
   KV_SERIALIZE(txs_hashes)
   KV_SERIALIZE(decode_as_json)
@@ -194,6 +125,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::entry)
   else
   {
     KV_SERIALIZE(relayed)
+    KV_SERIALIZE(received_timestamp)
   }
   KV_SERIALIZE(blink)
 KV_SERIALIZE_MAP_CODE_END()
@@ -513,7 +445,6 @@ KV_SERIALIZE_MAP_CODE_END()
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_BLOCK::response)
   KV_SERIALIZE(block_header)
-  KV_SERIALIZE(miner_tx_hash)
   KV_SERIALIZE(tx_hashes)
   KV_SERIALIZE(status)
   KV_SERIALIZE(blob)
@@ -660,7 +591,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(txpool_stats)
   KV_SERIALIZE(num_10m)
   KV_SERIALIZE(num_not_relayed)
   KV_SERIALIZE(histo_98pc)
-  KV_SERIALIZE_CONTAINER_POD_AS_BLOB(histo)
+  KV_SERIALIZE(histo)
   KV_SERIALIZE(num_double_spends)
 KV_SERIALIZE_MAP_CODE_END()
 
@@ -1131,43 +1062,47 @@ KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
-  KV_SERIALIZE_OPT2(service_node_pubkey, false)
-  KV_SERIALIZE_OPT2(registration_height, false)
-  KV_SERIALIZE_OPT2(registration_hf_version, false)
-  KV_SERIALIZE_OPT2(requested_unlock_height, false)
-  KV_SERIALIZE_OPT2(last_reward_block_height, false)
-  KV_SERIALIZE_OPT2(last_reward_transaction_index, false)
-  KV_SERIALIZE_OPT2(active, false)
-  KV_SERIALIZE_OPT2(funded, false)
-  KV_SERIALIZE_OPT2(state_height, false)
-  KV_SERIALIZE_OPT2(decommission_count, false)
-  KV_SERIALIZE_OPT2(earned_downtime_blocks, false)
-  KV_SERIALIZE_OPT2(service_node_version, false)
-  KV_SERIALIZE_OPT2(contributors, false)
-  KV_SERIALIZE_OPT2(total_contributed, false)
-  KV_SERIALIZE_OPT2(total_reserved, false)
-  KV_SERIALIZE_OPT2(staking_requirement, false)
-  KV_SERIALIZE_OPT2(portions_for_operator, false)
-  KV_SERIALIZE_OPT2(swarm_id, false)
-  KV_SERIALIZE_OPT2(operator_address, false)
-  KV_SERIALIZE_OPT2(public_ip, false)
-  KV_SERIALIZE_OPT2(storage_port, false)
-  KV_SERIALIZE_OPT2(storage_lmq_port, false)
-  KV_SERIALIZE_OPT2(quorumnet_port, false)
-  KV_SERIALIZE_OPT2(pubkey_ed25519, false)
-  KV_SERIALIZE_OPT2(pubkey_x25519, false)
-  KV_SERIALIZE_OPT2(block_hash, false)
-  KV_SERIALIZE_OPT2(height, false)
-  KV_SERIALIZE_OPT2(target_height, false)
-  KV_SERIALIZE_OPT2(hardfork, false)
+  KV_SERIALIZE(all)
+  if (!this_ref.all)
+  {
+    KV_SERIALIZE(service_node_pubkey)
+    KV_SERIALIZE(registration_height)
+    KV_SERIALIZE(registration_hf_version)
+    KV_SERIALIZE(requested_unlock_height)
+    KV_SERIALIZE(last_reward_block_height)
+    KV_SERIALIZE(last_reward_transaction_index)
+    KV_SERIALIZE(active)
+    KV_SERIALIZE(funded)
+    KV_SERIALIZE(state_height)
+    KV_SERIALIZE(decommission_count)
+    KV_SERIALIZE(earned_downtime_blocks)
+    KV_SERIALIZE(service_node_version)
+    KV_SERIALIZE(contributors)
+    KV_SERIALIZE(total_contributed)
+    KV_SERIALIZE(total_reserved)
+    KV_SERIALIZE(staking_requirement)
+    KV_SERIALIZE(portions_for_operator)
+    KV_SERIALIZE(swarm_id)
+    KV_SERIALIZE(operator_address)
+    KV_SERIALIZE(public_ip)
+    KV_SERIALIZE(storage_port)
+    KV_SERIALIZE(storage_lmq_port)
+    KV_SERIALIZE(quorumnet_port)
+    KV_SERIALIZE(pubkey_ed25519)
+    KV_SERIALIZE(pubkey_x25519)
+    KV_SERIALIZE(block_hash)
+    KV_SERIALIZE(height)
+    KV_SERIALIZE(target_height)
+    KV_SERIALIZE(hardfork)
 
-  KV_SERIALIZE_OPT2(last_uptime_proof, false)
-  KV_SERIALIZE_OPT2(storage_server_reachable, false)
-  KV_SERIALIZE_OPT2(storage_server_reachable_timestamp, false)
-  KV_SERIALIZE_OPT2(version_major, false)
-  KV_SERIALIZE_OPT2(version_minor, false)
-  KV_SERIALIZE_OPT2(version_patch, false)
-  KV_SERIALIZE_OPT2(votes, false)
+    KV_SERIALIZE(last_uptime_proof)
+    KV_SERIALIZE(storage_server_reachable)
+    KV_SERIALIZE(storage_server_reachable_timestamp)
+    KV_SERIALIZE(version_major)
+    KV_SERIALIZE(version_minor)
+    KV_SERIALIZE(version_patch)
+    KV_SERIALIZE(votes)
+  }
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -1212,7 +1147,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(quorumnet_port);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(pubkey_ed25519);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(pubkey_x25519);
-
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(last_uptime_proof);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable_timestamp);
@@ -1404,5 +1338,10 @@ KV_SERIALIZE_MAP_CODE_BEGIN(LNS_OWNERS_TO_NAMES::response)
   KV_SERIALIZE(status)
 KV_SERIALIZE_MAP_CODE_END()
 
+
+KV_SERIALIZE_MAP_CODE_BEGIN(FLUSH_CACHE::request)
+  KV_SERIALIZE_OPT(bad_txs, false)
+  KV_SERIALIZE_OPT(bad_blocks, false)
+KV_SERIALIZE_MAP_CODE_END()
 
 }}

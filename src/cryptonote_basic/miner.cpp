@@ -37,6 +37,7 @@
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
+#include "misc_os_dependent.h"
 #include "file_io_utils.h"
 #include "common/command_line.h"
 #include "common/util.h"
@@ -66,13 +67,13 @@ namespace cryptonote
   }
 
 
-  miner::miner(i_miner_handler* phandler, Blockchain* pbc):m_stop(1),
+  miner::miner(i_miner_handler* phandler, const get_block_hash_t &gbh):m_stop(1),
     m_template{},
     m_template_no(0),
     m_diffic(0),
     m_thread_index(0),
     m_phandler(phandler),
-    m_pbc(pbc),
+    m_gbh(gbh),
     m_height(0),
     m_threads_active(0),
     m_pausers_count(0),
@@ -375,8 +376,8 @@ namespace cryptonote
     }
 
     m_stop = true;
-    for (auto &thread : m_threads)
-      if (thread.joinable()) thread.join();
+    while (m_threads_active > 0)
+      epee::misc_utils::sleep_no_w(100);
 
     MINFO("Mining has been stopped, " << m_threads.size() << " finished" );
     m_threads.clear();
@@ -385,12 +386,12 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::find_nonce_for_given_block(const Blockchain *pbc, block& bl, const difficulty_type& diffic, uint64_t height)
+  bool miner::find_nonce_for_given_block(const get_block_hash_t &gbh, block& bl, const difficulty_type& diffic, uint64_t height)
   {
     for(; bl.nonce != std::numeric_limits<uint32_t>::max(); bl.nonce++)
     {
       crypto::hash h;
-      get_block_longhash(pbc, bl, h, height, tools::get_max_concurrency());
+      gbh(bl, height, tools::get_max_concurrency(), h);
 
       if(check_hash(h, diffic))
       {
@@ -485,7 +486,7 @@ namespace cryptonote
 
       b.nonce = nonce;
       crypto::hash h;
-      get_block_longhash(m_pbc, b, h, height, slow_mining ? 0 : tools::get_max_concurrency());
+      m_gbh(b, height, slow_mining ? 0 : tools::get_max_concurrency(), h);
 
       if(check_hash(h, local_diff))
       {

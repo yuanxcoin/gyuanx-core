@@ -54,7 +54,6 @@ public:
   bool init(const boost::program_options::variables_map& vm) {return true ;}
   bool deinit(){return true;}
   bool get_short_chain_history(std::list<crypto::hash>& ids) const { return true; }
-  bool get_stat_info(cryptonote::core_stat_info& st_inf) const {return true;}
   bool have_block(const crypto::hash& id) const {return true;}
   void get_blockchain_top(uint64_t& height, crypto::hash& top_id)const{height=0;top_id=crypto::null_hash;}
   std::vector<cryptonote::core::tx_verification_batch_info> parse_incoming_txs(const std::vector<cryptonote::blobdata>& tx_blobs, const cryptonote::tx_pool_options &opts) { return {}; }
@@ -288,6 +287,52 @@ TEST(ban, ignores_port)
   ASSERT_TRUE(server.unblock_host(MAKE_IPV4_ADDRESS_PORT(1,2,3,4,5)));
   ASSERT_FALSE(is_blocked(server,MAKE_IPV4_ADDRESS_PORT(1,2,3,4,5)));
   ASSERT_FALSE(is_blocked(server,MAKE_IPV4_ADDRESS_PORT(1,2,3,4,6)));
+}
+
+TEST(node_server, bind_same_p2p_port)
+{
+  struct test_data_t
+  {
+    test_core pr_core;
+    cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol;
+    std::unique_ptr<Server> server;
+
+    test_data_t(): cprotocol(pr_core, NULL)
+    {
+      server.reset(new Server(cprotocol));
+      cprotocol.set_p2p_endpoint(server.get());
+    }
+  };
+
+  const auto new_node = []() -> std::unique_ptr<test_data_t> {
+    test_data_t *d = new test_data_t;
+    return std::unique_ptr<test_data_t>(d);
+  };
+
+  const auto init = [](const std::unique_ptr<test_data_t>& server, const char* port) -> bool {
+    boost::program_options::options_description desc_options("Command line options");
+    cryptonote::core::init_options(desc_options);
+    Server::init_options(desc_options);
+
+    const char *argv[2] = {nullptr, nullptr};
+    boost::program_options::variables_map vm;
+    boost::program_options::store(boost::program_options::parse_command_line(1, argv, desc_options), vm);
+
+    vm.find(nodetool::arg_p2p_bind_port.name)->second = boost::program_options::variable_value(std::string(port), false);
+
+    boost::program_options::notify(vm);
+
+    return server->server->init(vm);
+  };
+
+  constexpr char port[] = "48080";
+  constexpr char port_another[] = "58080";
+
+  const auto node = new_node();
+  EXPECT_TRUE(init(node, port));
+
+  EXPECT_FALSE(init(new_node(), port));
+  EXPECT_TRUE(init(new_node(), port_another));
 }
 
 namespace nodetool { template class node_server<cryptonote::t_cryptonote_protocol_handler<test_core>>; }

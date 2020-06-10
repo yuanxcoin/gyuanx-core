@@ -48,7 +48,7 @@
 // advance which version they will stop working with
 // Don't go over 32767 for any of these
 #define WALLET_RPC_VERSION_MAJOR 1
-#define WALLET_RPC_VERSION_MINOR 13
+#define WALLET_RPC_VERSION_MINOR 17
 #define MAKE_WALLET_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define WALLET_RPC_VERSION MAKE_WALLET_RPC_VERSION(WALLET_RPC_VERSION_MAJOR, WALLET_RPC_VERSION_MINOR)
 namespace tools
@@ -67,11 +67,12 @@ namespace wallet_rpc
       uint32_t account_index;             // Return balance for this account.
       std::set<uint32_t> address_indices; // (Optional) Return balance detail for those subaddresses.
       bool all_accounts;                  // If true, return balance for all accounts, subaddr_indices and account_index are ignored
-
+      bool strict;                        // If true, only return the balance for transactions that have been spent and are not pending (i.e. excluding any transactions sitting in the TX pool)
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(address_indices)
         KV_SERIALIZE_OPT(all_accounts, false);
+        KV_SERIALIZE_OPT(strict, false);
       END_KV_SERIALIZE_MAP()
     };
 
@@ -85,6 +86,7 @@ namespace wallet_rpc
       std::string label;            // Label for the subaddress.
       uint64_t num_unspent_outputs; // Number of unspent outputs available for the subaddress.
       uint64_t blocks_to_unlock;    // The number of blocks remaining for the balance to unlock
+      uint64_t time_to_unlock;      // Timestamp of expected unlock
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
@@ -95,6 +97,7 @@ namespace wallet_rpc
         KV_SERIALIZE(label)
         KV_SERIALIZE(num_unspent_outputs)
         KV_SERIALIZE(blocks_to_unlock)
+        KV_SERIALIZE(time_to_unlock)
       END_KV_SERIALIZE_MAP()
     };
 
@@ -105,6 +108,7 @@ namespace wallet_rpc
       bool       multisig_import_needed;               // True if importing multisig data is needed for returning a correct balance.
       std::vector<per_subaddress_info> per_subaddress; // Balance information for each subaddress in an account.
       uint64_t blocks_to_unlock;                       // The number of blocks remaining for the balance to unlock
+      uint64_t   time_to_unlock;                       // Timestamp of expected unlock
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(balance)
@@ -112,6 +116,7 @@ namespace wallet_rpc
         KV_SERIALIZE(multisig_import_needed)
         KV_SERIALIZE(per_subaddress)
         KV_SERIALIZE(blocks_to_unlock)
+        KV_SERIALIZE(time_to_unlock)
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -189,9 +194,11 @@ namespace wallet_rpc
     {
       uint32_t account_index; // Create a new subaddress for this account.
       std::string label;      // (Optional) Label for the new subaddress.
+      uint32_t    count;      // Number of addresses to create, defaults to 1.
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(account_index)
+        KV_SERIALIZE_OPT(count, 1U)
         KV_SERIALIZE(label)
       END_KV_SERIALIZE_MAP()
     };
@@ -200,10 +207,14 @@ namespace wallet_rpc
     {
       std::string   address;       // The newly requested address.
       uint32_t      address_index; // Index of the new address in the requested account index.
+      std::vector<std::string> addresses; // The new addresses, if more than 1 is requested
+      std::vector<uint32_t>    address_indices; // The new addresses indicies if more than 1 is requested
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
         KV_SERIALIZE(address_index)
+        KV_SERIALIZE(addresses)
+        KV_SERIALIZE(address_indices)
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -237,9 +248,11 @@ namespace wallet_rpc
     struct request
     {
       std::string tag;      // (Optional) Tag for filtering accounts. All accounts if empty, otherwise those accounts with this tag
+      bool strict_balances; // If true, only return the balance for transactions that have been spent and are not pending (i.e. excluding any transactions sitting in the TX pool)
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(tag)
+        KV_SERIALIZE_OPT(strict_balances, false)
       END_KV_SERIALIZE_MAP()
     };
 
@@ -746,6 +759,7 @@ namespace wallet_rpc
       std::string address;                // Destination public address.
       uint32_t account_index;             // Sweep transactions from this account.
       std::set<uint32_t> subaddr_indices; // (Optional) Sweep from this set of subaddresses in the account.
+      bool subaddr_indices_all;           //
       uint32_t priority;                  // Set a priority for the transaction. Accepted values are: 1 for unimportant or 5 for blink.  (0 and 2-4 are accepted for backwards compatibility and are equivalent to 5)
       bool blink;                         // (Deprecated) Set priority to 5 for blink, field is deprecated: specifies that the tx should be blinked (`priority` will be ignored).
       uint64_t outputs;                   // 
@@ -761,6 +775,7 @@ namespace wallet_rpc
         KV_SERIALIZE(address)
         KV_SERIALIZE(account_index)
         KV_SERIALIZE(subaddr_indices)
+        KV_SERIALIZE_OPT(subaddr_indices_all, false)
         KV_SERIALIZE(priority)
         KV_SERIALIZE_OPT(blink, false)
         KV_SERIALIZE_OPT(outputs, (uint64_t)1)
@@ -915,6 +930,7 @@ namespace wallet_rpc
     uint64_t amount;                            // Amount for this payment.
     uint64_t block_height;                      // Height of the block that first confirmed this payment.
     uint64_t unlock_time;                       // Time (in block height) until this payment is safe to spend.
+    bool locked;                                // If the payment is spendable or not
     cryptonote::subaddress_index subaddr_index; // Major & minor index, account and subaddress index respectively.
     std::string address;                        // Address receiving the payment.
 
@@ -924,6 +940,7 @@ namespace wallet_rpc
       KV_SERIALIZE(amount)
       KV_SERIALIZE(block_height)
       KV_SERIALIZE(unlock_time)
+      KV_SERIALIZE(locked)
       KV_SERIALIZE(subaddr_index)
       KV_SERIALIZE(address)
     END_KV_SERIALIZE_MAP()
@@ -1580,9 +1597,13 @@ namespace wallet_rpc
     struct request
     {
       std::string data; // Anything you need to sign.
+      uint32_t account_index; // The account to use for signing
+      uint32_t address_index; // The subaddress in the account to sign with
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(data);
+        KV_SERIALIZE(data)
+        KV_SERIALIZE_OPT(account_index, 0u)
+        KV_SERIALIZE_OPT(address_index, 0u)
       END_KV_SERIALIZE_MAP()
     };
 
@@ -1813,12 +1834,10 @@ namespace wallet_rpc
     struct request
     {
       std::string address;     // Public address of the entry.
-      std::string payment_id;  // (Optional), defaults to "0000000000000000000000000000000000000000000000000000000000000000".
       std::string description; // (Optional), defaults to "".
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
-        KV_SERIALIZE(payment_id)
         KV_SERIALIZE(description)
       END_KV_SERIALIZE_MAP()
     };
@@ -1829,6 +1848,34 @@ namespace wallet_rpc
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(index);
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
+  // Edit a entry in the address book.
+  struct COMMAND_RPC_EDIT_ADDRESS_BOOK_ENTRY
+  {
+    struct request
+    {
+      uint64_t index;
+      bool set_address;
+      std::string address;
+      bool set_description;
+      std::string description;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(index)
+        KV_SERIALIZE(set_address)
+        KV_SERIALIZE(address)
+        KV_SERIALIZE(set_description)
+        KV_SERIALIZE(description)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      BEGIN_KV_SERIALIZE_MAP()
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -1850,13 +1897,11 @@ namespace wallet_rpc
     {
       uint64_t index;          // Index of entry.
       std::string address;     // Public address of the entry
-      std::string payment_id;  // (Optional) 64-character hex string to identify a transaction.
       std::string description; // Description of this address entry.
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(index)
         KV_SERIALIZE(address)
-        KV_SERIALIZE(payment_id)
         KV_SERIALIZE(description)
       END_KV_SERIALIZE_MAP()
     };
@@ -2438,7 +2483,7 @@ namespace wallet_rpc
       bool               get_tx_metadata;  // Return the metadata needed to relay the transaction. (Defaults to false)
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT(subaddr_indices, {});
+        KV_SERIALIZE    (subaddr_indices);
         KV_SERIALIZE    (destination);
         KV_SERIALIZE    (amount);
         KV_SERIALIZE    (service_node_key);
@@ -2714,7 +2759,7 @@ For information on updating & signing, refer to COMMAND_RPC_LNS_UPDATE_MAPPING)"
         KV_SERIALIZE    (name);
         KV_SERIALIZE    (value);
         KV_SERIALIZE_OPT(account_index,   (uint32_t)0);
-        KV_SERIALIZE_OPT(subaddr_indices, {});
+        KV_SERIALIZE    (subaddr_indices);
         KV_SERIALIZE_OPT(priority,        (uint32_t)0);
         KV_SERIALIZE    (get_tx_key)
         KV_SERIALIZE_OPT(do_not_relay,    false)
@@ -2787,7 +2832,7 @@ Providing the signature is an optional field and if not provided, will default t
         KV_SERIALIZE    (signature);
 
         KV_SERIALIZE_OPT(account_index,   (uint32_t)0);
-        KV_SERIALIZE_OPT(subaddr_indices, {});
+        KV_SERIALIZE    (subaddr_indices);
         KV_SERIALIZE_OPT(priority,        (uint32_t)0);
         KV_SERIALIZE    (get_tx_key)
         KV_SERIALIZE_OPT(do_not_relay,    false)

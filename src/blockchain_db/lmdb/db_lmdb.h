@@ -245,6 +245,7 @@ public:
 
   bool get_tx_blob(const crypto::hash& h, cryptonote::blobdata &tx) const override;
   bool get_pruned_tx_blob(const crypto::hash& h, cryptonote::blobdata &tx) const override;
+  bool get_pruned_tx_blobs_from(const crypto::hash& h, size_t count, std::vector<cryptonote::blobdata> &bd) const override;
   bool get_prunable_tx_blob(const crypto::hash& h, cryptonote::blobdata &tx) const override;
   bool get_prunable_tx_hash(const crypto::hash& tx_hash, crypto::hash &prunable_hash) const override;
 
@@ -343,7 +344,7 @@ public:
   std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> get_output_histogram(const std::vector<uint64_t> &amounts, bool unlocked, uint64_t recent_cutoff, uint64_t min_count) const override;
 
   bool get_output_distribution(uint64_t amount, uint64_t from_height, uint64_t to_height, std::vector<uint64_t> &distribution, uint64_t &base) const override;
-  bool get_output_blacklist(std::vector<uint64_t>       &blacklist) const override;
+  void get_output_blacklist(std::vector<uint64_t>       &blacklist) const override;
   void add_output_blacklist(std::vector<uint64_t> const &blacklist) override;
 
   // helper functions

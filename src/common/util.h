@@ -48,6 +48,7 @@
 #endif
 
 #include "crypto/hash.h"
+#include "cryptonote_config.h"
 
 /*! \brief Various Tools
  *
@@ -308,4 +309,6 @@ namespace tools
   constexpr Enum enum_top = static_cast<Enum>(enum_count<Enum> - 1);
 
   std::string lowercase_ascii_string(std::string src);
+  void clear_screen();
+  uint64_t cumulative_block_sync_weight(cryptonote::network_type nettype, uint64_t start_block, uint64_t num_blocks);
 }

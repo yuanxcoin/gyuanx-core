@@ -27,6 +27,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(cryptonote_protocol
+  levin_notify.cpp
   block_queue.cpp
   cryptonote_protocol_handler.inl
   cryptonote_protocol_defs.cpp

@@ -38,7 +38,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "math_helper.h"
+#include "common/periodic_task.h"
 #include "storages/levin_abstract_invoke2.h"
 #include "warnings.h"
 #include "cryptonote_protocol_defs.h"
@@ -46,7 +46,6 @@
 #include "block_queue.h"
 #include "common/perf_timer.h"
 #include "cryptonote_basic/connection_context.h"
-#include "cryptonote_basic/cryptonote_stat_info.h"
 #include <boost/circular_buffer.hpp>
 
 PUSH_WARNINGS
@@ -64,7 +63,6 @@ namespace cryptonote
   {
   public:
     typedef cryptonote_connection_context connection_context;
-    typedef core_stat_info stat_info;
     typedef t_cryptonote_protocol_handler<t_core> cryptonote_protocol_handler;
     typedef CORE_SYNC_DATA payload_type;
 
@@ -93,7 +91,6 @@ namespace cryptonote
     bool process_payload_sync_data(CORE_SYNC_DATA&& hshd, cryptonote_connection_context& context, bool is_inital);
     bool get_payload_sync_data(blobdata& data);
     bool get_payload_sync_data(CORE_SYNC_DATA& hshd);
-    bool get_stat_info(core_stat_info& stat_inf);
     bool on_callback(cryptonote_connection_context& context);
     t_core& get_core(){return m_core;}
     bool is_synchronized(){return m_synchronized;}
@@ -103,6 +100,7 @@ namespace cryptonote
     void stop();
     void on_connection_close(cryptonote_connection_context &context);
     void set_max_out_peers(unsigned int max) { m_max_out_peers = max; }
+    bool no_sync() const { return m_no_sync; }
     void set_no_sync(bool value) { m_no_sync = value; }
     std::string get_peers_overview() const;
     std::pair<uint32_t, uint32_t> get_next_needed_pruning_stripe() const;
@@ -178,15 +176,23 @@ namespace cryptonote
     std::atomic<bool> m_no_sync;
     boost::mutex m_sync_lock;
     block_queue m_block_queue;
-    epee::math_helper::periodic_task m_idle_peer_kicker{30s};
-    epee::math_helper::periodic_task m_standby_checker{100ms};
-    epee::math_helper::periodic_task m_sync_search_checker{101s};
+    tools::periodic_task m_idle_peer_kicker{30s};
+    tools::periodic_task m_standby_checker{100ms};
+    tools::periodic_task m_sync_search_checker{101s};
     std::atomic<unsigned int> m_max_out_peers;
     tools::PerformanceTimer m_sync_timer, m_add_timer;
     uint64_t m_last_add_end_time;
     uint64_t m_sync_spans_downloaded, m_sync_old_spans_downloaded, m_sync_bad_spans_downloaded;
     uint64_t m_sync_download_chain_size, m_sync_download_objects_size;
     size_t m_block_download_max_size;
+
+    // Values for sync time estimates
+    boost::posix_time::ptime m_sync_start_time;
+    boost::posix_time::ptime m_period_start_time;
+    uint64_t m_sync_start_height;
+    uint64_t m_period_start_height;
+    uint64_t get_estimated_remaining_sync_seconds(uint64_t current_blockchain_height, uint64_t target_blockchain_height);
+    std::string get_periodic_sync_estimate(uint64_t current_blockchain_height, uint64_t target_blockchain_height);
 
     boost::mutex m_buffer_mutex;
     boost::circular_buffer<size_t> m_avg_buffer = boost::circular_buffer<size_t>(10);

@@ -1323,6 +1323,7 @@ bool loki_name_system_get_mappings_by_owners::generate(std::vector<test_event_en
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height1 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name2 = "MyName2";
   crypto::hash session_tx_hash2;
@@ -1332,6 +1333,7 @@ bool loki_name_system_get_mappings_by_owners::generate(std::vector<test_event_en
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height2 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name3 = "MyName3";
   crypto::hash session_tx_hash3;
@@ -1341,6 +1343,7 @@ bool loki_name_system_get_mappings_by_owners::generate(std::vector<test_event_en
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height3 = gen.height();
+  gen.add_n_blocks(10);
 
   loki_register_callback(events, "check_lns_entries", [=](cryptonote::core &c, size_t ev_index)
   {

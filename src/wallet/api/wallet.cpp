@@ -277,9 +277,11 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
     {
       if (m_listener) {
         auto passphrase = m_listener->onDevicePassphraseRequest(on_device);
-        if (!on_device && passphrase) {
+        if (passphrase) {
           return boost::make_optional(epee::wipeable_string((*passphrase).data(), (*passphrase).size()));
         }
+      } else {
+        on_device = true;
       }
       return boost::none;
     }
@@ -757,7 +759,7 @@ bool WalletImpl::recover(const std::string &path, const std::string &seed)
     return recover(path, "", seed);
 }
 
-bool WalletImpl::recover(const std::string &path, const std::string &password, const std::string &seed)
+bool WalletImpl::recover(const std::string &path, const std::string &password, const std::string &seed, const std::string &seed_offset/* = {}*/)
 {
     clearStatus();
     m_errorString.clear();
@@ -774,6 +776,10 @@ bool WalletImpl::recover(const std::string &path, const std::string &password, c
     if (!crypto::ElectrumWords::words_to_bytes(seed, recovery_key, old_language)) {
         setStatusError(tr("Electrum-style word list failed verification"));
         return false;
+    }
+    if (!seed_offset.empty())
+    {
+        recovery_key = cryptonote::decrypt_key(recovery_key, seed_offset);
     }
 
     if (old_language == crypto::ElectrumWords::old_language_name)
@@ -1025,12 +1031,12 @@ void WalletImpl::setSubaddressLookahead(uint32_t major, uint32_t minor)
 
 uint64_t WalletImpl::balance(uint32_t accountIndex) const
 {
-    return m_wallet->balance(accountIndex);
+    return m_wallet->balance(accountIndex, false);
 }
 
 uint64_t WalletImpl::unlockedBalance(uint32_t accountIndex) const
 {
-    return m_wallet->unlocked_balance(accountIndex);
+    return m_wallet->unlocked_balance(accountIndex, false);
 }
 
 uint64_t WalletImpl::blockChainHeight() const
@@ -1155,6 +1161,10 @@ UnsignedTransaction *WalletImpl::loadUnsignedTx(const std::string &unsigned_file
   UnsignedTransactionImpl * transaction = new UnsignedTransactionImpl(*this);
   if (!m_wallet->load_unsigned_tx(unsigned_filename, transaction->m_unsigned_tx_set)){
     setStatusError(tr("Failed to load unsigned transactions"));
+    transaction->m_status = UnsignedTransaction::Status::Status_Error;
+    transaction->m_errorString = errorString();
+
+    return transaction;
   }
   
   // Check tx data and construct confirmation message
@@ -1698,6 +1708,28 @@ void WalletImpl::disposeTransaction(PendingTransaction *t)
 {
     delete t;
 }
+
+#if 0
+uint64_t WalletImpl::estimateTransactionFee(const std::vector<std::tuple<std::string, uint64_t>> &destinations, uint32_t priority) const
+{
+#if 0
+    const size_t pubkey_size = 33;
+    const size_t encrypted_paymentid_size = 11;
+    const size_t extra_size = pubkey_size + encrypted_paymentid_size;
+
+    return m_wallet->estimate_fee(
+        1 /*inputs*/,
+        CRYPTONOTE_DEFAULT_TX_MIXIN /*mixin*/,
+        destinations.size() + 1 /*outputs*/,
+        extra_size,
+        m_wallet->get_base_fees(),
+        m_wallet->get_fee_percent(priority),
+        m_wallet->get_fee_quantization_mask());
+#else
+    return 0; // TODO: IMPLEMENT
+#endif
+}
+#endif
 
 TransactionHistory *WalletImpl::history()
 {

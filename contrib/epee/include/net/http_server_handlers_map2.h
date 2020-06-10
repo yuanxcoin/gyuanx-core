@@ -30,6 +30,7 @@
 #include "jsonrpc_structs.h"
 #include "storages/portable_storage.h"
 #include "storages/portable_storage_template_helper.h"
+#include "misc_os_dependent.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net.http"
@@ -59,6 +60,8 @@
 #define MAP_URI_AUTO_JON2_IF(s_pattern, callback_f, command_type, cond) \
     else if((query_info.m_URI == s_pattern) && (cond)) \
     { \
+      response_info.m_mime_type = "application/json"; \
+      response_info.m_header_info.m_content_type = " application/json"; \
       handled = true; \
       uint64_t ticks = epee::misc_utils::get_tick_count(); \
       command_type::request req{}; \
@@ -77,8 +80,6 @@
       uint64_t ticks2 = epee::misc_utils::get_tick_count(); \
       epee::serialization::store_t_to_json(resp, response_info.m_body); \
       uint64_t ticks3 = epee::misc_utils::get_tick_count(); \
-      response_info.m_mime_type = "application/json"; \
-      response_info.m_header_info.m_content_type = " application/json"; \
       MDEBUG( s_pattern << " processed with " << ticks1-ticks << "/"<< ticks2-ticks1 << "/" << ticks3-ticks2 << "ms"); \
     }
 
@@ -87,6 +88,8 @@
 #define MAP_URI_AUTO_BIN2(s_pattern, callback_f, command_type) \
     else if(query_info.m_URI == s_pattern) \
     { \
+      response_info.m_mime_type = " application/octet-stream"; \
+      response_info.m_header_info.m_content_type = " application/octet-stream"; \
       handled = true; \
       uint64_t ticks = epee::misc_utils::get_tick_count(); \
       command_type::request req{}; \
@@ -105,8 +108,6 @@
       uint64_t ticks2 = epee::misc_utils::get_tick_count(); \
       epee::serialization::store_t_to_binary(resp, response_info.m_body); \
       uint64_t ticks3 = epee::misc_utils::get_tick_count(); \
-      response_info.m_mime_type = " application/octet-stream"; \
-      response_info.m_header_info.m_content_type = " application/octet-stream"; \
       MDEBUG( s_pattern << "() processed with " << ticks1-ticks << "/"<< ticks2-ticks1 << "/" << ticks3-ticks2 << "ms"); \
     }
 
@@ -118,6 +119,7 @@
 #define BEGIN_JSON_RPC_MAP(uri)    else if(query_info.m_URI == uri) \
     { \
     uint64_t ticks = epee::misc_utils::get_tick_count(); \
+    response_info.m_mime_type = "application/json"; \
     epee::serialization::portable_storage ps; \
     if(!ps.load_from_json(query_info.m_body)) \
     { \

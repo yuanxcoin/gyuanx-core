@@ -188,7 +188,8 @@ namespace cryptonote { namespace rpc {
 
   const command_line::arg_descriptor<std::string> core_rpc_server::arg_bootstrap_daemon_address = {
       "bootstrap-daemon-address"
-    , "URL of a 'bootstrap' remote daemon that the connected wallets can use while this daemon is still not fully synced"
+    , "URL of a 'bootstrap' remote daemon that the connected wallets can use while this daemon is still not fully synced.\n"
+      "Use 'auto' to enable automatic public nodes discovering and bootstrap daemon switching"
     , ""
     };
 
@@ -212,6 +213,7 @@ namespace cryptonote { namespace rpc {
     )
     : m_core(cr)
     , m_p2p(p2p)
+    , m_was_bootstrap_ever_used(false)
   {}
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const std::string &username_password)
@@ -225,27 +227,70 @@ namespace cryptonote { namespace rpc {
     return set_bootstrap_daemon(address, credentials);
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  boost::optional<std::string> core_rpc_server::get_random_public_node()
+  {
+    GET_PUBLIC_NODES::response response{};
+    try
+    {
+      GET_PUBLIC_NODES::request request{};
+      request.gray  = true;
+      request.white = true;
+
+      rpc_context context = {};
+      context.admin       = true;
+      response            = invoke(std::move(request), context);
+    }
+    catch(const std::exception &e)
+    {
+      return boost::none;
+    }
+
+    const auto get_random_node_address = [](const std::vector<public_node>& public_nodes) -> std::string {
+      const auto& random_node = public_nodes[crypto::rand_idx(public_nodes.size())];
+      const auto address = random_node.host + ":" + std::to_string(random_node.rpc_port);
+      return address;
+    };
+
+    if (!response.white.empty())
+    {
+      return get_random_node_address(response.white);
+    }
+
+    MDEBUG("No white public node found, checking gray peers");
+
+    if (!response.gray.empty())
+    {
+      return get_random_node_address(response.gray);
+    }
+
+    MERROR("Failed to find any suitable public node");
+    return boost::none;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials)
   {
     boost::unique_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
 
-    if (!address.empty())
+    if (address.empty())
     {
-      if (!m_http_client.set_server(address, credentials, epee::net_utils::ssl_support_t::e_ssl_support_autodetect))
-      {
-        return false;
-      }
+      m_bootstrap_daemon.reset(nullptr);
+    }
+    else if (address == "auto")
+    {
+      m_bootstrap_daemon.reset(new bootstrap_daemon([this]{ return get_random_public_node(); }));
+    }
+    else
+    {
+      m_bootstrap_daemon.reset(new bootstrap_daemon(address, credentials));
     }
 
-    m_bootstrap_daemon_address = address;   
-    m_should_use_bootstrap_daemon = !m_bootstrap_daemon_address.empty();
+    m_should_use_bootstrap_daemon = m_bootstrap_daemon.get() != nullptr;
 
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   void core_rpc_server::init(const boost::program_options::variables_map& vm)
   {
-    m_bootstrap_daemon_address = command_line::get_arg(vm, arg_bootstrap_daemon_address);
     if (!set_bootstrap_daemon(command_line::get_arg(vm, arg_bootstrap_daemon_address),
                               command_line::get_arg(vm, arg_bootstrap_daemon_login)))
     {
@@ -297,7 +342,10 @@ namespace cryptonote { namespace rpc {
     {
       {
         boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
-        res.bootstrap_daemon_address = m_bootstrap_daemon_address;
+        if (m_bootstrap_daemon.get() != nullptr)
+        {
+          res.bootstrap_daemon_address = m_bootstrap_daemon->address();
+        }
       }
       crypto::hash top_hash;
       m_core.get_blockchain_top(res.height_without_bootstrap, top_hash);
@@ -353,6 +401,7 @@ namespace cryptonote { namespace rpc {
       return res;
     }
 
+    res.service_node = m_core.service_node();
     res.block_size_limit = res.block_weight_limit = m_core.get_blockchain_storage().get_current_cumulative_block_weight_limit();
     res.block_size_median = res.block_weight_median = m_core.get_blockchain_storage().get_current_cumulative_block_weight_median();
     res.start_time = restricted ? 0 : (uint64_t)m_core.get_start_time();
@@ -369,14 +418,17 @@ namespace cryptonote { namespace rpc {
     else
     {
       boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
-      res.bootstrap_daemon_address = m_bootstrap_daemon_address;
+      if (m_bootstrap_daemon.get() != nullptr)
+      {
+        res.bootstrap_daemon_address = m_bootstrap_daemon->address();
+      }
       res.was_bootstrap_ever_used = m_was_bootstrap_ever_used;
     }
     res.database_size = m_core.get_blockchain_storage().get_db().get_database_size();
     if (restricted)
       res.database_size = round_up(res.database_size, 1'000'000'000);
     res.update_available = restricted ? false : m_core.is_update_available();
-    res.version = restricted ? std::to_string(LOKI_VERSION[0]) : LOKI_VERSION_STR;
+    res.version = restricted ? std::to_string(LOKI_VERSION[0]) : LOKI_VERSION_FULL;
     res.status_line = !restricted ? m_core.get_status_string() :
       "v" + std::to_string(LOKI_VERSION[0]) + "; Height: " + std::to_string(res.height);
 
@@ -429,15 +481,14 @@ namespace cryptonote { namespace rpc {
       return res;
     }
 
-    size_t pruned_size = 0, unpruned_size = 0, ntxes = 0;
+    size_t size = 0, ntxes = 0;
     res.blocks.reserve(bs.size());
     res.output_indices.reserve(bs.size());
     for(auto& bd: bs)
     {
       res.blocks.resize(res.blocks.size()+1);
       res.blocks.back().block = bd.first.first;
-      pruned_size += bd.first.first.size();
-      unpruned_size += bd.first.first.size();
+      size += bd.first.first.size();
       res.output_indices.push_back(GET_BLOCKS_FAST::block_output_indices());
       ntxes += bd.second.size();
       res.output_indices.back().indices.reserve(1 + bd.second.size());
@@ -446,11 +497,10 @@ namespace cryptonote { namespace rpc {
       res.blocks.back().txs.reserve(bd.second.size());
       for (std::vector<std::pair<crypto::hash, cryptonote::blobdata>>::iterator i = bd.second.begin(); i != bd.second.end(); ++i)
       {
-        unpruned_size += i->second.size();
-        res.blocks.back().txs.push_back(std::move(i->second));
+        res.blocks.back().txs.push_back({std::move(i->second), crypto::null_hash});
         i->second.clear();
         i->second.shrink_to_fit();
-        pruned_size += res.blocks.back().txs.back().size();
+        size += res.blocks.back().txs.back().size();
       }
 
       const size_t n_txes_to_lookup = bd.second.size() + (req.no_miner_tx ? 0 : 1);
@@ -468,7 +518,7 @@ namespace cryptonote { namespace rpc {
       }
     }
 
-    MDEBUG("on_get_blocks: " << bs.size() << " blocks, " << ntxes << " txes, pruned size " << pruned_size << ", unpruned size " << unpruned_size);
+    MDEBUG("on_get_blocks: " << bs.size() << " blocks, " << ntxes << " txes, size " << size);
     res.status = STATUS_OK;
     return res;
   }
@@ -672,7 +722,7 @@ namespace cryptonote { namespace rpc {
     {
       std::vector<tx_info> pool_tx_info;
       std::vector<spent_key_image_info> pool_key_image_info;
-      bool r = pool.get_transactions_and_spent_keys_info(pool_tx_info, pool_key_image_info);
+      bool r = pool.get_transactions_and_spent_keys_info(pool_tx_info, pool_key_image_info, context.admin);
       if(r)
       {
         // sort to match original request
@@ -809,11 +859,13 @@ namespace cryptonote { namespace rpc {
         e.block_height = e.block_timestamp = std::numeric_limits<uint64_t>::max();
         e.double_spend_seen = ptx_it->second.double_spend_seen;
         e.relayed = ptx_it->second.relayed;
+        e.received_timestamp = ptx_it->second.receive_time;
       }
       else
       {
         e.block_height = m_core.get_blockchain_storage().get_db().get_tx_block_height(tx_hash);
         e.block_timestamp = m_core.get_blockchain_storage().get_db().get_block_timestamp(e.block_height);
+        e.received_timestamp = 0;
         e.double_spend_seen = false;
         e.relayed = false;
         if (e.block_height <= immutable_height)
@@ -939,7 +991,7 @@ namespace cryptonote { namespace rpc {
       return res;
     }
 
-    if (req.do_sanity_checks && !cryptonote::tx_sanity_check(m_core.get_blockchain_storage(), tx_blob))
+    if (req.do_sanity_checks && !cryptonote::tx_sanity_check(tx_blob, m_core.get_blockchain_storage().get_num_mature_outputs(0)))
     {
       res.status = "Failed";
       res.reason = "Sanity check failed";
@@ -1106,7 +1158,8 @@ namespace cryptonote { namespace rpc {
       res.block_reward = lMiner.get_block_reward();
     }
     const account_public_address& lMiningAdr = lMiner.get_mining_address();
-    res.address = get_account_address_as_str(nettype(), false, lMiningAdr);
+    if (lMiner.is_mining())
+      res.address = get_account_address_as_str(nettype(), false, lMiningAdr);
     const uint8_t major_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
 
     res.pow_algorithm =
@@ -1394,14 +1447,13 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_OUTPUT_BLACKLIST>(req, res))
       return res;
 
-    res.status = "Failed";
     try
     {
       m_core.get_output_blacklist(res.blacklist);
     }
     catch (const std::exception &e)
     {
-      res.status = "Failed to get output blacklist";
+      res.status = std::string("Failed to get output blacklist: ") + e.what();
       return res;
     }
 
@@ -1617,7 +1669,10 @@ namespace cryptonote { namespace rpc {
       if(!parse_and_validate_block_from_blob(blockblob, b))
         throw rpc_error{ERROR_WRONG_BLOCKBLOB, "Wrong block blob"};
       b.nonce = req.starting_nonce;
-      miner::find_nonce_for_given_block(&(m_core.get_blockchain_storage()), b, template_res.difficulty, template_res.height);
+      miner::find_nonce_for_given_block([this](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash) {
+        hash = cryptonote::get_block_longhash_w_blockchain(&(m_core.get_blockchain_storage()), b, height, threads);
+        return true;
+      }, b, template_res.difficulty, template_res.height);
 
       submit_req.blob[0] = string_tools::buff_to_hex_nodelimer(block_to_blob(b));
       auto submit_res = invoke(std::move(submit_req), context);
@@ -1659,7 +1714,7 @@ namespace cryptonote { namespace rpc {
     response.miner_reward = blk.miner_tx.vout[0].amount;
     response.block_size = response.block_weight = m_core.get_blockchain_storage().get_db().get_block_weight(height);
     response.num_txes = blk.tx_hashes.size();
-    response.pow_hash = fill_pow_hash ? string_tools::pod_to_hex(get_block_longhash(&(m_core.get_blockchain_storage()), blk, height, 0)) : "";
+    response.pow_hash = fill_pow_hash ? string_tools::pod_to_hex(get_block_longhash_w_blockchain(&(m_core.get_blockchain_storage()), blk, height, 0)) : "";
     response.long_term_weight = m_core.get_blockchain_storage().get_db().get_block_long_term_weight(height);
     response.miner_tx_hash = string_tools::pod_to_hex(cryptonote::get_transaction_hash(blk.miner_tx));
     response.service_node_winner = string_tools::pod_to_hex(cryptonote::get_service_node_winner_from_tx_extra(blk.miner_tx.extra));
@@ -1670,34 +1725,42 @@ namespace cryptonote { namespace rpc {
   boost::upgrade_lock<boost::shared_mutex> core_rpc_server::should_bootstrap_lock()
   {
     // TODO - support bootstrapping via a remote LMQ RPC; requires some argument fiddling
-
-    if (m_bootstrap_daemon_address.empty() || !m_should_use_bootstrap_daemon)
-      return {};
-
     boost::upgrade_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+    if (!m_should_use_bootstrap_daemon || m_bootstrap_daemon.get() == nullptr)
+    {
+      lock.unlock();
+      return lock;
+    }
 
     auto current_time = std::chrono::system_clock::now();
-    if (current_time - m_bootstrap_height_check_time > 30s)  // update every 30s
+    if (!m_p2p.get_payload_object().no_sync() &&
+        current_time - m_bootstrap_height_check_time > 30s)  // update every 30s
     {
       {
         boost::upgrade_to_unique_lock<boost::shared_mutex> upgrade_lock(lock);
         m_bootstrap_height_check_time = current_time;
       }
 
-      uint64_t top_height;
-      crypto::hash top_hash;
-      m_core.get_blockchain_top(top_height, top_hash);
-      ++top_height; // turn top block height into blockchain height
+      boost::optional<uint64_t> bootstrap_daemon_height = m_bootstrap_daemon->get_height();
+      if (!bootstrap_daemon_height)
+      {
+        MERROR("Failed to fetch bootstrap daemon height");
+        lock.unlock();
+        return lock;
+      }
 
-      // query bootstrap daemon's height
-      cryptonote::rpc::GET_HEIGHT::request getheight_req{};
-      cryptonote::rpc::GET_HEIGHT::response getheight_res{};
-      m_should_use_bootstrap_daemon = (
-          epee::net_utils::invoke_http_json("/getheight", getheight_req, getheight_res, m_http_client)
-          && getheight_res.status == STATUS_OK
-          && top_height + 10 < getheight_res.height);
+      uint64_t target_height = m_core.get_target_blockchain_height();
+      if (bootstrap_daemon_height < target_height)
+      {
+        MINFO("Bootstrap daemon is out of sync");
+        lock.unlock();
+        m_bootstrap_daemon->handle_result(false);
+        return lock;
+      }
 
-      MINFO((m_should_use_bootstrap_daemon ? "Using" : "Not using") << " the bootstrap daemon (our height: " << top_height << ", bootstrap daemon's height: " << getheight_res.height << ")");
+      uint64_t top_height           = m_core.get_current_blockchain_height();
+      m_should_use_bootstrap_daemon = top_height + 10 < bootstrap_daemon_height;
+      MINFO((m_should_use_bootstrap_daemon ? "Using" : "Not using") << " the bootstrap daemon (our height: " << top_height << ", bootstrap daemon's height: " << *bootstrap_daemon_height << ")");
     }
 
     if (!m_should_use_bootstrap_daemon)
@@ -1705,6 +1768,7 @@ namespace cryptonote { namespace rpc {
       MINFO("The local daemon is fully synced; disabling bootstrap daemon requests");
       lock.unlock();
     }
+
     return lock;
   }
 
@@ -1727,7 +1791,7 @@ namespace cryptonote { namespace rpc {
 
     bool success;
     if (std::is_base_of<BINARY, RPC>::value)
-      success = epee::net_utils::invoke_http_bin(command_name, req, res, m_http_client);
+      success = m_bootstrap_daemon->invoke_http_bin(command_name, req, res);
     else
     {
       // FIXME: this type explosion of having to instantiate nested types is an epee pain point:
@@ -1739,7 +1803,7 @@ namespace cryptonote { namespace rpc {
       json_req.id = epee::serialization::storage_entry(0);
       json_req.method = command_name;
       json_req.params = req;
-      success = epee::net_utils::invoke_http_json("/json_rpc", json_req, json_resp, m_http_client);
+      success = m_bootstrap_daemon->invoke_http_json_rpc(command_name, json_req, json_resp);
       if (success)
         res = std::move(json_resp.result);
     }
@@ -2677,6 +2741,17 @@ namespace cryptonote { namespace rpc {
     if (!at_least_one_succeeded)
       throw rpc_error{ERROR_WRONG_PARAM, "Failed to query any quorums at all"};
 
+    res.status = STATUS_OK;
+    return res;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  FLUSH_CACHE::response core_rpc_server::invoke(FLUSH_CACHE::request&& req, rpc_context context)
+  {
+    FLUSH_CACHE::response res{};
+    if (req.bad_txs)
+      m_core.flush_bad_txs_cache();
+    if (req.bad_blocks)
+      m_core.flush_invalid_blocks();
     res.status = STATUS_OK;
     return res;
   }

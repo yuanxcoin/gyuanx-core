@@ -77,7 +77,7 @@ void command_server::init_commands(cryptonote::rpc::core_rpc_server* rpc_server)
   m_command_lookup.set_handler(
       "print_pl"
     , [this](const auto &x) { return m_parser.print_peer_list(x); }
-    , "print_pl [white] [gray] [<limit>]"
+    , "print_pl [white] [gray] [pruned] [publicrpc] [<limit>]"
     , "Print the current peer list."
     );
   m_command_lookup.set_handler(
@@ -375,6 +375,20 @@ void command_server::init_commands(cryptonote::rpc::core_rpc_server* rpc_server)
     , "print_sn_state_changes <start_height> [end height]"
     , "Query the state changes between the range, omit the last argument to scan until the current block"
     );
+    m_command_lookup.set_handler(
+      "set_bootstrap_daemon"
+    , [this](const auto &x) { return m_parser.set_bootstrap_daemon(x); }
+    , "set_bootstrap_daemon (auto | none | host[:port] [username] [password])"
+    , "URL of a 'bootstrap' remote daemon that the connected wallets can use while this daemon is still not fully synced.\n"
+      "Use 'auto' to enable automatic public nodes discovering and bootstrap daemon switching"
+    );
+    m_command_lookup.set_handler(
+      "flush_cache"
+    , [this](const auto &x) { return m_parser.flush_cache(x); }
+    , "flush_cache [bad-txs] [bad-blocks]"
+    , "Flush the specified cache(s)."
+    );
+
 #if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
     m_command_lookup.set_handler(
       "relay_votes_and_uptime", [rpc_server](const auto&) {
@@ -383,7 +397,6 @@ void command_server::init_commands(cryptonote::rpc::core_rpc_server* rpc_server)
       }
     , ""
     );
-
     m_command_lookup.set_handler(
       "integration_test", [rpc_server](const auto& args) {
         bool valid_cmd = false;
@@ -457,7 +470,7 @@ bool command_server::start_handling(std::function<void(void)> exit_handler)
         integration_test::use_redirected_cout();
       }
 
-      process_command(args);
+      process_command_and_log(args);
       if (args.size() == 1 && args[0] == "exit")
       {
         integration_test::deinit();

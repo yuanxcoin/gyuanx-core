@@ -96,7 +96,7 @@ public:
 
   bool print_sn_state_changes(uint64_t start_height, uint64_t end_height);
 
-  bool print_peer_list(bool white = true, bool gray = true, size_t limit = 0);
+  bool print_peer_list(bool white = true, bool gray = true, size_t limit = 0, bool pruned_only = false, bool publicrpc_only = false);
 
   bool print_peer_list_stats();
 
@@ -112,7 +112,7 @@ public:
 
   bool print_connections();
 
-  bool print_blockchain_info(uint64_t start_block_index, uint64_t end_block_index);
+  bool print_blockchain_info(int64_t start_block_index, uint64_t end_block_index);
 
   bool print_quorum_state(uint64_t start_height, uint64_t end_height);
 
@@ -130,7 +130,7 @@ public:
 
   bool print_block_by_height(uint64_t height, bool include_hex);
 
-  bool print_transaction(const crypto::hash& transaction_hash, bool include_hex, bool include_json);
+  bool print_transaction(const crypto::hash& transaction_hash, bool include_metadata, bool include_hex, bool include_json);
 
   bool is_key_image_spent(const crypto::key_image &ki);
 
@@ -201,6 +201,15 @@ public:
   bool check_blockchain_pruning();
 
   bool print_net_stats();
+
+  bool set_bootstrap_daemon(
+    const std::string &address,
+    const std::string &username,
+    const std::string &password);
+
+  bool flush_cache(bool bad_txs, bool invalid_blocks);
+
+  bool version();
 };
 
 } // namespace daemonize

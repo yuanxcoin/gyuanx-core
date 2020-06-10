@@ -44,11 +44,12 @@
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "cryptonote_core/miner.h"
+#include "cryptonote_basic/miner.h"
 #include "loki_economy.h"
 
 #include "chaingen.h"
 #include "device/device.hpp"
+#include "crypto/crypto.h"
 
 extern "C"
 {
@@ -640,11 +641,52 @@ loki_chain_generator::create_loki_name_system_tx_update_w_extra(cryptonote::acco
   return result;
 }
 
-static void fill_nonce(cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
+static void fill_nonce_with_test_generator(test_generator *generator, cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
 {
+  cryptonote::randomx_longhash_context randomx_context = {};
+  if (generator->m_hf_version >= cryptonote::network_version_12_checkpointing)
+  {
+    randomx_context.seed_height = crypto::rx_seedheight(height);
+    cryptonote::block prev      = blk;
+    do
+    {
+      prev = generator->m_blocks_info[prev.prev_id].block;
+    }
+    while (cryptonote::get_block_height(prev) != randomx_context.seed_height);
+
+    randomx_context.seed_block_hash           = cryptonote::get_block_hash(prev);
+    randomx_context.current_blockchain_height = height;
+  }
+
   blk.nonce = 0;
-  while (!cryptonote::miner::find_nonce_for_given_block(NULL, blk, diffic, height))
+  auto get_block_hash = [&randomx_context](const cryptonote::block &b, uint64_t height, unsigned int threads, crypto::hash &hash) {
+    hash = cryptonote::get_block_longhash(randomx_context, b, height, threads);
+    return true;
+  };
+
+  while (!cryptonote::miner::find_nonce_for_given_block(get_block_hash, blk, diffic, height))
     blk.timestamp++;
+}
+
+static void fill_nonce_with_loki_generator(loki_chain_generator const *generator, cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height)
+{
+  cryptonote::randomx_longhash_context randomx_context = {};
+  if (generator->blocks().size() && generator->hardfork() >= cryptonote::network_version_12_checkpointing)
+  {
+    randomx_context.seed_height = crypto::rx_seedheight(height);
+    randomx_context.seed_block_hash = cryptonote::get_block_hash(generator->blocks()[randomx_context.seed_height].block);
+    randomx_context.current_blockchain_height = height;
+  }
+
+  blk.nonce = 0;
+  auto get_block_hash = [&randomx_context](const cryptonote::block &blk, uint64_t height, unsigned int threads, crypto::hash &hash) {
+    hash = cryptonote::get_block_longhash(randomx_context, blk, height, threads);
+    return true;
+  };
+
+  while (!cryptonote::miner::find_nonce_for_given_block(get_block_hash, blk, TEST_DEFAULT_DIFFICULTY, height))
+    blk.timestamp++;
+
 }
 
 loki_blockchain_entry loki_chain_generator::create_genesis_block(const cryptonote::account_base &miner, uint64_t timestamp)
@@ -713,7 +755,7 @@ loki_blockchain_entry loki_chain_generator::create_genesis_block(const cryptonot
     }
   }
 
-  fill_nonce(blk, TEST_DEFAULT_DIFFICULTY, height);
+  fill_nonce_with_loki_generator(this, blk, TEST_DEFAULT_DIFFICULTY, height);
   result.block_weight = get_transaction_weight(blk.miner_tx);
   uint64_t block_reward, block_reward_unpenalized;
   cryptonote::get_base_block_reward(0 /*median_weight*/, result.block_weight, 0 /*already_generated_coins*/, block_reward, block_reward_unpenalized, hf_version_, height);
@@ -832,7 +874,7 @@ bool loki_chain_generator::create_block(loki_blockchain_entry &entry,
     }
   }
 
-  fill_nonce(blk, TEST_DEFAULT_DIFFICULTY, height);
+  fill_nonce_with_loki_generator(this, blk, TEST_DEFAULT_DIFFICULTY, height);
   entry.txs = tx_list;
   entry.service_node_state = prev.service_node_state;
   entry.service_node_state.update_from_block(db_, cryptonote::FAKECHAIN, state_history_, {} /*state_archive*/, {} /*alt_states*/, entry.block, entry.txs, nullptr);
@@ -1111,7 +1153,7 @@ bool test_generator::construct_block(cryptonote::block &blk,
   }
 
   //blk.tree_root_hash = get_tx_tree_hash(blk);
-  fill_nonce(blk, TEST_DEFAULT_DIFFICULTY, height);
+  fill_nonce_with_test_generator(this, blk, TEST_DEFAULT_DIFFICULTY, height);
   add_block(blk, txs_weight, block_weights, already_generated_coins);
 
   return true;
@@ -1179,7 +1221,7 @@ bool test_generator::construct_block_manually(cryptonote::block& blk, const cryp
   //blk.tree_root_hash = get_tx_tree_hash(blk);
 
   cryptonote::difficulty_type a_diffic = actual_params & bf_diffic ? diffic : TEST_DEFAULT_DIFFICULTY;
-  fill_nonce(blk, a_diffic, height);
+  fill_nonce_with_test_generator(this, blk, a_diffic, height);
 
   add_block(blk, txs_weight, block_weights, already_generated_coins);
 

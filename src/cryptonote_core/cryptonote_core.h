@@ -47,9 +47,8 @@
 #include "service_node_voting.h"
 #include "service_node_list.h"
 #include "service_node_quorum_cop.h"
-#include "cryptonote_core/miner.h"
+#include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
-#include "cryptonote_basic/cryptonote_stat_info.h"
 #include "warnings.h"
 #include "crypto/hash.h"
 PUSH_WARNINGS
@@ -582,15 +581,6 @@ namespace cryptonote
      bool find_blockchain_supplement(const uint64_t req_start_block, const std::list<crypto::hash>& qblock_ids, std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > >& blocks, uint64_t& total_height, uint64_t& start_height, bool pruned, bool get_miner_tx_hash, size_t max_count) const;
 
      /**
-      * @brief gets some stats about the daemon
-      *
-      * @param st_inf return-by-reference container for the stats requested
-      *
-      * @return true
-      */
-     bool get_stat_info(core_stat_info& st_inf) const;
-
-     /**
       * @copydoc Blockchain::get_tx_outputs_gindexs
       *
       * @note see Blockchain::get_tx_outputs_gindexs
@@ -626,7 +616,7 @@ namespace cryptonote
       */
      bool get_output_distribution(uint64_t amount, uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base) const;
 
-     bool get_output_blacklist(std::vector<uint64_t> &blacklist) const;
+     void get_output_blacklist(std::vector<uint64_t> &blacklist) const;
 
      /**
       * @copydoc miner::pause
@@ -968,6 +958,18 @@ namespace cryptonote
       */
      void set_service_node_votes_relayed(const std::vector<service_nodes::quorum_vote_t> &votes);
 
+     bool has_block_weights(uint64_t height, uint64_t nblocks) const;
+
+     /**
+      * @brief flushes the bad txs cache
+      */
+     void flush_bad_txs_cache();
+
+     /**
+      * @brief flushes the invalid block cache
+      */
+     void flush_invalid_blocks();
+
      /**
       * @brief Record if the service node has checkpointed at this point in time
       */
@@ -1177,17 +1179,17 @@ namespace cryptonote
      std::string m_config_folder; //!< folder to look in for configs and other files
 
 
-     epee::math_helper::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
-     epee::math_helper::periodic_task m_fork_moaner{2h}; //!< interval for checking HardFork status
-     epee::math_helper::periodic_task m_txpool_auto_relayer{2min, false}; //!< interval for checking re-relaying txpool transactions
-     epee::math_helper::periodic_task m_check_updates_interval{12h}; //!< interval for checking for new versions
-     epee::math_helper::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
-     epee::math_helper::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{UPTIME_PROOF_TIMER_SECONDS}}; //!< interval for checking our own uptime proof
-     epee::math_helper::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
-     epee::math_helper::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
-     epee::math_helper::periodic_task m_service_node_vote_relayer{2min, false};
-     epee::math_helper::periodic_task m_sn_proof_cleanup_interval{1h, false};
-     epee::math_helper::periodic_task m_systemd_notify_interval{10s};
+     tools::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
+     tools::periodic_task m_fork_moaner{2h}; //!< interval for checking HardFork status
+     tools::periodic_task m_txpool_auto_relayer{2min, false}; //!< interval for checking re-relaying txpool transactions
+     tools::periodic_task m_check_updates_interval{12h}; //!< interval for checking for new versions
+     tools::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
+     tools::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{UPTIME_PROOF_TIMER_SECONDS}}; //!< interval for checking our own uptime proof
+     tools::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
+     tools::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
+     tools::periodic_task m_service_node_vote_relayer{2min, false};
+     tools::periodic_task m_sn_proof_cleanup_interval{1h, false};
+     tools::periodic_task m_systemd_notify_interval{10s};
 
      std::atomic<bool> m_starter_message_showed; //!< has the "daemon will sync now" message been shown?
 

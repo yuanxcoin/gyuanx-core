@@ -134,12 +134,14 @@ bool command_parser_executor::print_peer_list(const std::vector<std::string>& ar
 {
   if (args.size() > 3)
   {
-    std::cout << "use: print_pl [white] [gray] [<limit>]" << std::endl;
+    std::cout << "use: print_pl [white] [gray] [<limit>] [pruned] [publicrpc]" << std::endl;
     return true;
   }
 
   bool white = false;
   bool gray = false;
+  bool pruned = false;
+  bool publicrpc = false;
   size_t limit = 0;
   for (size_t i = 0; i < args.size(); ++i)
   {
@@ -151,6 +153,14 @@ bool command_parser_executor::print_peer_list(const std::vector<std::string>& ar
     {
       gray = true;
     }
+    else if (args[i] == "pruned")
+    {
+      pruned = true;
+    }
+    else if (args[i] == "publicrpc")
+    {
+      publicrpc = true;
+    }
     else if (!epee::string_tools::get_xtype_from_string(limit, args[i]))
     {
       std::cout << "unexpected argument: " << args[i] << std::endl;
@@ -159,7 +169,7 @@ bool command_parser_executor::print_peer_list(const std::vector<std::string>& ar
   }
 
   const bool print_both = !white && !gray;
-  return m_executor.print_peer_list(white | print_both, gray | print_both, limit);
+  return m_executor.print_peer_list(white | print_both, gray | print_both, limit, pruned, publicrpc);
 }
 
 bool command_parser_executor::print_peer_list_stats(const std::vector<std::string>& args)
@@ -227,6 +237,16 @@ bool command_parser_executor::print_blockchain_info(const std::vector<std::strin
   }
   uint64_t start_index = 0;
   uint64_t end_index = 0;
+  if (args[0][0] == '-')
+  {
+    int64_t nblocks;
+    if(!epee::string_tools::get_xtype_from_string(nblocks, args[0]))
+    {
+      std::cout << "wrong number of blocks" << std::endl;
+      return false;
+    }
+    return m_executor.print_blockchain_info(nblocks, (uint64_t)-nblocks);
+  }
   if(!epee::string_tools::get_xtype_from_string(start_index, args[0]))
   {
     std::cout << "wrong starter block index parameter" << std::endl;
@@ -383,12 +403,15 @@ bool command_parser_executor::print_block(const std::vector<std::string>& args)
 
 bool command_parser_executor::print_transaction(const std::vector<std::string>& args)
 {
+  bool include_metadata = false;
   bool include_hex = false;
   bool include_json = false;
 
   // Assumes that optional flags come after mandatory argument <transaction_hash>
   for (unsigned int i = 1; i < args.size(); ++i) {
-    if (args[i] == "+hex")
+    if (args[i] == "+meta")
+      include_metadata = true;
+    else if (args[i] == "+hex")
       include_hex = true;
     else if (args[i] == "+json")
       include_json = true;
@@ -400,7 +423,7 @@ bool command_parser_executor::print_transaction(const std::vector<std::string>& 
   }
   if (args.empty())
   {
-    std::cout << "expected: print_tx <transaction_hash> [+hex] [+json]" << std::endl;
+    std::cout << "expected: print_tx <transaction_hash> [+meta] [+hex] [+json]" << std::endl;
     return true;
   }
 
@@ -408,7 +431,7 @@ bool command_parser_executor::print_transaction(const std::vector<std::string>& 
   crypto::hash tx_hash;
   if (parse_hash256(str_hash, tx_hash))
   {
-    m_executor.print_transaction(tx_hash, include_hex, include_json);
+    m_executor.print_transaction(tx_hash, include_metadata, include_hex, include_json);
   }
 
   return true;
@@ -909,8 +932,7 @@ bool command_parser_executor::pop_blocks(const std::vector<std::string>& args)
 
 bool command_parser_executor::version(const std::vector<std::string>& args)
 {
-  std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << std::endl;
-  return true;
+  return m_executor.version();
 }
 
 bool command_parser_executor::prune_blockchain(const std::vector<std::string>& args)
@@ -934,6 +956,44 @@ bool command_parser_executor::prune_blockchain(const std::vector<std::string>& a
 bool command_parser_executor::check_blockchain_pruning(const std::vector<std::string>& args)
 {
   return m_executor.check_blockchain_pruning();
+}
+
+bool command_parser_executor::set_bootstrap_daemon(const std::vector<std::string>& args)
+{
+  const size_t args_count = args.size();
+  if (args_count < 1 || args_count > 3)
+    return false;
+
+  return m_executor.set_bootstrap_daemon(
+    args[0] != "none" ? args[0] : std::string(),
+    args_count > 1 ? args[1] : std::string(),
+    args_count > 2 ? args[2] : std::string());
+}
+
+bool command_parser_executor::flush_cache(const std::vector<std::string>& args)
+{
+  bool bad_txs = false, bad_blocks = false;
+  std::string arg;
+
+  if (args.empty())
+    goto show_list;
+
+  for (size_t i = 0; i < args.size(); ++i)
+  {
+    arg = args[i];
+    if (arg == "bad-txs")
+      bad_txs = true;
+    else if (arg == "bad-blocks")
+      bad_blocks = true;
+    else
+      goto show_list;
+  }
+  return m_executor.flush_cache(bad_txs, bad_blocks);
+
+show_list:
+  std::cout << "Invalid cache type: " << arg << std::endl;
+  std::cout << "Cache types: bad-txs bad-blocks" << std::endl;
+  return true;
 }
 
 } // namespace daemonize

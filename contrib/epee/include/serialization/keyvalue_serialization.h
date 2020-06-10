@@ -118,18 +118,11 @@ public: \
 
 #define KV_SERIALIZE_OPT_N(variable, val_name, default_value) \
   do { \
+    if (is_store && this_ref.variable == default_value) \
+      break; \
     if (!epee::serialization::selector<is_store>::serialize(this_ref.variable, stg, hparent_section, val_name)) \
       epee::serialize_default(this_ref.variable, default_value); \
   } while (0);
-
-#define KV_SERIALIZE_OPT_N2(variable, val_name, default_value) \
-do { \
-  if (!epee::serialization::selector<is_store>::serialize(this_ref.variable, stg, hparent_section, val_name)) { \
-    epee::serialize_default(this_ref.variable, default_value); \
-  } else { \
-    this_ref.explicitly_set(); \
-  } \
-} while (0);
 
 #define KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE_N(variable, val_name) \
   epee::serialization::selector<is_store>::serialize_t_val_as_blob(this_ref.variable, stg, hparent_section, val_name); 
@@ -157,8 +150,6 @@ do { \
 #define KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE(variable)     KV_SERIALIZE_VAL_POD_AS_BLOB_FORCE_N(variable, #variable) //skip is_pod compile time check
 #define KV_SERIALIZE_CONTAINER_POD_AS_BLOB(variable)     KV_SERIALIZE_CONTAINER_POD_AS_BLOB_N(variable, #variable)
 #define KV_SERIALIZE_OPT(variable,default_value)          KV_SERIALIZE_OPT_N(variable, #variable, default_value)
-/// same as KV_SERIALIZE_OPT, but will call `explicitly_set()` if non-defaulted value found
-#define KV_SERIALIZE_OPT2(variable,default_value)         KV_SERIALIZE_OPT_N2(variable, #variable, default_value)
 #define KV_SERIALIZE_ENUM(enum_) do { \
   using enum_t = std::remove_const_t<decltype(this_ref.enum_)>; \
   using int_t = std::underlying_type_t<enum_t>; \

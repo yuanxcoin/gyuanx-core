@@ -64,7 +64,7 @@ namespace rpc {
 // has its own version, and that clients can just test major to see
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
-  constexpr version_t VERSION = {3, 6};
+  constexpr version_t VERSION = {3, 8};
 
   /// Makes a version array from a packed 32-bit integer version
   constexpr version_t make_version(uint32_t version)
@@ -268,116 +268,6 @@ namespace rpc {
   };
 
   LOKI_RPC_DOC_INTROSPECT
-  // TODO: Undocumented light wallet RPC call
-  struct GET_RANDOM_OUTS
-  {
-    struct request
-    {
-      std::vector<std::string> amounts;
-      uint32_t count;
-
-      KV_MAP_SERIALIZABLE
-    };
-
-
-    struct output {
-      std::string public_key;
-      uint64_t global_index;
-      std::string rct; // 64+64+64 characters long (<rct commit> + <encrypted mask> + <rct amount>)
-
-      KV_MAP_SERIALIZABLE
-    };
-
-    struct amount_out
-    {
-      uint64_t amount;
-      std::vector<output> outputs;
-
-      KV_MAP_SERIALIZABLE
-    };
-
-    struct response
-    {
-      std::vector<amount_out> amount_outs;
-      std::string Error;
-
-      KV_MAP_SERIALIZABLE
-    };
-  };
-
-  LOKI_RPC_DOC_INTROSPECT
-  // TODO: Undocumented light wallet RPC call
-  struct SUBMIT_RAW_TX
-  {
-      struct request
-      {
-        std::string address;
-        std::string view_key;
-        std::string tx;
-        bool blink;
-
-        KV_MAP_SERIALIZABLE
-      };
-
-
-      struct response
-      {
-        std::string status;
-        std::string error;
-
-        KV_MAP_SERIALIZABLE
-      };
-  };
-
-  LOKI_RPC_DOC_INTROSPECT
-  // TODO: Undocumented light wallet RPC call
-  struct LOGIN
-  {
-      struct request
-      {
-        std::string address;
-        std::string view_key;
-        bool create_account;
-
-        KV_MAP_SERIALIZABLE
-      };
-
-      struct response
-      {
-        std::string status;
-        std::string reason;
-        bool new_address;
-
-        KV_MAP_SERIALIZABLE
-      };
-  };
-
-  LOKI_RPC_DOC_INTROSPECT
-  // TODO: Undocumented light wallet RPC call
-  struct IMPORT_WALLET_REQUEST
-  {
-      struct request
-      {
-        std::string address;
-        std::string view_key;
-
-        KV_MAP_SERIALIZABLE
-      };
-
-      struct response
-      {
-        std::string payment_id;
-        uint64_t import_fee;
-        bool new_request;
-        bool request_fulfilled;
-        std::string payment_address;
-        std::string status;
-
-        KV_MAP_SERIALIZABLE
-      };
-  };
-
-  LOKI_RPC_DOC_INTROSPECT
   // Look up one or more transactions by hash.
   struct GET_TRANSACTIONS : PUBLIC, LEGACY
   {
@@ -404,8 +294,9 @@ namespace rpc {
       bool in_pool;                         // States if the transaction is in pool (`true`) or included in a block (`false`).
       bool double_spend_seen;               // States if the transaction is a double-spend (`true`) or not (`false`).
       uint64_t block_height;                // Block height including the transaction.
-      uint64_t block_timestamp;             // Unix time at chich the block has been added to the blockchain.
+      uint64_t block_timestamp;             // Unix time at which the block has been added to the blockchain.
       std::vector<uint64_t> output_indices; // List of transaction indexes.
+      uint64_t received_timestamp;          // Timestamp transaction was received in the pool.
       bool relayed;
       bool blink;                           // True if this is an approved, blink transaction (only for in_pool transactions or txes in recent blocks)
 
@@ -960,7 +851,6 @@ namespace rpc {
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information. See get_last_block_header.
-      std::string miner_tx_hash;          // Miner transaction information
       std::vector<std::string> tx_hashes; // List of hashes of non-coinbase transactions in the block. If there are no other transactions, this will be an empty list.
       std::string blob;                   // Hexadecimal blob of block information.
       std::string json;                   // JSON formatted block details.
@@ -2079,14 +1969,9 @@ namespace rpc {
   {
     static constexpr auto names() { return NAMES("get_service_nodes", "get_n_service_nodes", "get_all_service_nodes"); }
 
-    // Boolean values indicate whether corresponding
-    // fields should be included in the response
+    // Boolean values indicate whether corresponding fields should be included in the response
     struct requested_fields_t {
-
-      bool all = true; // internal use only: indicates whether none of the other parameters have been explicitly set
-      void explicitly_set() { all = false; }
-      void explicitly_set() const { /* no-op, but needs to be here to compile serialization code */ }
-
+      bool all = true; // If set, overrides any individual requested fields
       bool service_node_pubkey;
       bool registration_height;
       bool registration_hf_version;
@@ -2126,7 +2011,6 @@ namespace rpc {
       bool height;
       bool target_height;
       bool hardfork;
-
       KV_MAP_SERIALIZABLE
     };
 
@@ -2313,7 +2197,7 @@ namespace rpc {
   // Get information on output blacklist.
   struct GET_OUTPUT_BLACKLIST : PUBLIC, BINARY
   {
-    static constexpr auto names() { return NAMES("get_output_blacklist"); }
+    static constexpr auto names() { return NAMES("get_output_blacklist.bin"); }
 
     struct request : EMPTY {};
 
@@ -2556,6 +2440,21 @@ namespace rpc {
     };
   };
 
+  LOKI_RPC_DOC_INTROSPECT
+  // Clear TXs from the daemon cache, currently only the cache storing TX hashes that were previously verified bad by the daemon.
+  struct FLUSH_CACHE : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("flush_cache"); }
+    struct request
+    {
+      bool bad_txs; // Clear the cache storing TXs that failed verification.
+      bool bad_blocks; // Clear the cache storing blocks that failed verfication.
+      KV_MAP_SERIALIZABLE;
+    };
+
+    struct response : STATUS { };
+  };
+
   template <typename...> struct type_list {};
 
   /// List of all supported rpc command structs to allow compile-time enumeration of all supported
@@ -2643,7 +2542,8 @@ namespace rpc {
     REPORT_PEER_SS_STATUS,
     TEST_TRIGGER_P2P_RESYNC,
     LNS_NAMES_TO_OWNERS,
-    LNS_OWNERS_TO_NAMES
+    LNS_OWNERS_TO_NAMES,
+    FLUSH_CACHE
   >;
 
 } } // namespace cryptonote::rpc
