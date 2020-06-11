@@ -40,10 +40,7 @@
 
 namespace service_nodes
 {
-  struct legacy_deregister_vote;
   struct quorum_vote_t;
-  void vote_to_blob(const quorum_vote_t& vote, unsigned char blob[]);
-  void blob_to_vote(const unsigned char blob[], quorum_vote_t& vote);
 };
 
 namespace cryptonote

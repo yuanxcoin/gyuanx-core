@@ -78,11 +78,6 @@ namespace service_nodes
   enum struct quorum_group : uint8_t { invalid, validator, worker, _count };
   struct quorum_vote_t
   {
-    // Note: This type has various padding and alignment and was mistakingly serialized as a blob
-    // (padding and all, and not portable).  To remain compatible, we have to reproduce the blob
-    // data byte-for-byte as expected in the loki 5.x struct memory layout on AMD64, via the
-    // vote_to_blob functions below.
-
     uint8_t           version = 0;
     quorum_type       type;
     uint64_t          block_height;
@@ -104,9 +99,6 @@ namespace service_nodes
     template <class Archive>
     void serialize(Archive &ar, const unsigned int /*version*/) { }
   };
-
-  void vote_to_blob(const quorum_vote_t& vote, unsigned char blob[]);
-  void blob_to_vote(const unsigned char blob[], quorum_vote_t& vote);
 
   struct voter_to_signature
   {
@@ -134,17 +126,6 @@ namespace service_nodes
   bool               verify_vote_signature              (uint8_t hf_version, const quorum_vote_t& vote, cryptonote::vote_verification_context &vvc, const service_nodes::quorum &quorum);
   crypto::signature  make_signature_from_vote           (quorum_vote_t const &vote, const service_node_keys &keys);
   crypto::signature  make_signature_from_tx_state_change(cryptonote::tx_extra_service_node_state_change const &state_change, const service_node_keys &keys);
-
-  // NOTE: This preserves the deregister vote format pre-checkpointing so that
-  // up to the hardfork, we can still deserialize and serialize until we switch
-  // over to the new format
-  struct legacy_deregister_vote
-  {
-    uint64_t          block_height;
-    uint32_t          service_node_index;
-    uint32_t          voters_quorum_index;
-    crypto::signature signature;
-  };
 
   struct pool_vote_entry
   {
