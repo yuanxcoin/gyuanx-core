@@ -29,8 +29,6 @@
 # Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 
-# This is broken up into two parts: first we check for miniupnp, compile it if we can't
-# find it, and thereafter we check for libunbound, and compile it if we can't find it.
 # We always compile if we are building statically to reduce static dependency issues...
 # ...except for FreeBSD, because FreeBSD is a special case that doesn't play well with
 # others.
@@ -39,7 +37,6 @@ find_package(PkgConfig REQUIRED)
 
 if(NOT STATIC)
   pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
-  pkg_check_modules(UNBOUND libunbound)
   pkg_check_modules(LOKIMQ liblokimq>=1.1.4)
 endif()
 
@@ -62,33 +59,6 @@ else()
   target_link_libraries(miniupnpc INTERFACE libminiupnpc-static)
 endif()
 
-
-if(NOT UNBOUND_FOUND)
-  # NOTE: If STATIC is true, CMAKE_FIND_LIBRARY_SUFFIXES has been reordered.
-  # unbound has config tests which used OpenSSL libraries, so -ldl may need to
-  # be set in this case.
-  # The unbound CMakeLists.txt can set it, since it's also needed for the
-  # static OpenSSL libraries set up there after with target_link_libraries.
-  message(STATUS "Using in-tree unbound")
-  if(STATIC AND NOT IOS)
-    if(UNIX)
-      set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};${CMAKE_DL_LIBS};${CMAKE_THREAD_LIBS_INIT}")
-    elseif(MINGW)
-      set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};extra")
-    endif()
-  endif()
-  add_subdirectory(unbound)
-  target_link_libraries(libunbound INTERFACE unbound)
-  target_include_directories(libunbound INTERFACE unbound/libunbound)
-else()
-  message(STATUS "Found libunbound include (unbound.h) in ${UNBOUND_INCLUDE_DIRS}")
-  if(NOT UNBOUND_LIBRARIES)
-    message(FATAL_ERROR "Found libunbound includes, but could not find libunbound library. Please make sure you have installed libunbound or libunbound-dev or the equivalent")
-  endif()
-
-  link_dep_libs(libunbound INTERFACE "${UNBOUND_LIBRARY_DIRS}" ${UNBOUND_LIBRARIES})
-  target_include_directories(libunbound INTERFACE ${UNBOUND_INCLUDE_DIRS})
-endif()
 
 if(NOT LOKIMQ_FOUND)
   message(STATUS "Using in-tree lokimq")

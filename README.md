@@ -52,7 +52,7 @@ library archives (`.a`).
 | OpenPGM      | ?             | NO       | `libpgm-dev`         | `libpgm`     | `openpgm-devel`     | NO       | For ZeroMQ       |
 | sqlite3      | ?             | YES      | `libsqlite3-dev`     | `sqlite`     | `sqlite-devel`      | NO       | Loki Name System |
 | libnorm[2]   | ?             | NO       | `libnorm-dev`        |              |               `     | YES      | For ZeroMQ       |
-| libunbound   | 1.4.16        | YES      | `libunbound-dev`     | `unbound`    | `unbound-devel`     | NO       | DNS resolver     |
+| libunbound   | 1.4.16        | NO       | `libunbound-dev`     | `unbound`    | `unbound-devel`     | NO       | DNS resolver     |
 | libsodium    | ?             | NO       | `libsodium-dev`      | `libsodium`  | `libsodium-devel`   | NO       | cryptography     |
 | libunwind    | any           | NO       | `libunwind8-dev`     | `libunwind`  | `libunwind-devel`   | YES      | Stack traces     |
 | liblzma      | any           | NO       | `liblzma-dev`        | `xz`         | `xz-devel`          | YES      | For libunwind    |
