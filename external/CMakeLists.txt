@@ -33,9 +33,8 @@
 # ...except for FreeBSD, because FreeBSD is a special case that doesn't play well with
 # others.
 
-find_package(PkgConfig REQUIRED)
-
 if(NOT STATIC)
+  find_package(PkgConfig REQUIRED)
   pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
   pkg_check_modules(LOKIMQ liblokimq>=1.1.4)
 endif()
