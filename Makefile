@@ -111,6 +111,13 @@ release-static:
 	mkdir -p $(builddir)/release
 	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
+release-full-static:
+	mkdir -p $(builddir)/release-static
+	cd $(builddir)/release-static && cmake -DBUILD_STATIC_DEPS=ON -DCMAKE_BUILD_TYPE=Release -DWARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+
+release-full-static-archive: release-full-static
+	cd $(builddir)/release-static && $(MAKE) strip_binaries && $(MAKE) create_archive
+
 coverage:
 	mkdir -p $(builddir)/debug
 	cd $(builddir)/debug && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=Debug -D COVERAGE=ON $(topdir) && $(MAKE) && $(MAKE) test

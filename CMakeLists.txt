@@ -993,3 +993,50 @@ if (iwyu_tool_path AND PYTHONINTERP_FOUND)
     VERBATIM
   )
 endif()
+
+get_property(loki_exec_tgts GLOBAL PROPERTY loki_executable_targets)
+set(strip_binaries "")
+foreach(tgt ${loki_exec_tgts})
+  list(APPEND strip_binaries COMMAND ${CMAKE_STRIP} $<TARGET_FILE:${tgt}>)
+endforeach()
+add_custom_target(strip_binaries ${strip_binaries} DEPENDS ${loki_exec_tgts})
+
+execute_process(COMMAND tar --version RESULT_VARIABLE tar_exit_code OUTPUT_VARIABLE tar_vers)
+set(git_tag "unknown")
+if(GIT_FOUND)
+  execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=9 HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE commithash OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT ret)
+    set(git_tag ${commithash})
+  endif()
+endif()
+
+set(tar_os ${CMAKE_SYSTEM_NAME})
+set(default_archive create_tarxz)
+if(tar_os STREQUAL "Linux")
+  set(tar_os "linux-${CMAKE_SYSTEM_PROCESSOR}")
+elseif(tar_os STREQUAL "Darwin")
+  set(tar_os "macos")
+elseif(tar_os STREQUAL "Windows")
+  if(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES i686-.*mingw)
+    set(tar_os "win-x86")
+  elseif(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES x86_64-.*mingw)
+    set(tar_os "win-x64")
+  else()
+    set(tar_os "windows") # Don't know what arch
+  endif()
+  set(default_archive create_zip) # .tar.xz files are too scary for Windows users
+endif()
+set(tar_dir "loki-${tar_os}-${PROJECT_VERSION}${LOKI_RELEASE_SUFFIX}-${git_tag}")
+add_custom_target(create_tarxz
+  COMMAND ${CMAKE_COMMAND} -E rename bin "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E tar cvJ "${tar_dir}.tar.xz" -- "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E rename "${tar_dir}" bin
+  DEPENDS ${loki_exec_tgts})
+
+add_custom_target(create_zip
+  COMMAND ${CMAKE_COMMAND} -E rename bin "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E tar cv "${tar_dir}.zip" --format=zip -- "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E rename "${tar_dir}" bin
+  DEPENDS ${loki_exec_tgts})
+
+add_custom_target(create_archive DEPENDS ${default_archive})
