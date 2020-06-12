@@ -53,7 +53,7 @@ if(CCACHE_PROGRAM)
   endforeach()
 endif()
 
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 project(loki
@@ -140,6 +140,31 @@ if(NOT CMAKE_BUILD_TYPE)
   message(STATUS "Setting default build type: ${CMAKE_BUILD_TYPE}")
 endif()
 string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_LOWER)
+
+cmake_policy(SET CMP0069 NEW)
+SET(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
+set(USE_LTO_DEFAULT ON)
+if(MINGW)
+  set(USE_LTO_DEFAULT OFF) # FIXME - investigate whether this is still needed with non-ancient mingw
+endif()
+option(USE_LTO "Use Link-Time Optimization (Release mode only)" ${USE_LTO_DEFAULT})
+
+if(USE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT IPO_ENABLED OUTPUT ipo_error)
+  if(IPO_ENABLED)
+    message(STATUS "LTO enabled")
+  else()
+    message(WARNING "LTO not supported by compiler: ${ipo_error}")
+  endif()
+else()
+  message(STATUS "LTO disabled")
+  set(IPO_ENABLED OFF)
+endif()
+
+if(IPO_ENABLED AND NOT DEFINED CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+endif()
 
 # On Darwin, ensure the user-defined paths are used to find PCSC
 # before falling back to the system frameworks.
@@ -543,8 +568,6 @@ else()
     set(MINGW_FLAG "${MINGW_FLAG} -DWIN32_LEAN_AND_MEAN")
     set(Boost_THREADAPI win32)
     include_directories(SYSTEM src/platform/mingw)
-    # mingw doesn't support LTO (multiple definition errors at link time)
-    set(USE_LTO_DEFAULT false)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--stack,10485760")
     if(NOT BUILD_64)
       add_definitions(-DWINVER=0x0501 -D_WIN32_WINNT=0x0501)
@@ -754,36 +777,6 @@ else()
   # At least some CLANGs default to not enough for monero
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=900")
 
-  if(NOT DEFINED USE_LTO_DEFAULT)
-    set(USE_LTO_DEFAULT false)
-  endif()
-  set(USE_LTO ${USE_LTO_DEFAULT} CACHE BOOL "Use Link-Time Optimization (Release mode only)")
-
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # There is a clang bug that does not allow to compile code that uses AES-NI intrinsics if -flto is enabled, so explicitly disable
-    set(USE_LTO false)
-  endif()
-
-
-  if(USE_LTO)
-    set(RELEASE_FLAGS "${RELEASE_FLAGS} -flto")
-    if(STATIC)
-      set(RELEASE_FLAGS "${RELEASE_FLAGS} -ffat-lto-objects")
-    endif()
-    # Since gcc 4.9 the LTO format is non-standard (slim), so we need the gcc-specific ar and ranlib binaries
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9.0) AND NOT OPENBSD AND NOT DRAGONFLY)
-      # When invoking cmake on distributions on which gcc's binaries are prefixed
-      # with an arch-specific triplet, the user must specify -DCHOST=<prefix>
-      if (DEFINED CHOST)
-        set(CMAKE_AR "${CHOST}-gcc-ar")
-        set(CMAKE_RANLIB "${CHOST}-gcc-ranlib")
-      else()
-        set(CMAKE_AR "gcc-ar")
-        set(CMAKE_RANLIB "gcc-ranlib")
-      endif()
-    endif()
-  endif()
-
   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${DEBUG_FLAGS}")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${DEBUG_FLAGS}")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ${RELEASE_FLAGS}")
@@ -803,6 +796,8 @@ else()
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${STATIC_FLAGS} ")
   endif()
 endif()
+
+
 
 if (${BOOST_IGNORE_SYSTEM_PATHS} STREQUAL "ON")
   set(Boost_NO_SYSTEM_PATHS TRUE)

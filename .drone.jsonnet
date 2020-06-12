@@ -40,8 +40,8 @@ local debian_pipeline(name, image,
                 'mkdir build',
                 'cd build',
                 'cmake .. -G Ninja -DCMAKE_CXX_FLAGS=-fdiagnostics-color=always -DCMAKE_BUILD_TYPE='+build_type+' ' +
+                    '-DUSE_LTO=' + (if lto then 'ON ' else 'OFF ') +
                     (if werror then '-DWARNINGS_AS_ERRORS=ON ' else '') +
-                    (if lto then '' else '-DUSE_LTO=OFF ') +
                     (if build_tests || run_tests then '-DBUILD_TESTS=ON ' else '') +
                     cmake_extra
             ] + (if arch == 'arm64' && jobs > 1 then
@@ -135,8 +135,8 @@ local mac_builder(name,
                 'mkdir build',
                 'cd build',
                 'cmake .. -G Ninja -DCMAKE_CXX_FLAGS=-fcolor-diagnostics -DCMAKE_BUILD_TYPE='+build_type+' ' +
+                    '-DUSE_LTO=' + (if lto then 'ON ' else 'OFF ') +
                     (if werror then '-DWARNINGS_AS_ERRORS=ON ' else '') +
-                    (if lto then '' else '-DUSE_LTO=OFF ') +
                     (if build_tests || run_tests then '-DBUILD_TESTS=ON ' else '') +
                     cmake_extra,
                 'ninja -j' + jobs + ' -v'
