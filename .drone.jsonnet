@@ -24,7 +24,7 @@ local debian_pipeline(name, image,
         run_tests=false, # Runs full test suite
         cmake_extra='',
         extra_cmds=[],
-        jobs=12,
+        jobs=6,
         allow_fail=false) = {
     kind: 'pipeline',
     type: 'docker',
