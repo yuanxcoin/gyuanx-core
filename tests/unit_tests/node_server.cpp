@@ -142,7 +142,7 @@ static bool is_blocked(Server &server, const epee::net_utils::network_address &a
 TEST(ban, add)
 {
   test_core pr_core;
-  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core, NULL);
+  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core);
   Server server(cprotocol);
   cprotocol.set_p2p_endpoint(&server);
 
@@ -227,7 +227,7 @@ TEST(ban, add)
 TEST(ban, limit)
 {
   test_core pr_core;
-  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core, NULL);
+  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core);
   Server server(cprotocol);
   cprotocol.set_p2p_endpoint(&server);
 
@@ -244,7 +244,7 @@ TEST(ban, subnet)
 {
   time_t seconds;
   test_core pr_core;
-  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core, NULL);
+  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core);
   Server server(cprotocol);
   cprotocol.set_p2p_endpoint(&server);
 
@@ -276,7 +276,7 @@ TEST(ban, ignores_port)
 {
   time_t seconds;
   test_core pr_core;
-  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core, NULL);
+  cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol(pr_core);
   Server server(cprotocol);
   cprotocol.set_p2p_endpoint(&server);
 
@@ -297,7 +297,7 @@ TEST(node_server, bind_same_p2p_port)
     cryptonote::t_cryptonote_protocol_handler<test_core> cprotocol;
     std::unique_ptr<Server> server;
 
-    test_data_t(): cprotocol(pr_core, NULL)
+    test_data_t(): cprotocol(pr_core)
     {
       server.reset(new Server(cprotocol));
       cprotocol.set_p2p_endpoint(server.get());
