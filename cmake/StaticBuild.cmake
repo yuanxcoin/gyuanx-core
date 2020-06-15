@@ -399,8 +399,8 @@ build_external(hidapi
   DEPENDS ${maybe_eudev} libusb_external
   CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --enable-static --with-pic
     "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-O2 ${flto}" "CXXFLAGS=-O2 ${flto}"
-    "libudev_CFLAGS=-I${DEPS_DESTDIR}/include" "libudev_LIBS="
-    "libusb_CFLAGS=-I${DEPS_DESTDIR}/include/libusb-1.0" "libusb_LIBS="
+    "libudev_CFLAGS=-I${DEPS_DESTDIR}/include" "libudev_LIBS=-L${DEPS_DESTDIR}/lib -ludev"
+    "libusb_CFLAGS=-I${DEPS_DESTDIR}/include/libusb-1.0" "libusb_LIBS=-L${DEPS_DESTDIR}/lib -lusb-1.0"
   BUILD_BYPRODUCTS
     ${hidapi_lib_byproducts}
     ${DEPS_DESTDIR}/include/hidapi

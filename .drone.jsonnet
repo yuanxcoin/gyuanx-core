@@ -14,7 +14,8 @@ local debian_pipeline(name, image,
         lto=false,
         werror=false, // FIXME
         build_tests=true,
-        run_tests=false,
+        test_lokid=true, # Simple lokid offline startup test
+        run_tests=false, # Runs full test suite
         cmake_extra='',
         extra_cmds=[],
         jobs=12,
@@ -35,7 +36,7 @@ local debian_pipeline(name, image,
                 'apt-get update',
                 'apt-get install -y eatmydata',
                 'eatmydata apt-get dist-upgrade -y',
-                'eatmydata apt-get install -y cmake git ninja-build ccache ' + deps,
+                'eatmydata apt-get install -y --no-install-recommends cmake git ca-certificates ninja-build ccache ' + deps,
                 'eatmydata git submodule update --init --recursive',
                 'mkdir build',
                 'cd build',
@@ -50,9 +51,11 @@ local debian_pipeline(name, image,
                     ['ninja -j1 rpc wallet -v', 'ninja -j2 daemon device_trezor -v', 'ninja -j1 wallet_rpc_server -v', 'ninja -j2 -v']
                 else
                     ['ninja -j' + jobs + ' -v']
-            ) + [
-                '(sleep 3; echo "status\ndiff\nexit") | TERM=xterm ./bin/lokid --offline --data-dir=startuptest'
-            ] + (
+            ) + (
+                if test_lokid then [
+                    '(sleep 3; echo "status\ndiff\nexit") | TERM=xterm ./bin/lokid --offline --data-dir=startuptest'
+                ] else []
+            ) + (
                 if run_tests then [
                     'mkdir -v -p $$HOME/.loki',
                     'GTEST_COLOR=1 ctest --output-on-failure -j'+jobs
@@ -150,6 +153,16 @@ local mac_builder(name,
     ]
 };
 
+local static_check_and_upload = [
+    '../utils/build_scripts/drone-check-static-libs.sh',
+    'ninja strip_binaries',
+    'ninja create_tarxz',
+    '../utils/build_scripts/drone-static-upload.sh'
+];
+
+local static_build_deps='autoconf automake make qttools5-dev file libtool gperf pkg-config patch openssh-client';
+
+
 
 [
     // Various debian builds
@@ -168,16 +181,16 @@ local mac_builder(name,
     debian_pipeline("Debian sid (ARM64)", "debian:sid", arch="arm64", build_tests=false),
     debian_pipeline("Debian buster (armhf)", "arm32v7/debian:buster", arch="arm64", build_tests=false, cmake_extra='-DDOWNLOAD_SODIUM=ON -DARCH_ID=armhf'),
 
-/*
     // Static build (on bionic) which gets uploaded to builds.lokinet.dev:
-    debian_pipeline("Static (focal amd64)", "ubuntu:bionic", deps='g++-8 python3-dev', lto=true,
-                    cmake_extra='-DBUILD_SHARED_LIBS=OFF -DSTATIC_LINK=ON -DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 ' +
-                        '-DDOWNLOAD_SODIUM=ON -DDOWNLOAD_CURL=ON -DDOWNLOAD_UV=ON -DWITH_SYSTEMD=OFF',
-                    extra_cmds=[
-                        '../contrib/ci/drone-check-static-libs.sh',
-                        '../contrib/ci/drone-static-upload.sh'
-                    ]),
-
+    debian_pipeline("Static (bionic amd64)", "ubuntu:bionic", deps='g++-8 '+static_build_deps,
+                    cmake_extra='-DBUILD_STATIC_DEPS=ON -DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8',
+                    build_tests=false, lto=true, extra_cmds=static_check_and_upload),
+    // Static mingw build (on focal) which gets uploaded to builds.lokinet.dev:
+    debian_pipeline("Static (win64)", "ubuntu:focal", deps='g++ g++-mingw-w64-x86-64 '+static_build_deps,
+                    cmake_extra='-DCMAKE_TOOLCHAIN_FILE=../cmake/64-bit-toolchain.cmake -DBUILD_STATIC_DEPS=ON',
+                    build_tests=false, lto=false, test_lokid=false, extra_cmds=[
+                        'ninja strip_binaries', 'ninja create_zip', '../utils/build_scripts/drone-static-upload.sh']),
+/*
     // Deb builds:
     deb_builder("debian:sid", "sid", "debian/sid"),
     deb_builder("debian:buster", "buster", "debian/buster", imaginary_repo=true),
@@ -187,11 +200,6 @@ local mac_builder(name,
     // Macos builds:
     mac_builder('macOS (Release)', run_tests=true),
     mac_builder('macOS (Debug)', build_type='Debug'),
-/*
-    mac_builder('macOS (Static)', cmake_extra='-DBUILD_SHARED_LIBS=OFF -DSTATIC_LINK=ON -DDOWNLOAD_SODIUM=FORCE -DDOWNLOAD_CURL=FORCE -DDOWNLOAD_UV=FORCE',
-                extra_cmds=[
-                    '../contrib/ci/drone-check-static-libs.sh',
-                    '../contrib/ci/drone-static-upload.sh'
-                ]),
-*/
+    mac_builder('macOS (Static)', cmake_extra='-DBUILD_STATIC_DEPS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13',
+                build_tests=false, extra_cmds=static_check_and_upload),
 ]
