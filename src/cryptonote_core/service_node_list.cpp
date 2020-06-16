@@ -855,7 +855,7 @@ namespace service_nodes
   {
     contributor_args_t contributor_args = {};
     crypto::public_key service_node_key;
-    uint64_t expiration_timestamp;
+    uint64_t expiration_timestamp{0};
     crypto::signature signature;
 
     if (!reg_tx_extract_fields(tx, contributor_args, expiration_timestamp, service_node_key, signature))

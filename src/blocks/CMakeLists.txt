@@ -27,6 +27,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(blocks blocks.cpp)
+target_link_libraries(blocks PRIVATE Boost::boost)
 
 foreach(BLOB_NAME checkpoints testnet_blocks stagenet_blocks)
     set(OUTPUT_C_SOURCE "generated_${BLOB_NAME}.c")

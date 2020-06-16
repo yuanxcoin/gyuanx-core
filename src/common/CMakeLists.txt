@@ -51,7 +51,12 @@ add_library(common
   timings.cc
   updates.cpp
   util.cpp
+  ${PROJECT_BINARY_DIR}/translations/translation_files.cpp
   )
+
+set_source_files_properties(${PROJECT_BINARY_DIR}/translations/translation_files.cpp PROPERTIES GENERATED 1)
+add_dependencies(common generate_translation_data)
+
 
 if (STACK_TRACE)
   target_sources(common PRIVATE stack_trace.cpp)
@@ -64,8 +69,6 @@ if (BACKCOMPAT)
   target_sources(common PRIVATE compat/glibc_compat.cpp)
 endif()
 
-add_dependencies(common generate_translations_header)
-
 target_link_libraries(common
   PUBLIC
     cncrypto
@@ -76,8 +79,6 @@ target_link_libraries(common
     OpenSSL::SSL
     OpenSSL::Crypto
     extra)
-
-target_include_directories(common PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/../../translations")
 
 option(STACK_TRACE "Install a hook that dumps stack on exception" OFF)
 

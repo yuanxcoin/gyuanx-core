@@ -125,7 +125,7 @@ struct TestDB: public BaseTestDB
     return result;
   }
 
-  virtual void remove_block_checkpoint(uint64_t block_height)
+  void remove_block_checkpoint(uint64_t block_height) override
   {
     auto it = std::find_if(checkpoints.begin(), checkpoints.end(), [block_height](checkpoint_t const &entry) {
       return entry.height == block_height;

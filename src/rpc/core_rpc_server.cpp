@@ -1545,12 +1545,12 @@ namespace cryptonote { namespace rpc {
     if (!req.prev_block.empty())
     {
       if (!epee::string_tools::hex_to_pod(req.prev_block, prev_block))
-        throw rpc_error{ERROR_INTERNAL_ERROR, "Invalid prev_block"};
+        throw rpc_error{ERROR_INTERNAL, "Invalid prev_block"};
     }
     if(!m_core.get_block_template(b, req.prev_block.empty() ? NULL : &prev_block, info.address, diff, res.height, res.expected_reward, blob_reserve))
     {
       LOG_ERROR("Failed to create block template");
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: failed to create block template"};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: failed to create block template"};
     }
 
     if (b.major_version >= network_version_12_checkpointing)
@@ -1572,13 +1572,13 @@ namespace cryptonote { namespace rpc {
     if(tx_pub_key == crypto::null_pkey)
     {
       LOG_ERROR("Failed to get tx pub key in coinbase extra");
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: failed to create block template"};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: failed to create block template"};
     }
     res.reserved_offset = block_blob.find(tx_pub_key.data, 0, sizeof(tx_pub_key.data));
     if (res.reserved_offset == block_blob.npos)
     {
       LOG_ERROR("Failed to find tx pub key in blockblob");
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: failed to create block template"};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: failed to create block template"};
     }
     if (req.reserve_size)
       res.reserved_offset += sizeof(tx_pub_key) + 2; //2 bytes: tag for TX_EXTRA_NONCE(1 byte), counter in TX_EXTRA_NONCE(1 byte)
@@ -1587,7 +1587,7 @@ namespace cryptonote { namespace rpc {
     if(res.reserved_offset + req.reserve_size > block_blob.size())
     {
       LOG_ERROR("Failed to calculate offset for ");
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: failed to create block template"};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: failed to create block template"};
     }
     blobdata hashing_blob = get_block_hashing_blob(b);
     res.prev_hash = string_tools::pod_to_hex(b.prev_id);
@@ -1834,7 +1834,7 @@ namespace cryptonote { namespace rpc {
     block last_block;
     bool have_last_block = m_core.get_block_by_hash(last_block_hash, last_block);
     if (!have_last_block)
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get last block."};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: can't get last block."};
     fill_block_header_response(last_block, false, last_block_height, last_block_hash, res.block_header, req.fill_pow_hash && context.admin);
     res.status = STATUS_OK;
     return res;
@@ -1857,9 +1857,9 @@ namespace cryptonote { namespace rpc {
       bool orphan = false;
       bool have_block = m_core.get_block_by_hash(block_hash, blk, &orphan);
       if (!have_block)
-        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get block by hash. Hash = " + hash + '.'};
+        throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by hash. Hash = " + hash + '.'};
       if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
-        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: coinbase transaction in the block has the wrong type"};
+        throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
       uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
       fill_block_header_response(blk, orphan, block_height, block_hash, block_header, fill_pow_hash && admin);
     };
@@ -1895,13 +1895,13 @@ namespace cryptonote { namespace rpc {
       block blk;
       bool have_block = m_core.get_block_by_hash(block_hash, blk);
       if (!have_block)
-        throw rpc_error{ERROR_INTERNAL_ERROR, 
+        throw rpc_error{ERROR_INTERNAL, 
           "Internal error: can't get block by height. Height = " + std::to_string(h) + ". Hash = " + epee::string_tools::pod_to_hex(block_hash) + '.'};
       if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
-        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: coinbase transaction in the block has the wrong type"};
+        throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
       uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
       if (block_height != h)
-        throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: coinbase transaction in the block has the wrong height"};
+        throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong height"};
       res.headers.push_back(block_header_response());
       fill_block_header_response(blk, false, block_height, block_hash, res.headers.back(), req.fill_pow_hash && context.admin);
     }
@@ -1924,7 +1924,7 @@ namespace cryptonote { namespace rpc {
     block blk;
     bool have_block = m_core.get_block_by_hash(block_hash, blk);
     if (!have_block)
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get block by height. Height = " + std::to_string(req.height) + '.'};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by height. Height = " + std::to_string(req.height) + '.'};
     fill_block_header_response(blk, false, req.height, block_hash, res.block_header, req.fill_pow_hash && context.admin);
     res.status = STATUS_OK;
     return res;
@@ -1955,9 +1955,9 @@ namespace cryptonote { namespace rpc {
     bool orphan = false;
     bool have_block = m_core.get_block_by_hash(block_hash, blk, &orphan);
     if (!have_block)
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: can't get block by hash. Hash = " + req.hash + '.'};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by hash. Hash = " + req.hash + '.'};
     if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Internal error: coinbase transaction in the block has the wrong type"};
+      throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
     uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
     fill_block_header_response(blk, orphan, block_height, block_hash, res.block_header, req.fill_pow_hash && context.admin);
     for (size_t n = 0; n < blk.tx_hashes.size(); ++n)
@@ -2597,14 +2597,14 @@ namespace cryptonote { namespace rpc {
             req.cumulative,
             m_core.get_current_blockchain_height());
         if (!data)
-          throw rpc_error{ERROR_INTERNAL_ERROR, "Failed to get output distribution"};
+          throw rpc_error{ERROR_INTERNAL, "Failed to get output distribution"};
 
         res.distributions.push_back({std::move(*data), amount, "", req.binary, req.compress});
       }
     }
     catch (const std::exception &e)
     {
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Failed to get output distribution"};
+      throw rpc_error{ERROR_INTERNAL, "Failed to get output distribution"};
     }
 
     res.status = STATUS_OK;
@@ -2636,13 +2636,13 @@ namespace cryptonote { namespace rpc {
     try
     {
       if (!(req.check ? m_core.check_blockchain_pruning() : m_core.prune_blockchain()))
-        throw rpc_error{ERROR_INTERNAL_ERROR, req.check ? "Failed to check blockchain pruning" : "Failed to prune blockchain"};
+        throw rpc_error{ERROR_INTERNAL, req.check ? "Failed to check blockchain pruning" : "Failed to prune blockchain"};
       res.pruning_seed = m_core.get_blockchain_pruning_seed();
       res.pruned = res.pruning_seed != 0;
     }
     catch (const std::exception &e)
     {
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Failed to prune blockchain"};
+      throw rpc_error{ERROR_INTERNAL, "Failed to prune blockchain"};
     }
 
     res.status = STATUS_OK;
@@ -2768,7 +2768,7 @@ namespace cryptonote { namespace rpc {
     std::string err_msg;
     uint8_t hf_version = m_core.get_hard_fork_version(m_core.get_current_blockchain_height());
     if (!service_nodes::make_registration_cmd(m_core.get_nettype(), hf_version, req.staking_requirement, req.args, m_core.get_service_keys(), res.registration_cmd, req.make_friendly, err_msg))
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Failed to make registration command" + (err_msg.empty() ? ""s : ": " + err_msg)};
+      throw rpc_error{ERROR_INTERNAL, "Failed to make registration command" + (err_msg.empty() ? ""s : ": " + err_msg)};
 
     res.status = STATUS_OK;
     return res;
@@ -3240,7 +3240,7 @@ namespace cryptonote { namespace rpc {
       throw rpc_error{ERROR_WRONG_PARAM, "The provided end_height needs to be higher than start_height"};
 
     if (!db.get_blocks(req.start_height, end_height - req.start_height + 1, blocks))
-      throw rpc_error{ERROR_INTERNAL_ERROR, "Could not query block at requested height: " + std::to_string(req.start_height)};
+      throw rpc_error{ERROR_INTERNAL, "Could not query block at requested height: " + std::to_string(req.start_height)};
 
     res.start_height = req.start_height;
     res.end_height = end_height;
@@ -3407,7 +3407,7 @@ namespace cryptonote { namespace rpc {
 
       auto it = owner_to_request_index.find(record.owner);
       if (it == owner_to_request_index.end())
-        throw rpc_error{ERROR_INTERNAL_ERROR, "Owner=" + record.owner.to_string(nettype()) +
+        throw rpc_error{ERROR_INTERNAL, "Owner=" + record.owner.to_string(nettype()) +
           ", could not be mapped back a index in the request 'entries' array"};
 
       entry.request_index   = it->second;

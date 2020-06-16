@@ -39,7 +39,7 @@ constexpr int16_t
     ERROR_TOO_BIG_HEIGHT        = -2,
     ERROR_TOO_BIG_RESERVE_SIZE  = -3,
     ERROR_WRONG_WALLET_ADDRESS  = -4,
-    ERROR_INTERNAL_ERROR        = -5,
+    ERROR_INTERNAL              = -5,
     ERROR_WRONG_BLOCKBLOB       = -6,
     ERROR_BLOCK_NOT_ACCEPTED    = -7,
     ERROR_CORE_BUSY             = -9,

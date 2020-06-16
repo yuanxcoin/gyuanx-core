@@ -30,6 +30,7 @@ add_executable(difficulty-tests
   difficulty.cpp)
 target_link_libraries(difficulty-tests
   PRIVATE
+    cncrypto
     cryptonote_basic
     easylogging
     extra)

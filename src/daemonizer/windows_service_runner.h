@@ -51,7 +51,7 @@ namespace windows {
     std::string m_name;
     Application app;
 
-    static service_runner* instance{nullptr};
+    static service_runner*& get_instance() { static service_runner* instance{nullptr}; return instance; }
 
   public:
     template <typename... Args>
@@ -59,6 +59,7 @@ namespace windows {
         : m_name{std::move(name)}, app{std::forward<Args>(args)...}
     {
       // This limitation is crappy, but imposed on us by Windows
+      auto& instance = get_instance();
       if (instance) throw std::runtime_error("Only one service_runner<T> may exist at a time");
       instance = this;
 
@@ -71,7 +72,7 @@ namespace windows {
       m_status.dwWaitHint = 0;
     }
 
-    ~service_runner() { instance = nullptr; }
+    ~service_runner() { get_instance() = nullptr; }
 
     // Non-copyable and non-moveable
     service_runner &operator=(service_runner&&) = delete;
@@ -81,7 +82,7 @@ namespace windows {
 
     void run()
     {
-      SERVICE_TABLE_ENTRY const table[] = {{m_name.c_str(), &service_main}, {0, 0}};
+      SERVICE_TABLE_ENTRY const table[] = {{&m_name[0], &service_main}, {0, 0}};
       StartServiceCtrlDispatcher(table);
     }
   private:
@@ -102,7 +103,7 @@ namespace windows {
 
     static void WINAPI service_main(DWORD argc, LPSTR * argv)
     {
-      instance->service_main_(argc, argv);
+      get_instance()->service_main_(argc, argv);
     }
 
     void service_main_(DWORD argc, LPSTR * argv)
@@ -124,7 +125,7 @@ namespace windows {
 
     static void WINAPI on_state_change_request(DWORD control_code)
     {
-      instance->on_state_change_request_(control_code);
+      get_instance()->on_state_change_request_(control_code);
     }
 
     void on_state_change_request_(DWORD control_code)

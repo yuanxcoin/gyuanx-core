@@ -43,7 +43,17 @@ if (IOS)
     INCLUDE(CmakeLists_IOS.txt)
 endif()
 
-cmake_minimum_required(VERSION 3.7)
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+  foreach(lang C CXX)
+    if(NOT DEFINED CMAKE_${lang}_COMPILER_LAUNCHER AND NOT CMAKE_${lang}_COMPILER MATCHES ".*/ccache")
+      message(STATUS "Enabling ccache for ${lang}")
+      set(CMAKE_${lang}_COMPILER_LAUNCHER ${CCACHE_PROGRAM} CACHE STRING "")
+    endif()
+  endforeach()
+endif()
+
+cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 project(loki
@@ -62,6 +72,13 @@ endif()
 if(POLICY CMP0079)
   cmake_policy(SET CMP0079 NEW)
 endif()
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
 function (add_c_flag_if_supported flag var)
   string(REPLACE "-" "_" supported ${flag}_c)
@@ -122,7 +139,32 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
   message(STATUS "Setting default build type: ${CMAKE_BUILD_TYPE}")
 endif()
-string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_LOWER)
+
+cmake_policy(SET CMP0069 NEW)
+SET(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
+if(CMAKE_BUILD_TYPE STREQUAL Release AND NOT MINGW)
+  set(USE_LTO_DEFAULT ON)
+else()
+  set(USE_LTO_DEFAULT OFF)
+endif()
+option(USE_LTO "Use Link-Time Optimization" ${USE_LTO_DEFAULT})
+
+if(USE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT IPO_ENABLED OUTPUT ipo_error)
+  if(IPO_ENABLED)
+    message(STATUS "LTO enabled")
+  else()
+    message(WARNING "LTO not supported by compiler: ${ipo_error}")
+  endif()
+else()
+  message(STATUS "LTO disabled")
+  set(IPO_ENABLED OFF)
+endif()
+
+if(IPO_ENABLED AND NOT DEFINED CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+endif()
 
 # On Darwin, ensure the user-defined paths are used to find PCSC
 # before falling back to the system frameworks.
@@ -213,8 +255,8 @@ if (BUILD_TESTS)
   add_definitions(-DUNIT_TEST)
 endif()
 
+find_package(Git)
 if(NOT MANUAL_SUBMODULES)
-  find_package(Git)
   if(GIT_FOUND)
     function (check_submodule relative_path)
       execute_process(COMMAND git rev-parse "HEAD" WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${relative_path} OUTPUT_VARIABLE localHead)
@@ -239,7 +281,6 @@ if(NOT MANUAL_SUBMODULES)
     
     message(STATUS "Checking submodules")
     check_submodule(external/miniupnp)
-    check_submodule(external/unbound)
     check_submodule(external/rapidjson)
     check_submodule(external/trezor-common)
     check_submodule(external/randomx)
@@ -256,31 +297,7 @@ option(PER_BLOCK_CHECKPOINT "Enables per-block checkpointing" ON)
 list(INSERT CMAKE_MODULE_PATH 0
   "${CMAKE_SOURCE_DIR}/cmake")
 
-if (NOT DEFINED ENV{DEVELOPER_LOCAL_TOOLS})
-  message(STATUS "Could not find DEVELOPER_LOCAL_TOOLS in env (not required)")
-  set(BOOST_IGNORE_SYSTEM_PATHS_DEFAULT OFF)
-elseif ("$ENV{DEVELOPER_LOCAL_TOOLS}" EQUAL 1)
-  message(STATUS "Found: env DEVELOPER_LOCAL_TOOLS = 1")
-  set(BOOST_IGNORE_SYSTEM_PATHS_DEFAULT ON)
-else()
-  message(STATUS "Found: env DEVELOPER_LOCAL_TOOLS = 0")
-  set(BOOST_IGNORE_SYSTEM_PATHS_DEFAULT OFF)
-endif()
-
-message(STATUS "BOOST_IGNORE_SYSTEM_PATHS defaults to ${BOOST_IGNORE_SYSTEM_PATHS_DEFAULT}")
-option(BOOST_IGNORE_SYSTEM_PATHS "Ignore boost system paths for local boost installation" ${BOOST_IGNORE_SYSTEM_PATHS_DEFAULT})
-
-
-if (NOT DEFINED ENV{DEVELOPER_LIBUNBOUND_OLD})
-  message(STATUS "Could not find DEVELOPER_LIBUNBOUND_OLD in env (not required)")
-elseif ("$ENV{DEVELOPER_LIBUNBOUND_OLD}" EQUAL 1)
-  message(STATUS "Found: env DEVELOPER_LIBUNBOUND_OLD = 1, will use the work around")
-  add_definitions(-DDEVELOPER_LIBUNBOUND_OLD)
-elseif ("$ENV{DEVELOPER_LIBUNBOUND_OLD}" EQUAL 0)
-  message(STATUS "Found: env DEVELOPER_LIBUNBOUND_OLD = 0")
-else()
-  message(STATUS "Found: env DEVELOPER_LIBUNBOUND_OLD with bad value. Will NOT use the work around")
-endif()
+option(BOOST_IGNORE_SYSTEM_PATHS "Ignore boost system paths for local boost installation" OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -331,12 +348,22 @@ if(APPLE)
   endif()
 endif()
 
-if(MSVC OR MINGW)
+option(BUILD_STATIC_DEPS "Download, build and statically link against core dependencies" OFF)
+if(BUILD_STATIC_DEPS)
+  include(StaticBuild)
+endif()
+
+if(MSVC OR MINGW OR BUILD_STATIC_DEPS)
   set(DEFAULT_STATIC true)
 else()
   set(DEFAULT_STATIC false)
 endif()
-option(STATIC "Try to link external libraries statically, where possible" ${DEFAULT_STATIC})
+option(STATIC "Try to link external dependencies statically, where possible" ${DEFAULT_STATIC})
+
+if(BUILD_STATIC_DEPS AND NOT STATIC)
+  message(FATAL_ERROR "Option BUILD_STATIC_DEPS requires STATIC be enabled as well")
+endif()
+
 option(BUILD_SHARED_LIBS "Build shared internal libraries" OFF)
 set(PIC_FLAG "-fPIC")
 
@@ -395,7 +422,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads)
 
 if (APPLE AND NOT IOS)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64 -fvisibility=default -std=c++14")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64 -fvisibility=default")
   if (NOT OpenSSL_DIR)
       EXECUTE_PROCESS(COMMAND brew --prefix openssl
         OUTPUT_VARIABLE OPENSSL_ROOT_DIR
@@ -404,7 +431,11 @@ if (APPLE AND NOT IOS)
   endif()
 endif()
 
-find_package(OpenSSL REQUIRED)
+if(BUILD_STATIC_DEPS)
+  # SSL::* targets already set up
+else()
+  find_package(OpenSSL REQUIRED)
+endif()
 message(STATUS "Using OpenSSL include dir at ${OPENSSL_INCLUDE_DIR}")
 
 if(MINGW)
@@ -417,38 +448,45 @@ add_definition_if_library_exists(c explicit_bzero "strings.h" HAVE_EXPLICIT_BZER
 add_definition_if_function_found(strptime HAVE_STRPTIME)
 
 # Generate header for embedded translations
-# Generate header for embedded translations, use target toolchain if depends, otherwise use the
-# lrelease and lupdate binaries from the host
 add_subdirectory(translations)
 
-add_library(libunbound INTERFACE)
 add_library(miniupnpc INTERFACE)
 add_library(systemd INTERFACE)  # Will do nothing unless we find and enable systemd support
 
+if(NOT TARGET sodium)
 # Allow -D DOWNLOAD_SODIUM=FORCE to download without even checking for a local libsodium
-option(DOWNLOAD_SODIUM "Allow libsodium to be downloaded and built locally if not found on the system" OFF)
-if(NOT DOWNLOAD_SODIUM STREQUAL "FORCE")
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(SODIUM libsodium>=1.0.9 IMPORTED_TARGET)
-endif()
-
-add_library(sodium INTERFACE)
-if(SODIUM_FOUND AND NOT DOWNLOAD_SODIUM STREQUAL "FORCE")
-  target_link_libraries(sodium INTERFACE PkgConfig::SODIUM)
-else()
-  if(NOT DOWNLOAD_SODIUM)
-    message(FATAL_ERROR "Could not find libsodium >= 1.0.9; either install it on your system or use -DDOWNLOAD_SODIUM=ON to download and build an internal copy")
+  option(DOWNLOAD_SODIUM "Allow libsodium to be downloaded and built locally if not found on the system" OFF)
+  if(NOT DOWNLOAD_SODIUM STREQUAL "FORCE" AND NOT BUILD_STATIC_DEPS)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SODIUM libsodium>=1.0.9 IMPORTED_TARGET)
   endif()
-  message(STATUS "Sodium >= 1.0.9 not found, but DOWNLOAD_SODIUM specified, so downloading it")
-  include(DownloadLibSodium)
-  target_link_libraries(sodium INTERFACE sodium_vendor)
+
+  add_library(sodium INTERFACE)
+  if(SODIUM_FOUND AND NOT DOWNLOAD_SODIUM STREQUAL "FORCE" AND NOT BUILD_STATIC_DEPS)
+    target_link_libraries(sodium INTERFACE PkgConfig::SODIUM)
+  else()
+    if(NOT DOWNLOAD_SODIUM AND NOT BUILD_STATIC_DEPS)
+      message(FATAL_ERROR "Could not find libsodium >= 1.0.9; either install it on your system or use -DDOWNLOAD_SODIUM=ON to download and build an internal copy")
+    endif()
+    message(STATUS "Sodium >= 1.0.9 not found, but DOWNLOAD_SODIUM specified, so downloading it")
+    include(DownloadLibSodium)
+    target_link_libraries(sodium INTERFACE sodium_vendor)
+  endif()
+
+  # Need this target export so that loki-mq properly picks up sodium
+  export(TARGETS sodium NAMESPACE sodium:: FILE sodium-exports.cmake)
 endif()
 
-export(TARGETS sodium NAMESPACE sodium:: FILE sodium-exports.cmake)
-install(TARGETS sodium EXPORT sodiumConfig DESTINATION ${CMAKE_INSTALL_LIBDIR})
+if (NOT BUILD_STATIC_DEPS)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(UNBOUND libunbound REQUIRED IMPORTED_TARGET)
+  add_library(libunbound INTERFACE)
+  target_link_libraries(libunbound INTERFACE PkgConfig::UNBOUND)
+endif()
 
 option(WITH_SYSTEMD "Attempts to link against and enable systemd daemon notification support" ON)
-if (WITH_SYSTEMD)
+if (WITH_SYSTEMD AND NOT BUILD_STATIC_DEPS)
+  find_package(PkgConfig REQUIRED)
   pkg_check_modules(SYSTEMD libsystemd IMPORTED_TARGET)
 
     if(SYSTEMD_FOUND)
@@ -534,8 +572,6 @@ else()
     set(MINGW_FLAG "${MINGW_FLAG} -DWIN32_LEAN_AND_MEAN")
     set(Boost_THREADAPI win32)
     include_directories(SYSTEM src/platform/mingw)
-    # mingw doesn't support LTO (multiple definition errors at link time)
-    set(USE_LTO_DEFAULT false)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--stack,10485760")
     if(NOT BUILD_64)
       add_definitions(-DWINVER=0x0501 -D_WIN32_WINNT=0x0501)
@@ -543,19 +579,6 @@ else()
   endif()
   set(C_WARNINGS "-Waggregate-return -Wnested-externs -Wold-style-definition -Wstrict-prototypes")
   set(CXX_WARNINGS "-Wno-reorder -Wno-missing-field-initializers")
-  try_compile(STATIC_ASSERT_RES "${CMAKE_CURRENT_BINARY_DIR}/static-assert" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test-static-assert.c" COMPILE_DEFINITIONS "-std=c11")
-  if(STATIC_ASSERT_RES)
-    set(STATIC_ASSERT_FLAG "")
-  else()
-    set(STATIC_ASSERT_FLAG "-Dstatic_assert=_Static_assert")
-  endif()
-
-  try_compile(STATIC_ASSERT_CPP_RES "${CMAKE_CURRENT_BINARY_DIR}/static-assert" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test-static-assert.cpp" COMPILE_DEFINITIONS "-std=c++14")
-  if(STATIC_ASSERT_CPP_RES)
-    set(STATIC_ASSERT_CPP_FLAG "")
-  else()
-    set(STATIC_ASSERT_CPP_FLAG "-Dstatic_assert=_Static_assert")
-  endif()
 
   option(COVERAGE "Enable profiling for test coverage report" 0)
 
@@ -645,8 +668,8 @@ else()
   message(STATUS "Using C++ security hardening flags: ${CXX_SECURITY_FLAGS}")
   message(STATUS "Using linker security hardening flags: ${LD_SECURITY_FLAGS}")
 
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11 -D_GNU_SOURCE ${MINGW_FLAG} ${STATIC_ASSERT_FLAG} ${WARNINGS} ${C_WARNINGS} ${COVERAGE_FLAGS} ${PIC_FLAG} ${C_SECURITY_FLAGS}")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -D_GNU_SOURCE ${MINGW_FLAG} ${STATIC_ASSERT_CPP_FLAG} ${WARNINGS} ${CXX_WARNINGS} ${COVERAGE_FLAGS} ${PIC_FLAG} ${CXX_SECURITY_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE ${MINGW_FLAG} ${STATIC_ASSERT_FLAG} ${WARNINGS} ${C_WARNINGS} ${COVERAGE_FLAGS} ${PIC_FLAG} ${C_SECURITY_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE ${MINGW_FLAG} ${STATIC_ASSERT_CPP_FLAG} ${WARNINGS} ${CXX_WARNINGS} ${COVERAGE_FLAGS} ${PIC_FLAG} ${CXX_SECURITY_FLAGS}")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LD_SECURITY_FLAGS} ${LD_BACKCOMPAT_FLAGS}")
 
   # With GCC 6.1.1 the compiled binary malfunctions due to aliasing. Until that
@@ -758,36 +781,6 @@ else()
   # At least some CLANGs default to not enough for monero
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=900")
 
-  if(NOT DEFINED USE_LTO_DEFAULT)
-    set(USE_LTO_DEFAULT false)
-  endif()
-  set(USE_LTO ${USE_LTO_DEFAULT} CACHE BOOL "Use Link-Time Optimization (Release mode only)")
-
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # There is a clang bug that does not allow to compile code that uses AES-NI intrinsics if -flto is enabled, so explicitly disable
-    set(USE_LTO false)
-  endif()
-
-
-  if(USE_LTO)
-    set(RELEASE_FLAGS "${RELEASE_FLAGS} -flto")
-    if(STATIC)
-      set(RELEASE_FLAGS "${RELEASE_FLAGS} -ffat-lto-objects")
-    endif()
-    # Since gcc 4.9 the LTO format is non-standard (slim), so we need the gcc-specific ar and ranlib binaries
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9.0) AND NOT OPENBSD AND NOT DRAGONFLY)
-      # When invoking cmake on distributions on which gcc's binaries are prefixed
-      # with an arch-specific triplet, the user must specify -DCHOST=<prefix>
-      if (DEFINED CHOST)
-        set(CMAKE_AR "${CHOST}-gcc-ar")
-        set(CMAKE_RANLIB "${CHOST}-gcc-ranlib")
-      else()
-        set(CMAKE_AR "gcc-ar")
-        set(CMAKE_RANLIB "gcc-ranlib")
-      endif()
-    endif()
-  endif()
-
   set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${DEBUG_FLAGS}")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${DEBUG_FLAGS}")
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ${RELEASE_FLAGS}")
@@ -808,6 +801,8 @@ else()
   endif()
 endif()
 
+
+
 if (${BOOST_IGNORE_SYSTEM_PATHS} STREQUAL "ON")
   set(Boost_NO_SYSTEM_PATHS TRUE)
 endif()
@@ -824,7 +819,9 @@ if(STATIC)
 endif()
 set(Boost_USE_MULTITHREADED TRUE) # Needed for macOS, at least, and won't hurt elsewhere
 
-if (WIN32)
+if(BUILD_STATIC_DEPS)
+  # StaticBuild.cmake sets Boost targets up for us
+elseif (WIN32)
   find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time chrono regex serialization program_options locale)
 else()
   find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time chrono regex serialization program_options)
@@ -899,7 +896,9 @@ if (BUILD_INTEGRATION)
   target_compile_definitions(extra INTERFACE LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
 else()
   option(USE_READLINE "Build with GNU readline support." ON)
-  if(USE_READLINE AND NOT DEPENDS)
+  if(USE_READLINE AND BUILD_STATIC_DEPS)
+    # readline target already set up
+  elseif(USE_READLINE AND NOT DEPENDS)
     find_package(Readline)
     if(READLINE_FOUND AND GNU_READLINE_FOUND)
       add_library(readline INTERFACE)
@@ -937,14 +936,18 @@ if (LOKI_DEBUG_SHORT_PROOFS)
 endif()
 
 
-add_library(sqlite3 INTERFACE)
-if (NOT SQLITE3_LIBRARIES)
-  pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+if(BUILD_STATIC_DEPS)
+  # sqlite3 target already set up
+else()
+  add_library(sqlite3 INTERFACE)
+  if (NOT SQLITE3_LIBRARIES)
+    pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+  endif()
+  find_library(sqlite3_link_libs NAMES ${SQLITE3_LIBRARIES} PATHS ${SQLITE3_LIBRARY_DIRS})
+  message(STATUS "sqlite3: ${SQLITE3_LIBRARIES} ${sqlite3_link_libs}")
+  target_link_libraries(sqlite3 INTERFACE ${sqlite3_link_libs})
+  target_include_directories(sqlite3 INTERFACE ${SQLITE3_INCLUDE_DIRS})
 endif()
-find_library(sqlite3_link_libs NAMES ${SQLITE3_LIBRARIES} PATHS ${SQLITE3_LIBRARY_DIRS})
-message(STATUS "sqlite3: ${SQLITE3_LIBRARIES} ${sqlite3_link_libs}")
-target_link_libraries(sqlite3 INTERFACE ${sqlite3_link_libs})
-target_include_directories(sqlite3 INTERFACE ${SQLITE3_INCLUDE_DIRS})
 
 add_subdirectory(contrib)
 add_subdirectory(src)
@@ -981,11 +984,6 @@ endif()
 # when ON - will install libwallet_merged into "lib"
 option(BUILD_GUI_DEPS "Build GUI dependencies." OFF)
 
-# This is not nice, distribution packagers should not enable this, but depend
-# on libunbound shipped with their distribution instead
-option(INSTALL_VENDORED_LIBUNBOUND "Install libunbound binary built from source vendored with this repo." OFF)
-
-CHECK_C_COMPILER_FLAG(-std=c11 HAVE_C11)
 find_package(PythonInterp)
 find_program(iwyu_tool_path NAMES iwyu_tool.py iwyu_tool)
 if (iwyu_tool_path AND PYTHONINTERP_FOUND)
@@ -995,3 +993,50 @@ if (iwyu_tool_path AND PYTHONINTERP_FOUND)
     VERBATIM
   )
 endif()
+
+get_property(loki_exec_tgts GLOBAL PROPERTY loki_executable_targets)
+set(strip_binaries "")
+foreach(tgt ${loki_exec_tgts})
+  list(APPEND strip_binaries COMMAND ${CMAKE_STRIP} $<TARGET_FILE:${tgt}>)
+endforeach()
+add_custom_target(strip_binaries ${strip_binaries} DEPENDS ${loki_exec_tgts})
+
+execute_process(COMMAND tar --version RESULT_VARIABLE tar_exit_code OUTPUT_VARIABLE tar_vers)
+set(git_tag "unknown")
+if(GIT_FOUND)
+  execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=9 HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE commithash OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT ret)
+    set(git_tag ${commithash})
+  endif()
+endif()
+
+set(tar_os ${CMAKE_SYSTEM_NAME})
+set(default_archive create_tarxz)
+if(tar_os STREQUAL "Linux")
+  set(tar_os "linux-${CMAKE_SYSTEM_PROCESSOR}")
+elseif(tar_os STREQUAL "Darwin")
+  set(tar_os "macos")
+elseif(tar_os STREQUAL "Windows")
+  if(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES i686-.*mingw)
+    set(tar_os "win-x86")
+  elseif(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES x86_64-.*mingw)
+    set(tar_os "win-x64")
+  else()
+    set(tar_os "windows") # Don't know what arch
+  endif()
+  set(default_archive create_zip) # .tar.xz files are too scary for Windows users
+endif()
+set(tar_dir "loki-${tar_os}-${PROJECT_VERSION}${LOKI_RELEASE_SUFFIX}-${git_tag}")
+add_custom_target(create_tarxz
+  COMMAND ${CMAKE_COMMAND} -E rename bin "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E tar cvJ "${tar_dir}.tar.xz" -- "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E rename "${tar_dir}" bin
+  DEPENDS ${loki_exec_tgts})
+
+add_custom_target(create_zip
+  COMMAND ${CMAKE_COMMAND} -E rename bin "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E tar cv "${tar_dir}.zip" --format=zip -- "${tar_dir}"
+  COMMAND ${CMAKE_COMMAND} -E rename "${tar_dir}" bin
+  DEPENDS ${loki_exec_tgts})
+
+add_custom_target(create_archive DEPENDS ${default_archive})

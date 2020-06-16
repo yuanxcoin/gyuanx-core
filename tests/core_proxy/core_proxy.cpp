@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
 
   //create objects and link them
   tests::proxy_core pr_core;
-  cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> cprotocol(pr_core, NULL);
+  cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> cprotocol(pr_core);
   nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> > p2psrv {
       cprotocol
     };
