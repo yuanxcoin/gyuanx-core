@@ -35,6 +35,7 @@
 #include <cstdio>
 
 #ifdef WIN32
+#include "string_tools.h"
 #ifndef STRSAFE_NO_DEPRECATE
 #define STRSAFE_NO_DEPRECATE
 #endif
@@ -284,7 +285,7 @@ namespace tools {
     {
       try
       {
-        return string_tools::utf16_to_utf8(psz_path);
+        return epee::string_tools::utf16_to_utf8(psz_path);
       }
       catch (const std::exception &e)
       {
@@ -352,10 +353,10 @@ namespace tools {
 #if defined(WIN32)
     // Maximizing chances for success
     std::wstring wide_replacement_name;
-    try { wide_replacement_name = string_tools::utf8_to_utf16(old_name); }
+    try { wide_replacement_name = epee::string_tools::utf8_to_utf16(old_name); }
     catch (...) { return std::error_code(GetLastError(), std::system_category()); }
     std::wstring wide_replaced_name;
-    try { wide_replaced_name = string_tools::utf8_to_utf16(new_name); }
+    try { wide_replaced_name = epee::string_tools::utf8_to_utf16(new_name); }
     catch (...) { return std::error_code(GetLastError(), std::system_category()); }
 
     DWORD attributes = ::GetFileAttributesW(wide_replaced_name.c_str());
