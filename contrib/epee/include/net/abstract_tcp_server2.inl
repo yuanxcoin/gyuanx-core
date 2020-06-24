@@ -702,7 +702,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
   std::chrono::milliseconds connection<t_protocol_handler>::get_timeout_from_bytes_read(size_t bytes)
   {
     std::chrono::milliseconds ms{(unsigned)(bytes * TIMEOUT_EXTRA_MS_PER_BYTE)};
-    if (auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(m_timer.expiry() - std::chrono::steady_clock::now());
+    if (auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(m_timer.expires_at() - std::chrono::steady_clock::now());
         remaining > 0ms)
       ms += remaining;
     if (ms > get_default_timeout())
@@ -749,11 +749,11 @@ PRAGMA_WARNING_DISABLE_VS(4355)
     }
     if (add)
     {
-      if (const auto cur = std::chrono::duration_cast<std::chrono::milliseconds>(m_timer.expiry() - std::chrono::steady_clock::now());
+      if (const auto cur = std::chrono::duration_cast<std::chrono::milliseconds>(m_timer.expires_at() - std::chrono::steady_clock::now());
           cur > 0s)
         ms += cur;
     }
-    m_timer.expires_after(ms);
+    m_timer.expires_from_now(ms);
     m_timer.async_wait([=](const boost::system::error_code& ec)
     {
       if(ec == boost::asio::error::operation_aborted)

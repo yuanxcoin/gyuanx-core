@@ -697,7 +697,7 @@ namespace trezor{
     require_socket();
 
     // Set a deadline for the asynchronous operation.
-    m_deadline.expires_after(timeout);
+    m_deadline.expires_from_now(timeout);
 
     // Set up the variables that receive the result of the asynchronous
     // operation. The error code is set to would_block to signal that the

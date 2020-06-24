@@ -308,7 +308,7 @@ namespace net_utils
       {
         auto ptr = std::make_shared<idle_callback_conext<t_handler>>(io_service_, std::move(callback), timeout);
         //needed call handler here ?...
-        ptr->m_timer.expires_after(ptr->m_period);
+        ptr->m_timer.expires_from_now(ptr->m_period);
         ptr->m_timer.async_wait([this, ptr] (const boost::system::error_code&) { global_timer_handler<t_handler>(ptr); });
         return true;
       }
@@ -319,7 +319,7 @@ namespace net_utils
       //if handler return false - he don't want to be called anymore
       if(!ptr->call_handler())
         return;
-      ptr->m_timer.expires_after(ptr->m_period);
+      ptr->m_timer.expires_from_now(ptr->m_period);
       ptr->m_timer.async_wait([this, ptr] (const boost::system::error_code&) { global_timer_handler<t_handler>(ptr); });
     }
 

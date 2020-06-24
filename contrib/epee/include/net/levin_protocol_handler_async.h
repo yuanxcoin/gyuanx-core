@@ -196,7 +196,7 @@ public:
       if(m_con.start_outer_call())
       {
         MDEBUG(con.get_context_ref() << "anvoke_handler, timeout: " << timeout);
-        m_timer.expires_after(std::chrono::milliseconds(timeout));
+        m_timer.expires_from_now(std::chrono::milliseconds(timeout));
         m_timer.async_wait([&con, command, cb, timeout](const boost::system::error_code& ec)
         {
           if(ec == boost::asio::error::operation_aborted)
@@ -260,7 +260,7 @@ public:
         uint64_t timeout = m_timeout;
         async_protocol_handler& con = m_con;
         int command = m_command;
-        m_timer.expires_after(std::chrono::milliseconds(m_timeout));
+        m_timer.expires_from_now(std::chrono::milliseconds(m_timeout));
         m_timer.async_wait([&con, cb, command, timeout](const boost::system::error_code& ec)
         {
           if(ec == boost::asio::error::operation_aborted)
