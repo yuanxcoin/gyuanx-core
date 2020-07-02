@@ -39,7 +39,7 @@ namespace net
 {
     std::pair<std::string_view, std::string_view> get_network_address_host_and_port(std::string_view address)
     {
-        std::pair<std::string, std::string> result;
+        std::pair<std::string_view, std::string_view> result;
         auto& [host, port] = result;
         // require ipv6 address format "[addr:addr:addr:...:addr]:port"
         if (address.find(']') != std::string_view::npos)
@@ -66,7 +66,7 @@ namespace net
     {
         bool ipv6 = false;
 
-        auto [host_str, port_str] = get_network_address_host_and_port(std::string(address));
+        auto [host_str, port_str] = get_network_address_host_and_port(address);
 
         if (host_str.empty())
             return make_error_code(net::error::invalid_host);
@@ -79,7 +79,7 @@ namespace net
 #if BOOST_VERSION >= 106600
         auto v6 = boost::asio::ip::make_address_v6(host_str, ec);
 #else
-        auto v6 = boost::asio::ip::address_v6::from_string(host_str, ec);
+        auto v6 = boost::asio::ip::address_v6::from_string(std::string{host_str}, ec);
 #endif
         ipv6 = !ec;
 

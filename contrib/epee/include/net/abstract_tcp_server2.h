@@ -46,6 +46,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include "net_utils_base.h"
 #include "connection_basic.hpp"
 #include "network_throttle-detail.hpp"

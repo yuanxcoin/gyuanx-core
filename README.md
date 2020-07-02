@@ -43,10 +43,10 @@ library archives (`.a`).
 
 | Dep          | Min. version  | Vendored | Debian/Ubuntu pkg     | Arch pkg     | Fedora              | Optional | Purpose          |
 | ------------ | ------------- | -------- | --------------------- | ------------ | ------------------- | -------- | ---------------- |
-| GCC          | 7.1.0         | NO       | `g++`                 | `base-devel` | `gcc`               | NO       |                  |
+| GCC          | 8.1.0         | NO       | `g++`[1]              | `base-devel` | `gcc`               | NO       |                  |
 | CMake        | 3.10          | NO       | `cmake`               | `cmake`      | `cmake`             | NO       |                  |
 | pkg-config   | any           | NO       | `pkg-config`          | `base-devel` | `pkgconf`           | NO       |                  |
-| Boost        | 1.65          | NO       | `libboost-all-dev`[1] | `boost`      | `boost-devel`       | NO       | C++ libraries    |
+| Boost        | 1.65          | NO       | `libboost-all-dev`[2] | `boost`      | `boost-devel`       | NO       | C++ libraries    |
 | OpenSSL      | basically any | NO       | `libssl-dev`          | `openssl`    | `openssl-devel`     | NO       | sha256 sum       |
 | libzmq       | 4.3.0         | YES      | `libzmq3-dev`         | `zeromq`     | `zeromq-devel`      | NO       | ZeroMQ library   |
 | sqlite3      | ?             | YES      | `libsqlite3-dev`      | `sqlite`     | `sqlite-devel`      | NO       | Loki Name System |
@@ -66,7 +66,10 @@ library archives (`.a`).
 | protoc       | ?             | NO       | `protobuf-compiler`   | `protobuf`   | `protobuf-compiler` | YES      | Hardware wallet  |
 
 
-[1] libboost-all-dev includes a lot of unnecessary packages; see the apt command below for a
+[1] On Ubuntu Bionic you will need the g++-8 package instead of g++ (which is version 7) and will
+need to run `export CC=gcc-8 CXX=g++-8` before running `make` or `cmake`.
+
+[2] libboost-all-dev includes a lot of unnecessary packages; see the apt command below for a
 breakdown of the minimum set of required boost packages.
 
 Install all dependencies at once on Debian/Ubuntu:

@@ -85,7 +85,6 @@ template <class Archive, typename C, std::enable_if_t<Archive::is_deserializer, 
 void serialize_container(Archive& ar, C& v)
 {
   using T = std::remove_cv_t<typename C::value_type>;
-  constexpr bool VarintSerialization = std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t>;
 
   size_t cnt;
   auto arr = ar.begin_array(cnt);

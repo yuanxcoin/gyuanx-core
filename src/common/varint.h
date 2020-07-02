@@ -150,7 +150,7 @@ namespace tools {
   auto write_varint(const OutputIt& it_, T i) { return write_varint(OutputIt{it_}, i); }
 
   template <typename It, typename T, std::enable_if_t<std::is_integral_v<T> && std::is_unsigned_v<T>, int> = 0>
-  auto read_varint(const It& it_, const It& end, T i) { return read_varint(It{it_}, end, i); }
+  auto read_varint(const It& it_, const It& end, T& i) { return read_varint(It{it_}, end, i); }
 
 
   /*! \brief reads the varint from an encoded string into `write`. Returns the number of bytes

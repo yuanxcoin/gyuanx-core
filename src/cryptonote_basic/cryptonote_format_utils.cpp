@@ -31,6 +31,7 @@
 
 #include <atomic>
 #include <boost/algorithm/string.hpp>
+#include <limits>
 #include <lokimq/hex.h>
 #include <variant>
 #include "wipeable_string.h"
@@ -402,7 +403,11 @@ namespace cryptonote
       // TODO: get rid of the user-configurable default_decimal_point nonsense and just multiply
       // this value by the `COIN` constant.
       for (size_t i = 0; i < decimal_point; i++)
+      {
+        if (amount > std::numeric_limits<uint64_t>::max() / 10)
+          return false; // would overflow
         amount *= 10;
+      }
     }
 
     if (parts.size() == 1)

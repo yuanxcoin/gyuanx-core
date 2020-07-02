@@ -34,7 +34,7 @@ std::vector<std::string_view> split(std::string_view str, const std::string_view
 std::vector<std::string_view> split_any(std::string_view str, const std::string_view delims, bool trim)
 {
   if (delims.empty())
-    return split(str, delims);
+    return split(str, delims, trim);
   std::vector<std::string_view> results;
   for (size_t pos = str.find_first_of(delims); pos != std::string_view::npos; pos = str.find_first_of(delims))
   {
