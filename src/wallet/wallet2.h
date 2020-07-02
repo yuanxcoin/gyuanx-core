@@ -38,7 +38,6 @@
 #include <boost/serialization/list.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/deque.hpp>
-#include <boost/thread/lock_guard.hpp>
 #include <atomic>
 #include <random>
 
@@ -53,7 +52,7 @@
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "cryptonote_core/loki_name_system.h"
 #include "common/unordered_containers_boost_serialization.h"
-#include "common/util.h"
+#include "common/file.h"
 #include "crypto/chacha.h"
 #include "crypto/hash.h"
 #include "ringct/rctTypes.h"
@@ -68,6 +67,7 @@
 #include "wallet_light_rpc.h"
 
 #include "common/loki_integration_test_hooks.h"
+#include "wipeable_string.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "wallet.wallet2"
@@ -81,6 +81,8 @@ class wallet_accessor_test;
 LOKI_RPC_DOC_INTROSPECT
 namespace tools
 {
+  using namespace std::literals;
+
   static const char *ERR_MSG_NETWORK_VERSION_QUERY_FAILED = tr("Could not query the current network version, try later");
   static const char *ERR_MSG_NETWORK_HEIGHT_QUERY_FAILED = tr("Could not query the current network block height, try later: ");
   static const char *ERR_MSG_SERVICE_NODE_LIST_QUERY_FAILED = tr("Failed to query daemon for service node list");
@@ -118,14 +120,14 @@ private:
   class wallet_keys_unlocker
   {
   public:
-    wallet_keys_unlocker(wallet2 &w, const boost::optional<tools::password_container> &password);
+    wallet_keys_unlocker(wallet2 &w, const std::optional<tools::password_container> &password);
     wallet_keys_unlocker(wallet2 &w, bool locked, const epee::wipeable_string &password);
     ~wallet_keys_unlocker();
   private:
     wallet2 &w;
     bool locked;
     crypto::chacha_key key;
-    static boost::mutex lockers_lock;
+    static std::mutex lockers_mutex;
     static unsigned int lockers;
   };
 
@@ -138,7 +140,7 @@ private:
     virtual void on_unconfirmed_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index) {}
     virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx, uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index) {}
     virtual void on_skip_transaction(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx) {}
-    virtual boost::optional<epee::wipeable_string> on_get_password(const char *reason) { return boost::none; }
+    virtual std::optional<epee::wipeable_string> on_get_password(const char *reason) { return std::nullopt; }
     // Light wallet callbacks
     virtual void on_lw_new_block(uint64_t height) {}
     virtual void on_lw_money_received(uint64_t height, const crypto::hash &txid, uint64_t amount) {}
@@ -147,8 +149,8 @@ private:
     // Device callbacks
     virtual void on_device_button_request(uint64_t code) {}
     virtual void on_device_button_pressed() {}
-    virtual boost::optional<epee::wipeable_string> on_device_pin_request() { return boost::none; }
-    virtual boost::optional<epee::wipeable_string> on_device_passphrase_request(bool & on_device) { on_device = true; return boost::none; }
+    virtual std::optional<epee::wipeable_string> on_device_pin_request() { return std::nullopt; }
+    virtual std::optional<epee::wipeable_string> on_device_passphrase_request(bool& on_device) { on_device = true; return std::nullopt; }
     virtual void on_device_progress(const hw::device_progress& event) {};
     // Common callbacks
     virtual void on_pool_tx_removed(const crypto::hash &txid) {}
@@ -161,8 +163,8 @@ private:
     wallet_device_callback(wallet2 * wallet): wallet(wallet) {};
     void on_button_request(uint64_t code=0) override;
     void on_button_pressed() override;
-    boost::optional<epee::wipeable_string> on_pin_request() override;
-    boost::optional<epee::wipeable_string> on_passphrase_request(bool & on_device) override;
+    std::optional<epee::wipeable_string> on_pin_request() override;
+    std::optional<epee::wipeable_string> on_passphrase_request(bool& on_device) override;
     void on_progress(const hw::device_progress& event) override;
   private:
     wallet2 * wallet;
@@ -332,7 +334,7 @@ private:
     friend class wallet_keys_unlocker;
     friend class wallet_device_callback;
   public:
-    static constexpr const std::chrono::seconds rpc_timeout = std::chrono::minutes(3) + std::chrono::seconds(30);
+    static constexpr const std::chrono::seconds rpc_timeout = 3min + 30s;
     enum RefreshType {
       RefreshFull,
       RefreshOptimizeCoinbase,
@@ -361,17 +363,17 @@ private:
     static void init_options(boost::program_options::options_description& desc_params);
 
     //! Uses stdin and stdout. Returns a wallet2 if no errors.
-    static std::pair<std::unique_ptr<wallet2>, password_container> make_from_json(const boost::program_options::variables_map& vm, bool unattended, const std::string& json_file, const std::function<boost::optional<password_container>(const char *, bool)> &password_prompter);
+    static std::pair<std::unique_ptr<wallet2>, password_container> make_from_json(const boost::program_options::variables_map& vm, bool unattended, const std::string& json_file, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
     //! Uses stdin and stdout. Returns a wallet2 and password for `wallet_file` if no errors.
     static std::pair<std::unique_ptr<wallet2>, password_container>
-      make_from_file(const boost::program_options::variables_map& vm, bool unattended, const std::string& wallet_file, const std::function<boost::optional<password_container>(const char *, bool)> &password_prompter);
+      make_from_file(const boost::program_options::variables_map& vm, bool unattended, const std::string& wallet_file, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
     //! Uses stdin and stdout. Returns a wallet2 and password for wallet with no file if no errors.
-    static std::pair<std::unique_ptr<wallet2>, password_container> make_new(const boost::program_options::variables_map& vm, bool unattended, const std::function<boost::optional<password_container>(const char *, bool)> &password_prompter);
+    static std::pair<std::unique_ptr<wallet2>, password_container> make_new(const boost::program_options::variables_map& vm, bool unattended, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
     //! Just parses variables.
-    static std::unique_ptr<wallet2> make_dummy(const boost::program_options::variables_map& vm, bool unattended, const std::function<boost::optional<password_container>(const char *, bool)> &password_prompter);
+    static std::unique_ptr<wallet2> make_dummy(const boost::program_options::variables_map& vm, bool unattended, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
     static bool verify_password(const std::string& keys_file_name, const epee::wipeable_string& password, bool no_spend_key, hw::device &hwdev, uint64_t kdf_rounds);
     static bool query_device(hw::device::device_type& device_type, const std::string& keys_file_name, const epee::wipeable_string& password, uint64_t kdf_rounds = 1);
@@ -412,7 +414,7 @@ private:
       uint64_t money_transfered;
       uint64_t unlock_time;
       bool error;
-      boost::optional<cryptonote::subaddress_receive_info> received;
+      std::optional<cryptonote::subaddress_receive_info> received;
 
       tx_scan_info_t(): amount(0), money_transfered(0), error(true) {}
     };
@@ -444,7 +446,7 @@ private:
 
       bool is_rct() const { return m_rct; }
       uint64_t amount() const { return m_amount; }
-      const crypto::public_key &get_public_key() const { return boost::get<const cryptonote::txout_to_key>(m_tx.vout[m_internal_output_index].target).key; }
+      const crypto::public_key &get_public_key() const { return std::get<cryptonote::txout_to_key>(m_tx.vout[m_internal_output_index].target).key; }
 
       BEGIN_SERIALIZE_OBJECT()
         FIELD(m_block_height)
@@ -713,7 +715,7 @@ private:
     {
       crypto::public_key pkey;
       crypto::key_derivation derivation;
-      std::vector<boost::optional<cryptonote::subaddress_receive_info>> received;
+      std::vector<std::optional<cryptonote::subaddress_receive_info>> received;
     };
 
     struct tx_cache_data
@@ -856,13 +858,13 @@ private:
      * \param watch_only          true to include only view key, false to include both spend and view keys
      * \return                    Encrypted wallet keys data which can be stored to a wallet file
      */
-    boost::optional<wallet2::keys_file_data> get_keys_file_data(const epee::wipeable_string& password, bool watch_only);
+    std::optional<wallet2::keys_file_data> get_keys_file_data(const epee::wipeable_string& password, bool watch_only);
     /*!
      * \brief get_cache_file_data   Get wallet cache data which can be stored to a wallet file.
      * \param password              Password to protect the wallet cache data (TODO: probably better save the password in the wallet object?)
      * \return                      Encrypted wallet cache data which can be stored to a wallet file
      */
-    boost::optional<wallet2::cache_file_data> get_cache_file_data(const epee::wipeable_string& password);
+    std::optional<wallet2::cache_file_data> get_cache_file_data(const epee::wipeable_string& password);
 
     std::string path() const;
 
@@ -886,13 +888,13 @@ private:
 
     bool deinit();
     bool init(std::string daemon_address = "http://localhost:8080",
-      boost::optional<epee::net_utils::http::login> daemon_login = boost::none,
+      std::optional<epee::net_utils::http::login> daemon_login = std::nullopt,
       boost::asio::ip::tcp::endpoint proxy = {},
       uint64_t upper_transaction_weight_limit = 0,
       bool trusted_daemon = true,
       epee::net_utils::ssl_options_t ssl_options = epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
     bool set_daemon(std::string daemon_address = "http://localhost:8080",
-      boost::optional<epee::net_utils::http::login> daemon_login = boost::none, bool trusted_daemon = true,
+      std::optional<epee::net_utils::http::login> daemon_login = std::nullopt, bool trusted_daemon = true,
       epee::net_utils::ssl_options_t ssl_options = epee::net_utils::ssl_support_t::e_ssl_support_autodetect);
 
     void stop() { m_run.store(false, std::memory_order_relaxed); m_message_store.stop(); }
@@ -929,7 +931,7 @@ private:
     // Subaddress scheme
     cryptonote::account_public_address get_subaddress(const cryptonote::subaddress_index& index) const;
     cryptonote::account_public_address get_address() const { return get_subaddress({0,0}); }
-    boost::optional<cryptonote::subaddress_index> get_subaddress_index(const cryptonote::account_public_address& address) const;
+    std::optional<cryptonote::subaddress_index> get_subaddress_index(const cryptonote::account_public_address& address) const;
     crypto::public_key get_subaddress_spend_public_key(const cryptonote::subaddress_index& index) const;
     std::vector<crypto::public_key> get_subaddress_spend_public_keys(uint32_t account, uint32_t begin, uint32_t end) const;
     std::string get_subaddress_as_str(const cryptonote::subaddress_index& index) const;
@@ -999,9 +1001,9 @@ private:
     std::string sign_tx_dump_to_str(unsigned_tx_set &exported_txs, std::vector<wallet2::pending_tx> &ptx, signed_tx_set &signed_txes);
     // load unsigned_tx_set from file. 
     bool load_unsigned_tx(const std::string &unsigned_filename, unsigned_tx_set &exported_txs) const;
-    bool parse_unsigned_tx_from_str(const std::string &unsigned_tx_st, unsigned_tx_set &exported_txs) const;
+    bool parse_unsigned_tx_from_str(std::string_view unsigned_tx_st, unsigned_tx_set &exported_txs) const;
     bool load_tx(const std::string &signed_filename, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set&)> accept_func = NULL);
-    bool parse_tx_from_str(const std::string &signed_tx_st, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set &)> accept_func);
+    bool parse_tx_from_str(std::string_view signed_tx_st, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set &)> accept_func);
     std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra_base, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::loki_construct_tx_params &tx_params);
 
     std::vector<wallet2::pending_tx> create_transactions_all(uint64_t below, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::txtype tx_type = cryptonote::txtype::standard);
@@ -1012,8 +1014,8 @@ private:
     void cold_tx_aux_import(const std::vector<pending_tx>& ptx, const std::vector<std::string>& tx_device_aux);
     void cold_sign_tx(const std::vector<pending_tx>& ptx_vector, signed_tx_set &exported_txs, std::vector<cryptonote::address_parse_info> const &dsts_info, std::vector<std::string> & tx_device_aux);
     uint64_t cold_key_image_sync(uint64_t &spent, uint64_t &unspent);
-    void device_show_address(uint32_t account_index, uint32_t address_index, const boost::optional<crypto::hash8> &payment_id);
-    bool parse_multisig_tx_from_str(std::string multisig_tx_st, multisig_tx_set &exported_txs) const;
+    void device_show_address(uint32_t account_index, uint32_t address_index, const std::optional<crypto::hash8> &payment_id);
+    bool parse_multisig_tx_from_str(std::string_view multisig_tx_st, multisig_tx_set &exported_txs) const;
     bool load_multisig_tx(cryptonote::blobdata blob, multisig_tx_set &exported_txs, std::function<bool(const multisig_tx_set&)> accept_func = NULL);
     bool load_multisig_tx_from_file(const std::string &filename, multisig_tx_set &exported_txs, std::function<bool(const multisig_tx_set&)> accept_func = NULL);
     bool sign_multisig_tx_from_file(const std::string &filename, std::vector<crypto::hash> &txids, std::function<bool(const multisig_tx_set&)> accept_func);
@@ -1047,19 +1049,19 @@ private:
     };
     void get_transfers(get_transfers_args_t args, std::vector<transfer_view>& transfers);
     std::string transfers_to_csv(const std::vector<transfer_view>& transfers, bool formatting = false) const;
-    void get_payments(const crypto::hash& payment_id, std::list<wallet2::payment_details>& payments, uint64_t min_height = 0, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
-    void get_payments(std::list<std::pair<crypto::hash,wallet2::payment_details>>& payments, uint64_t min_height, uint64_t max_height = (uint64_t)-1, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
+    void get_payments(const crypto::hash& payment_id, std::list<wallet2::payment_details>& payments, uint64_t min_height = 0, const std::optional<uint32_t>& subaddr_account = std::nullopt, const std::set<uint32_t>& subaddr_indices = {}) const;
+    void get_payments(std::list<std::pair<crypto::hash,wallet2::payment_details>>& payments, uint64_t min_height, uint64_t max_height = (uint64_t)-1, const std::optional<uint32_t>& subaddr_account = std::nullopt, const std::set<uint32_t>& subaddr_indices = {}) const;
     void get_payments_out(std::list<std::pair<crypto::hash,wallet2::confirmed_transfer_details>>& confirmed_payments,
-      uint64_t min_height, uint64_t max_height = (uint64_t)-1, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
-    void get_unconfirmed_payments_out(std::list<std::pair<crypto::hash,wallet2::unconfirmed_transfer_details>>& unconfirmed_payments, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
-    void get_unconfirmed_payments(std::list<std::pair<crypto::hash,wallet2::pool_payment_details>>& unconfirmed_payments, const boost::optional<uint32_t>& subaddr_account = boost::none, const std::set<uint32_t>& subaddr_indices = {}) const;
+      uint64_t min_height, uint64_t max_height = (uint64_t)-1, const std::optional<uint32_t>& subaddr_account = std::nullopt, const std::set<uint32_t>& subaddr_indices = {}) const;
+    void get_unconfirmed_payments_out(std::list<std::pair<crypto::hash,wallet2::unconfirmed_transfer_details>>& unconfirmed_payments, const std::optional<uint32_t>& subaddr_account = std::nullopt, const std::set<uint32_t>& subaddr_indices = {}) const;
+    void get_unconfirmed_payments(std::list<std::pair<crypto::hash,wallet2::pool_payment_details>>& unconfirmed_payments, const std::optional<uint32_t>& subaddr_account = std::nullopt, const std::set<uint32_t>& subaddr_indices = {}) const;
 
     // NOTE(loki): get_all_service_node caches the result, get_service_nodes doesn't
-    std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> get_all_service_nodes(boost::optional<std::string> &failed)                                             const { return m_node_rpc_proxy.get_all_service_nodes(failed); }
-    std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> get_service_nodes    (std::vector<std::string> const &pubkeys, boost::optional<std::string> &failed)    const { return m_node_rpc_proxy.get_service_nodes(pubkeys, failed); }
-    std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> get_service_node_blacklisted_key_images(boost::optional<std::string> &failed)               const { return m_node_rpc_proxy.get_service_node_blacklisted_key_images(failed); }
-    std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry> lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request, boost::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_owners_to_names(request, failed); }
-    std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request, boost::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_names_to_owners(request, failed); }
+    std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> get_all_service_nodes(std::optional<std::string> &failed)                                             const { return m_node_rpc_proxy.get_all_service_nodes(failed); }
+    std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> get_service_nodes    (std::vector<std::string> const &pubkeys, std::optional<std::string> &failed)    const { return m_node_rpc_proxy.get_service_nodes(pubkeys, failed); }
+    std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> get_service_node_blacklisted_key_images(std::optional<std::string> &failed)               const { return m_node_rpc_proxy.get_service_node_blacklisted_key_images(failed); }
+    std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry> lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request, std::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_owners_to_names(request, failed); }
+    std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request, std::optional<std::string> &failed) const { return m_node_rpc_proxy.lns_names_to_owners(request, failed); }
 
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
@@ -1130,7 +1132,7 @@ private:
         {
           const transfer_details &td = m_transfers[i];
           const cryptonote::tx_out &out = td.m_tx.vout[td.m_internal_output_index];
-          const cryptonote::txout_to_key &o = boost::get<const cryptonote::txout_to_key>(out.target);
+          const cryptonote::txout_to_key &o = std::get<cryptonote::txout_to_key>(out.target);
           m_pub_keys.emplace(o.key, i);
         }
         return;
@@ -1201,10 +1203,10 @@ private:
      * \param  file_path      Wallet file path
      * \return                Whether path is valid format
      */
-    static bool wallet_valid_path_format(const std::string& file_path);
-    static bool parse_long_payment_id(const std::string& payment_id_str, crypto::hash& payment_id);
-    static bool parse_short_payment_id(const std::string& payment_id_str, crypto::hash8& payment_id);
-    static bool parse_payment_id(const std::string& payment_id_str, crypto::hash& payment_id);
+    static bool wallet_valid_path_format(std::string_view file_path);
+    static bool parse_long_payment_id(std::string_view payment_id_str, crypto::hash& payment_id);
+    static bool parse_short_payment_id(std::string_view payment_id_str, crypto::hash8& payment_id);
+    static bool parse_payment_id(std::string_view payment_id_str, crypto::hash& payment_id);
 
     bool always_confirm_transfers() const { return m_always_confirm_transfers; }
     void always_confirm_transfers(bool always) { m_always_confirm_transfers = always; }
@@ -1259,13 +1261,13 @@ private:
     void check_tx_key(const crypto::hash &txid, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, uint64_t &received, bool &in_pool, uint64_t &confirmations);
     void check_tx_key_helper(const crypto::hash &txid, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const cryptonote::account_public_address &address, uint64_t &received, bool &in_pool, uint64_t &confirmations);
     void check_tx_key_helper(const cryptonote::transaction &tx, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, const cryptonote::account_public_address &address, uint64_t &received) const;
-    std::string get_tx_proof(const crypto::hash &txid, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message);
-    std::string get_tx_proof(const cryptonote::transaction &tx, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message) const;
-    bool check_tx_proof(const crypto::hash &txid, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message, const std::string &sig_str, uint64_t &received, bool &in_pool, uint64_t &confirmations);
-    bool check_tx_proof(const cryptonote::transaction &tx, const cryptonote::account_public_address &address, bool is_subaddress, const std::string &message, const std::string &sig_str, uint64_t &received) const;
+    std::string get_tx_proof(const crypto::hash &txid, const cryptonote::account_public_address &address, bool is_subaddress, std::string_view message);
+    std::string get_tx_proof(const cryptonote::transaction &tx, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const cryptonote::account_public_address &address, bool is_subaddress, std::string_view message) const;
+    bool check_tx_proof(const crypto::hash &txid, const cryptonote::account_public_address &address, bool is_subaddress, std::string_view message, std::string_view sig_str, uint64_t &received, bool &in_pool, uint64_t &confirmations);
+    bool check_tx_proof(const cryptonote::transaction &tx, const cryptonote::account_public_address &address, bool is_subaddress, std::string_view message, std::string_view sig_str, uint64_t &received) const;
 
-    std::string get_spend_proof(const crypto::hash &txid, const std::string &message);
-    bool check_spend_proof(const crypto::hash &txid, const std::string &message, const std::string &sig_str);
+    std::string get_spend_proof(const crypto::hash &txid, std::string_view message);
+    bool check_spend_proof(const crypto::hash &txid, std::string_view message, std::string_view sig_str);
 
     /*!
      * \brief  Generates a proof that proves the reserve of unspent funds
@@ -1274,7 +1276,7 @@ private:
      * \param  message                  Arbitrary challenge message to be signed together
      * \return                          Signature string
      */
-    std::string get_reserve_proof(const boost::optional<std::pair<uint32_t, uint64_t>> &account_minreserve, const std::string &message);
+    std::string get_reserve_proof(const std::optional<std::pair<uint32_t, uint64_t>> &account_minreserve, std::string message);
     /*!
      * \brief  Verifies a proof of reserve
      * \param  address                  The signer's address
@@ -1284,7 +1286,7 @@ private:
      * \param  spent                    [OUT] the sum of spent funds included in the signature
      * \return                          true if the signature verifies correctly
      */
-    bool check_reserve_proof(const cryptonote::account_public_address &address, const std::string &message, const std::string &sig_str, uint64_t &total, uint64_t &spent);
+    bool check_reserve_proof(const cryptonote::account_public_address &address, std::string_view message, std::string_view sig_str, uint64_t &total, uint64_t &spent);
 
    /*!
     * \brief GUI Address book get/store
@@ -1299,13 +1301,13 @@ private:
     const transfer_details &get_transfer_details(size_t idx) const;
 
     void get_hard_fork_info (uint8_t version, uint64_t &earliest_height) const;
-    boost::optional<uint8_t> get_hard_fork_version() const { return m_node_rpc_proxy.get_hardfork_version(); }
+    std::optional<uint8_t> get_hard_fork_version() const { return m_node_rpc_proxy.get_hardfork_version(); }
     bool use_fork_rules(uint8_t version, uint64_t early_blocks = 0) const;
 
     std::string get_wallet_file() const;
     std::string get_keys_file() const;
     std::string get_daemon_address() const;
-    const boost::optional<epee::net_utils::http::login>& get_daemon_login() const { return m_daemon_login; }
+    const std::optional<epee::net_utils::http::login>& get_daemon_login() const { return m_daemon_login; }
     uint64_t get_daemon_blockchain_height(std::string& err) const;
     uint64_t get_daemon_blockchain_target_height(std::string& err);
    /*!
@@ -1348,8 +1350,8 @@ private:
      */
     void set_account_tag_description(const std::string& tag, const std::string& description);
 
-    std::string sign(const std::string &data, cryptonote::subaddress_index index = {0, 0}) const;
-    bool verify(const std::string &data, const cryptonote::account_public_address &address, const std::string &signature) const;
+    std::string sign(std::string_view data, cryptonote::subaddress_index index = {0, 0}) const;
+    bool verify(std::string_view data, const cryptonote::account_public_address &address, std::string_view signature) const;
 
     /*!
      * \brief sign_multisig_participant signs given message with the multisig public signer key
@@ -1357,7 +1359,7 @@ private:
      * \throws                          if wallet is not multisig
      * \return                          signature
      */
-    std::string sign_multisig_participant(const std::string& data) const;
+    std::string sign_multisig_participant(std::string_view data) const;
     /*!
      * \brief verify_with_public_key verifies message was signed with given public key
      * \param data                   message
@@ -1365,13 +1367,13 @@ private:
      * \param signature              signature of the message
      * \return                       true if the signature is correct
      */
-    bool verify_with_public_key(const std::string &data, const crypto::public_key &public_key, const std::string &signature) const;
+    bool verify_with_public_key(std::string_view data, const crypto::public_key &public_key, std::string_view signature) const;
 
     // Import/Export wallet data
     std::pair<size_t, std::vector<tools::wallet2::transfer_details>> export_outputs(bool all = false) const;
     std::string export_outputs_to_str(bool all = false) const;
     size_t import_outputs(const std::pair<size_t, std::vector<tools::wallet2::transfer_details>> &outputs);
-    size_t import_outputs_from_str(const std::string &outputs_st);
+    size_t import_outputs_from_str(std::string outputs_st);
     payment_container export_payments() const;
     void import_payments(const payment_container &payments);
     void import_payments_out(const std::list<std::pair<crypto::hash,wallet2::confirmed_transfer_details>> &confirmed_payments);
@@ -1381,7 +1383,7 @@ private:
     std::pair<size_t, std::vector<std::pair<crypto::key_image, crypto::signature>>> export_key_images(bool requested_only) const;
     uint64_t import_key_images(const std::vector<std::pair<crypto::key_image, crypto::signature>> &signed_key_images, size_t offset, uint64_t &spent, uint64_t &unspent, bool check_spent = true);
     uint64_t import_key_images_from_file(const std::string &filename, uint64_t &spent, uint64_t &unspent);
-    bool import_key_images(std::vector<crypto::key_image> key_images, size_t offset=0, boost::optional<std::unordered_set<size_t>> selected_transfers=boost::none);
+    bool import_key_images(std::vector<crypto::key_image> key_images, size_t offset=0, std::optional<std::unordered_set<size_t>> selected_transfers=std::nullopt);
     bool import_key_images(signed_tx_set & signed_tx, size_t offset=0, bool only_selected_transfers=false);
     crypto::public_key get_tx_pub_key_from_received_outs(const tools::wallet2::transfer_details &td) const;
 
@@ -1414,16 +1416,14 @@ private:
 
     void remove_obsolete_pool_txs(const std::vector<crypto::hash> &tx_hashes);
 
-    std::string encrypt(const char *plaintext, size_t len, const crypto::secret_key &skey, bool authenticated = true) const;
+    std::string encrypt(std::string_view plaintext, const crypto::secret_key &skey, bool authenticated = true) const;
     std::string encrypt(const epee::span<char> &span, const crypto::secret_key &skey, bool authenticated = true) const;
-    std::string encrypt(const std::string &plaintext, const crypto::secret_key &skey, bool authenticated = true) const;
-    std::string encrypt(const epee::wipeable_string &plaintext, const crypto::secret_key &skey, bool authenticated = true) const;
-    std::string encrypt_with_view_secret_key(const std::string &plaintext, bool authenticated = true) const;
-    template<typename T=std::string> T decrypt(const std::string &ciphertext, const crypto::secret_key &skey, bool authenticated = true) const;
-    std::string decrypt_with_view_secret_key(const std::string &ciphertext, bool authenticated = true) const;
+    std::string encrypt_with_view_secret_key(std::string_view plaintext, bool authenticated = true) const;
+    epee::wipeable_string decrypt(std::string_view ciphertext, const crypto::secret_key &skey, bool authenticated = true) const;
+    epee::wipeable_string decrypt_with_view_secret_key(std::string_view ciphertext, bool authenticated = true) const;
 
     std::string make_uri(const std::string &address, const std::string &payment_id, uint64_t amount, const std::string &tx_description, const std::string &recipient_name, std::string &error) const;
-    bool parse_uri(const std::string &uri, std::string &address, std::string &payment_id, uint64_t &amount, std::string &tx_description, std::string &recipient_name, std::vector<std::string> &unknown_parameters, std::string &error);
+    bool parse_uri(std::string_view uri, std::string &address, std::string &payment_id, uint64_t &amount, std::string &tx_description, std::string &recipient_name, std::vector<std::string> &unknown_parameters, std::string &error);
 
     uint64_t get_blockchain_height_by_date(uint16_t year, uint8_t month, uint8_t day);    // 1<=month<=12, 1<=day<=31
 
@@ -1482,21 +1482,21 @@ private:
     crypto::public_key get_multisig_signing_public_key(const crypto::secret_key &skey) const;
 
     template<class t_request, class t_response>
-    inline bool invoke_http_json(const boost::string_ref uri, const t_request& req, t_response& res, std::chrono::milliseconds timeout = std::chrono::seconds(15), const boost::string_ref http_method = "POST")
+    inline bool invoke_http_json(const std::string_view uri, const t_request& req, t_response& res, std::chrono::milliseconds timeout = 15s, std::string_view http_method = "POST"sv)
     {
       if (m_offline) return false;
       std::lock_guard<std::recursive_mutex> lock(m_daemon_rpc_mutex);
       return epee::net_utils::invoke_http_json(uri, req, res, *m_http_client, timeout, http_method);
     }
     template<class t_request, class t_response>
-    inline bool invoke_http_bin(const boost::string_ref uri, const t_request& req, t_response& res, std::chrono::milliseconds timeout = std::chrono::seconds(15), const boost::string_ref http_method = "POST")
+    inline bool invoke_http_bin(std::string_view uri, const t_request& req, t_response& res, std::chrono::milliseconds timeout = 15s, std::string_view http_method = "POST"sv)
     {
       if (m_offline) return false;
       std::lock_guard<std::recursive_mutex> lock(m_daemon_rpc_mutex);
       return epee::net_utils::invoke_http_bin(uri, req, res, *m_http_client, timeout, http_method);
     }
     template<class t_request, class t_response>
-    inline bool invoke_http_json_rpc(const boost::string_ref uri, const std::string& method_name, const t_request& req, t_response& res, std::chrono::milliseconds timeout = std::chrono::seconds(15), const boost::string_ref http_method = "POST", const std::string& req_id = "0")
+    inline bool invoke_http_json_rpc(std::string_view uri, const std::string& method_name, const t_request& req, t_response& res, std::chrono::milliseconds timeout = 15s, std::string_view http_method = "POST"sv, const std::string& req_id = "0")
     {
       if (m_offline) return false;
       std::lock_guard<std::recursive_mutex> lock(m_daemon_rpc_mutex);
@@ -1634,7 +1634,7 @@ private:
 
 
     std::atomic<bool> m_long_poll_disabled;
-    static std::string get_default_daemon_address() { CRITICAL_REGION_LOCAL(default_daemon_address_lock); return default_daemon_address; }
+    static std::string get_default_daemon_address() { std::lock_guard lock{default_daemon_address_mutex}; return default_daemon_address; }
 
   private:
     /*!
@@ -1657,7 +1657,7 @@ private:
      * \param password       Password of keys buffer
      */
     bool load_keys_buf(const std::string& keys_buf, const epee::wipeable_string& password);
-    bool load_keys_buf(const std::string& keys_buf, const epee::wipeable_string& password, boost::optional<crypto::chacha_key>& keys_to_encrypt);
+    bool load_keys_buf(const std::string& keys_buf, const epee::wipeable_string& password, std::optional<crypto::chacha_key>& keys_to_encrypt);
     void process_new_transaction(const crypto::hash &txid, const cryptonote::transaction& tx, const std::vector<uint64_t> &o_indices, uint64_t height, uint8_t block_version, uint64_t ts, bool miner_tx, bool pool, bool blink, bool double_spend_seen, const tx_cache_data &tx_cache_data, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache = NULL);
     bool should_skip_block(const cryptonote::block &b, uint64_t height) const;
     void process_new_blockchain_entry(const cryptonote::block& b, const cryptonote::block_complete_entry& bche, const parsed_block &parsed_block, const crypto::hash& bl_id, uint64_t height, const std::vector<tx_cache_data> &tx_cache_data, size_t tx_cache_data_offset, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache = NULL);
@@ -1737,17 +1737,17 @@ private:
     wallet_device_callback * get_device_callback();
     void on_device_button_request(uint64_t code);
     void on_device_button_pressed();
-    boost::optional<epee::wipeable_string> on_device_pin_request();
-    boost::optional<epee::wipeable_string> on_device_passphrase_request(bool & on_device);
+    std::optional<epee::wipeable_string> on_device_pin_request();
+    std::optional<epee::wipeable_string> on_device_passphrase_request(bool& on_device);
     void on_device_progress(const hw::device_progress& event);
 
     std::string get_rpc_status(const std::string &s) const;
-    void throw_on_rpc_response_error(const boost::optional<std::string> &status, const char *method) const;
+    void throw_on_rpc_response_error(const std::optional<std::string> &status, const char *method) const;
 
     bool should_expand(const cryptonote::subaddress_index &index) const;
 
     cryptonote::account_base m_account;
-    boost::optional<epee::net_utils::http::login> m_daemon_login;
+    std::optional<epee::net_utils::http::login> m_daemon_login;
     std::string m_daemon_address;
     std::string m_wallet_file;
     std::string m_keys_file;
@@ -1857,7 +1857,7 @@ private:
     std::string m_ring_database;
     bool m_ring_history_saved;
     std::unique_ptr<ringdb> m_ringdb;
-    boost::optional<crypto::chacha_key> m_ringdb_key;
+    std::optional<crypto::chacha_key> m_ringdb_key;
 
     uint64_t m_last_block_reward;
     std::unique_ptr<tools::file_locker> m_keys_file_locker;
@@ -1868,8 +1868,8 @@ private:
     crypto::secret_key m_original_view_secret_key;
 
     crypto::chacha_key m_cache_key;
-    boost::optional<epee::wipeable_string> m_encrypt_keys_after_refresh;
-    boost::mutex m_decrypt_keys_lock;
+    std::optional<epee::wipeable_string> m_encrypt_keys_after_refresh;
+    std::mutex m_decrypt_keys_mutex;
     unsigned int m_decrypt_keys_lockers;
 
     bool m_unattended;
@@ -1880,7 +1880,7 @@ private:
 
     ExportFormat m_export_format;
 
-    static boost::mutex default_daemon_address_lock;
+    static std::mutex default_daemon_address_mutex;
     static std::string default_daemon_address;
   };
 
@@ -1893,7 +1893,7 @@ private:
   // TODO(loki): The better question is if anyone is ever going to try use
   // register service node funded by multiple subaddresses. This is unlikely.
   constexpr std::array<const char* const, 6> allowed_priority_strings = {{"default", "unimportant", "normal", "elevated", "priority", "blink"}};
-  bool parse_subaddress_indices(const std::string& arg, std::set<uint32_t>& subaddr_indices, std::string *err_msg = nullptr);
+  bool parse_subaddress_indices(std::string_view arg, std::set<uint32_t>& subaddr_indices, std::string *err_msg = nullptr);
   bool parse_priority          (const std::string& arg, uint32_t& priority);
 
 }
@@ -2314,60 +2314,4 @@ namespace boost
       a & x.multisig_sigs;
     }
   }
-}
-
-namespace tools
-{
-
-  namespace detail
-  {
-    //----------------------------------------------------------------------------------------------------
-    inline void digit_split_strategy(const std::vector<cryptonote::tx_destination_entry>& dsts,
-      const cryptonote::tx_destination_entry& change_dst, uint64_t dust_threshold,
-      std::vector<cryptonote::tx_destination_entry>& splitted_dsts, std::vector<cryptonote::tx_destination_entry> &dust_dsts)
-    {
-      splitted_dsts.clear();
-      dust_dsts.clear();
-
-      for(auto& de: dsts)
-      {
-        cryptonote::decompose_amount_into_digits(de.amount, 0,
-          [&](uint64_t chunk) { splitted_dsts.push_back(cryptonote::tx_destination_entry(chunk, de.addr, de.is_subaddress)); },
-          [&](uint64_t a_dust) { splitted_dsts.push_back(cryptonote::tx_destination_entry(a_dust, de.addr, de.is_subaddress)); } );
-      }
-
-      cryptonote::decompose_amount_into_digits(change_dst.amount, 0,
-        [&](uint64_t chunk) {
-          if (chunk <= dust_threshold)
-            dust_dsts.push_back(cryptonote::tx_destination_entry(chunk, change_dst.addr, false));
-          else
-            splitted_dsts.push_back(cryptonote::tx_destination_entry(chunk, change_dst.addr, false));
-        },
-        [&](uint64_t a_dust) { dust_dsts.push_back(cryptonote::tx_destination_entry(a_dust, change_dst.addr, false)); } );
-    }
-    //----------------------------------------------------------------------------------------------------
-    inline void null_split_strategy(const std::vector<cryptonote::tx_destination_entry>& dsts,
-      const cryptonote::tx_destination_entry& change_dst, uint64_t dust_threshold,
-      std::vector<cryptonote::tx_destination_entry>& splitted_dsts, std::vector<cryptonote::tx_destination_entry> &dust_dsts)
-    {
-      splitted_dsts = dsts;
-
-      dust_dsts.clear();
-      uint64_t change = change_dst.amount;
-
-      if (0 != change)
-      {
-        splitted_dsts.push_back(cryptonote::tx_destination_entry(change, change_dst.addr, false));
-      }
-    }
-    //----------------------------------------------------------------------------------------------------
-    inline void print_source_entry(const cryptonote::tx_source_entry& src)
-    {
-      std::string indexes;
-      std::for_each(src.outputs.begin(), src.outputs.end(), [&](const cryptonote::tx_source_entry::output_entry& s_e) { indexes += boost::to_string(s_e.first) + " "; });
-      LOG_PRINT_L0("amount=" << cryptonote::print_money(src.amount) << ", real_output=" <<src.real_output << ", real_output_in_tx_index=" << src.real_output_in_tx_index << ", indexes: " << indexes);
-    }
-    //----------------------------------------------------------------------------------------------------
-  }
-  //----------------------------------------------------------------------------------------------------
 }

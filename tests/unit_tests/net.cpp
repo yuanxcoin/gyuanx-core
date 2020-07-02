@@ -40,7 +40,6 @@
 #include <boost/range/adaptor/sliced.hpp>
 #include <boost/range/combine.hpp>
 #include <boost/system/error_code.hpp>
-#include <boost/thread/thread.hpp>
 #include <boost/uuid/nil_generator.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid.hpp>
@@ -73,6 +72,8 @@ namespace
         "vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyyd.onion";
 }
 
+using namespace std::literals;
+
 TEST(tor_address, constants)
 {
     static_assert(!net::tor_address::is_local(), "bad is_local() response");
@@ -93,8 +94,8 @@ TEST(tor_address, invalid)
     EXPECT_TRUE(net::tor_address::make(".onion:").has_error());
     EXPECT_TRUE(net::tor_address::make(v2_onion + 1).has_error());
     EXPECT_TRUE(net::tor_address::make(v3_onion + 1).has_error());
-    EXPECT_TRUE(net::tor_address::make(boost::string_ref{v2_onion, sizeof(v2_onion) - 2}).has_error());
-    EXPECT_TRUE(net::tor_address::make(boost::string_ref{v3_onion, sizeof(v3_onion) - 2}).has_error());
+    EXPECT_TRUE(net::tor_address::make(std::string_view{v2_onion, sizeof(v2_onion) - 2}).has_error());
+    EXPECT_TRUE(net::tor_address::make(std::string_view{v3_onion, sizeof(v3_onion) - 2}).has_error());
     EXPECT_TRUE(net::tor_address::make(std::string{v2_onion} + ":-").has_error());
     EXPECT_TRUE(net::tor_address::make(std::string{v2_onion} + ":900a").has_error());
     EXPECT_TRUE(net::tor_address::make(std::string{v3_onion} + ":65536").has_error());
@@ -551,7 +552,7 @@ TEST(i2p_address, invalid)
     EXPECT_TRUE(net::i2p_address::make(".b32.i2p").has_error());
     EXPECT_TRUE(net::i2p_address::make(".b32.i2p:").has_error());
     EXPECT_TRUE(net::i2p_address::make(b32_i2p + 1).has_error());
-    EXPECT_TRUE(net::i2p_address::make(boost::string_ref{b32_i2p, sizeof(b32_i2p) - 2}).has_error());
+    EXPECT_TRUE(net::i2p_address::make(std::string_view{b32_i2p, sizeof(b32_i2p) - 2}).has_error());
     EXPECT_TRUE(net::i2p_address::make(std::string{b32_i2p} + ":65536").has_error());
     EXPECT_TRUE(net::i2p_address::make(std::string{b32_i2p} + ":-1").has_error());
 
@@ -943,7 +944,7 @@ namespace
         boost::asio::io_service::work work;
         stream_type::socket server;
         stream_type::acceptor acceptor;
-        boost::thread io;
+        std::thread io;
         std::atomic<bool> connected;
 
         io_thread()
@@ -1162,11 +1163,11 @@ TEST(socks_connector, host)
     boost::asio::steady_timer timeout{io.io_service};
     timeout.expires_from_now(std::chrono::seconds{5});
 
-    boost::unique_future<boost::asio::ip::tcp::socket> sock =
+    std::future<boost::asio::ip::tcp::socket> sock =
         net::socks::connector{io.acceptor.local_endpoint()}("example.com", "8080", timeout);
 
     while (!io.connected)
-        ASSERT_FALSE(sock.is_ready());
+        ASSERT_NE(sock.wait_for(0s), std::future_status::ready);
     const std::uint8_t expected_bytes[] = {
         4, 1, 0x1f, 0x90, 0x00, 0x00, 0x00, 0x01, 0x00,
         'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'c', 'o', 'm', 0x00
@@ -1179,7 +1180,7 @@ TEST(socks_connector, host)
     const std::uint8_t reply_bytes[] = {0, 90, 0, 0, 0, 0, 0, 0};
     boost::asio::write(io.server, boost::asio::buffer(reply_bytes));
 
-    ASSERT_EQ(boost::future_status::ready, sock.wait_for(boost::chrono::seconds{3}));
+    ASSERT_EQ(std::future_status::ready, sock.wait_for(3s));
     EXPECT_TRUE(sock.get().is_open());
 }
 
@@ -1189,11 +1190,11 @@ TEST(socks_connector, ipv4)
     boost::asio::steady_timer timeout{io.io_service};
     timeout.expires_from_now(std::chrono::seconds{5});
 
-    boost::unique_future<boost::asio::ip::tcp::socket> sock =
+    std::future<boost::asio::ip::tcp::socket> sock =
         net::socks::connector{io.acceptor.local_endpoint()}("250.88.125.99", "8080", timeout);
 
     while (!io.connected)
-        ASSERT_FALSE(sock.is_ready());
+        ASSERT_NE(sock.wait_for(0s), std::future_status::ready);
     const std::uint8_t expected_bytes[] = {
         4, 1, 0x1f, 0x90, 0xfa, 0x58, 0x7d, 0x63, 0x00
     };
@@ -1205,7 +1206,7 @@ TEST(socks_connector, ipv4)
     const std::uint8_t reply_bytes[] = {0, 90, 0, 0, 0, 0, 0, 0};
     boost::asio::write(io.server, boost::asio::buffer(reply_bytes));
 
-    ASSERT_EQ(boost::future_status::ready, sock.wait_for(boost::chrono::seconds{3}));
+    ASSERT_EQ(std::future_status::ready, sock.wait_for(3s));
     EXPECT_TRUE(sock.get().is_open());
 }
 
@@ -1215,11 +1216,11 @@ TEST(socks_connector, error)
     boost::asio::steady_timer timeout{io.io_service};
     timeout.expires_from_now(std::chrono::seconds{5});
 
-    boost::unique_future<boost::asio::ip::tcp::socket> sock =
+    std::future<boost::asio::ip::tcp::socket> sock =
         net::socks::connector{io.acceptor.local_endpoint()}("250.88.125.99", "8080", timeout);
 
     while (!io.connected)
-        ASSERT_FALSE(sock.is_ready());
+        ASSERT_NE(sock.wait_for(0s), std::future_status::ready);
     const std::uint8_t expected_bytes[] = {
         4, 1, 0x1f, 0x90, 0xfa, 0x58, 0x7d, 0x63, 0x00
     };
@@ -1231,7 +1232,7 @@ TEST(socks_connector, error)
     const std::uint8_t reply_bytes[] = {0, 91, 0, 0, 0, 0, 0, 0};
     boost::asio::write(io.server, boost::asio::buffer(reply_bytes));
 
-    ASSERT_EQ(boost::future_status::ready, sock.wait_for(boost::chrono::seconds{3}));
+    ASSERT_EQ(std::future_status::ready, sock.wait_for(3s));
     EXPECT_THROW(sock.get().is_open(), boost::system::system_error);
 }
 
@@ -1241,10 +1242,10 @@ TEST(socks_connector, timeout)
     boost::asio::steady_timer timeout{io.io_service};
     timeout.expires_from_now(std::chrono::milliseconds{10});
 
-    boost::unique_future<boost::asio::ip::tcp::socket> sock =
+    std::future<boost::asio::ip::tcp::socket> sock =
         net::socks::connector{io.acceptor.local_endpoint()}("250.88.125.99", "8080", timeout);
 
-    ASSERT_EQ(boost::future_status::ready, sock.wait_for(boost::chrono::seconds{3}));
+    ASSERT_EQ(std::future_status::ready, sock.wait_for(3s));
     EXPECT_THROW(sock.get().is_open(), boost::system::system_error);
 }
 
@@ -1349,7 +1350,7 @@ TEST(dandelionpp_map, dropped_connection)
         }
 
         EXPECT_EQ(3u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(3u, entry.second);
 
         for (const boost::uuids::uuid& connection : in_connections)
@@ -1407,7 +1408,7 @@ TEST(dandelionpp_map, dropped_connection)
         }
 
         EXPECT_EQ(3u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(3u, entry.second);
     }
     {
@@ -1470,7 +1471,7 @@ TEST(dandelionpp_map, dropped_connection_remapped)
         }
 
         EXPECT_EQ(3u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(3u, entry.second);
 
         for (const boost::uuids::uuid& connection : in_connections)
@@ -1509,7 +1510,7 @@ TEST(dandelionpp_map, dropped_connection_remapped)
         }
 
         EXPECT_EQ(2u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(5u, entry.second);
     }
     // select 3 of 3 connections but do not remap existing links
@@ -1530,7 +1531,7 @@ TEST(dandelionpp_map, dropped_connection_remapped)
         }
 
         EXPECT_EQ(2u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(5u, entry.second);
     }
     // map 8 new incoming connections across 3 outgoing links
@@ -1553,7 +1554,7 @@ TEST(dandelionpp_map, dropped_connection_remapped)
         }
 
         EXPECT_EQ(3u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(6u, entry.second);
     }
 }
@@ -1607,7 +1608,7 @@ TEST(dandelionpp_map, dropped_all_connections)
         }
 
         EXPECT_EQ(3u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(3u, entry.second);
 
         for (const boost::uuids::uuid& connection : in_connections)
@@ -1639,7 +1640,7 @@ TEST(dandelionpp_map, dropped_all_connections)
         }
 
         EXPECT_EQ(3u, used.size());
-        for (const std::pair<boost::uuids::uuid, std::size_t>& entry : used)
+        for (const auto& entry : used)
             EXPECT_EQ(3u, entry.second);
     }
 }

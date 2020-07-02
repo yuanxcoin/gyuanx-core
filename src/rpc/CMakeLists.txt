@@ -77,7 +77,6 @@ target_link_libraries(rpc
     Boost::thread
     Boost::program_options
     OpenSSL::SSL
-    Boost::regex
     extra)
 
 target_link_libraries(daemon_messages
@@ -93,6 +92,5 @@ target_link_libraries(daemon_rpc_server
     rpc
     daemon_messages
     serialization
-    Boost::chrono
     Boost::thread
     extra)

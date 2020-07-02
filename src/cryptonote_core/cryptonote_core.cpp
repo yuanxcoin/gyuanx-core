@@ -37,6 +37,7 @@
 #include <unordered_set>
 #include <iomanip>
 #include <lokimq/hex.h>
+#include <lokimq/base32z.h>
 
 extern "C" {
 #include <sodium.h>
@@ -48,8 +49,8 @@ extern "C" {
 #include <sqlite3.h>
 
 #include "cryptonote_core.h"
-#include "common/util.h"
-#include "common/base32z.h"
+#include "common/file.h"
+#include "common/sha256sum.h"
 #include "common/updates.h"
 #include "common/download.h"
 #include "common/threadpool.h"
@@ -147,11 +148,6 @@ namespace cryptonote
   static const command_line::arg_descriptor<uint64_t> arg_test_drop_download_height = {
     "test-drop-download-height"
   , "Like test-drop-download but discards only after around certain height"
-  , 0
-  };
-  static const command_line::arg_descriptor<int> arg_test_dbg_lock_sleep = {
-    "test-dbg-lock-sleep"
-  , "Sleep time in ms, defaults to 0 (off), used to debug before/after locking mutex. Values 100 to 1000 are good for tests."
   , 0
   };
   static const command_line::arg_descriptor<uint64_t> arg_fast_block_sync = {
@@ -354,7 +350,7 @@ namespace cryptonote
 
     tools::download_async_handle handle;
     {
-      boost::lock_guard<boost::mutex> lock(m_update_mutex);
+      std::lock_guard lock{m_update_mutex};
       handle = m_update_download;
       m_update_download = 0;
     }
@@ -380,7 +376,6 @@ namespace cryptonote
     command_line::add_arg(desc, arg_show_time_stats);
     command_line::add_arg(desc, arg_block_sync_size);
     command_line::add_arg(desc, arg_check_updates);
-    command_line::add_arg(desc, arg_test_dbg_lock_sleep);
     command_line::add_arg(desc, arg_offline);
     command_line::add_arg(desc, arg_block_download_max_size);
     command_line::add_arg(desc, arg_max_txpool_weight);
@@ -483,8 +478,6 @@ namespace cryptonote
              << (epee::net_utils::ipv4_network_address{ m_sn_public_ip, m_storage_port }).str());
 
     }
-
-    epee::debug::g_test_dbg_lock_sleep() = command_line::get_arg(vm, arg_test_dbg_lock_sleep);
 
     return true;
   }
@@ -1014,17 +1007,15 @@ namespace cryptonote
 
     if (m_service_node) {
       MGINFO_YELLOW("Service node public keys:");
-      MGINFO_YELLOW("- primary: " << epee::string_tools::pod_to_hex(keys.pub));
-      MGINFO_YELLOW("- ed25519: " << epee::string_tools::pod_to_hex(keys.pub_ed25519));
-      // Same as ed25519, but encoded with base32z:
-      char b32z[52] = {};
-      base32z::encode(std::string{reinterpret_cast<const char*>(keys.pub_ed25519.data), 32}, b32z);
-      MGINFO_YELLOW("- lokinet: " << lokimq::string_view(b32z, sizeof(b32z)) << ".snode");
-      MGINFO_YELLOW("-  x25519: " << epee::string_tools::pod_to_hex(keys.pub_x25519));
+      MGINFO_YELLOW("- primary: " << lokimq::to_hex(tools::view_guts(keys.pub)));
+      MGINFO_YELLOW("- ed25519: " << lokimq::to_hex(tools::view_guts(keys.pub_ed25519)));
+      // .snode address is the ed25519 pubkey, encoded with base32z and with .snode appended:
+      MGINFO_YELLOW("- lokinet: " << lokimq::to_base32z(tools::view_guts(keys.pub_ed25519)) << ".snode");
+      MGINFO_YELLOW("-  x25519: " << lokimq::to_hex(tools::view_guts(keys.pub_x25519)));
     } else {
       // Only print the x25519 version because it's the only thing useful for a non-SN (for
       // encrypted LMQ RPC connections).
-      MGINFO_YELLOW("x25519 public key: " << epee::string_tools::pod_to_hex(keys.pub_x25519));
+      MGINFO_YELLOW("x25519 public key: " << lokimq::to_hex(tools::view_guts(keys.pub_x25519)));
     }
 
     return true;
@@ -1061,7 +1052,7 @@ namespace cryptonote
   // check_sn is whether we check an incoming key against known service nodes (and thus return
   // "true" for the service node access if it checks out).
   //
-  lokimq::AuthLevel core::lmq_allow(lokimq::string_view ip, lokimq::string_view x25519_pubkey_str, lokimq::AuthLevel default_auth) {
+  lokimq::AuthLevel core::lmq_allow(std::string_view ip, std::string_view x25519_pubkey_str, lokimq::AuthLevel default_auth) {
     using namespace lokimq;
     AuthLevel auth = default_auth;
     if (x25519_pubkey_str.size() == sizeof(crypto::x25519_public_key)) {
@@ -1089,7 +1080,7 @@ namespace cryptonote
         tools::copy_guts(m_service_keys.pub_x25519),
         tools::copy_guts(m_service_keys.key_x25519),
         m_service_node,
-        [this](string_view x25519_pk) { return m_service_node_list.remote_lookup(x25519_pk); },
+        [this](std::string_view x25519_pk) { return m_service_node_list.remote_lookup(x25519_pk); },
         [](LogLevel level, const char *file, int line, std::string msg) {
           // What a lovely interface (<-- sarcasm)
           if (ELPP->vRegistry()->allowed(easylogging_level(level), "lmq"))
@@ -1115,7 +1106,7 @@ namespace cryptonote
       std::string qnet_listen = "tcp://" + listen_ip + ":" + std::to_string(m_quorumnet_port);
       MGINFO("- listening on " << qnet_listen << " (quorumnet)");
       m_lmq->listen_curve(qnet_listen,
-          [this, public_=command_line::get_arg(vm, arg_lmq_quorumnet_public)](string_view ip, string_view pk, bool) {
+          [this, public_=command_line::get_arg(vm, arg_lmq_quorumnet_public)](std::string_view ip, std::string_view pk, bool) {
             return lmq_allow(ip, pk, public_ ? AuthLevel::basic : AuthLevel::none);
           });
 
@@ -1186,7 +1177,7 @@ namespace cryptonote
       return;
     }
 
-    tx_info.parsed = parse_tx_from_blob(tx_info.tx, tx_info.tx_hash, *tx_info.blob);
+    tx_info.parsed = parse_and_validate_tx_from_blob(*tx_info.blob, tx_info.tx, tx_info.tx_hash);
     if(!tx_info.parsed)
     {
       LOG_PRINT_L1("WRONG TRANSACTION BLOB, Failed to parse, rejected");
@@ -1195,7 +1186,7 @@ namespace cryptonote
     }
     //std::cout << "!"<< tx.vin.size() << std::endl;
 
-    std::lock_guard<boost::mutex> lock(bad_semantics_txes_lock);
+    std::lock_guard lock{bad_semantics_txes_lock};
     for (int idx = 0; idx < 2; ++idx)
     {
       if (bad_semantics_txes[idx].find(tx_info.tx_hash) != bad_semantics_txes[idx].end())
@@ -1746,7 +1737,7 @@ namespace cryptonote
     std::unordered_set<crypto::key_image> ki;
     for(const auto& in: tx.vin)
     {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
+      CHECKED_GET_SPECIFIC_VARIANT(in, txin_to_key, tokey_in, false);
       if(!ki.insert(tokey_in.k_image).second)
         return false;
     }
@@ -1760,7 +1751,7 @@ namespace cryptonote
     {
       for(const auto& in: tx.vin)
       {
-        CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
+        CHECKED_GET_SPECIFIC_VARIANT(in, txin_to_key, tokey_in, false);
         for (size_t n = 1; n < tokey_in.key_offsets.size(); ++n)
           if (tokey_in.key_offsets[n] == 0)
             return false;
@@ -1774,7 +1765,7 @@ namespace cryptonote
     std::unordered_set<crypto::key_image> ki;
     for(const auto& in: tx.vin)
     {
-      CHECKED_GET_SPECIFIC_VARIANT(in, const txin_to_key, tokey_in, false);
+      CHECKED_GET_SPECIFIC_VARIANT(in, txin_to_key, tokey_in, false);
       if (!(rct::scalarmultKey(rct::ki2rct(tokey_in.k_image), rct::curveOrder()) == rct::identity()))
         return false;
     }
@@ -2105,11 +2096,6 @@ namespace cryptonote
     return m_blockchain_storage.have_block(id);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::parse_tx_from_blob(transaction& tx, crypto::hash& tx_hash, const blobdata& blob) const
-  {
-    return parse_and_validate_tx_from_blob(blob, tx, tx_hash);
-  }
-  //-----------------------------------------------------------------------------------------------
   crypto::hash core::get_block_id_by_height(uint64_t height) const
   {
     return m_blockchain_storage.get_block_id_by_height(height);
@@ -2220,12 +2206,12 @@ namespace cryptonote
       m_starter_message_showed = true;
     }
 
-    m_fork_moaner.do_call(boost::bind(&core::check_fork_time, this));
-    m_txpool_auto_relayer.do_call(boost::bind(&core::relay_txpool_transactions, this));
-    m_service_node_vote_relayer.do_call(boost::bind(&core::relay_service_node_votes, this));
-    // m_check_updates_interval.do_call(boost::bind(&core::check_updates, this));
-    m_check_disk_space_interval.do_call(boost::bind(&core::check_disk_space, this));
-    m_block_rate_interval.do_call(boost::bind(&core::check_block_rate, this));
+    m_fork_moaner.do_call([this] { return check_fork_time(); });
+    m_txpool_auto_relayer.do_call([this] { return relay_txpool_transactions(); });
+    m_service_node_vote_relayer.do_call([this] { return relay_service_node_votes(); });
+    // m_check_updates_interval.do_call([this] { return check_updates(); });
+    m_check_disk_space_interval.do_call([this] { return check_disk_space(); });
+    m_block_rate_interval.do_call([this] { return check_block_rate(); });
     m_sn_proof_cleanup_interval.do_call([&snl=m_service_node_list] { snl.cleanup_proofs(); return true; });
 
     time_t const lifetime = time(nullptr) - get_start_time();
@@ -2235,7 +2221,7 @@ namespace cryptonote
       do_uptime_proof_call();
     }
 
-    m_blockchain_pruning_interval.do_call(boost::bind(&core::update_blockchain_pruning, this));
+    m_blockchain_pruning_interval.do_call([this] { return update_blockchain_pruning(); });
     m_miner.on_idle();
     m_mempool.on_idle();
 
@@ -2337,7 +2323,7 @@ namespace cryptonote
     boost::filesystem::path path(epee::string_tools::get_current_module_folder());
     path /= filename;
 
-    boost::unique_lock<boost::mutex> lock(m_update_mutex);
+    std::unique_lock lock{m_update_mutex};
 
     if (m_update_download != 0)
     {
@@ -2346,7 +2332,7 @@ namespace cryptonote
     }
 
     crypto::hash file_hash;
-    if (!tools::sha256sum(path.string(), file_hash) || (hash != epee::string_tools::pod_to_hex(file_hash)))
+    if (!tools::sha256sum_file(path.string(), file_hash) || (hash != epee::string_tools::pod_to_hex(file_hash)))
     {
       MCDEBUG("updates", "We don't have that file already, downloading");
       const std::string tmppath = path.string() + ".tmp";
@@ -2360,7 +2346,7 @@ namespace cryptonote
         if (success)
         {
           crypto::hash file_hash;
-          if (!tools::sha256sum(tmppath, file_hash))
+          if (!tools::sha256sum_file(tmppath, file_hash))
           {
             MCERROR("updates", "Failed to hash " << tmppath);
             remove = true;
@@ -2378,7 +2364,7 @@ namespace cryptonote
           MCERROR("updates", "Failed to download " << uri);
           good = false;
         }
-        boost::unique_lock<boost::mutex> lock(m_update_mutex);
+        std::unique_lock lock{m_update_mutex};
         m_update_download = 0;
         if (success && !remove)
         {

@@ -32,12 +32,12 @@
 #include <boost/format.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/endian/conversion.hpp>
-#include <memory>  // std::unique_ptr
-#include <cstring>  // memcpy
+#include <memory>
+#include <cstring>
 
 #include "string_tools.h"
 #include "file_io_utils.h"
-#include "common/util.h"
+#include "common/file.h"
 #include "common/pruning.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "crypto/crypto.h"
@@ -596,7 +596,7 @@ void BlockchainLMDB::check_open() const
 void BlockchainLMDB::do_resize(uint64_t increase_size)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  CRITICAL_REGION_LOCAL(m_synchronization_lock);
+  std::lock_guard lock{*this};
   const uint64_t add_size = 1LL << 30;
 
   // check disk capacity
@@ -976,12 +976,13 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   unsigned int unprunable_size = tx.unprunable_size;
   if (unprunable_size == 0)
   {
-    std::stringstream ss;
-    binary_archive<true> ba(ss);
-    bool r = const_cast<cryptonote::transaction&>(tx).serialize_base(ba);
-    if (!r)
-      throw0(DB_ERROR("Failed to serialize pruned tx"));
-    unprunable_size = ss.str().size();
+    serialization::binary_string_archiver ba;
+    try {
+      const_cast<cryptonote::transaction&>(tx).serialize_base(ba);
+    } catch (const std::exception& e) {
+      throw0(DB_ERROR("Failed to serialize pruned tx: "s + e.what()));
+    }
+    unprunable_size = ba.str().size();
   }
 
   if (unprunable_size > blob.size())
@@ -1111,7 +1112,7 @@ uint64_t BlockchainLMDB::add_output(const crypto::hash& tx_hash,
   CURSOR(output_txs)
   CURSOR(output_amounts)
 
-  if (tx_output.target.type() != typeid(txout_to_key))
+  if (!std::holds_alternative<txout_to_key>(tx_output.target))
     throw0(DB_ERROR("Wrong output type: expected txout_to_key"));
   if (tx_output.amount == 0 && !commitment)
     throw0(DB_ERROR("RCT output without commitment"));
@@ -1140,7 +1141,7 @@ uint64_t BlockchainLMDB::add_output(const crypto::hash& tx_hash,
   else
     ok.amount_index = 0;
   ok.output_id = m_num_outputs;
-  ok.data.pubkey = boost::get < txout_to_key > (tx_output.target).key;
+  ok.data.pubkey = std::get<txout_to_key>(tx_output.target).key;
   ok.data.unlock_time = unlock_time;
   ok.data.height = m_height;
   if (tx_output.amount == 0)
@@ -1198,7 +1199,7 @@ void BlockchainLMDB::remove_tx_outputs(const uint64_t tx_id, const transaction& 
       throw0(DB_ERROR("tx has outputs, but no output indices found"));
   }
 
-  bool is_pseudo_rct = tx.version >= cryptonote::txversion::v2_ringct && tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
+  bool is_pseudo_rct = tx.version >= cryptonote::txversion::v2_ringct && tx.vin.size() == 1 && std::holds_alternative<txin_gen>(tx.vin[0]);
   for (size_t i = tx.vout.size(); i-- > 0;)
   {
     uint64_t amount = is_pseudo_rct ? 0 : tx.vout[i].amount;
@@ -1400,7 +1401,7 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
     throw DB_ERROR("Database could not be opened");
   }
 
-  boost::optional<bool> is_hdd_result = tools::is_hdd(filename.c_str());
+  std::optional<bool> is_hdd_result = tools::is_hdd(filename.c_str());
   if (is_hdd_result)
   {
     if (is_hdd_result.value())
@@ -1743,19 +1744,22 @@ std::string BlockchainLMDB::get_db_name() const
   return std::string("lmdb");
 }
 
-// TODO: this?
-bool BlockchainLMDB::lock()
+void BlockchainLMDB::lock()
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  check_open();
-  return false;
+  m_synchronization_lock.lock();
 }
 
-// TODO: this?
+bool BlockchainLMDB::try_lock()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  return m_synchronization_lock.try_lock();
+}
+
 void BlockchainLMDB::unlock()
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  check_open();
+  m_synchronization_lock.unlock();
 }
 
 #define TXN_PREFIX(flags) \
@@ -2024,7 +2028,7 @@ static bool is_v1_tx(MDB_cursor *c_txs_pruned, MDB_val *tx_id)
     throw0(DB_ERROR(lmdb_error("Failed to find transaction pruned data: ", ret).c_str()));
   if (v.mv_size == 0)
     throw0(DB_ERROR("Invalid transaction pruned data"));
-  return cryptonote::is_v1_tx(cryptonote::blobdata_ref{(const char*)v.mv_data, v.mv_size});
+  return cryptonote::is_v1_tx(std::string_view{(const char*)v.mv_data, v.mv_size});
 }
 
 enum { prune_mode_prune, prune_mode_update, prune_mode_check };
@@ -4110,8 +4114,8 @@ std::vector<checkpoint_t> BlockchainLMDB::get_checkpoints_range(uint64_t start, 
   if (!get_top_checkpoint(top_checkpoint)) return result;
   if (!get_block_checkpoint_internal(0, bottom_checkpoint, MDB_FIRST)) return result;
 
-  start = loki::clamp_u64(start, bottom_checkpoint.height, top_checkpoint.height);
-  end   = loki::clamp_u64(end, bottom_checkpoint.height, top_checkpoint.height);
+  start = std::clamp(start, bottom_checkpoint.height, top_checkpoint.height);
+  end   = std::clamp(end, bottom_checkpoint.height, top_checkpoint.height);
   if (start > end)
   {
     if (start < bottom_checkpoint.height) return result;
@@ -5504,12 +5508,13 @@ void BlockchainLMDB::migrate_1_2()
       transaction tx;
       if (!parse_and_validate_tx_from_blob(bd, tx))
         throw0(DB_ERROR("Failed to parse tx from blob retrieved from the db"));
-      std::stringstream ss;
-      binary_archive<true> ba(ss);
-      bool r = tx.serialize_base(ba);
-      if (!r)
-        throw0(DB_ERROR("Failed to serialize pruned tx"));
-      std::string pruned = ss.str();
+      serialization::binary_string_archiver ba;
+      try {
+        tx.serialize_base(ba);
+      } catch (const std::exception& e) {
+        throw0(DB_ERROR("Failed to serialize pruned tx: "s + e.what()));
+      }
+      std::string pruned = ba.str();
 
       if (pruned.size() > bd.size())
         throw0(DB_ERROR("Pruned tx is larger than raw tx"));

@@ -41,6 +41,7 @@
 #include "wallet/wallet_args.h"
 #include "common/command_line.h"
 #include "common/i18n.h"
+#include "common/signal_handler.h"
 #include "cryptonote_config.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/account.h"
@@ -55,16 +56,18 @@
 #include "rpc/core_rpc_server.h"
 #include "daemonizer/daemonizer.h"
 #include "cryptonote_core/loki_name_system.h"
+#include "serialization/boost_std_variant.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "wallet.rpc"
-
-#define DEFAULT_AUTO_REFRESH_PERIOD 20 // seconds
 
 namespace rpc = cryptonote::rpc;
 
 namespace
 {
+  using namespace std::literals;
+  constexpr auto DEFAULT_AUTO_REFRESH_PERIOD = 20s;
+
   const command_line::arg_descriptor<std::string, true> arg_rpc_bind_port = {"rpc-bind-port", "Sets bind port for server"};
   const command_line::arg_descriptor<bool> arg_disable_rpc_login = {"disable-rpc-login", "Disable HTTP authentication for RPC connections served by this process"};
   const command_line::arg_descriptor<bool> arg_restricted = {"restricted-rpc", "Restricts to view-only commands", false};
@@ -73,7 +76,7 @@ namespace
 
   constexpr const char default_rpc_username[] = "loki";
 
-  boost::optional<tools::password_container> password_prompter(const char *prompt, bool verify)
+  std::optional<tools::password_container> password_prompter(const char *prompt, bool verify)
   {
     auto pwd_container = tools::password_container::prompt(verify, prompt);
     if (!pwd_container)
@@ -109,12 +112,13 @@ namespace tools
   {
     m_stop = false;
     m_net_server.add_idle_handler([this](){
-      if (m_auto_refresh_period == 0) // disabled
+      if (m_auto_refresh_period == 0s) // disabled
         return true;
 
+      const auto now = std::chrono::steady_clock::now();
       if (!m_long_poll_new_changes)
       {
-        if (boost::posix_time::microsec_clock::universal_time() < m_last_auto_refresh_time + boost::posix_time::seconds(m_auto_refresh_period))
+        if (now < m_last_auto_refresh_time + m_auto_refresh_period)
           return true;
       }
       m_long_poll_new_changes = false; // Always consume the change, if we miss one due to thread race, not the end of the world.
@@ -124,9 +128,9 @@ namespace tools
       } catch (const std::exception& ex) {
         LOG_ERROR("Exception at while refreshing, what=" << ex.what());
       }
-      m_last_auto_refresh_time = boost::posix_time::microsec_clock::universal_time();
+      m_last_auto_refresh_time = now;
       return true;
-    }, 1000);
+    }, 1s);
 
     m_net_server.add_idle_handler([this](){
       if (m_stop.load(std::memory_order_relaxed))
@@ -135,13 +139,13 @@ namespace tools
         return false;
       }
       return true;
-    }, 500);
+    }, 500ms);
 
-    m_long_poll_thread = boost::thread([&] {
+    m_long_poll_thread = std::thread([&] {
       for (;;)
       {
         if (m_long_poll_disabled) return true;
-        if (m_auto_refresh_period == 0)
+        if (m_auto_refresh_period == 0s)
         {
           std::this_thread::sleep_for(std::chrono::seconds(1));
           continue;
@@ -181,7 +185,7 @@ namespace tools
     if (!rpc_config)
       return false;
 
-    boost::optional<epee::net_utils::http::login> http_login{};
+    std::optional<epee::net_utils::http::login> http_login{};
     std::string bind_port = command_line::get_arg(m_vm, arg_rpc_bind_port);
     const bool disable_auth = command_line::get_arg(m_vm, arg_disable_rpc_login);
     m_restricted = command_line::get_arg(m_vm, arg_restricted);
@@ -258,7 +262,7 @@ namespace tools
     } // end auth enabled
 
     m_auto_refresh_period = DEFAULT_AUTO_REFRESH_PERIOD;
-    m_last_auto_refresh_time = boost::posix_time::min_date_time;
+    m_last_auto_refresh_time = std::chrono::steady_clock::time_point::min();
 
     m_net_server.set_threads_prefix("RPC");
     auto rng = [](size_t len, uint8_t *ptr) { return crypto::rand(len, ptr); };
@@ -530,7 +534,7 @@ namespace tools
   {
     if (!m_wallet) return not_open(er);
     const std::pair<std::map<std::string, std::string>, std::vector<std::string>> account_tags = m_wallet->get_account_tags();
-    for (const std::pair<std::string, std::string>& p : account_tags.first)
+    for (const auto& p : account_tags.first)
     {
       res.account_tags.resize(res.account_tags.size() + 1);
       auto& info = res.account_tags.back();
@@ -605,6 +609,41 @@ namespace tools
     }
     return true;
   }
+
+  static bool extract_account_addr(
+      cryptonote::address_parse_info& info,
+      cryptonote::network_type nettype,
+      std::string_view addr_or_url,
+      epee::json_rpc::error& er)
+  {
+    if (!get_account_address_from_str_or_url(info, nettype, addr_or_url,
+          [&er](const std::string_view url, const std::vector<std::string> &addresses, bool dnssec_valid) {
+            if (!dnssec_valid)
+            {
+              er.message = "Invalid DNSSEC for "s;
+              er.message += url;
+              return ""s;
+            }
+            if (addresses.empty())
+            {
+              er.message = "No Loki address found at "s;
+              er.message += url;
+              return ""s;
+            }
+            return addresses[0];
+          }))
+    {
+      er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
+      if (er.message.empty())
+      {
+        er.message = "WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: "s;
+        er.message += addr_or_url;
+      }
+      return false;
+    }
+    return true;
+  }
+
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::validate_transfer(const std::list<transfer_destination>& destinations, const std::string& payment_id, std::vector<cryptonote::tx_destination_entry>& dsts, std::vector<uint8_t>& extra, bool at_least_one_destination, epee::json_rpc::error& er)
   {
@@ -613,29 +652,11 @@ namespace tools
     for (auto it = destinations.begin(); it != destinations.end(); it++)
     {
       cryptonote::address_parse_info info;
-      cryptonote::tx_destination_entry de;
       er.message = "";
-      if(!get_account_address_from_str_or_url(info, m_wallet->nettype(), it->address,
-        [&er](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-          if (!dnssec_valid)
-          {
-            er.message = std::string("Invalid DNSSEC for ") + url;
-            return {};
-          }
-          if (addresses.empty())
-          {
-            er.message = std::string("No Loki address found at ") + url;
-            return {};
-          }
-          return addresses[0];
-        }))
-      {
-        er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
-        if (er.message.empty())
-          er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + it->address;
+      if (!extract_account_addr(info, m_wallet->nettype(), it->address, er))
         return false;
-      }
 
+      cryptonote::tx_destination_entry de;
       de.original = it->address;
       de.addr = info.address;
       de.is_subaddress = info.is_subaddress;
@@ -807,7 +828,7 @@ namespace tools
       if (req.blink || priority != tx_priority_unimportant)
         priority = tx_priority_blink;
 
-      boost::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+      std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
       if (!hf_version)
       {
         er.code    = WALLET_RPC_ERROR_CODE_HF_QUERY_FAILED;
@@ -869,7 +890,7 @@ namespace tools
       if (req.blink || priority != tx_priority_unimportant)
         priority = tx_priority_blink;
 
-      boost::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+      std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
       if (!hf_version)
       {
         er.code    = WALLET_RPC_ERROR_CODE_HF_QUERY_FAILED;
@@ -1873,24 +1894,8 @@ namespace tools
 
     cryptonote::address_parse_info info;
     er.message = "";
-    if(!get_account_address_from_str_or_url(info, m_wallet->nettype(), req.address,
-      [&er](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-        if (!dnssec_valid)
-        {
-          er.message = std::string("Invalid DNSSEC for ") + url;
-          return {};
-        }
-        if (addresses.empty())
-        {
-          er.message = std::string("No Loki address found at ") + url;
-          return {};
-        }
-        return addresses[0];
-      }))
-    {
-      er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
+    if (!extract_account_addr(info, m_wallet->nettype(), req.address, er))
       return false;
-    }
 
     res.good = m_wallet->verify(req.data, info.address, req.signature);
     return true;
@@ -2235,7 +2240,7 @@ namespace tools
   {
     if (!m_wallet) return not_open(er);
 
-    boost::optional<std::pair<uint32_t, uint64_t>> account_minreserve;
+    std::optional<std::pair<uint32_t, uint64_t>> account_minreserve;
     if (!req.all)
     {
       if (req.account_index >= m_wallet->get_num_subaddress_accounts())
@@ -2681,26 +2686,9 @@ namespace tools
 
     cryptonote::address_parse_info info;
     er.message = "";
-    if(!get_account_address_from_str_or_url(info, m_wallet->nettype(), req.address,
-      [&er](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-        if (!dnssec_valid)
-        {
-          er.message = std::string("Invalid DNSSEC for ") + url;
-          return {};
-        }
-        if (addresses.empty())
-        {
-          er.message = std::string("No Loki address found at ") + url;
-          return {};
-        }
-        return addresses[0];
-      }))
-    {
-      er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
-      if (er.message.empty())
-        er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + req.address;
+    if (!extract_account_addr(info, m_wallet->nettype(), req.address, er))
       return false;
-    }
+
     if (!m_wallet->add_address_book_row(info.address, info.has_payment_id ? &info.payment_id : NULL, req.description, info.is_subaddress))
     {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
@@ -2735,26 +2723,8 @@ namespace tools
     if (req.set_address)
     {
       er.message = "";
-      if(!get_account_address_from_str_or_url(info, m_wallet->nettype(), req.address,
-        [&er](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-          if (!dnssec_valid)
-          {
-            er.message = std::string("Invalid DNSSEC for ") + url;
-            return {};
-          }
-          if (addresses.empty())
-          {
-            er.message = std::string("No Monero address found at ") + url;
-            return {};
-          }
-          return addresses[0];
-        }))
-      {
-        er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
-        if (er.message.empty())
-          er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + req.address;
+      if (!extract_account_addr(info, m_wallet->nettype(), req.address, er))
         return false;
-      }
       entry.m_address = info.address;
       entry.m_is_subaddress = info.is_subaddress;
       if (info.has_payment_id)
@@ -2831,8 +2801,8 @@ namespace tools
     }
     try
     {
-      m_auto_refresh_period = req.enable ? req.period ? req.period : DEFAULT_AUTO_REFRESH_PERIOD : 0;
-      MINFO("Auto refresh now " << (m_auto_refresh_period ? std::to_string(m_auto_refresh_period) + " seconds" : std::string("disabled")));
+      m_auto_refresh_period = req.enable ? req.period ? std::chrono::seconds{req.period} : DEFAULT_AUTO_REFRESH_PERIOD : 0s;
+      MINFO("Auto refresh now " << (m_auto_refresh_period != 0s ? std::to_string(std::chrono::duration<float>(m_auto_refresh_period).count()) + " seconds" : std::string("disabled")));
       return true;
     }
     catch (const std::exception& e)
@@ -4012,24 +3982,9 @@ namespace tools
         continue;
       if (req.allow_openalias)
       {
-        std::string address;
-        res.valid = get_account_address_from_str_or_url(info, net_type.type, req.address,
-          [&er, &address](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-            if (!dnssec_valid)
-            {
-              er.message = std::string("Invalid DNSSEC for ") + url;
-              return {};
-            }
-            if (addresses.empty())
-            {
-              er.message = std::string("No Loki address found at ") + url;
-              return {};
-            }
-            address = addresses[0];
-            return address;
-          });
+        res.valid = extract_account_addr(info, net_type.type, req.address, er);
         if (res.valid)
-          res.openalias_address = address;
+          res.openalias_address = info.as_str(net_type.type);
       }
       else
       {
@@ -4089,14 +4044,14 @@ namespace tools
       ssl_options.verification != epee::net_utils::ssl_verification_t::none &&
       ssl_options.support == epee::net_utils::ssl_support_t::e_ssl_support_enabled;
 
-    if (verification_required && !ssl_options.has_strong_verification(boost::string_ref{}))
+    if (verification_required && !ssl_options.has_strong_verification(""sv))
     {
       er.code = WALLET_RPC_ERROR_CODE_NO_DAEMON_CONNECTION;
       er.message = "SSL is enabled but no user certificate or fingerprints were provided";
       return false;
     }
 
-    if (!m_wallet->set_daemon(req.address, boost::none, req.trusted, std::move(ssl_options)))
+    if (!m_wallet->set_daemon(req.address, std::nullopt, req.trusted, std::move(ssl_options)))
     {
       er.code = WALLET_RPC_ERROR_CODE_NO_DAEMON_CONNECTION;
       er.message = std::string("Unable to set daemon");
@@ -4689,9 +4644,7 @@ int main(int argc, char **argv)
   po::options_description hidden_params("Hidden");
   daemonizer::init_options(hidden_params, desc_params);
 
-  boost::optional<po::variables_map> vm;
-  bool should_terminate = false;
-  std::tie(vm, should_terminate) = wallet_args::main(
+  auto [vm, should_terminate] = wallet_args::main(
     argc, argv,
     "loki-wallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
     tools::wallet_rpc_server::tr("This is the RPC loki wallet. It needs to connect to a loki\ndaemon to work correctly."),

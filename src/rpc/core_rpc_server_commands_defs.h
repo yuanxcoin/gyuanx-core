@@ -64,7 +64,7 @@ namespace rpc {
 // has its own version, and that clients can just test major to see
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
-  constexpr version_t VERSION = {3, 8};
+  constexpr version_t VERSION = {4, 0};
 
   /// Makes a version array from a packed 32-bit integer version
   constexpr version_t make_version(uint32_t version)
@@ -76,9 +76,6 @@ namespace rpc {
   {
     return (uint32_t(version.first) << 16) | version.second;
   }
-
-  using lokimq::string_view;
-  using namespace lokimq::literals;
 
   const static std::string
     STATUS_OK = "OK",
@@ -94,9 +91,9 @@ namespace rpc {
     /// Used to specify RPC names as:
     /// static constexpr auto names() { return NAMES("primary_name", "some_alias"); }
     template <size_t... N>
-    constexpr std::array<string_view, sizeof...(N)> NAMES(const char (&...names)[N]) {
+    constexpr std::array<std::string_view, sizeof...(N)> NAMES(const char (&...names)[N]) {
       static_assert(sizeof...(N) > 0, "RPC command must have at least one name");
-      return {string_view{names, N-1}...};
+      return {std::string_view{names, N-1}...};
     }
   }
 

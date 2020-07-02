@@ -26,9 +26,10 @@
 #pragma once
 
 #include <string>
-#include <boost/optional/optional.hpp>
-#include "http_auth.h"
+#include <optional>
 #include "net/net_ssl.h"
+#include "net/http_base.h"
+#include "net/http_auth.h"
 
 namespace epee
 {
@@ -52,9 +53,8 @@ namespace net_utils
   int get_index(const char *s, char c);
   std::string hex_to_dec_2bytes(const char *s);
   std::string convert(char val);
-  std::string conver_to_url_format(const std::string& uri);
-  std::string convert_from_url_format(const std::string& uri);
-  std::string convert_to_url_format_force_all(const std::string& uri);
+  std::string convert_to_url_format(std::string_view uri);
+  std::string convert_from_url_format(std::string_view uri);
 
 namespace http
 {
@@ -63,15 +63,15 @@ namespace http
   public:
     abstract_http_client() {}
     virtual ~abstract_http_client() {}
-    bool set_server(const std::string& address, boost::optional<login> user, ssl_options_t ssl_options = ssl_support_t::e_ssl_support_autodetect);
-    virtual void set_server(std::string host, std::string port, boost::optional<login> user, ssl_options_t ssl_options = ssl_support_t::e_ssl_support_autodetect) = 0;
+    bool set_server(const std::string& address, std::optional<login> user, ssl_options_t ssl_options = ssl_support_t::e_ssl_support_autodetect);
+    virtual void set_server(std::string host, std::string port, std::optional<login> user, ssl_options_t ssl_options = ssl_support_t::e_ssl_support_autodetect) = 0;
     virtual void set_auto_connect(bool auto_connect) = 0;
     virtual bool connect(std::chrono::milliseconds timeout) = 0;
     virtual bool disconnect() = 0;
     virtual bool is_connected(bool *ssl = NULL) = 0;
-    virtual bool invoke(const boost::string_ref uri, const boost::string_ref method, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) = 0;
-    virtual bool invoke_get(const boost::string_ref uri, std::chrono::milliseconds timeout, const std::string& body = std::string(), const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) = 0;
-    virtual bool invoke_post(const boost::string_ref uri, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) = 0;
+    virtual bool invoke(const std::string_view uri, const std::string_view method, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) = 0;
+    virtual bool invoke_get(const std::string_view uri, std::chrono::milliseconds timeout, const std::string& body = std::string(), const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) = 0;
+    virtual bool invoke_post(const std::string_view uri, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) = 0;
     virtual uint64_t get_bytes_sent() const = 0;
     virtual uint64_t get_bytes_received() const = 0;
   };

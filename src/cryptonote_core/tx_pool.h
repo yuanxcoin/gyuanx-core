@@ -39,7 +39,6 @@
 #include <functional>
 
 #include "string_tools.h"
-#include "syncobj.h"
 #include "common/periodic_task.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/verification_context.h"
@@ -346,23 +345,17 @@ namespace cryptonote
      */
     bool try_lock() const { return m_transactions_lock.try_lock(); }
 
-    /* These are needed as a workaround for boost::lock not considering the type lockable if const
-     * versions are defined.  When we switch to std::lock these can go. */
-    void lock() { m_transactions_lock.lock(); }
-    void unlock() { m_transactions_lock.unlock(); }
-    bool try_lock() { return m_transactions_lock.try_lock(); }
-
     /**
      * @brief obtains a unique lock on the approved blink tx pool
      */
     template <typename... Args>
-    auto blink_unique_lock(Args &&...args) const { return std::unique_lock<boost::shared_mutex>{m_blinks_mutex, std::forward<Args>(args)...}; }
+    auto blink_unique_lock(Args &&...args) const { return std::unique_lock{m_blinks_mutex, std::forward<Args>(args)...}; }
 
     /**
      * @brief obtains a shared lock on the approved blink tx pool
      */
     template <typename... Args>
-    auto blink_shared_lock(Args &&...args) const { return std::shared_lock<boost::shared_mutex>{m_blinks_mutex, std::forward<Args>(args)...}; }
+    auto blink_shared_lock(Args &&...args) const { return std::shared_lock{m_blinks_mutex, std::forward<Args>(args)...}; }
 
 
     // load/store operations
@@ -734,7 +727,7 @@ namespace cryptonote
      */
     typedef std::unordered_map<crypto::key_image, std::unordered_set<crypto::hash> > key_images_container;
 
-    mutable boost::recursive_mutex m_transactions_lock;  //!< mutex for the pool
+    mutable std::recursive_mutex m_transactions_lock;  //!< mutex for the pool
 
     //! container for spent key images from the transactions in the pool
     key_images_container m_spent_key_images;  
@@ -779,7 +772,7 @@ namespace cryptonote
 
     std::unordered_map<crypto::hash, transaction> m_parsed_tx_cache;
 
-    mutable boost::shared_mutex m_blinks_mutex;
+    mutable std::shared_mutex m_blinks_mutex;
 
     // Contains blink metadata for approved blink transactions. { txhash => blink_tx, ... }.
     mutable std::unordered_map<crypto::hash, std::shared_ptr<cryptonote::blink_tx>> m_blinks;

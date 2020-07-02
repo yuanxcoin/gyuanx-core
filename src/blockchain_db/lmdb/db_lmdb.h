@@ -31,6 +31,7 @@
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/blobdatatype.h" // for type blobdata
 #include "ringct/rctTypes.h"
+#include <boost/thread/thread.hpp>
 #include <boost/thread/tss.hpp>
 
 #include <lmdb.h>
@@ -192,7 +193,9 @@ public:
 
   std::string get_db_name() const override;
 
-  bool lock() override;
+  void lock() override;
+
+  bool try_lock() override;
 
   void unlock() override;
 
@@ -500,6 +503,9 @@ private:
   constexpr static uint64_t DEFAULT_MAPSIZE = 1LL << 33;
 #endif
 #endif
+
+  // Guards LMDB resize
+  std::mutex m_synchronization_lock;
 
   constexpr static float RESIZE_PERCENT = 0.9f;
 };

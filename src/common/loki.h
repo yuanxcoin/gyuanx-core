@@ -33,24 +33,12 @@
 #define LOKI_MINUTES(val) val * 60
 
 #include <cstddef>
-#include <cstdint>
-#include <string>
-#include <iterator>
-#include <cassert>
 
 #define LOKI_RPC_DOC_INTROSPECT
 namespace loki
 {
 double      round           (double);
 double      exp2            (double);
-
-constexpr uint64_t clamp_u64(uint64_t val, uint64_t min, uint64_t max)
-{
-  assert(min <= max);
-  if (val < min) val = min;
-  else if (val > max) val = max;
-  return val;
-}
 
 template <typename lambda_t>
 struct deferred
@@ -66,9 +54,7 @@ public:
 };
 
 template <typename lambda_t>
-#ifdef __GNUG__
-[[gnu::warn_unused_result]]
-#endif
+[[nodiscard]]
 deferred<lambda_t> defer(lambda_t lambda) { return lambda; }
 
 struct defer_helper

@@ -27,7 +27,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/optional.hpp>
+#include <optional>
 #include "cryptonote_config.h"
 #include "version.h"
 #include "string_tools.h"
@@ -47,7 +47,7 @@ namespace daemonize {
 command_server::command_server(
     uint32_t ip
   , uint16_t port
-  , const boost::optional<tools::login>& login
+  , const std::optional<tools::login>& login
   , const epee::net_utils::ssl_options_t& ssl_options
   )
   : m_parser{ip, port, login, ssl_options}
@@ -529,10 +529,15 @@ std::string command_server::get_commands_str()
      std::string usage = documentation.second.empty() ? args.front() : documentation.first;
      std::string description = documentation.second.empty() ? documentation.first : documentation.second;
      usage.insert(0, "  ");
-     ss << "Command usage: " << std::endl << usage << std::endl << std::endl;
-     boost::replace_all(description, "\n", "\n  ");
-     description.insert(0, "  ");
-     ss << "Command description: " << std::endl << description << std::endl;
+     ss << "Command usage: \n" << usage << "\n\n";
+     ss << "Command description:\n  ";
+     for (char c : description)
+     {
+       if (c == '\n')
+         ss << "\n  ";
+       else
+         ss << c;
+     }
    }
    return ss.str();
  }

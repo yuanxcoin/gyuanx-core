@@ -28,6 +28,8 @@
 
 #include "daemon_handler.h"
 
+#include <thread>
+
 // likely included by daemon_handler.h's includes,
 // but including here for clarity
 #include "cryptonote_core/cryptonote_core.h"
@@ -410,7 +412,7 @@ namespace rpc
       return;
     }
 
-    unsigned int concurrency_count = boost::thread::hardware_concurrency() * 4;
+    unsigned int concurrency_count = std::thread::hardware_concurrency() * 4;
 
     // if we couldn't detect threads, set it to a ridiculously high number
     if(concurrency_count == 0)
@@ -824,11 +826,11 @@ namespace rpc
     }
 
     header.hash = hash_in;
-    if (b.miner_tx.vin.size() != 1 || b.miner_tx.vin.front().type() != typeid(txin_gen))
+    if (b.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(b.miner_tx.vin.front()))
     {
       return false;
     }
-    header.height = boost::get<txin_gen>(b.miner_tx.vin.front()).height;
+    header.height = std::get<txin_gen>(b.miner_tx.vin.front()).height;
 
     header.major_version = b.major_version;
     header.minor_version = b.minor_version;

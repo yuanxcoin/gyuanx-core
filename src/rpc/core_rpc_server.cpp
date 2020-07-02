@@ -35,6 +35,7 @@
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
 #include <cstring>
+#include <variant>
 #include "include_base_utils.h"
 #include "string_tools.h"
 #include "core_rpc_server.h"
@@ -42,10 +43,9 @@
 #include "common/updates.h"
 #include "common/download.h"
 #include "common/loki.h"
-#include "common/util.h"
+#include "common/sha256sum.h"
 #include "common/perf_timer.h"
 #include "common/random.h"
-#include "common/base32z.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
@@ -76,28 +76,31 @@ namespace cryptonote { namespace rpc {
 
       Request load(rpc_request& request) {
         Request req{};
-        if (request.body.is<string_view>()) {
-          // I hate that I have to copy this string_view into a string, but epee *ONLY* supports
-          // strings for json serialization. TODO: stop using epee.
-          if (!epee::serialization::load_t_from_json(req, std::string{request.body.get_unchecked<string_view>()}))
+        if (std::holds_alternative<std::string_view>(request.body)) {
+          if (!epee::serialization::load_t_from_json(req, std::get<std::string_view>(request.body)))
             throw parse_error{"Failed to parse JSON parameters"};
         } else {
           // This is nasty.  TODO: get rid of epee's horrible serialization code.
-          auto& epee_stuff = request.body.get_unchecked<jsonrpc_params>();
+          auto& epee_stuff = std::get<jsonrpc_params>(request.body);
           auto& storage_entry = epee_stuff.second;
-          // For some reason epee calls a json object a "section" instead of something common like
-          // dict, object, hash, map.  But okay, then it calls a pointer to a section a "hsection"
-          // because obfuscation is the epee way.  Then we have `array_entry` (and of course,
-          // `harray` to refer to an `array_entry*`), but array_entries are *only* allowed to be
-          // arrays of sections.  Meanwhile epee's author left comments telling us that XML is
-          // horrible.  Pot meet kettle.
-          if (storage_entry.type() == typeid(epee::serialization::section)) {
-            auto* section = &boost::get<epee::serialization::section>(storage_entry);
+          // Epee nomenclature translactions:
+          //
+          // - "storage_entry" is a variant over values (ints, doubles, string, storage_entries, or
+          // array_entry).
+          //
+          // - "array_entry" is a variant over vectors of all of those values.
+          //
+          // Epee's json serialization also has a metric ton of limitations: for example it can't
+          // properly deserialize signed integer (unless *all* values are negative), or doubles
+          // (unless *all* values do not look like ints), and for both serialization and
+          // deserialization doesn't support lists of lists, and any mixed types in lists (for
+          // example '[bool, 1, "hi"]`).
+          //
+          // Conclusion: it needs to go.
+          if (auto* section = std::get_if<epee::serialization::section>(&storage_entry))
             req.load(epee_stuff.first, section);
-          }
-          else if (storage_entry.type() == typeid(epee::serialization::array_entry)) {
-            throw std::runtime_error("FIXME 125157015");
-          }
+          else
+            throw std::runtime_error{"only top-level JSON object values are currently supported"};
         }
         return req;
       }
@@ -124,10 +127,10 @@ namespace cryptonote { namespace rpc {
       using Request = typename RPC::request;
       Request load(rpc_request& request) { 
         Request req{};
-        if (!request.body.is<string_view>())
+        if (!std::holds_alternative<std::string_view>(request.body))
           throw std::runtime_error{"Internal error: can't load binary a RPC command with non-string body"};
-        auto data = request.body.get_unchecked<string_view>();
-        if (!epee::serialization::load_t_from_binary(req, epee::span<const uint8_t>{reinterpret_cast<uint8_t const*>(&data[0]), data.size()}))
+        auto data = std::get<std::string_view>(request.body);
+        if (!epee::serialization::load_t_from_binary(req, data))
           throw parse_error{"Failed to parse binary data parameters"};
         return req;
       }
@@ -167,11 +170,7 @@ namespace cryptonote { namespace rpc {
     std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands(rpc::type_list<RPC...>) {
       std::unordered_map<std::string, std::shared_ptr<const rpc_command>> regs;
 
-#ifdef __cpp_fold_expressions // C++17
       (register_rpc_command<RPC>(regs), ...);
-#else
-      (void) std::initializer_list<bool>{(register_rpc_command<RPC>(regs), true)...};
-#endif
 
       return regs;
     }
@@ -218,7 +217,7 @@ namespace cryptonote { namespace rpc {
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const std::string &username_password)
   {
-    boost::optional<epee::net_utils::http::login> credentials;
+    std::optional<epee::net_utils::http::login> credentials;
     const auto loc = username_password.find(':');
     if (loc != std::string::npos)
     {
@@ -227,7 +226,7 @@ namespace cryptonote { namespace rpc {
     return set_bootstrap_daemon(address, credentials);
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  boost::optional<std::string> core_rpc_server::get_random_public_node()
+  std::optional<std::string> core_rpc_server::get_random_public_node()
   {
     GET_PUBLIC_NODES::response response{};
     try
@@ -242,7 +241,7 @@ namespace cryptonote { namespace rpc {
     }
     catch(const std::exception &e)
     {
-      return boost::none;
+      return std::nullopt;
     }
 
     const auto get_random_node_address = [](const std::vector<public_node>& public_nodes) -> std::string {
@@ -264,12 +263,12 @@ namespace cryptonote { namespace rpc {
     }
 
     MERROR("Failed to find any suitable public node");
-    return boost::none;
+    return std::nullopt;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials)
+  bool core_rpc_server::set_bootstrap_daemon(const std::string &address, const std::optional<epee::net_utils::http::login> &credentials)
   {
-    boost::unique_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+    std::unique_lock lock{m_bootstrap_daemon_mutex};
 
     if (address.empty())
     {
@@ -341,7 +340,7 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_INFO>(req, res))
     {
       {
-        boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+        std::shared_lock lock{m_bootstrap_daemon_mutex};
         if (m_bootstrap_daemon.get() != nullptr)
         {
           res.bootstrap_daemon_address = m_bootstrap_daemon->address();
@@ -417,7 +416,7 @@ namespace cryptonote { namespace rpc {
     }
     else
     {
-      boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+      std::shared_lock lock{m_bootstrap_daemon_mutex};
       if (m_bootstrap_daemon.get() != nullptr)
       {
         res.bootstrap_daemon_address = m_bootstrap_daemon->address();
@@ -444,11 +443,11 @@ namespace cryptonote { namespace rpc {
     // No bootstrap daemon check: Only ever get stats about local server
     res.start_time = (uint64_t)m_core.get_start_time();
     {
-      CRITICAL_REGION_LOCAL(epee::net_utils::network_throttle_manager::m_lock_get_global_throttle_in);
+      std::lock_guard lock{epee::net_utils::network_throttle_manager::m_lock_get_global_throttle_in};
       epee::net_utils::network_throttle_manager::get_global_throttle_in().get_stats(res.total_packets_in, res.total_bytes_in);
     }
     {
-      CRITICAL_REGION_LOCAL(epee::net_utils::network_throttle_manager::m_lock_get_global_throttle_out);
+      std::lock_guard lock{epee::net_utils::network_throttle_manager::m_lock_get_global_throttle_out};
       epee::net_utils::network_throttle_manager::get_global_throttle_out().get_stats(res.total_packets_out, res.total_bytes_out);
     }
     res.status = STATUS_OK;
@@ -460,8 +459,7 @@ namespace cryptonote { namespace rpc {
   public:
     pruned_transaction(transaction& tx) : tx(tx) {}
     BEGIN_SERIALIZE_OBJECT()
-      bool r = tx.serialize_base(ar);
-      if (!r) return false;
+      tx.serialize_base(ar);
     END_SERIALIZE()
   };
   //------------------------------------------------------------------------------------------------------------------------------
@@ -759,15 +757,16 @@ namespace cryptonote { namespace rpc {
               res.status = "Failed to parse and validate tx from blob";
               return res;
             }
-            std::stringstream ss;
-            binary_archive<true> ba(ss);
-            if (!tx.serialize_base(ba))
-            {
-              res.status = "Failed to serialize transaction base";
+            serialization::binary_string_archiver ba;
+            try {
+              tx.serialize_base(ba);
+            } catch (const std::exception& e) {
+              res.status = "Failed to serialize transaction base: "s + e.what();
               return res;
             }
-            const cryptonote::blobdata pruned = ss.str();
-            sorted_txs.emplace_back(h, pruned, get_transaction_prunable_hash(tx), std::string(ptx_it->tx_blob, pruned.size()));
+            std::string pruned = ba.str();
+            std::string pruned2{ptx_it->tx_blob, pruned.size()};
+            sorted_txs.emplace_back(h, std::move(pruned), get_transaction_prunable_hash(tx), std::move(pruned2));
             missed_txs.erase(missed_it);
             per_tx_pool_tx_info.emplace(h, *ptx_it);
             ++found_in_pool;
@@ -1087,7 +1086,7 @@ namespace cryptonote { namespace rpc {
       return res;
     }
 
-    unsigned int concurrency_count = boost::thread::hardware_concurrency() * 4;
+    unsigned int concurrency_count = std::thread::hardware_concurrency() * 4;
 
     // if we couldn't detect threads, set it to a ridiculously high number
     if(concurrency_count == 0)
@@ -1410,7 +1409,7 @@ namespace cryptonote { namespace rpc {
   {
     PERF_TIMER(on_set_bootstrap_daemon);
 
-    boost::optional<epee::net_utils::http::login> credentials;
+    std::optional<epee::net_utils::http::login> credentials;
     if (!req.username.empty() || !req.password.empty())
     {
       credentials = epee::net_utils::http::login(req.username, req.password);
@@ -1467,7 +1466,7 @@ namespace cryptonote { namespace rpc {
 
     PERF_TIMER(on_getblockcount);
     {
-      boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+      std::shared_lock lock{m_bootstrap_daemon_mutex};
       if (m_should_use_bootstrap_daemon)
       {
         res.status = "This command is unsupported for bootstrap daemon";
@@ -1485,7 +1484,7 @@ namespace cryptonote { namespace rpc {
 
     PERF_TIMER(on_getblockhash);
     {
-      boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+      std::shared_lock lock{m_bootstrap_daemon_mutex};
       if (m_should_use_bootstrap_daemon)
       {
         res = "This command is unsupported for bootstrap daemon";
@@ -1603,7 +1602,7 @@ namespace cryptonote { namespace rpc {
 
     PERF_TIMER(on_submitblock);
     {
-      boost::shared_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
+      std::shared_lock lock{m_bootstrap_daemon_mutex};
       if (m_should_use_bootstrap_daemon)
       {
         res.status = "This command is unsupported for bootstrap daemon";
@@ -1722,11 +1721,15 @@ namespace cryptonote { namespace rpc {
 
   /// All the common (untemplated) code for use_bootstrap_daemon_if_necessary.  Returns a held lock
   /// if we need to bootstrap, an unheld one if we don't.
-  boost::upgrade_lock<boost::shared_mutex> core_rpc_server::should_bootstrap_lock()
+  std::unique_lock<std::shared_mutex> core_rpc_server::should_bootstrap_lock()
   {
     // TODO - support bootstrapping via a remote LMQ RPC; requires some argument fiddling
-    boost::upgrade_lock<boost::shared_mutex> lock(m_bootstrap_daemon_mutex);
-    if (!m_should_use_bootstrap_daemon || m_bootstrap_daemon.get() == nullptr)
+
+    if (!m_should_use_bootstrap_daemon)
+        return {};
+
+    std::unique_lock lock{m_bootstrap_daemon_mutex};
+    if (!m_bootstrap_daemon)
     {
       lock.unlock();
       return lock;
@@ -1736,12 +1739,9 @@ namespace cryptonote { namespace rpc {
     if (!m_p2p.get_payload_object().no_sync() &&
         current_time - m_bootstrap_height_check_time > 30s)  // update every 30s
     {
-      {
-        boost::upgrade_to_unique_lock<boost::shared_mutex> upgrade_lock(lock);
-        m_bootstrap_height_check_time = current_time;
-      }
+      m_bootstrap_height_check_time = current_time;
 
-      boost::optional<uint64_t> bootstrap_daemon_height = m_bootstrap_daemon->get_height();
+      std::optional<uint64_t> bootstrap_daemon_height = m_bootstrap_daemon->get_height();
       if (!bootstrap_daemon_height)
       {
         MERROR("Failed to fetch bootstrap daemon height");
@@ -1811,10 +1811,7 @@ namespace cryptonote { namespace rpc {
     if (!success)
       throw std::runtime_error{"Bootstrap request failed"};
 
-    {
-      boost::upgrade_to_unique_lock<boost::shared_mutex> lock(bs_lock);
-      m_was_bootstrap_ever_used = true;
-    }
+    m_was_bootstrap_ever_used = true;
     res.untrusted = true;
     return true;
   }
@@ -1858,9 +1855,9 @@ namespace cryptonote { namespace rpc {
       bool have_block = m_core.get_block_by_hash(block_hash, blk, &orphan);
       if (!have_block)
         throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by hash. Hash = " + hash + '.'};
-      if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
+      if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
-      uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
+      uint64_t block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
       fill_block_header_response(blk, orphan, block_height, block_hash, block_header, fill_pow_hash && admin);
     };
 
@@ -1897,9 +1894,9 @@ namespace cryptonote { namespace rpc {
       if (!have_block)
         throw rpc_error{ERROR_INTERNAL, 
           "Internal error: can't get block by height. Height = " + std::to_string(h) + ". Hash = " + epee::string_tools::pod_to_hex(block_hash) + '.'};
-      if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
+      if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
-      uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
+      uint64_t block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
       if (block_height != h)
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong height"};
       res.headers.push_back(block_header_response());
@@ -1956,9 +1953,9 @@ namespace cryptonote { namespace rpc {
     bool have_block = m_core.get_block_by_hash(block_hash, blk, &orphan);
     if (!have_block)
       throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by hash. Hash = " + req.hash + '.'};
-    if (blk.miner_tx.vin.size() != 1 || blk.miner_tx.vin.front().type() != typeid(txin_gen))
+    if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
       throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
-    uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
+    uint64_t block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
     fill_block_header_response(blk, orphan, block_height, block_hash, res.block_header, req.fill_pow_hash && context.admin);
     for (size_t n = 0; n < blk.tx_hashes.size(); ++n)
     {
@@ -2435,7 +2432,7 @@ namespace cryptonote { namespace rpc {
     }
 
     crypto::hash file_hash;
-    if (!tools::sha256sum(path.string(), file_hash) || (hash != epee::string_tools::pod_to_hex(file_hash)))
+    if (!tools::sha256sum_file(path.string(), file_hash) || (hash != epee::string_tools::pod_to_hex(file_hash)))
     {
       MDEBUG("We don't have that file already, downloading");
       if (!tools::download(path.string(), res.auto_uri))
@@ -2444,7 +2441,7 @@ namespace cryptonote { namespace rpc {
         res.status = "Failed to download";
         return res;
       }
-      if (!tools::sha256sum(path.string(), file_hash))
+      if (!tools::sha256sum_file(path.string(), file_hash))
       {
         MERROR("Failed to hash " << path);
         res.status = "Failed to hash";
@@ -2765,10 +2762,9 @@ namespace cryptonote { namespace rpc {
     if (!m_core.service_node())
       throw rpc_error{ERROR_WRONG_PARAM, "Daemon has not been started in service node mode, please relaunch with --service-node flag."};
 
-    std::string err_msg;
     uint8_t hf_version = m_core.get_hard_fork_version(m_core.get_current_blockchain_height());
-    if (!service_nodes::make_registration_cmd(m_core.get_nettype(), hf_version, req.staking_requirement, req.args, m_core.get_service_keys(), res.registration_cmd, req.make_friendly, err_msg))
-      throw rpc_error{ERROR_INTERNAL, "Failed to make registration command" + (err_msg.empty() ? ""s : ": " + err_msg)};
+    if (!service_nodes::make_registration_cmd(m_core.get_nettype(), hf_version, req.staking_requirement, req.args, m_core.get_service_keys(), res.registration_cmd, req.make_friendly))
+      throw rpc_error{ERROR_INTERNAL, "Failed to make registration command"};
 
     res.status = STATUS_OK;
     return res;
@@ -2797,10 +2793,10 @@ namespace cryptonote { namespace rpc {
       args.push_back(std::to_string(portions_cut));
     }
 
-    for (const auto contrib : req.contributions)
+    for (const auto& [address, amount] : req.contributions)
     {
-        uint64_t num_portions = service_nodes::get_portions_to_make_amount(staking_requirement, contrib.amount);
-        args.push_back(contrib.address);
+        uint64_t num_portions = service_nodes::get_portions_to_make_amount(staking_requirement, amount);
+        args.push_back(address);
         args.push_back(std::to_string(num_portions));
     }
 
@@ -3359,11 +3355,11 @@ namespace cryptonote { namespace rpc {
         entry.name_hash                                        = record.name_hash;
         entry.owner                                            = record.owner.to_string(nettype());
         if (record.backup_owner) entry.backup_owner            = record.backup_owner.to_string(nettype());
-        entry.encrypted_value                                  = epee::to_hex::string(record.encrypted_value.to_span());
+        entry.encrypted_value                                  = lokimq::to_hex(record.encrypted_value.to_view());
         entry.register_height                                  = record.register_height;
         entry.update_height                                    = record.update_height;
-        entry.txid                                             = epee::string_tools::pod_to_hex(record.txid);
-        if (record.prev_txid) entry.prev_txid                  = epee::string_tools::pod_to_hex(record.prev_txid);
+        entry.txid                                             = lokimq::to_hex(tools::view_guts(record.txid));
+        if (record.prev_txid) entry.prev_txid                  = lokimq::to_hex(tools::view_guts(record.prev_txid));
       }
     }
 
@@ -3415,11 +3411,11 @@ namespace cryptonote { namespace rpc {
       entry.name_hash       = std::move(record.name_hash);
       if (record.owner) entry.owner = record.owner.to_string(nettype());
       if (record.backup_owner) entry.backup_owner = record.backup_owner.to_string(nettype());
-      entry.encrypted_value = epee::to_hex::string(record.encrypted_value.to_span());
+      entry.encrypted_value = lokimq::to_hex(record.encrypted_value.to_view());
       entry.register_height = record.register_height;
       entry.update_height   = record.update_height;
-      entry.txid            = epee::string_tools::pod_to_hex(record.txid);
-      if (record.prev_txid) entry.prev_txid = epee::string_tools::pod_to_hex(record.prev_txid);
+      entry.txid            = lokimq::to_hex(tools::view_guts(record.txid));
+      if (record.prev_txid) entry.prev_txid = lokimq::to_hex(tools::view_guts(record.prev_txid));
     }
 
     res.status = STATUS_OK;

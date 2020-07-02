@@ -39,7 +39,6 @@ add_executable(unit_tests
   checkpoints.cpp
   command_line.cpp
   crypto.cpp
-  decompose_amount_into_digits.cpp
   device.cpp
   dns_resolver.cpp
   epee_boosted_tcp_server.cpp
@@ -76,6 +75,7 @@ add_executable(unit_tests
   service_nodes.cpp
   service_nodes_swarm.cpp
   sha256.cpp
+  string_util.cpp
   subaddress.cpp
   test_tx_utils.cpp
   test_peerlist.cpp
@@ -106,7 +106,6 @@ target_link_libraries(unit_tests
     wallet
     p2p
     version
-    Boost::chrono
     Boost::thread
     miniupnpc
     gtest

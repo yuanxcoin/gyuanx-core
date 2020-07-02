@@ -29,6 +29,7 @@
 #include <boost/algorithm/string.hpp>
 #include "common/command_line.h"
 #include "common/varint.h"
+#include "common/signal_handler.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "blockchain_objects.h"
@@ -287,8 +288,7 @@ skip:
         totins += io;
       }
       if (do_ringsize) {
-        const cryptonote::txin_to_key& tx_in_to_key
-                       = boost::get<cryptonote::txin_to_key>(tx.vin[0]);
+        const auto& tx_in_to_key = std::get<cryptonote::txin_to_key>(tx.vin[0]);
         io = tx_in_to_key.key_offsets.size();
         if (io < minrings)
           minrings = io;

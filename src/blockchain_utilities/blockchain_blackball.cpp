@@ -37,7 +37,10 @@
 #include <boost/archive/portable_binary_oarchive.hpp>
 #include "common/unordered_containers_boost_serialization.h"
 #include "common/command_line.h"
+#include "common/string_util.h"
 #include "common/varint.h"
+#include "common/file.h"
+#include "common/signal_handler.h"
 #include "serialization/crypto.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_core/cryptonote_core.h"
@@ -86,9 +89,7 @@ struct output_data
 
 static bool parse_db_sync_mode(std::string db_sync_mode)
 {
-  std::vector<std::string> options;
-  boost::trim(db_sync_mode);
-  boost::split(options, db_sync_mode, boost::is_any_of(" :"));
+  auto options = tools::split_any(db_sync_mode, " :", true);
 
   for(const auto &option : options)
     MDEBUG("option: " << option);
@@ -126,7 +127,8 @@ static bool parse_db_sync_mode(std::string db_sync_mode)
   if(options.size() >= 2 && !safemode)
   {
     char *endptr;
-    uint64_t bps = strtoull(options[1].c_str(), &endptr, 0);
+    std::string bpsstr{options[1]};
+    uint64_t bps = strtoull(bpsstr.c_str(), &endptr, 0);
     if (*endptr == '\0')
       records_per_sync = bps;
   }
@@ -302,23 +304,19 @@ static void close()
 static std::string compress_ring(const std::vector<uint64_t> &ring, std::string s = "")
 {
   const size_t sz = s.size();
-  s.resize(s.size() + 12 * ring.size());
-  char *ptr = (char*)s.data() + sz;
+  s.reserve(s.size() + tools::VARINT_MAX_LENGTH<uint64_t> * ring.size());
+  auto ins = std::back_inserter(s);
   for (uint64_t out: ring)
-    tools::write_varint(ptr, out);
-  if (ptr > s.data() + sz + 12 * ring.size())
-    throw std::runtime_error("varint output overflow");
-  s.resize(ptr - s.data());
+    tools::write_varint(ins, out);
   return s;
 }
 
 static std::string compress_ring(uint64_t amount, const std::vector<uint64_t> &ring)
 {
-  char s[12], *ptr = s;
-  tools::write_varint(ptr, amount);
-  if (ptr > s + sizeof(s))
-    throw std::runtime_error("varint output overflow");
-  return compress_ring(ring, std::string(s, ptr-s));
+  std::string s;
+  s.reserve(tools::VARINT_MAX_LENGTH<uint64_t> * (1 + ring.size()));
+  tools::write_varint(std::back_inserter(s), amount);
+  return compress_ring(ring, std::move(s));
 }
 
 static std::vector<uint64_t> decompress_ring(const std::string &s)
@@ -393,13 +391,13 @@ static bool for_all_transactions(const std::string &filename, uint64_t &start_id
       continue;
 
     cryptonote::transaction_prefix tx;
-    blobdata bd;
-    bd.assign(reinterpret_cast<char*>(v.mv_data), v.mv_size);
-    std::stringstream ss;
-    ss << bd;
-    binary_archive<false> ba(ss);
-    bool r = do_serialize(ba, tx);
-    CHECK_AND_ASSERT_MES(r, false, "Failed to parse transaction from blob");
+    try {
+      std::string_view bd{static_cast<const char*>(v.mv_data), v.mv_size};
+      serialization::parse_binary(bd, tx);
+    } catch (const std::exception& e) {
+      LOG_ERROR("Failed to parse transaction from blob: " << e.what());
+      return false;
+    }
 
     start_idx = *(uint64_t*)k.mv_data;
     if (!f(tx)) {
@@ -1346,7 +1344,7 @@ int main(int argc, char* argv[])
       for (const auto &out: tx.vout)
       {
         ++outs_total;
-        CHECK_AND_ASSERT_THROW_MES(out.target.type() == typeid(txout_to_key), "Out target type is not txout_to_key: height=" + std::to_string(height));
+        CHECK_AND_ASSERT_THROW_MES(std::holds_alternative<txout_to_key>(out.target), "Out target type is not txout_to_key: height=" + std::to_string(height));
         uint64_t out_global_index = outs_per_amount[out.amount]++;
         if (is_output_spent(cur, output_data(out.amount, out_global_index)))
           ++outs_spent;
@@ -1423,12 +1421,11 @@ int main(int argc, char* argv[])
     for_all_transactions(filename, start_idx, n_txes, [&](const cryptonote::transaction_prefix &tx)->bool
     {
       std::cout << "\r" << start_idx << "/" << n_txes << "         \r" << std::flush;
-      const bool miner_tx = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
       for (const auto &in: tx.vin)
       {
-        if (in.type() != typeid(txin_to_key))
+        if (!std::holds_alternative<txin_to_key>(in))
           continue;
-        const auto &txin = boost::get<txin_to_key>(in);
+        const auto &txin = std::get<txin_to_key>(in);
         if (opt_rct_only && txin.amount != 0)
           continue;
 
@@ -1557,6 +1554,7 @@ int main(int argc, char* argv[])
       set_processed_txidx(txn, canonical, start_idx+1);
       if (!opt_rct_only)
       {
+        const bool miner_tx = tx.vin.size() == 1 && std::holds_alternative<txin_gen>(tx.vin[0]);
         for (const auto &out: tx.vout)
         {
           uint64_t amount = out.amount;
@@ -1565,7 +1563,7 @@ int main(int argc, char* argv[])
 
           if (opt_rct_only && amount != 0)
             continue;
-          if (out.target.type() != typeid(txout_to_key))
+          if (!std::holds_alternative<txout_to_key>(out.target))
             continue;
           inc_per_amount_outputs(txn, amount, 1, 0);
         }

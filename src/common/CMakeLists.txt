@@ -29,7 +29,6 @@
 
 add_library(common
   aligned.c
-  base32z.cpp
   base58.cpp
   combinator.cpp
   command_line.cpp
@@ -37,6 +36,7 @@ add_library(common
   download.cpp
   error.cpp
   expect.cpp
+  file.cpp
   i18n.cpp
   loki.cpp
   notify.cpp
@@ -46,7 +46,9 @@ add_library(common
   random.cpp
   rules.cpp
   scoped_message_writer.cpp
+  sha256sum.cpp
   spawn.cpp
+  string_util.cpp
   threadpool.cpp
   timings.cc
   updates.cpp
@@ -75,7 +77,6 @@ target_link_libraries(common
     lokimq::lokimq
   PRIVATE
     libunbound
-    Boost::regex
     OpenSSL::SSL
     OpenSSL::Crypto
     extra)

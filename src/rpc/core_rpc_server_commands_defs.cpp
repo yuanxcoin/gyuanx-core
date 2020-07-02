@@ -2,22 +2,6 @@
 
 namespace cryptonote { namespace rpc {
 
-#if !(__cplusplus >= 201703L || (defined(_MSC_VER) && _MSVC_LANG > 201402L))
-// Static member definitions for pre-C++17 compiler.  Including these isn't required in C++17 and
-// will (depending on compiler flags) produce warnings.
-constexpr size_t GET_BLOCKS_FAST::MAX_COUNT;
-constexpr uint64_t GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE;
-constexpr uint8_t GET_QUORUM_STATE::ALL_QUORUMS_SENTINEL_VALUE;
-constexpr size_t GET_CHECKPOINTS::MAX_COUNT;
-constexpr uint32_t GET_CHECKPOINTS::NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT;
-constexpr uint64_t GET_CHECKPOINTS::HEIGHT_SENTINEL_VALUE;
-constexpr uint64_t GET_SN_STATE_CHANGES::HEIGHT_SENTINEL_VALUE;
-constexpr size_t LNS_NAMES_TO_OWNERS::MAX_REQUEST_ENTRIES;
-constexpr size_t LNS_NAMES_TO_OWNERS::MAX_TYPE_REQUEST_ENTRIES;
-constexpr size_t LNS_OWNERS_TO_NAMES::MAX_REQUEST_ENTRIES;
-#endif
-
-
 KV_SERIALIZE_MAP_CODE_BEGIN(STATUS)
   KV_SERIALIZE(status)
 KV_SERIALIZE_MAP_CODE_END()
@@ -316,11 +300,11 @@ KV_SERIALIZE_MAP_CODE_END()
 
 bool GETBLOCKHASH::request::load(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section)
 {
-  return epee::serialization::selector<false>::serialize(height, ps, hparent_section, "height");
+  return epee::serialization::perform_serialize<false>(height, ps, hparent_section, "height");
 }
 bool GETBLOCKHASH::request::store(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section)
 {
-  return epee::serialization::selector<true>::serialize(height, ps, hparent_section, "height");
+  return epee::serialization::perform_serialize<true>(height, ps, hparent_section, "height");
 }
 
 
@@ -349,11 +333,11 @@ KV_SERIALIZE_MAP_CODE_END()
 
 bool SUBMITBLOCK::request::load(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section)
 {
-  return epee::serialization::selector<false>::serialize(blob, ps, hparent_section, "blob");
+  return epee::serialization::perform_serialize<false>(blob, ps, hparent_section, "blob");
 }
 bool SUBMITBLOCK::request::store(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section)
 {
-  return epee::serialization::selector<true>::serialize(blob, ps, hparent_section, "blob");
+  return epee::serialization::perform_serialize<true>(blob, ps, hparent_section, "blob");
 }
 
 
@@ -875,11 +859,10 @@ namespace
   std::string compress_integer_array(const std::vector<T> &v)
   {
     std::string s;
-    s.resize(v.size() * (sizeof(T) * 8 / 7 + 1));
-    char *ptr = &s[0];
+    s.reserve(tools::VARINT_MAX_LENGTH<T>);
+    auto ins = std::back_inserter(s);
     for (const T &t: v)
-      tools::write_varint(ptr, t);
-    s.resize(ptr - s.data());
+      tools::write_varint(ins, t);
     return s;
   }
 
@@ -887,15 +870,10 @@ namespace
   std::vector<T> decompress_integer_array(const std::string &s)
   {
     std::vector<T> v;
-    v.reserve(s.size());
-    int read = 0;
-    const std::string::const_iterator end = s.end();
-    for (std::string::const_iterator i = s.begin(); i != end; std::advance(i, read))
+    for (auto it = s.begin(); it < s.end(); )
     {
-      T t;
-      read = tools::read_varint(std::string::const_iterator(i), s.end(), t);
-      CHECK_AND_ASSERT_THROW_MES(read > 0 && read <= 256, "Error decompressing data");
-      v.push_back(t);
+      int read = tools::read_varint(it, s.end(), v.emplace_back());
+      CHECK_AND_ASSERT_THROW_MES(read > 0, "Error decompressing data");
     }
     return v;
   }

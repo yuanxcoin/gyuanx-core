@@ -65,36 +65,30 @@ namespace protocol{
   };
 
   template<typename T>
-  bool cn_deserialize(const void * buff, size_t len, T & dst){
-    std::stringstream ss;
-    ss.write(static_cast<const char *>(buff), len);  //ss << tx_blob;
-    binary_archive<false> ba(ss);
-    bool r = ::serialization::serialize(ba, dst);
-    return r;
-  }
-
-  template<typename T>
-  bool cn_deserialize(const std::string & str, T & dst){
-    return cn_deserialize(str.data(), str.size(), dst);
+  bool cn_deserialize(const std::string_view buff, T& dst) {
+    try {
+      serialization::parse_binary(buff, dst);
+      return true;
+    } catch (...) {
+      return false;
+    }
   }
 
   template<typename T>
   std::string cn_serialize(T & obj){
-    std::ostringstream oss;
-    binary_archive<true> oar(oss);
-    bool success = ::serialization::serialize(oar, obj);
-    if (!success){
+    try {
+      return serialization::dump_binary(obj);
+    } catch (...) {
       throw exc::EncodingException("Could not CN serialize given object");
     }
-    return oss.str();
   }
 
 // Crypto / encryption
 namespace crypto {
 namespace chacha {
   // Constants as defined in RFC 7539.
-  const unsigned IV_SIZE = 12;
-  const unsigned TAG_SIZE = 16;  // crypto_aead_chacha20poly1305_IETF_ABYTES;
+  constexpr unsigned IV_SIZE = 12;
+  constexpr unsigned TAG_SIZE = 16;  // crypto_aead_chacha20poly1305_IETF_ABYTES;
 
   /**
    * Chacha20Poly1305 decryption with tag verification. RFC 7539.
@@ -162,13 +156,13 @@ namespace tx {
   void translate_dst_entry(MoneroTransactionDestinationEntry * dst, const cryptonote::tx_destination_entry * src);
   void translate_klrki(MoneroMultisigKLRki * dst, const rct::multisig_kLRki * src);
   void translate_rct_key(MoneroRctKey * dst, const rct::ctkey * src);
-  std::string hash_addr(const MoneroAccountPublicAddress * addr, boost::optional<uint64_t> amount = boost::none, boost::optional<bool> is_subaddr = boost::none);
-  std::string hash_addr(const std::string & spend_key, const std::string & view_key, boost::optional<uint64_t> amount = boost::none, boost::optional<bool> is_subaddr = boost::none);
-  std::string hash_addr(const ::crypto::public_key * spend_key, const ::crypto::public_key * view_key, boost::optional<uint64_t> amount = boost::none, boost::optional<bool> is_subaddr = boost::none);
+  std::string hash_addr(const MoneroAccountPublicAddress * addr, std::optional<uint64_t> amount = std::nullopt, std::optional<bool> is_subaddr = std::nullopt);
+  std::string hash_addr(const std::string & spend_key, const std::string & view_key, std::optional<uint64_t> amount = std::nullopt, std::optional<bool> is_subaddr = std::nullopt);
+  std::string hash_addr(const ::crypto::public_key * spend_key, const ::crypto::public_key * view_key, std::optional<uint64_t> amount = std::nullopt, std::optional<bool> is_subaddr = std::nullopt);
   ::crypto::secret_key compute_enc_key(const ::crypto::secret_key & private_view_key, const std::string & aux, const std::string & salt);
   std::string compute_sealing_key(const std::string & master_key, size_t idx, bool is_iv=false);
 
-  typedef boost::variant<rct::rangeSig, rct::Bulletproof> rsig_v;
+  using rsig_v = std::variant<rct::rangeSig, rct::Bulletproof>;
 
   /**
    * Transaction signer state holder.

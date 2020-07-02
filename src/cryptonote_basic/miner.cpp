@@ -29,18 +29,15 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include <sstream>
 #include <numeric>
-#include <boost/algorithm/string.hpp>
+#include "lokimq/base64.h"
 #include "misc_language.h"
-#include "syncobj.h"
-#include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "cryptonote_core/cryptonote_tx_utils.h"
 #include "misc_os_dependent.h"
 #include "file_io_utils.h"
 #include "common/command_line.h"
 #include "common/util.h"
+#include "common/string_util.h"
 #include "string_coding.h"
 #include "string_tools.h"
 #include "storages/portable_storage_template_helper.h"
@@ -86,9 +83,7 @@ namespace cryptonote
     m_do_mining(false),
     m_current_hash_rate(0),
     m_block_reward(0)
-  {
-    m_attrs.set_stack_size(THREAD_STACK_SIZE);
-  }
+  {}
   //-----------------------------------------------------------------------------------------------------
   miner::~miner()
   {
@@ -98,7 +93,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------------
   bool miner::set_block_template(const block& bl, const difficulty_type& di, uint64_t height, uint64_t block_reward)
   {
-    CRITICAL_REGION_LOCAL(m_template_lock);
+    std::unique_lock lock{m_template_lock};
     m_template = bl;
     m_diffic = di;
     m_height = height;
@@ -168,7 +163,7 @@ namespace cryptonote
     if(m_last_hr_merge_time && is_mining())
     {
       m_current_hash_rate = m_hashes * 1000 / ((epee::misc_utils::get_tick_count() - m_last_hr_merge_time + 1));
-      CRITICAL_REGION_LOCAL(m_last_hash_rates_lock);
+      std::unique_lock lock{m_last_hash_rates_lock};
       m_last_hash_rates.push_back(m_current_hash_rate);
       if(m_last_hash_rates.size() > 19)
         m_last_hash_rates.pop_front();
@@ -227,7 +222,7 @@ namespace cryptonote
 
     // restart all threads
     {
-      CRITICAL_REGION_LOCAL(m_threads_lock);
+      std::unique_lock lock{m_threads_lock};
       m_stop = true;
       while (m_threads_active > 0)
         epee::misc_utils::sleep_no_w(100);
@@ -236,7 +231,7 @@ namespace cryptonote
     m_stop = false;
     m_thread_index = 0;
     for(size_t i = 0; i != m_threads_total; i++)
-      m_threads.push_back(boost::thread(m_attrs, boost::bind(&miner::worker_thread, this, false)));
+      m_threads.emplace_back([this] { return worker_thread(false); });
   }
   //-----------------------------------------------------------------------------------------------------
   void miner::init_options(boost::program_options::options_description& desc)
@@ -253,15 +248,20 @@ namespace cryptonote
       std::string buff;
       bool r = epee::file_io_utils::load_file_to_string(command_line::get_arg(vm, arg_extra_messages), buff);
       CHECK_AND_ASSERT_MES(r, false, "Failed to load file with extra messages: " << command_line::get_arg(vm, arg_extra_messages));
-      std::vector<std::string> extra_vec;
-      boost::split(extra_vec, buff, boost::is_any_of("\n"), boost::token_compress_on );
+      auto extra_vec = tools::split_any(buff, "\n"sv, true);
       m_extra_messages.resize(extra_vec.size());
       for(size_t i = 0; i != extra_vec.size(); i++)
       {
-        epee::string_tools::trim(extra_vec[i]);
+        tools::trim(extra_vec[i]);
         if(!extra_vec[i].size())
           continue;
-        std::string buff = epee::string_encoding::base64_decode(extra_vec[i]);
+        if (!lokimq::is_base64(extra_vec[i]))
+        {
+          MWARNING("Invalid (non-base64) extra message `" << extra_vec[i] << "'");
+          continue;
+        }
+
+        std::string buff = lokimq::from_base64(extra_vec[i]);
         if(buff != "0")
           m_extra_messages[i] = buff;
       }
@@ -317,7 +317,7 @@ namespace cryptonote
       m_threads_total = 1;
     }
     m_starter_nonce = crypto::rand<uint32_t>();
-    CRITICAL_REGION_LOCAL(m_threads_lock);
+    std::unique_lock lock{m_threads_lock};
     if(is_mining())
     {
       LOG_ERROR("Starting miner but it's already started");
@@ -340,7 +340,7 @@ namespace cryptonote
     
     for(size_t i = 0; i != m_threads_total; i++)
     {
-      m_threads.push_back(boost::thread(m_attrs, boost::bind(&miner::worker_thread, this, slow_mining)));
+      m_threads.emplace_back([=] { return worker_thread(slow_mining); });
     }
 
     if (threads_count == 0)
@@ -367,7 +367,7 @@ namespace cryptonote
   {
     MTRACE("Miner has received stop signal");
 
-    CRITICAL_REGION_LOCAL(m_threads_lock);
+    std::unique_lock lock{m_threads_lock};
     bool mining = !m_threads.empty();
     if (!mining)
     {
@@ -413,7 +413,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------------
   void miner::pause()
   {
-    CRITICAL_REGION_LOCAL(m_miners_count_lock);
+    std::unique_lock lock{m_miners_count_lock};
     MDEBUG("miner::pause: " << m_pausers_count << " -> " << (m_pausers_count + 1));
     ++m_pausers_count;
     if(m_pausers_count == 1 && is_mining())
@@ -422,7 +422,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------------
   void miner::resume()
   {
-    CRITICAL_REGION_LOCAL(m_miners_count_lock);
+    std::unique_lock lock{m_miners_count_lock};
     MDEBUG("miner::resume: " << m_pausers_count << " -> " << (m_pausers_count - 1));
     --m_pausers_count;
     if(m_pausers_count < 0)
@@ -461,11 +461,12 @@ namespace cryptonote
 
       if(local_template_ver != m_template_no)
       {
-        CRITICAL_REGION_BEGIN(m_template_lock);
-        b = m_template;
-        local_diff = m_diffic;
-        height = m_height;
-        CRITICAL_REGION_END();
+        {
+          std::unique_lock lock{m_template_lock};
+          b = m_template;
+          local_diff = m_diffic;
+          height = m_height;
+        }
         local_template_ver = m_template_no;
         nonce = m_starter_nonce + th_local_index;
       }

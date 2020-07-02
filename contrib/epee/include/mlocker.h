@@ -29,7 +29,7 @@
 #pragma once 
 
 #include <map>
-#include <boost/thread/mutex.hpp>
+#include <mutex>
 #include "span.h"
 
 namespace epee
@@ -51,7 +51,7 @@ namespace epee
     static size_t page_size;
     static size_t num_locked_objects;
 
-    static boost::mutex &mutex();
+    static std::mutex &mutex();
     static std::map<size_t, unsigned int> &map();
     static void lock_page(size_t page);
     static void unlock_page(size_t page);
@@ -86,5 +86,5 @@ namespace epee
   template <class T, size_t N>
   using mlocked_arr = mlocked<std::array<T, N>>;
 
-  template <typename T> struct is_byte_spannable<mlocked<T>> : is_byte_spannable<T> {};
+  template <typename T> constexpr bool is_byte_spannable<mlocked<T>> = is_byte_spannable<T>;
 }

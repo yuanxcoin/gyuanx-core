@@ -262,28 +262,28 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
       }
     }
 
-    boost::optional<epee::wipeable_string> on_device_pin_request() override
+    std::optional<epee::wipeable_string> on_device_pin_request() override
     {
       if (m_listener) {
         auto pin = m_listener->onDevicePinRequest();
         if (pin){
-          return boost::make_optional(epee::wipeable_string((*pin).data(), (*pin).size()));
+          return std::make_optional(epee::wipeable_string(pin->data(), pin->size()));
         }
       }
-      return boost::none;
+      return std::nullopt;
     }
 
-    boost::optional<epee::wipeable_string> on_device_passphrase_request(bool on_device) override
+    std::optional<epee::wipeable_string> on_device_passphrase_request(bool on_device) override
     {
       if (m_listener) {
         auto passphrase = m_listener->onDevicePassphraseRequest(on_device);
         if (passphrase) {
-          return boost::make_optional(epee::wipeable_string((*passphrase).data(), (*passphrase).size()));
+          return std::make_optional(epee::wipeable_string(passphrase->data(), passphrase->size()));
         }
       } else {
         on_device = true;
       }
-      return boost::none;
+      return std::nullopt;
     }
 
     void on_device_progress(const hw::device_progress & event) override
@@ -453,11 +453,9 @@ WalletImpl::WalletImpl(NetworkType nettype, uint64_t kdf_rounds)
 
     m_refreshIntervalMillis = DEFAULT_REFRESH_INTERVAL_MILLIS;
 
-    m_refreshThread = boost::thread([this] () {
-        this->refreshThreadFunc();
-    });
+    m_refreshThread = std::thread([this] () { refreshThreadFunc(); });
 
-    m_longPollThread = boost::thread([this]() {
+    m_longPollThread = std::thread([this]() {
       for (;;)
       {
         if (!m_refreshEnabled)
@@ -843,18 +841,18 @@ void WalletImpl::setSeedLanguage(const std::string &arg)
 
 int WalletImpl::status() const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     return m_status;
 }
 
 std::string WalletImpl::errorString() const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     return m_errorString;
 }
 
 void WalletImpl::statusWithErrorString(int& status, std::string& errorString) const {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     status = m_status;
     errorString = m_errorString;
 }
@@ -1522,7 +1520,7 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const std::vector<stri
             break;
         }
         try {
-            boost::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+            std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
             if (!hf_version)
             {
               setStatusError(tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED);
@@ -1978,7 +1976,7 @@ std::string WalletImpl::getReserveProof(bool all, uint32_t account_index, uint64
     try
     {
         clearStatus();
-        boost::optional<std::pair<uint32_t, uint64_t>> account_minreserve;
+        std::optional<std::pair<uint32_t, uint64_t>> account_minreserve;
         if (!all)
         {
             account_minreserve = std::make_pair(account_index, amount);
@@ -2119,7 +2117,7 @@ bool WalletImpl::watchOnly() const
 
 void WalletImpl::clearStatus() const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     m_status = Status_Ok;
     m_errorString.clear();
 }
@@ -2136,7 +2134,7 @@ void WalletImpl::setStatusCritical(const std::string& message) const
 
 void WalletImpl::setStatus(int status, const std::string& message) const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     m_status = status;
     m_errorString = message;
 }
@@ -2146,7 +2144,7 @@ void WalletImpl::refreshThreadFunc()
     LOG_PRINT_L3(__FUNCTION__ << ": starting refresh thread");
 
     while (true) {
-        boost::mutex::scoped_lock lock(m_refreshMutex);
+        std::unique_lock lock{m_refreshMutex};
         if (m_refreshThreadDone) {
             break;
         }
@@ -2154,8 +2152,8 @@ void WalletImpl::refreshThreadFunc()
         // if auto refresh enabled, we wait for the "m_refreshIntervalSeconds" interval.
         // if not - we wait forever
         if (m_refreshIntervalMillis > 0) {
-            boost::posix_time::milliseconds wait_for_ms(m_refreshIntervalMillis.load());
-            m_refreshCV.timed_wait(lock, wait_for_ms);
+            std::chrono::milliseconds wait_for_ms{m_refreshIntervalMillis.load()};
+            m_refreshCV.wait_for(lock, wait_for_ms);
         } else {
             m_refreshCV.wait(lock);
         }
@@ -2176,7 +2174,7 @@ void WalletImpl::doRefresh()
 {
     bool rescan = m_refreshShouldRescan.exchange(false);
     // synchronizing async and sync refresh calls
-    boost::lock_guard<boost::mutex> guarg(m_refreshMutex2);
+    std::lock_guard guard{m_refreshMutex2};
     do try {
         LOG_PRINT_L3(__FUNCTION__ << ": doRefresh, rescan = "<<rescan);
         // Syncing daemon and refreshing wallet simultaneously is very resource intensive.
@@ -2547,7 +2545,7 @@ uint64_t WalletImpl::coldKeyImageSync(uint64_t &spent, uint64_t &unspent)
 
 void WalletImpl::deviceShowAddress(uint32_t accountIndex, uint32_t addressIndex, const std::string &paymentId)
 {
-    boost::optional<crypto::hash8> payment_id_param = boost::none;
+    std::optional<crypto::hash8> payment_id_param = std::nullopt;
     if (!paymentId.empty())
     {
         crypto::hash8 payment_id;

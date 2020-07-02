@@ -28,17 +28,18 @@
 
 #pragma once
 #include <ctype.h>
-#include <boost/shared_ptr.hpp>
-#include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/optional/optional.hpp>
-#include <boost/utility/string_ref.hpp>
 //#include <mbstring.h>
+#include <regex>
 #include <algorithm>
 #include <cctype>
 #include <functional>
+#include <memory>
+#include <optional>
+#include <string_view>
 
 #include "net_helper.h"
+#include "abstract_http_client.h"
 #include "http_client_base.h"
 
 #ifdef HTTP_ENABLE_GZIP
@@ -46,13 +47,10 @@
 #endif 
 
 #include "string_tools.h"
-#include "reg_exp_definer.h"
-#include "abstract_http_client.h"
 #include "http_base.h" 
 #include "http_auth.h"
 #include "to_nonconst_iterator.h"
 #include "net_parse_helpers.h"
-#include "syncobj.h"
 
 //#include "shlwapi.h"
 
@@ -60,8 +58,6 @@
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net.http"
-
-extern epee::critical_section gregexp_lock;
 
 
 namespace epee
@@ -109,6 +105,11 @@ namespace net_utils
 	namespace http
 	{
 
+    inline const std::regex rexp_match_gzip{"gzip|(deflate)", std::regex::icase};
+    inline const std::regex rexp_match_close{"^\\s*close", std::regex::icase};
+    inline const std::regex rexp_match_multipart_type{
+      R"re(^\s*multipart/[\w-]+; boundary=(?:"(.*?)"|\\"(.*?)\\"|([^\s;]*)))re", std::regex::icase};
+
 		template<typename net_client_type>
     class http_simple_client_template : public i_target_handler, public abstract_http_client
 		{
@@ -142,12 +143,12 @@ namespace net_utils
 			size_t m_len_in_summary;
 			size_t m_len_in_remain;
 			//std::string* m_ptarget_buffer;
-			boost::shared_ptr<i_sub_handler> m_pcontent_encoding_handler;
+			std::shared_ptr<i_sub_handler> m_pcontent_encoding_handler;
 			reciev_machine_state m_state;
 			chunked_state m_chunked_state;
 			std::string m_chunked_cache;
 			bool m_auto_connect;
-			mutable critical_section m_lock;
+			mutable std::recursive_mutex m_lock;
 
 		public:
 			explicit http_simple_client_template()
@@ -173,9 +174,9 @@ namespace net_utils
 
 			using abstract_http_client::set_server;
 
-			void set_server(std::string host, std::string port, boost::optional<login> user, ssl_options_t ssl_options = ssl_support_t::e_ssl_support_autodetect) override
+			void set_server(std::string host, std::string port, std::optional<login> user, ssl_options_t ssl_options = ssl_support_t::e_ssl_support_autodetect) override
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				disconnect();
 				m_host_buff = std::move(host);
 				m_port = std::move(port);
@@ -191,31 +192,31 @@ namespace net_utils
 			template<typename F>
 			void set_connector(F connector)
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				m_net_client.set_connector(std::move(connector));
 			}
 
       bool connect(std::chrono::milliseconds timeout) override
       {
-        CRITICAL_REGION_LOCAL(m_lock);
+        std::lock_guard lock{m_lock};
         return m_net_client.connect(m_host_buff, m_port, timeout);
       }
 			//---------------------------------------------------------------------------
 			bool disconnect() override
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				return m_net_client.disconnect();
 			}
 			//---------------------------------------------------------------------------
 			bool is_connected(bool *ssl = NULL) override
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				return m_net_client.is_connected(ssl);
 			}
 			//---------------------------------------------------------------------------
 			virtual bool handle_target_data(std::string& piece_of_transfer) override
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				m_response_info.m_body += piece_of_transfer;
         piece_of_transfer.clear();
 				return true;
@@ -226,16 +227,17 @@ namespace net_utils
         return true;
       }
 			//---------------------------------------------------------------------------
-			inline bool invoke_get(const boost::string_ref uri, std::chrono::milliseconds timeout, const std::string& body = std::string(), const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) override
+			inline 
+				bool invoke_get(std::string_view uri, std::chrono::milliseconds timeout, const std::string& body = std::string(), const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) override
 			{
-					CRITICAL_REGION_LOCAL(m_lock);
+					std::lock_guard lock{m_lock};
 					return invoke(uri, "GET", body, timeout, ppresponse_info, additional_params);
 			}
 
 			//---------------------------------------------------------------------------
-			inline bool invoke(const boost::string_ref uri, const boost::string_ref method, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) override
+			inline bool invoke(std::string_view uri, std::string_view method, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) override
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				if(!is_connected())
 				{
 					if (!m_auto_connect)
@@ -306,15 +308,15 @@ namespace net_utils
 				return false;
 			}
 			//---------------------------------------------------------------------------
-			inline bool invoke_post(const boost::string_ref uri, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) override
+			inline bool invoke_post(std::string_view uri, const std::string& body, std::chrono::milliseconds timeout, const http_response_info** ppresponse_info = NULL, const fields_list& additional_params = fields_list()) override
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				return invoke(uri, "POST", body, timeout, ppresponse_info, additional_params);
 			}
 			//---------------------------------------------------------------------------
 			bool test(const std::string &s, std::chrono::milliseconds timeout) // TEST FUNC ONLY
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				m_net_client.set_test_data(s);
 				m_state = reciev_machine_state_header;
 				return handle_reciev(timeout);
@@ -339,7 +341,7 @@ namespace net_utils
 			//---------------------------------------------------------------------------
 			inline bool handle_reciev(std::chrono::milliseconds timeout)
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				bool keep_handling = true;
 				bool need_more_data = true;
 				std::string recv_buffer;
@@ -404,7 +406,7 @@ namespace net_utils
 				bool handle_header(std::string& recv_buff, bool& need_more_data)
 			{
  
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
         if(!recv_buff.size())
         {
           LOG_ERROR("Connection closed at handle_header");
@@ -420,7 +422,7 @@ namespace net_utils
 					recv_buff.assign(m_header_cache.begin()+pos+4, m_header_cache.end());
 					m_header_cache.erase(m_header_cache.begin()+pos+4, m_header_cache.end());
 
-					analize_cached_header_and_invoke_state();
+					analyze_cached_header_and_invoke_state();
           if (!on_header(m_response_info))
           {
             MDEBUG("Connection cancelled by on_header");
@@ -440,7 +442,7 @@ namespace net_utils
 			inline
 				bool handle_body_content_len(std::string& recv_buff, bool& need_more_data)
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				if(!recv_buff.size())
 				{
 					MERROR("Warning: Content-Len mode, but connection unexpectedly closed");
@@ -466,7 +468,7 @@ namespace net_utils
 			inline
 				bool handle_body_connection_close(std::string& recv_buff, bool& need_more_data)
 			{
-				CRITICAL_REGION_LOCAL(m_lock);
+				std::lock_guard lock{m_lock};
 				if(!recv_buff.size())
 				{
 					m_state = reciev_machine_state_done;
@@ -558,7 +560,7 @@ namespace net_utils
 			inline
 				bool handle_body_body_chunked(std::string& recv_buff, bool& need_more_data)
 			{
-        CRITICAL_REGION_LOCAL(m_lock);
+        std::lock_guard lock{m_lock};
 				if(!recv_buff.size())
 				{
 					MERROR("Warning: CHUNKED mode, but connection unexpectedly closed");
@@ -715,7 +717,7 @@ namespace net_utils
 				return true;
 			}
 			//---------------------------------------------------------------------------
-			inline bool analize_first_response_line()
+			inline bool analyze_first_response_line()
 			{
 				//First line response, look like this:	"HTTP/1.1 200 OK"
 				const char *ptr = m_header_cache.c_str();
@@ -754,12 +756,11 @@ namespace net_utils
 			inline
 				bool set_reply_content_encoder()
 			{
-				STATIC_REGEXP_EXPR_1(rexp_match_gzip, "^.*?((gzip)|(deflate))", boost::regex::icase | boost::regex::normal);
-				boost::smatch result;						//   12      3
-				if(boost::regex_search( m_response_info.m_header_info.m_content_encoding, result, rexp_match_gzip, boost::match_default) && result[0].matched)
+				std::smatch result;
+				if(std::regex_search(m_response_info.m_header_info.m_content_encoding, result, rexp_match_gzip))
 				{
 #ifdef HTTP_ENABLE_GZIP
-					m_pcontent_encoding_handler.reset(new content_encoding_gzip(this, result[3].matched));
+					m_pcontent_encoding_handler.reset(new content_encoding_gzip(this, result[1].matched));
 #else
           m_pcontent_encoding_handler.reset(new do_nothing_sub_handler(this));
           LOG_ERROR("GZIP encoding not supported in this build, please add zlib to your project and define HTTP_ENABLE_GZIP");
@@ -774,14 +775,14 @@ namespace net_utils
 				return true;
 			}
 			inline	
-				bool analize_cached_header_and_invoke_state()
+				bool analyze_cached_header_and_invoke_state()
 			{
 				m_response_info.clear();
-				analize_first_response_line();
+				analyze_first_response_line();
 				std::string fake_str; //gcc error workaround
 
 				bool res = parse_header(m_response_info.m_header_info, m_header_cache);
-				CHECK_AND_ASSERT_MES(res, false, "http_stream_filter::analize_cached_reply_header_and_invoke_state(): failed to anilize reply header: " << m_header_cache);
+				CHECK_AND_ASSERT_MES(res, false, "http_stream_filter::analyze_cached_reply_header_and_invoke_state(): failed to analyze reply header: " << m_header_cache);
 
 				set_reply_content_encoder();
 
@@ -816,7 +817,7 @@ namespace net_utils
 					//In the response header the length was specified
 					if(!content_len_valid)
 					{
-						LOG_ERROR("http_stream_filter::analize_cached_reply_header_and_invoke_state(): Failed to get_len_from_content_lenght();, m_query_info.m_content_length="<<m_response_info.m_header_info.m_content_length);
+						LOG_ERROR("http_stream_filter::analyze_cached_reply_header_and_invoke_state(): Failed to get_len_from_content_length();, m_query_info.m_content_length="<<m_response_info.m_header_info.m_content_length);
 						m_state = reciev_machine_state_error;
 						return false;
 					}
@@ -850,38 +851,25 @@ namespace net_utils
 			inline 
 				bool is_connection_close_field(const std::string& str)
 			{
-				STATIC_REGEXP_EXPR_1(rexp_match_close, "^\\s*close", boost::regex::icase | boost::regex::normal);
-				boost::smatch result;
-				if(boost::regex_search( str, result, rexp_match_close, boost::match_default) && result[0].matched)
-					return true;
-				else
-					return false;
+				std::smatch result;
+				return std::regex_search(str, result, rexp_match_close);
 			}
 			inline
-				bool is_multipart_body(const http_header_info& head_info, OUT std::string& boundary)
+				bool is_multipart_body(const http_header_info& head_info, std::string& boundary)
 			{
 				//Check whether this is multi part - if yes, capture boundary immediately
-				STATIC_REGEXP_EXPR_1(rexp_match_multipart_type, "^\\s*multipart/([\\w\\-]+); boundary=((\"(.*?)\")|(\\\\\"(.*?)\\\\\")|([^\\s;]*))", boost::regex::icase | boost::regex::normal);
-				boost::smatch result;
-				if(boost::regex_search(head_info.m_content_type, result, rexp_match_multipart_type, boost::match_default) && result[0].matched)
+				std::smatch result;
+				if(std::regex_search(head_info.m_content_type, result, rexp_match_multipart_type))
 				{
-					if(result[4].matched)
-						boundary = result[4];
-					else if(result[6].matched)
-						boundary = result[6];
-					else if(result[7].matched)
-						boundary = result[7];
-					else 
-					{
-						LOG_ERROR("Failed to match boundary in content-type=" << head_info.m_content_type);
-						return false;
-					}
-					return true;
+					for (size_t i : {1, 2, 3})
+						if(result[i].matched)
+						{
+							boundary = result[i];
+							return true;
+						}
+					LOG_ERROR("Failed to match boundary in content-type=" << head_info.m_content_type);
 				}
-				else
-					return false;
-
-				return true;
+				return false;
 			}
 		};
 		typedef http_simple_client_template<blocked_mode_client> http_simple_client;

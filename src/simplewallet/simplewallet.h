@@ -37,8 +37,11 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
-#include <boost/optional/optional.hpp>
 #include <boost/program_options/variables_map.hpp>
 
 #include "cryptonote_basic/account.h"
@@ -98,16 +101,16 @@ namespace cryptonote
     void wallet_idle_thread();
 
     //! \return Prompts user for password and verifies against local file. Logs on error and returns `none`
-    boost::optional<tools::password_container> get_and_verify_password() const;
+    std::optional<tools::password_container> get_and_verify_password() const;
 
-    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const crypto::secret_key& recovery_key,
+    std::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const crypto::secret_key& recovery_key,
         bool recover, bool two_random, const std::string &old_language);
-    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const cryptonote::account_public_address& address,
-        const boost::optional<crypto::secret_key>& spendkey, const crypto::secret_key& viewkey);
-    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm,
+    std::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm, const cryptonote::account_public_address& address,
+        const std::optional<crypto::secret_key>& spendkey, const crypto::secret_key& viewkey);
+    std::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm,
         const epee::wipeable_string &multisig_keys, const std::string &old_language);
-    boost::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm);
-    boost::optional<epee::wipeable_string> open_wallet(const boost::program_options::variables_map& vm);
+    std::optional<epee::wipeable_string> new_wallet(const boost::program_options::variables_map& vm);
+    std::optional<epee::wipeable_string> open_wallet(const boost::program_options::variables_map& vm);
     bool close_wallet();
 
     bool viewkey(const std::vector<std::string> &args = std::vector<std::string>());
@@ -299,7 +302,6 @@ namespace cryptonote
     std::pair<std::string, std::string> show_outputs_line(const std::vector<uint64_t> &heights, uint64_t blockchain_height, uint64_t highlight_idx = std::numeric_limits<uint64_t>::max()) const;
     bool freeze_thaw(const std::vector<std::string>& args, bool freeze);
 
-    bool on_command(bool (simple_wallet::*cmd)(const std::vector<std::string>&), const std::vector<std::string> &args);
     bool on_cancelled_command();
     void check_for_inactivity_lock(bool user);
 
@@ -339,10 +341,10 @@ namespace cryptonote
     virtual void on_unconfirmed_money_received(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t amount, const cryptonote::subaddress_index& subaddr_index);
     virtual void on_money_spent(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& in_tx, uint64_t amount, const cryptonote::transaction& spend_tx, const cryptonote::subaddress_index& subaddr_index);
     virtual void on_skip_transaction(uint64_t height, const crypto::hash &txid, const cryptonote::transaction& tx);
-    virtual boost::optional<epee::wipeable_string> on_get_password(const char *reason);
+    virtual std::optional<epee::wipeable_string> on_get_password(const char *reason);
     virtual void on_device_button_request(uint64_t code);
-    virtual boost::optional<epee::wipeable_string> on_device_pin_request();
-    virtual boost::optional<epee::wipeable_string> on_device_passphrase_request(bool & on_device);
+    virtual std::optional<epee::wipeable_string> on_device_pin_request();
+    virtual std::optional<epee::wipeable_string> on_device_passphrase_request(bool& on_device);
     //----------------------------------------------------------
 
     friend class refresh_progress_reporter_t;
@@ -431,9 +433,9 @@ namespace cryptonote
     refresh_progress_reporter_t m_refresh_progress_reporter;
 
     std::atomic<bool> m_idle_run;
-    boost::thread m_idle_thread;
-    boost::mutex m_idle_mutex;
-    boost::condition_variable m_idle_cond;
+    std::thread m_idle_thread;
+    std::mutex m_idle_mutex;
+    std::condition_variable m_idle_cond;
 
     std::atomic<bool> m_auto_refresh_enabled;
     bool m_auto_refresh_refreshing;
@@ -442,7 +444,7 @@ namespace cryptonote
 
     std::atomic<uint64_t> m_password_asked_on_height;
     crypto::hash          m_password_asked_on_checksum;
-    boost::thread         m_long_poll_thread;
+    std::thread           m_long_poll_thread;
 
     std::atomic<time_t> m_last_activity_time;
     std::atomic<bool> m_locked;

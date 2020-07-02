@@ -34,7 +34,7 @@
 #include <boost/asio/ip/address_v6.hpp>
 #include <typeinfo>
 #include <type_traits>
-#include "byte_slice.h"
+#include "shared_sv.h"
 #include "enums.h"
 #include "misc_log_ex.h"
 #include "serialization/keyvalue_serialization.h"
@@ -89,7 +89,7 @@ namespace net_utils
 			if (is_store)
 			{
 				uint32_t ip = SWAP32LE(this_ref.m_ip);
-				epee::serialization::selector<is_store>::serialize(ip, stg, hparent_section, "m_ip");
+				epee::serialization::perform_serialize<is_store>(ip, stg, parent_section, "m_ip");
 			}
 			else
 			{
@@ -194,7 +194,7 @@ namespace net_utils
 		static const uint8_t ID = 2;
 		BEGIN_KV_SERIALIZE_MAP()
 			boost::asio::ip::address_v6::bytes_type bytes = this_ref.m_address.to_bytes();
-			epee::serialization::selector<is_store>::serialize_t_val_as_blob(bytes, stg, hparent_section, "addr");
+			epee::serialization::perform_serialize_blob<is_store>(bytes, stg, parent_section, "addr");
 			const_cast<boost::asio::ip::address_v6&>(this_ref.m_address) = boost::asio::ip::address_v6(bytes);
 			KV_SERIALIZE(m_port)
 		END_KV_SERIALIZE_MAP()
@@ -268,27 +268,29 @@ namespace net_utils
 		Type& as_mutable() const
 		{
 			// types `implmentation<Type>` and `implementation<const Type>` are unique
-			using Type_ = typename std::remove_const<Type>::type;
+			using Type_ = std::remove_const_t<Type>;
 			network_address::interface* const self_ = self.get(); // avoid clang warning in typeid
 			if (!self_ || typeid(implementation<Type_>) != typeid(*self_))
 				throw std::bad_cast{};
 			return static_cast<implementation<Type_>*>(self_)->value;
 		}
 
+		// Const: we're serializing
 		template<typename T, typename t_storage>
-		bool serialize_addr(std::false_type, t_storage& stg, typename t_storage::hsection hparent)
+		bool serialize_addr(t_storage& stg, epee::serialization::section* parent) const
+		{
+		  return epee::serialization::perform_serialize<true>(as<T>(), stg, parent, "addr");
+		}
+
+		// Non-const: we're deserializing
+		template<typename T, typename t_storage>
+		bool serialize_addr(t_storage& stg, epee::serialization::section* parent)
 		{
 			T addr{};
-			if (!epee::serialization::selector<false>::serialize(addr, stg, hparent, "addr"))
+			if (!epee::serialization::perform_serialize<false>(addr, stg, parent, "addr"))
 				return false;
 			*this = std::move(addr);
 			return true;
-		}
-
-		template<typename T, typename t_storage>
-		bool serialize_addr(std::true_type, t_storage& stg, typename t_storage::hsection hparent) const
-		{
-			return epee::serialization::selector<true>::serialize(as<T>(), stg, hparent, "addr");
 		}
 
 	public:
@@ -347,10 +349,10 @@ namespace net_utils
     const boost::uuids::uuid m_connection_id;
     const network_address m_remote_address;
     const bool     m_is_income;
-    const time_t   m_started;
+    std::chrono::steady_clock::time_point m_started;
     const bool      m_ssl;
-    time_t   m_last_recv;
-    time_t   m_last_send;
+    std::chrono::steady_clock::time_point m_last_recv;
+    std::chrono::steady_clock::time_point m_last_send;
     uint64_t m_recv_cnt;
     uint64_t m_send_cnt;
     double m_current_speed_down;
@@ -360,12 +362,13 @@ namespace net_utils
 
     connection_context_base(boost::uuids::uuid connection_id,
                             const network_address &remote_address, bool is_income, bool ssl,
-                            time_t last_recv = 0, time_t last_send = 0,
+                            std::chrono::steady_clock::time_point last_recv = std::chrono::steady_clock::time_point::min(),
+                            std::chrono::steady_clock::time_point last_send = std::chrono::steady_clock::time_point::min(),
                             uint64_t recv_cnt = 0, uint64_t send_cnt = 0):
                                             m_connection_id(connection_id),
                                             m_remote_address(remote_address),
                                             m_is_income(is_income),
-                                            m_started(time(NULL)),
+                                            m_started(std::chrono::steady_clock::now()),
                                             m_ssl(ssl),
                                             m_last_recv(last_recv),
                                             m_last_send(last_send),
@@ -380,10 +383,10 @@ namespace net_utils
     connection_context_base(): m_connection_id(),
                                m_remote_address(),
                                m_is_income(false),
-                               m_started(time(NULL)),
+                               m_started(std::chrono::steady_clock::now()),
                                m_ssl(false),
-                               m_last_recv(0),
-                               m_last_send(0),
+                               m_last_recv(std::chrono::steady_clock::time_point::min()),
+                               m_last_send(std::chrono::steady_clock::time_point::min()),
                                m_recv_cnt(0),
                                m_send_cnt(0),
                                m_current_speed_down(0),
@@ -419,7 +422,7 @@ namespace net_utils
 	/************************************************************************/
 	struct i_service_endpoint
 	{
-		virtual bool do_send(byte_slice message)=0;
+    virtual bool do_send(shared_sv message)=0;
     virtual bool close()=0;
     virtual bool send_done()=0;
     virtual bool call_run_once_service_io()=0;

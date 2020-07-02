@@ -37,7 +37,6 @@
 
 using namespace cryptonote;
 
-#include <boost/regex.hpp>
 #include <common/apply_permutation.h>
 #include "common/util.h"
 #include "common/command_line.h"
@@ -86,7 +85,7 @@ static device_trezor_test *ensure_trezor_test_device();
 static void rollback_chain(cryptonote::core * core, const cryptonote::block & head);
 static void setup_chain(cryptonote::core * core, gen_trezor_base & trezor_base, std::string chain_path, bool fix_chain, const po::variables_map & vm_core);
 
-static long get_env_long(const char * flag_name, boost::optional<long> def = boost::none){
+static long get_env_long(const char * flag_name, std::optional<long> def = std::nullopt){
   const char *env_data = getenv(flag_name);
   return env_data ? atol(env_data) : (def ? def.get() : 0);
 }
@@ -126,7 +125,6 @@ int main(int argc, char* argv[])
     }
 
     const std::string filter = command_line::get_arg(vm, arg_filter);
-    boost::smatch match;
 
     size_t tests_count = 0;
     std::vector<std::string> failed_tests;
@@ -391,7 +389,7 @@ static device_trezor_test *ensure_trezor_test_device(){
 static void add_hforks(std::vector<test_event_entry>& events, const v_hardforks_t& hard_forks)
 {
   event_replay_settings repl_set;
-  repl_set.hard_forks = boost::make_optional(hard_forks);
+  repl_set.hard_forks = std::make_optional(hard_forks);
   events.push_back(repl_set);
 }
 
@@ -400,7 +398,7 @@ static void add_top_hfork(std::vector<test_event_entry>& events, const v_hardfor
   event_replay_settings repl_set;
   v_hardforks_t top_fork;
   top_fork.push_back(hard_forks.back());
-  repl_set.hard_forks = boost::make_optional(top_fork);
+  repl_set.hard_forks = std::make_optional(top_fork);
   events.push_back(repl_set);
 }
 
@@ -453,7 +451,7 @@ static tools::wallet2::tx_construction_data get_construction_data_with_decrypted
   if (get_short_payment_id(payment_id, ptx, hwdev))
   {
     // Remove encrypted
-    remove_field_from_tx_extra(construction_data.extra, typeid(cryptonote::tx_extra_nonce));
+    remove_field_from_tx_extra<cryptonote::tx_extra_nonce>(construction_data.extra);
     // Add decrypted
     std::string extra_nonce;
     set_encrypted_payment_id_to_tx_extra_nonce(extra_nonce, payment_id);
@@ -522,7 +520,7 @@ static std::vector<uint8_t> build_payment_id_extra(const std::string & payment_i
   return res;
 }
 
-static cryptonote::address_parse_info init_addr_parse_info(cryptonote::account_public_address &addr, bool is_sub=false, boost::optional<crypto::hash8> payment_id = boost::none)
+static cryptonote::address_parse_info init_addr_parse_info(cryptonote::account_public_address &addr, bool is_sub=false, std::optional<crypto::hash8> payment_id = std::nullopt)
 {
   cryptonote::address_parse_info res;
   res.address = addr;
@@ -544,7 +542,7 @@ static void expand_tsx(cryptonote::transaction &tx)
     rv.p.MGs.resize(1);
     rv.p.MGs[0].II.resize(tx.vin.size());
     for (size_t n = 0; n < tx.vin.size(); ++n)
-      rv.p.MGs[0].II[n] = rct::ki2rct(boost::get<txin_to_key>(tx.vin[n]).k_image);
+      rv.p.MGs[0].II[n] = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
   }
   else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2)
   {
@@ -552,7 +550,7 @@ static void expand_tsx(cryptonote::transaction &tx)
     for (size_t n = 0; n < tx.vin.size(); ++n)
     {
       rv.p.MGs[n].II.resize(1);
-      rv.p.MGs[n].II[0] = rct::ki2rct(boost::get<txin_to_key>(tx.vin[n]).k_image);
+      rv.p.MGs[n].II[0] = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
     }
   }
 }
@@ -826,7 +824,7 @@ bool gen_trezor_base::generate(std::vector<test_event_entry>& events)
   cryptonote::transaction tx_1;
   std::vector<size_t> selected_transfers;
   std::vector<tx_source_entry> sources;
-  bool res = wallet_tools::fill_tx_sources(m_wl_alice.get(), sources, TREZOR_TEST_MIXIN, boost::none, MK_COINS(2), m_bt, selected_transfers, num_blocks(events) - 1, 0, 1);
+  bool res = wallet_tools::fill_tx_sources(m_wl_alice.get(), sources, TREZOR_TEST_MIXIN, std::nullopt, MK_COINS(2), m_bt, selected_transfers, num_blocks(events) - 1, 0, 1);
   CHECK_AND_ASSERT_THROW_MES(res, "TX Fill sources failed");
 
   construct_tx_to_key(tx_1, m_wl_alice.get(), m_bob_account, MK_COINS(1), sources, TREZOR_TEST_FEE, true, rct::RangeProofPaddedBulletproof, 1);
@@ -864,21 +862,21 @@ void gen_trezor_base::load(std::vector<test_event_entry>& events)
 
   for(auto & ev : events)
   {
-    if (typeid(cryptonote::block) == ev.type())
+    if (std::holds_alternative<cryptonote::block>(ev))
     {
-      m_head = boost::get<cryptonote::block>(ev);
+      m_head = std::get<cryptonote::block>(ev);
     }
-    else if (typeid(cryptonote::account_base) == ev.type())  // accounts
+    else if (std::holds_alternative<cryptonote::account_base>(ev))  // accounts
     {
-      const auto & acc = boost::get<cryptonote::account_base>(ev);
+      const auto & acc = std::get<cryptonote::account_base>(ev);
       if (acc_idx < accounts_num)
       {
         *accounts[acc_idx++] = acc;
       }
     }
-    else if (typeid(event_replay_settings) == ev.type())  // hard forks
+    else if (std::holds_alternative<event_replay_settings>(ev))  // hard forks
     {
-      const auto & rep_settings = boost::get<event_replay_settings>(ev);
+      const auto & rep_settings = std::get<event_replay_settings>(ev);
       if (rep_settings.hard_forks)
       {
         const auto & hf = rep_settings.hard_forks.get();
@@ -1073,7 +1071,7 @@ void gen_trezor_base::test_trezor_tx(std::vector<test_event_entry>& events, std:
       const bool sender = widx == 0;
       tools::wallet2 *wl = wallets[widx];
 
-      wallet_tools::process_transactions(wl, events, m_head, m_bt, boost::make_optional(head_hash));
+      wallet_tools::process_transactions(wl, events, m_head, m_bt, std::make_optional(head_hash));
 
       tools::wallet2::transfer_container m_trans;
       tools::wallet2::transfer_container m_trans_txid;
@@ -1274,13 +1272,13 @@ tsx_builder * tsx_builder::sources(std::vector<cryptonote::tx_source_entry> & so
     return this;
 }
 
-tsx_builder * tsx_builder::compute_sources(boost::optional<size_t> num_utxo, boost::optional<uint64_t> min_amount, ssize_t offset, int step, boost::optional<fnc_accept_tx_source_t> fnc_accept)
+tsx_builder * tsx_builder::compute_sources(std::optional<size_t> num_utxo, std::optional<uint64_t> min_amount, ssize_t offset, int step, std::optional<fnc_accept_tx_source_t> fnc_accept)
 {
   CHECK_AND_ASSERT_THROW_MES(m_tester, "m_tester wallet empty");
   CHECK_AND_ASSERT_THROW_MES(m_from, "m_from wallet empty");
 
   // typedef std::function<bool(const tx_source_info_crate_t &info, bool &abort)> fnc_accept_tx_source_t;
-  boost::optional<fnc_accept_tx_source_t> fnc_accept_to_use = boost::none;
+  std::optional<fnc_accept_tx_source_t> fnc_accept_to_use = std::nullopt;
 
   auto c_account = m_account;
   fnc_accept_tx_source_t fnc_acc = [c_account, &fnc_accept] (const tx_source_info_crate_t &info, bool &abort) -> bool {
@@ -1299,7 +1297,7 @@ tsx_builder * tsx_builder::compute_sources(boost::optional<size_t> num_utxo, boo
   return this;
 }
 
-tsx_builder * tsx_builder::compute_sources_to_sub(boost::optional<size_t> num_utxo, boost::optional<uint64_t> min_amount, ssize_t offset, int step, boost::optional<fnc_accept_tx_source_t> fnc_accept)
+tsx_builder * tsx_builder::compute_sources_to_sub(std::optional<size_t> num_utxo, std::optional<uint64_t> min_amount, ssize_t offset, int step, std::optional<fnc_accept_tx_source_t> fnc_accept)
 {
   fnc_accept_tx_source_t fnc = [&fnc_accept] (const tx_source_info_crate_t &info, bool &abort) -> bool {
     if (info.td->m_subaddr_index.minor == 0){
@@ -1314,7 +1312,7 @@ tsx_builder * tsx_builder::compute_sources_to_sub(boost::optional<size_t> num_ut
   return compute_sources(num_utxo, min_amount, offset, step, fnc);
 }
 
-tsx_builder * tsx_builder::compute_sources_to_sub_acc(boost::optional<size_t> num_utxo, boost::optional<uint64_t> min_amount, ssize_t offset, int step, boost::optional<fnc_accept_tx_source_t> fnc_accept)
+tsx_builder * tsx_builder::compute_sources_to_sub_acc(std::optional<size_t> num_utxo, std::optional<uint64_t> min_amount, ssize_t offset, int step, std::optional<fnc_accept_tx_source_t> fnc_accept)
 {
   fnc_accept_tx_source_t fnc = [&fnc_accept] (const tx_source_info_crate_t &info, bool &abort) -> bool {
     if (info.td->m_subaddr_index.minor == 0 || info.src->real_out_additional_tx_keys.size() == 0){
@@ -1408,7 +1406,7 @@ tsx_builder * tsx_builder::build_tx()
   return this;
 }
 
-tsx_builder * tsx_builder::construct_pending_tx(tools::wallet2::pending_tx &ptx, boost::optional<std::vector<uint8_t>> extra)
+tsx_builder * tsx_builder::construct_pending_tx(tools::wallet2::pending_tx &ptx, std::optional<std::vector<uint8_t>> extra)
 {
   CHECK_AND_ASSERT_THROW_MES(m_from, "Wallet not provided");
 
@@ -1636,7 +1634,7 @@ bool gen_trezor_1utxo::generate(std::vector<test_event_entry>& events)
            ->mixin(TREZOR_TEST_MIXIN)
            ->fee(TREZOR_TEST_FEE)
            ->from(m_wl_alice.get(), 0)
-           ->compute_sources(boost::none, MK_COINS(1), -1, -1)
+           ->compute_sources(std::nullopt, MK_COINS(1), -1, -1)
            ->add_destination(m_eve_account, false, 1000)
            ->rct_config(m_rct_config)
            ->build_tx();
@@ -1652,7 +1650,7 @@ bool gen_trezor_1utxo_paymentid_short::generate(std::vector<test_event_entry>& e
       ->mixin(TREZOR_TEST_MIXIN)
       ->fee(TREZOR_TEST_FEE)
       ->from(m_wl_alice.get(), 0)
-      ->compute_sources(boost::none, MK_COINS(1), -1, -1)
+      ->compute_sources(std::nullopt, MK_COINS(1), -1, -1)
       ->add_destination(m_eve_account, false, 1000)
       ->payment_id(TREZOR_TEST_PAYMENT_ID)
       ->rct_config(m_rct_config)
@@ -1669,7 +1667,7 @@ bool gen_trezor_1utxo_paymentid_short_integrated::generate(std::vector<test_even
       ->mixin(TREZOR_TEST_MIXIN)
       ->fee(TREZOR_TEST_FEE)
       ->from(m_wl_alice.get(), 0)
-      ->compute_sources(boost::none, MK_COINS(1), -1, -1)
+      ->compute_sources(std::nullopt, MK_COINS(1), -1, -1)
       ->add_destination(m_eve_account, false, 1000)
       ->payment_id(TREZOR_TEST_PAYMENT_ID)
       ->set_integrated(0)

@@ -27,8 +27,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/range/adaptor/reversed.hpp>
-
 #include "cryptonote_core/service_node_rules.h"
 #include "checkpoints/checkpoints.h"
 #include "string_tools.h"
@@ -109,11 +107,11 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
 
   for (const txin_v& tx_input : tx.vin)
   {
-    if (tx_input.type() == typeid(txin_to_key))
+    if (std::holds_alternative<txin_to_key>(tx_input))
     {
-      add_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+      add_spent_key(std::get<txin_to_key>(tx_input).k_image);
     }
-    else if (tx_input.type() == typeid(txin_gen))
+    else if (std::holds_alternative<txin_gen>(tx_input))
     {
       /* nothing to do here */
       miner_tx = true;
@@ -123,9 +121,9 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
       LOG_PRINT_L1("Unsupported input type, removing key images and aborting transaction addition");
       for (const txin_v& tx_input : tx.vin)
       {
-        if (tx_input.type() == typeid(txin_to_key))
+        if (std::holds_alternative<txin_to_key>(tx_input))
         {
-          remove_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+          remove_spent_key(std::get<txin_to_key>(tx_input).k_image);
         }
       }
       return;
@@ -243,8 +241,9 @@ void BlockchainDB::pop_block(block& blk, std::vector<transaction>& txs)
 
   remove_block();
 
-  for (const auto& h : boost::adaptors::reverse(blk.tx_hashes))
+  for (auto it = blk.tx_hashes.rbegin(); it != blk.tx_hashes.rend(); ++it)
   {
+    auto& h = *it;
     cryptonote::transaction tx;
     if (!get_tx(h, tx) && !get_pruned_tx(h, tx))
       throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
@@ -260,9 +259,9 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
 
   for (const txin_v& tx_input : tx.vin)
   {
-    if (tx_input.type() == typeid(txin_to_key))
+    if (std::holds_alternative<txin_to_key>(tx_input))
     {
-      remove_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+      remove_spent_key(std::get<txin_to_key>(tx_input).k_image);
     }
   }
 

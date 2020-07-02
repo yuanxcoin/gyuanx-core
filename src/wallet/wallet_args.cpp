@@ -33,6 +33,7 @@
 #include <boost/format.hpp>
 #include "common/i18n.h"
 #include "common/util.h"
+#include "common/file.h"
 #include "misc_log_ex.h"
 #include "string_tools.h"
 #include "version.h"
@@ -85,7 +86,7 @@ namespace wallet_args
     return i18n_translate(str, "wallet_args");
   }
 
-  std::pair<boost::optional<boost::program_options::variables_map>, bool> main(
+  std::pair<std::optional<boost::program_options::variables_map>, bool> main(
     int argc, char** argv,
     const char* const usage,
     const char* const notice,
@@ -190,7 +191,7 @@ namespace wallet_args
       return true;
     });
     if (!r)
-      return {boost::none, true};
+      return {std::nullopt, true};
 
     if (should_terminate)
       return {std::move(vm), should_terminate};

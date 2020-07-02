@@ -1,5 +1,5 @@
-local default_deps_base='libsystemd-dev libboost-filesystem-dev libboost-thread-dev libboost-date-time-dev libboost-chrono-dev libgtest-dev ' +
-    'libboost-regex-dev libboost-serialization-dev libboost-program-options-dev libunbound-dev nettle-dev libevent-dev libminiupnpc-dev ' +
+local default_deps_base='libsystemd-dev libboost-filesystem-dev libboost-thread-dev libboost-date-time-dev libgtest-dev ' +
+    'libboost-serialization-dev libboost-program-options-dev libunbound-dev nettle-dev libevent-dev libminiupnpc-dev ' +
     'libunwind8-dev libsodium-dev libssl-dev libreadline-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev protobuf-compiler python3 ' +
     'pkg-config libsqlite3-dev qttools5-dev';
 local default_deps='g++ ' + default_deps_base; // g++ sometimes needs replacement
@@ -173,11 +173,11 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
 
 [
     // Various debian builds
-    debian_pipeline("Debian sid (w/ tests) (amd64)", "debian:sid", lto=true, run_tests=true),
-    debian_pipeline("Debian sid/Debug (amd64)", "debian:sid", build_type='Debug', lto=true),
-    debian_pipeline("Debian sid/clang-10 (amd64)", "debian:sid", deps='clang-10 '+default_deps_base,
+    debian_pipeline("Debian (w/ tests) (amd64)", "debian:testing", lto=true, run_tests=true),
+    debian_pipeline("Debian Debug (amd64)", "debian:testing", build_type='Debug'),
+    debian_pipeline("Debian clang-10 (amd64)", "debian:testing", deps='clang-10 '+default_deps_base,
                     cmake_extra='-DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 ', lto=true),
-    debian_pipeline("Debian sid/gcc-10 (amd64)", "debian:sid", deps='g++-10 '+default_deps_base,
+    debian_pipeline("Debian gcc-10 (amd64)", "debian:testing", deps='g++-10 '+default_deps_base,
                     cmake_extra='-DCMAKE_C_COMPILER=gcc-10 -DCMAKE_CXX_COMPILER=g++-10 -DBUILD_DEBUG_UTILS=ON'),
     debian_pipeline("Debian buster (i386)", "i386/debian:buster", cmake_extra='-DDOWNLOAD_SODIUM=ON -DARCH_ID=i386'),
     debian_pipeline("Ubuntu focal (amd64)", "ubuntu:focal"),
@@ -185,7 +185,7 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
     // ARM builds (ARM64 and armhf)
     debian_pipeline("Ubuntu bionic (ARM64)", "ubuntu:bionic", arch="arm64", build_tests=false, deps='g++-8 ' + default_deps_base,
                     cmake_extra='-DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 -DDOWNLOAD_SODIUM=ON'),
-    debian_pipeline("Debian sid (ARM64)", "debian:sid", arch="arm64", build_tests=false),
+    debian_pipeline("Debian (ARM64)", "debian:testing", arch="arm64", build_tests=false),
     debian_pipeline("Debian buster (armhf)", "arm32v7/debian:buster", arch="arm64", build_tests=false, cmake_extra='-DDOWNLOAD_SODIUM=ON -DARCH_ID=armhf'),
 
     // Static build (on bionic) which gets uploaded to builds.lokinet.dev:
@@ -207,6 +207,6 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
     // Macos builds:
     mac_builder('macOS (Release)', run_tests=true),
     mac_builder('macOS (Debug)', build_type='Debug', cmake_extra='-DBUILD_DEBUG_UTILS=ON'),
-    mac_builder('macOS (Static)', cmake_extra='-DBUILD_STATIC_DEPS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13',
+    mac_builder('macOS (Static)', cmake_extra='-DBUILD_STATIC_DEPS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14',
                 build_tests=false, extra_cmds=static_check_and_upload),
 ]

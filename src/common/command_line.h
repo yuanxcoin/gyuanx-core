@@ -31,7 +31,6 @@
 #pragma once
 
 #include <functional>
-#include <iostream>
 #include <sstream>
 #include <array>
 #include <type_traits>
@@ -90,7 +89,7 @@ namespace command_line
   template<typename T>
   struct arg_descriptor<T, true>
   {
-    static_assert(!std::is_same<T, bool>::value, "Boolean switch can't be required");
+    static_assert(!std::is_same_v<T, bool>, "Boolean switch can't be required");
 
     typedef T value_type;
 
@@ -269,7 +268,7 @@ namespace command_line
   }
 
   template<typename T, bool required, bool dependent, int NUM_DEPS>
-  typename std::enable_if<!std::is_same<T, bool>::value, bool>::type has_arg(const boost::program_options::variables_map& vm, const arg_descriptor<T, required, dependent, NUM_DEPS>& arg)
+  std::enable_if_t<!std::is_same_v<T, bool>, bool> has_arg(const boost::program_options::variables_map& vm, const arg_descriptor<T, required, dependent, NUM_DEPS>& arg)
   {
     auto value = vm[arg.name];
     return !value.empty();
@@ -320,4 +319,7 @@ namespace command_line
   /// boost::program_options::options_description, using the terminal width (if available).  Returns
   /// the boost defaults if terminal width isn't available.
   std::pair<unsigned, unsigned> boost_option_sizes();
+
+  // Clears the screen using readline, if available, otherwise trying some terminal escape hacks.
+  void clear_screen();
 }

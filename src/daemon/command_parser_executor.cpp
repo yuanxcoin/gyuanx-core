@@ -43,7 +43,7 @@ namespace daemonize {
 command_parser_executor::command_parser_executor(
     uint32_t ip
   , uint16_t port
-  , const boost::optional<tools::login>& login
+  , const std::optional<tools::login>& login
   , const epee::net_utils::ssl_options_t& ssl_options
   )
   : m_executor{ip, port, login, ssl_options}
@@ -496,7 +496,7 @@ bool command_parser_executor::start_mining(const std::vector<std::string>& args)
       {
         bool dnssec_valid;
         std::string address_str = tools::dns_utils::get_account_address_as_str_from_url(args.front(), dnssec_valid,
-            [](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid){return addresses[0];});
+            [](const std::string_view url, const std::vector<std::string> &addresses, bool dnssec_valid){return addresses[0];});
         if(!cryptonote::get_account_address_from_str(info, cryptonote::MAINNET, address_str))
         {
           if(!cryptonote::get_account_address_from_str(info, cryptonote::TESTNET, address_str))
@@ -651,7 +651,7 @@ bool command_parser_executor::out_peers(const std::vector<std::string>& args)
 	}
 	  
 	catch(const std::exception& ex) {
-		_erro("stoi exception");
+		MERROR("stoi exception");
 		return false;
 	}
 	
@@ -671,7 +671,7 @@ bool command_parser_executor::in_peers(const std::vector<std::string>& args)
 	}
 
 	catch(const std::exception& ex) {
-		_erro("stoi exception");
+		MERROR("stoi exception");
 		return false;
 	}
 

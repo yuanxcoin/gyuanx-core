@@ -31,7 +31,7 @@
 
 #pragma once
 
-#include <mapbox/variant.hpp>
+#include <variant>
 #include <memory>
 
 #include <boost/program_options/options_description.hpp>
@@ -58,7 +58,6 @@ class variables_map;
 }}
 
 namespace cryptonote { namespace rpc {
-  using namespace lokimq::literals;
 
   static constexpr auto long_poll_timeout = 15s;
 
@@ -110,7 +109,7 @@ namespace cryptonote { namespace rpc {
 
     // A free-form identifier identifiying the remote address of the request; this might be IP:PORT,
     // or could contain a pubkey, or ...
-    lokimq::string_view remote;
+    std::string_view remote;
   };
 
   struct rpc_request {
@@ -124,7 +123,7 @@ namespace cryptonote { namespace rpc {
     // The returned value in either case is the serialized value to return.
     //
     // If sometimes goes wrong, throw.
-    mapbox::util::variant<string_view, jsonrpc_params> body;
+    std::variant<std::string_view, jsonrpc_params> body;
 
     // Values to pass through to the invoke() call
     rpc_context context;
@@ -308,23 +307,22 @@ private:
 
     //utils
     uint64_t get_block_reward(const block& blk);
-    boost::optional<std::string> get_random_public_node();
+    std::optional<std::string> get_random_public_node();
     bool set_bootstrap_daemon(const std::string &address, const std::string &username_password);
-    bool set_bootstrap_daemon(const std::string &address, const boost::optional<epee::net_utils::http::login> &credentials);
+    bool set_bootstrap_daemon(const std::string &address, const std::optional<epee::net_utils::http::login> &credentials);
     void fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash);
-    boost::upgrade_lock<boost::shared_mutex> should_bootstrap_lock();
+    std::unique_lock<std::shared_mutex> should_bootstrap_lock();
 
     template <typename COMMAND_TYPE>
     bool use_bootstrap_daemon_if_necessary(const typename COMMAND_TYPE::request& req, typename COMMAND_TYPE::response& res);
     
     core& m_core;
     nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> >& m_p2p;
-    boost::shared_mutex m_bootstrap_daemon_mutex;
+    std::shared_mutex m_bootstrap_daemon_mutex;
     std::atomic<bool> m_should_use_bootstrap_daemon;
     std::unique_ptr<bootstrap_daemon> m_bootstrap_daemon;
     std::chrono::system_clock::time_point m_bootstrap_height_check_time;
     bool m_was_bootstrap_ever_used;
-    network_type m_nettype;
   };
 
 }} // namespace cryptonote::rpc

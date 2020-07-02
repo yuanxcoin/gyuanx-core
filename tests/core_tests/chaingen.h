@@ -32,15 +32,14 @@
 
 #include <vector>
 #include <iostream>
-#include <stdint.h>
+#include <cstdint>
+#include <optional>
+#include <regex>
 
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/program_options.hpp>
-#include <boost/optional.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/serialization/variant.hpp>
-#include <boost/serialization/optional.hpp>
 
 #include "include_base_utils.h"
 #include "common/boost_serialization_helper.h"
@@ -53,6 +52,8 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
+#include "serialization/boost_std_variant.h"
+#include "serialization/boost_std_optional.h"
 #include "misc_language.h"
 
 #include "blockchain_db/testdb.h"
@@ -113,7 +114,7 @@ struct loki_blockchain_addable
   template<class Archive> void serialize(Archive & /*ar*/, const unsigned int /*version*/) { }
 };
 
-typedef boost::function<bool (cryptonote::core& c, size_t ev_index)> loki_callback;
+typedef std::function<bool (cryptonote::core& c, size_t ev_index)> loki_callback;
 struct loki_callback_entry
 {
   std::string   name;
@@ -206,7 +207,7 @@ typedef std::vector<std::pair<uint8_t, uint64_t>> v_hardforks_t;
 struct event_replay_settings
 {
   event_replay_settings() = default;
-  boost::optional<v_hardforks_t> hard_forks;
+  std::optional<v_hardforks_t> hard_forks;
 
 private:
   friend class boost::serialization::access;
@@ -219,14 +220,14 @@ private:
 };
 
 
-VARIANT_TAG(binary_archive, callback_entry, 0xcb);
-VARIANT_TAG(binary_archive, cryptonote::account_base, 0xcc);
-VARIANT_TAG(binary_archive, serialized_block, 0xcd);
-VARIANT_TAG(binary_archive, serialized_transaction, 0xce);
-VARIANT_TAG(binary_archive, event_visitor_settings, 0xcf);
-VARIANT_TAG(binary_archive, event_replay_settings, 0xda);
+BINARY_VARIANT_TAG(callback_entry, 0xcb);
+BINARY_VARIANT_TAG(cryptonote::account_base, 0xcc);
+BINARY_VARIANT_TAG(serialized_block, 0xcd);
+BINARY_VARIANT_TAG(serialized_transaction, 0xce);
+BINARY_VARIANT_TAG(event_visitor_settings, 0xcf);
+BINARY_VARIANT_TAG(event_replay_settings, 0xda);
 
-typedef boost::variant<cryptonote::block,
+typedef   std::variant<cryptonote::block,
                        cryptonote::transaction,
                        std::vector<cryptonote::transaction>,
                        cryptonote::account_base,
@@ -250,7 +251,7 @@ typedef std::unordered_map<crypto::hash, const cryptonote::transaction*> map_has
 class test_chain_unit_base
 {
 public:
-  typedef boost::function<bool (cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)> verify_callback;
+  typedef std::function<bool (cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)> verify_callback;
   typedef std::map<std::string, verify_callback> callbacks_map;
 
   void register_callback(const std::string& cb_name, verify_callback cb);
@@ -455,7 +456,7 @@ typedef std::unordered_map<output_hasher, output_index, output_hasher_hasher> ma
 typedef std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses_t;
 typedef std::pair<uint64_t, size_t>  outloc_t;
 
-typedef boost::variant<cryptonote::account_public_address, cryptonote::account_keys, cryptonote::account_base, cryptonote::tx_destination_entry> var_addr_t;
+typedef std::variant<cryptonote::account_public_address, cryptonote::account_keys, cryptonote::account_base, cryptonote::tx_destination_entry> var_addr_t;
 cryptonote::account_public_address get_address(const var_addr_t& inp);
 
 typedef struct {
@@ -528,7 +529,7 @@ cryptonote::transaction construct_tx_with_fee(std::vector<test_event_entry>& eve
 bool construct_tx_rct(const cryptonote::account_keys& sender_account_keys,
     std::vector<cryptonote::tx_source_entry>& sources,
     const std::vector<cryptonote::tx_destination_entry>& destinations,
-    const boost::optional<cryptonote::tx_destination_entry>& change_addr,
+    const std::optional<cryptonote::tx_destination_entry>& change_addr,
     std::vector<uint8_t> extra, cryptonote::transaction& tx, uint64_t unlock_time,
     rct::RangeProofType range_proof_type=rct::RangeProofBorromean, int bp_version = 0);
 
@@ -592,7 +593,7 @@ bool extract_hard_forks(const std::vector<test_event_entry>& events, v_hardforks
 /*                                                                      */
 /************************************************************************/
 template<class t_test_class>
-struct push_core_event_visitor: public boost::static_visitor<bool>
+struct push_core_event_visitor
 {
 private:
   cryptonote::core& m_c;
@@ -718,12 +719,10 @@ public:
       bvc.m_verifivation_failed = true;
 
     cryptonote::block blk;
-    std::stringstream ss;
-    ss << sr_block.data;
-    binary_archive<false> ba(ss);
-    ::serialization::serialize(ba, blk);
-    if (!ss.good())
-    {
+    serialization::binary_string_unarchiver ba{sr_block.data};
+    try {
+      serialization::serialize(ba, blk);
+    } catch (...) {
       blk = cryptonote::block();
     }
     bool r = m_validator.check_block_verification_context(bvc, m_ev_index, blk);
@@ -743,12 +742,10 @@ public:
     bool tx_added = pool_size + 1 == m_c.get_pool().get_transactions_count();
 
     cryptonote::transaction tx;
-    std::stringstream ss;
-    ss << sr_tx.data;
-    binary_archive<false> ba(ss);
-    ::serialization::serialize(ba, tx);
-    if (!ss.good())
-    {
+    serialization::binary_string_unarchiver ba{sr_tx.data};
+    try {
+      serialization::serialize(ba, tx);
+    } catch (...) {
       tx = cryptonote::transaction();
     }
 
@@ -889,9 +886,9 @@ inline bool replay_events_through_core_plain(cryptonote::core& cr, const std::ve
 
   //init core here
   if (reinit) {
-    CHECK_AND_ASSERT_MES(typeid(cryptonote::block) == events[0].type(), false,
+    CHECK_AND_ASSERT_MES(std::holds_alternative<cryptonote::block>(events[0]), false,
                          "First event must be genesis block creation");
-    cr.set_genesis_block(boost::get<cryptonote::block>(events[0]));
+    cr.set_genesis_block(std::get<cryptonote::block>(events[0]));
   }
 
   bool r = true;
@@ -899,7 +896,7 @@ inline bool replay_events_through_core_plain(cryptonote::core& cr, const std::ve
   for(size_t i = 1; i < events.size() && r; ++i)
   {
     visitor.event_index(i);
-    r = boost::apply_visitor(visitor, events[i]);
+    r = std::visit(visitor, events[i]);
   }
 
   return r;
@@ -1018,11 +1015,8 @@ inline bool do_replay_file(const std::string& filename)
   VEC_EVENTS.push_back(CALLBACK_ENTRY); \
 }
 
-#define REGISTER_CALLBACK(CB_NAME, CLBACK) \
-  register_callback(CB_NAME, boost::bind(&CLBACK, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
-
-#define REGISTER_CALLBACK_METHOD(CLASS, METHOD) \
-  register_callback(#METHOD, boost::bind(&CLASS::METHOD, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+#define REGISTER_CALLBACK(METHOD) \
+  register_callback(#METHOD, [this](auto&&... x) { return METHOD(std::forward<decltype(x)>(x)...); });
 
 #define MAKE_GENESIS_BLOCK(VEC_EVENTS, BLK_NAME, MINER_ACC, TS)                       \
   test_generator generator;                                               \
@@ -1211,7 +1205,7 @@ inline bool do_replay_file(const std::string& filename)
 #define GENERATE_AND_PLAY(generator_class)                                                                             \
   if (list_tests)                                                                                                      \
     std::cout << #generator_class << std::endl;                                                                        \
-  else if (filter.empty() || boost::regex_match(std::string(#generator_class), match, boost::regex(filter)))           \
+  else if (std::cmatch m; filter.empty() || std::regex_match(#generator_class, m, std::regex(filter)))                 \
   {                                                                                                                    \
     std::vector<test_event_entry> events;                                                                              \
     ++tests_count;                                                                                                     \
@@ -1225,7 +1219,7 @@ inline bool do_replay_file(const std::string& filename)
   }
 
 #define GENERATE_AND_PLAY_INSTANCE(generator_class, generator_class_instance, CORE)                                    \
-  if (filter.empty() || boost::regex_match(std::string(#generator_class), match, boost::regex(filter)))                \
+  if (std::cmatch m; filter.empty() || std::regex_match(#generator_class, m, std::regex(filter)))                      \
   {                                                                                                                    \
     std::vector<test_event_entry> events;                                                                              \
     ++tests_count;                                                                                                     \

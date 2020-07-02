@@ -30,8 +30,9 @@
 #define _LEVIN_BASE_H_
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 
-#include "byte_slice.h"
 #include "net_utils_base.h"
 #include "span.h"
 
@@ -128,14 +129,14 @@ namespace levin
   bucket_head2 make_header(uint32_t command, uint64_t msg_size, uint32_t flags, bool expect_response) noexcept;
 
   //! \return A levin notification message.
-  byte_slice make_notify(int command, epee::span<const std::uint8_t> payload);
+  std::string make_notify(int command, epee::span<const std::uint8_t> payload);
 
   /*! Generate a dummy levin message.
 
-      \param noise_bytes Total size of the returned `byte_slice`.
+      \param noise_bytes Total size of the returned string.
       \return `nullptr` if `noise_size` is smaller than the levin header.
         Otherwise, a dummy levin message. */
-  byte_slice make_noise_notify(std::size_t noise_bytes);
+  std::string make_noise_notify(std::size_t noise_bytes);
 
   /*! Generate 1+ levin messages that are identical to the noise message size.
 
@@ -144,7 +145,7 @@ namespace levin
    \return `nullptr` if `noise.size()` is less than the levin header size.
       Otherwise, a levin notification message OR 2+ levin fragment messages.
       Each message is `noise.size()` in length. */
-  byte_slice make_fragmented_notify(const byte_slice& noise, int command, epee::span<const std::uint8_t> payload);
+  std::string make_fragmented_notify(const std::string_view noise, int command, epee::span<const std::uint8_t> payload);
 }
 }
 

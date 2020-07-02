@@ -35,9 +35,9 @@
 #include "wallet/wallet2.h"
 
 #include <string>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/thread.hpp>
-#include <boost/thread/condition_variable.hpp>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
 
 namespace Monero {
@@ -235,7 +235,7 @@ private:
     friend class SubaddressAccountImpl;
 
     std::unique_ptr<tools::wallet2> m_wallet;
-    mutable boost::mutex m_statusMutex;
+    mutable std::mutex m_statusMutex;
     mutable int m_status;
     mutable std::string m_errorString;
     std::string m_password;
@@ -251,13 +251,13 @@ private:
     std::atomic<int>  m_refreshIntervalMillis;
     std::atomic<bool> m_refreshShouldRescan;
     // synchronizing  refresh loop;
-    boost::mutex        m_refreshMutex;
+    std::mutex        m_refreshMutex;
 
     // synchronizing  sync and async refresh
-    boost::mutex        m_refreshMutex2;
-    boost::condition_variable m_refreshCV;
-    boost::thread       m_refreshThread;
-    boost::thread       m_longPollThread;
+    std::mutex        m_refreshMutex2;
+    std::condition_variable m_refreshCV;
+    std::thread       m_refreshThread;
+    std::thread       m_longPollThread;
 
     // flag indicating wallet is recovering from seed
     // so it shouldn't be considered as new and pull blocks (slow-refresh)
@@ -268,7 +268,7 @@ private:
     std::atomic<bool>   m_rebuildWalletCache;
     // cache connection status to avoid unnecessary RPC calls
     mutable std::atomic<bool>   m_is_connected;
-    boost::optional<epee::net_utils::http::login> m_daemon_login{};
+    std::optional<epee::net_utils::http::login> m_daemon_login{};
 };
 
 

@@ -39,14 +39,9 @@
 #include "version.h"
 #include "net/http_client.h"
 #include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "WalletAPI"
-
-namespace epee {
-    unsigned int g_test_dbg_lock_sleep = 0;
-}
 
 namespace Monero {
 
@@ -198,24 +193,21 @@ std::vector<std::string> WalletManagerImpl::findWallets(const std::string &path)
     if(!boost::filesystem::is_directory(path)){
         return result;
     }
-    const boost::regex wallet_rx("(.*)\\.(keys)$"); // searching for <wallet_name>.keys files
     boost::filesystem::recursive_directory_iterator end_itr; // Default ctor yields past-the-end
     for (boost::filesystem::recursive_directory_iterator itr(path); itr != end_itr; ++itr) {
         // Skip if not a file
         if (!boost::filesystem::is_regular_file(itr->status()))
             continue;
-        boost::smatch what;
         std::string filename = itr->path().filename().string();
 
         LOG_PRINT_L3("Checking filename: " << filename);
 
-        bool matched = boost::regex_match(filename, what, wallet_rx);
-        if (matched) {
+        if (tools::ends_with(filename, ".keys")) {
             // if keys file found, checking if there's wallet file itself
-            std::string wallet_file = (itr->path().parent_path() /= what[1].str()).string();
-            if (boost::filesystem::exists(wallet_file)) {
-                LOG_PRINT_L3("Found wallet: " << wallet_file);
-                result.push_back(wallet_file);
+            filename.erase(filename.size() - 5);
+            if (boost::filesystem::exists(filename)) {
+                LOG_PRINT_L3("Found wallet: " << filename);
+                result.push_back(std::move(filename));
             }
         }
     }
@@ -229,7 +221,7 @@ std::string WalletManagerImpl::errorString() const
 
 void WalletManagerImpl::setDaemonAddress(const std::string &address)
 {
-    m_http_client.set_server(address, boost::none);
+    m_http_client.set_server(address, std::nullopt);
 }
 
 bool WalletManagerImpl::connected(uint32_t *version)

@@ -94,7 +94,7 @@ namespace service_nodes
 
   void service_node_list::init()
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     if (m_blockchain.get_current_hard_fork_version() < 9)
     {
       reset(true);
@@ -116,7 +116,7 @@ namespace service_nodes
   static std::vector<service_nodes::pubkey_and_sninfo> sort_and_filter(const service_nodes_infos_t &sns_infos, UnaryPredicate p, bool reserve = true) {
     std::vector<pubkey_and_sninfo> result;
     if (reserve) result.reserve(sns_infos.size());
-    for (const pubkey_and_sninfo &key_info : sns_infos)
+    for (const auto& key_info : sns_infos)
       if (p(*key_info.second))
         result.push_back(key_info);
 
@@ -138,7 +138,7 @@ namespace service_nodes
   std::shared_ptr<const quorum> service_node_list::get_quorum(quorum_type type, uint64_t height, bool include_old, std::vector<std::shared_ptr<const quorum>> *alt_quorums) const
   {
     height = offset_testing_quorum_height(type, height);
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     quorum_manager const *quorums = nullptr;
     if (height == m_state.height)
       quorums = &m_state.quorums;
@@ -172,9 +172,8 @@ namespace service_nodes
 
     if (alt_quorums)
     {
-      for (std::pair<crypto::hash, state_t> const &hash_to_state : m_transient.alt_state)
+      for (const auto& [hash, alt_state] : m_transient.alt_state)
       {
-        state_t const &alt_state = hash_to_state.second;
         if (alt_state.height == height)
         {
           std::shared_ptr<const quorum> alt_result = alt_state.quorums.get(type);
@@ -223,13 +222,13 @@ namespace service_nodes
 
   size_t service_node_list::get_service_node_count() const
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     return m_state.service_nodes_infos.size();
   }
 
   std::vector<service_node_pubkey_info> service_node_list::get_service_node_list_state(const std::vector<crypto::public_key> &service_node_pubkeys) const
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     std::vector<service_node_pubkey_info> result;
 
     if (service_node_pubkeys.empty())
@@ -255,7 +254,7 @@ namespace service_nodes
 
   void service_node_list::set_my_service_node_keys(const service_node_keys *keys)
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     m_service_node_keys = keys;
   }
 
@@ -267,7 +266,7 @@ namespace service_nodes
 
   bool service_node_list::is_service_node(const crypto::public_key& pubkey, bool require_active) const
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     auto it = m_state.service_nodes_infos.find(pubkey);
     return it != m_state.service_nodes_infos.end() && (!require_active || it->second->is_active());
   }
@@ -296,7 +295,7 @@ namespace service_nodes
   bool reg_tx_extract_fields(const cryptonote::transaction& tx, contributor_args_t &contributor_args, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature)
   {
     cryptonote::tx_extra_service_node_register registration;
-    if (!get_service_node_register_from_tx_extra(tx.extra, registration))
+    if (!get_field_from_tx_extra(tx.extra, registration))
       return false;
     if (!cryptonote::get_service_node_pubkey_from_tx_extra(tx.extra, service_node_key))
       return false;
@@ -376,7 +375,7 @@ namespace service_nodes
 
   static uint64_t get_staking_output_contribution(const cryptonote::transaction& tx, int i, crypto::key_derivation const &derivation, hw::device& hwdev)
   {
-    if (tx.vout[i].target.type() != typeid(cryptonote::txout_to_key))
+    if (!std::holds_alternative<cryptonote::txout_to_key>(tx.vout[i].target))
     {
       return 0;
     }
@@ -487,7 +486,7 @@ namespace service_nodes
       // would be generated, when they want to spend it in the future.
 
       cryptonote::tx_extra_tx_key_image_proofs key_image_proofs;
-      if (!get_tx_key_image_proofs_from_tx_extra(tx.extra, key_image_proofs))
+      if (!get_field_from_tx_extra(tx.extra, key_image_proofs))
       {
         LOG_PRINT_L1("TX: Didn't have key image proofs in the tx_extra, rejected on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
         stake_decoded = false;
@@ -523,7 +522,7 @@ namespace service_nodes
           }
 
           // Stealth address public key should match the public key referenced in the TX only if valid information is given.
-          const auto& out_to_key = boost::get<cryptonote::txout_to_key>(tx.vout[output_index].target);
+          const auto& out_to_key = std::get<cryptonote::txout_to_key>(tx.vout[output_index].target);
           if (out_to_key.key != ephemeral_pub_key)
           {
             LOG_PRINT_L1("TX: Derived TX ephemeral key did not match tx stored key on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx) << " for output: " << output_index);
@@ -630,9 +629,8 @@ namespace service_nodes
             state_change, cryptonote::get_block_height(block), tvc, *quorums->obligations, hf_version))
     {
       quorums = nullptr;
-      for (std::pair<crypto::hash, state_t> const &entry : alt_states)
+      for (const auto& [hash, alt_state] : alt_states)
       {
-        state_t const &alt_state = entry.second;
         if (alt_state.height != state_change.block_height) continue;
 
         quorums = &alt_state.quorums;
@@ -815,7 +813,7 @@ namespace service_nodes
     }
 
     cryptonote::tx_extra_tx_key_image_unlock unlock;
-    if (!cryptonote::get_tx_key_image_unlock_from_tx_extra(tx.extra, unlock))
+    if (!cryptonote::get_field_from_tx_extra(tx.extra, unlock))
     {
       LOG_PRINT_L1("Unlock TX: Didn't have key image unlock in the tx_extra, rejected on height: "
                    << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
@@ -1163,7 +1161,7 @@ namespace service_nodes
     if (block.major_version < cryptonote::network_version_9_service_nodes)
       return true;
 
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     process_block(block, txs);
 
     if (block.major_version >= cryptonote::network_version_13_enforce_checkpoints && checkpoint)
@@ -1434,13 +1432,8 @@ namespace service_nodes
       calc_swarm_changes(existing_swarms, seed);
 
       /// Apply changes
-      for (const auto entry : existing_swarms) {
-
-        const swarm_id_t swarm_id = entry.first;
-        const std::vector<crypto::public_key>& snodes = entry.second;
-
-        for (const auto snode : snodes) {
-
+      for (const auto& [swarm_id, snodes] : existing_swarms) {
+        for (const auto& snode : snodes) {
           auto& sn_info_ptr = service_nodes_infos.at(snode);
           if (sn_info_ptr->swarm_id == swarm_id) continue; /// nothing changed for this snode
           duplicate_info(sn_info_ptr).swarm_id = swarm_id;
@@ -1506,7 +1499,7 @@ namespace service_nodes
 
   void service_node_list::blockchain_detached(uint64_t height, bool /*by_pop_blocks*/)
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
 
     uint64_t revert_to_height = height - 1;
     bool reinitialise         = false;
@@ -1672,7 +1665,7 @@ namespace service_nodes
 
   bool service_node_list::validate_miner_tx(const crypto::hash& prev_id, const cryptonote::transaction& miner_tx, uint64_t height, int hf_version, cryptonote::block_reward_parts const &reward_parts) const
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     if (hf_version < 9)
       return true;
 
@@ -1713,7 +1706,7 @@ namespace service_nodes
         return false;
       }
 
-      if (miner_tx.vout[vout_index].target.type() != typeid(cryptonote::txout_to_key))
+      if (!std::holds_alternative<cryptonote::txout_to_key>(miner_tx.vout[vout_index].target))
       {
         MERROR("Service node output target type should be txout_to_key");
         return false;
@@ -1728,7 +1721,7 @@ namespace service_nodes
       r = crypto::derive_public_key(derivation, vout_index, payout.address.m_spend_public_key, out_eph_public_key);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << vout_index << ", "<< payout.address.m_spend_public_key << ")");
 
-      if (boost::get<cryptonote::txout_to_key>(miner_tx.vout[vout_index].target).key != out_eph_public_key)
+      if (std::get<cryptonote::txout_to_key>(miner_tx.vout[vout_index].target).key != out_eph_public_key)
       {
         MERROR("Invalid service node reward output");
         return false;
@@ -1855,7 +1848,7 @@ namespace service_nodes
 
     data_for_serialization *data[] = {&m_transient.cache_long_term_data, &m_transient.cache_short_term_data};
     auto const serialize_version   = data_for_serialization::get_version(hf_version);
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
 
     for (data_for_serialization *serialize_entry : data)
     {
@@ -1894,11 +1887,14 @@ namespace service_nodes
     m_transient.cache_data_blob.clear();
     if (m_transient.state_added_to_archive)
     {
-      std::stringstream ss;
-      binary_archive<true> ba(ss);
-      bool r = ::serialization::serialize(ba, m_transient.cache_long_term_data);
-      CHECK_AND_ASSERT_MES(r, false, "Failed to store service node info: failed to serialize long term data");
-      m_transient.cache_data_blob.append(ss.str());
+      serialization::binary_string_archiver ba;
+      try {
+        serialization::serialize(ba, m_transient.cache_long_term_data);
+      } catch (const std::exception& e) {
+        LOG_ERROR("Failed to store service node info: failed to serialize long term data: " << e.what());
+        return false;
+      }
+      m_transient.cache_data_blob.append(ba.str());
       {
         auto &db = m_blockchain.get_db();
         cryptonote::db_wtxn_guard txn_guard{db};
@@ -1908,11 +1904,14 @@ namespace service_nodes
 
     m_transient.cache_data_blob.clear();
     {
-      std::stringstream ss;
-      binary_archive<true> ba(ss);
-      bool r = ::serialization::serialize(ba, m_transient.cache_short_term_data);
-      CHECK_AND_ASSERT_MES(r, false, "Failed to store service node info: failed to serialize short term data data");
-      m_transient.cache_data_blob.append(ss.str());
+      serialization::binary_string_archiver ba;
+      try {
+        serialization::serialize(ba, m_transient.cache_short_term_data);
+      } catch (const std::exception& e) {
+        LOG_ERROR("Failed to store service node info: failed to serialize short term data: " << e.what());
+        return false;
+      }
+      m_transient.cache_data_blob.append(ba.str());
       {
         auto &db = m_blockchain.get_db();
         cryptonote::db_wtxn_guard txn_guard{db};
@@ -1958,7 +1957,7 @@ namespace service_nodes
     return result;
   }
 
-#ifdef __cpp_lib_erase_if
+#ifdef __cpp_lib_erase_if // # (C++20)
   using std::erase_if;
 #else
   template <typename Container, typename Predicate>
@@ -1983,7 +1982,7 @@ namespace service_nodes
 
   void proof_info::store(const crypto::public_key &pubkey, cryptonote::Blockchain &blockchain)
   {
-    std::unique_lock<cryptonote::Blockchain> lock{blockchain};
+    std::unique_lock lock{blockchain};
     auto &db = blockchain.get_db();
     db.set_service_node_proof(pubkey, *this);
   }
@@ -2153,7 +2152,7 @@ namespace service_nodes
   }
 
   crypto::public_key service_node_list::get_pubkey_from_x25519(const crypto::x25519_public_key &x25519) const {
-    auto lock = tools::shared_lock(m_x25519_map_mutex);
+    std::shared_lock lock{m_x25519_map_mutex};
     auto it = x25519_to_pub.find(x25519);
     if (it != x25519_to_pub.end())
       return it->second.first;
@@ -2174,7 +2173,7 @@ namespace service_nodes
     }
   }
 
-  std::string service_node_list::remote_lookup(lokimq::string_view xpk) {
+  std::string service_node_list::remote_lookup(std::string_view xpk) {
     if (xpk.size() != sizeof(crypto::x25519_public_key))
       return "";
     crypto::x25519_public_key x25519_pub;
@@ -2209,7 +2208,7 @@ namespace service_nodes
 
   void service_node_list::record_checkpoint_vote(crypto::public_key const &pubkey, uint64_t height, bool voted)
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
     if (!m_state.service_nodes_infos.count(pubkey))
       return;
 
@@ -2221,7 +2220,7 @@ namespace service_nodes
 
   bool service_node_list::set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value)
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    std::lock_guard lock(m_sn_mutex);
 
     if (!m_state.service_nodes_infos.count(pubkey)) {
       LOG_PRINT_L2("No Service Node is known by this pubkey: " << pubkey);
@@ -2301,13 +2300,14 @@ namespace service_nodes
     if (db.get_service_node_data(blob, true /*long_term*/))
     {
       bytes_loaded += blob.size();
-      std::stringstream ss;
-      ss << blob;
-      blob.clear();
-      binary_archive<false> ba(ss);
-
       data_for_serialization data_in = {};
-      if (::serialization::serialize(ba, data_in) && data_in.states.size())
+      bool success = false;
+      try {
+        serialization::parse_binary(blob, data_in);
+        success = true;
+      } catch (...) {}
+
+      if (success && data_in.states.size())
       {
         // NOTE: Previously the quorum for the next state is derived from the
         // state that's been updated from the next block. This is fixed in
@@ -2373,13 +2373,13 @@ namespace service_nodes
       return false;
 
     bytes_loaded += blob.size();
-    std::stringstream ss;
-    ss << blob;
-    binary_archive<false> ba(ss);
-
     data_for_serialization data_in = {};
-    bool deserialized              = ::serialization::serialize(ba, data_in);
-    CHECK_AND_ASSERT_MES(deserialized, false, "Failed to parse service node data from blob");
+    try {
+      serialization::parse_binary(blob, data_in);
+    } catch (const std::exception& e) {
+      LOG_ERROR("Failed to parse service node data from blob: " << e.what());
+      return false;
+    }
 
     if (data_in.states.empty())
       return false;
@@ -2666,8 +2666,7 @@ namespace service_nodes
       const std::vector<std::string>& args,
       const service_node_keys &keys,
       std::string &cmd,
-      bool make_friendly,
-      boost::optional<std::string&> err_msg)
+      bool make_friendly)
   {
 
     contributor_args_t contributor_args = convert_registration_args(nettype, args, staking_requirement, hf_version);

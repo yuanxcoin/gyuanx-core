@@ -43,7 +43,6 @@
 #include <unordered_set>
 
 #include "span.h"
-#include "syncobj.h"
 #include "string_tools.h"
 #include "rolling_median.h"
 #include "cryptonote_basic/cryptonote_basic.h"
@@ -94,7 +93,7 @@ namespace cryptonote
    * 
    * @return checkpoints data, empty span if there ain't any checkpoints for specific network type
    */
-  typedef std::function<const epee::span<const unsigned char>(cryptonote::network_type network)> GetCheckpointsCallback;
+  using GetCheckpointsCallback = std::function<std::string_view(cryptonote::network_type network)>;
 
   /************************************************************************/
   /*                                                                      */
@@ -1011,12 +1010,6 @@ namespace cryptonote
     void unlock() const { m_blockchain_lock.unlock(); }
     bool try_lock() const { return m_blockchain_lock.try_lock(); }
 
-    /* These are needed as a workaround for boost::lock not considering the type lockable if const
-     * versions are defined.  When we switch to std::lock these can go. */
-    void lock() { m_blockchain_lock.lock(); }
-    void unlock() { m_blockchain_lock.unlock(); }
-    bool try_lock() { return m_blockchain_lock.try_lock(); }
-
     void cancel();
 
     /**
@@ -1084,7 +1077,7 @@ namespace cryptonote
     service_nodes::service_node_list& m_service_node_list;
     lns::name_system_db               m_lns_db;
 
-    mutable boost::recursive_mutex m_blockchain_lock; // TODO: add here reader/writer lock
+    mutable std::recursive_mutex m_blockchain_lock; // TODO: add here reader/writer lock
 
     // main chain
     size_t m_current_block_cumul_weight_limit;
@@ -1123,7 +1116,7 @@ namespace cryptonote
     difficulty_type m_difficulty_for_next_block;
 
     boost::asio::io_service m_async_service;
-    boost::thread_group m_async_pool;
+    std::thread m_async_thread;
     std::unique_ptr<boost::asio::io_service::work> m_async_work_idle;
 
     // some invalid blocks

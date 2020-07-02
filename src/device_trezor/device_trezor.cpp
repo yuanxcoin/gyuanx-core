@@ -28,6 +28,7 @@
 //
 
 #include "device_trezor.hpp"
+#include "common/lock.h"
 
 namespace hw {
 namespace trezor {
@@ -78,7 +79,7 @@ namespace trezor {
       if (r && !m_live_refresh_thread)
       {
         m_live_refresh_thread_running = true;
-        m_live_refresh_thread.reset(new boost::thread(boost::bind(&device_trezor::live_refresh_thread_main, this)));
+        m_live_refresh_thread.emplace([this] { live_refresh_thread_main(); });
       }
       return r;
     }
@@ -90,7 +91,7 @@ namespace trezor {
       if (m_live_refresh_thread)
       {
         m_live_refresh_thread->join();
-        m_live_refresh_thread = nullptr;
+        m_live_refresh_thread.reset();
       }
       return device_trezor_base::release();
     }
@@ -124,13 +125,13 @@ namespace trezor {
     {
       while(m_live_refresh_thread_running)
       {
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+        std::this_thread::sleep_for(100ms);
         if (!m_live_refresh_in_progress)
         {
           continue;
         }
 
-        TREZOR_AUTO_LOCK_DEVICE();
+        std::lock_guard lock{device_locker};
         if (!m_transport || !m_live_refresh_in_progress)
         {
           continue;
@@ -200,7 +201,7 @@ namespace trezor {
       }
     }
 
-    void device_trezor::display_address(const cryptonote::subaddress_index& index, const boost::optional<crypto::hash8> &payment_id) {
+    void device_trezor::display_address(const cryptonote::subaddress_index& index, const std::optional<crypto::hash8> &payment_id) {
       get_address(index, payment_id, true);
     }
 
@@ -213,13 +214,13 @@ namespace trezor {
     /* ======================================================================= */
 
     std::shared_ptr<messages::monero::MoneroAddress> device_trezor::get_address(
-        const boost::optional<cryptonote::subaddress_index> & subaddress,
-        const boost::optional<crypto::hash8> & payment_id,
+        const std::optional<cryptonote::subaddress_index> & subaddress,
+        const std::optional<crypto::hash8> & payment_id,
         bool show_address,
-        const boost::optional<std::vector<uint32_t>> & path,
-        const boost::optional<cryptonote::network_type> & network_type){
+        const std::optional<std::vector<uint32_t>> & path,
+        const std::optional<cryptonote::network_type> & network_type){
       CHECK_AND_ASSERT_THROW_MES(!payment_id || !subaddress || subaddress->is_zero(), "Subaddress cannot be integrated");
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_initialize_unsafe();
       require_initialized();
@@ -241,9 +242,9 @@ namespace trezor {
     }
 
     std::shared_ptr<messages::monero::MoneroWatchKey> device_trezor::get_view_key(
-        const boost::optional<std::vector<uint32_t>> & path,
-        const boost::optional<cryptonote::network_type> & network_type){
-      TREZOR_AUTO_LOCK_CMD();
+        const std::optional<std::vector<uint32_t>> & path,
+        const std::optional<cryptonote::network_type> & network_type){
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_initialize_unsafe();
       require_initialized();
@@ -272,7 +273,7 @@ namespace trezor {
         const ::hw::device_cold::tx_key_data_t & tx_aux_data,
         const ::crypto::secret_key & view_key_priv)
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_initialize_unsafe();
       require_initialized();
@@ -292,7 +293,7 @@ namespace trezor {
     {
 #define EVENT_PROGRESS(P) do { if (m_callback) {(m_callback)->on_progress(device_cold::op_progress(P)); } }while(0)
 
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_initialize_unsafe();
       require_initialized();
@@ -379,7 +380,7 @@ namespace trezor {
 
     void device_trezor::live_refresh_start()
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       live_refresh_start_unsafe();
     }
@@ -406,7 +407,7 @@ namespace trezor {
         crypto::key_image& ki
     )
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
 
       if (!m_live_refresh_in_progress)
@@ -436,7 +437,7 @@ namespace trezor {
 
     void device_trezor::live_refresh_finish()
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       if (m_live_refresh_in_progress)
       {
@@ -490,7 +491,7 @@ namespace trezor {
     {
       CHECK_AND_ASSERT_THROW_MES(unsigned_tx.transfers.first == 0, "Unsuported non zero offset");
 
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_initialize_unsafe();
       require_initialized();
@@ -530,17 +531,17 @@ namespace trezor {
           throw exc::ProtocolException(std::string("Transaction verification failed: ") + e.what());
         }
 
-        std::string key_images;
+        std::ostringstream key_images;
         bool all_are_txin_to_key = std::all_of(cdata.tx.vin.begin(), cdata.tx.vin.end(), [&](const cryptonote::txin_v& s_e) -> bool
         {
-          CHECKED_GET_SPECIFIC_VARIANT(s_e, const cryptonote::txin_to_key, in, false);
-          key_images += boost::to_string(in.k_image) + " ";
+          CHECKED_GET_SPECIFIC_VARIANT(s_e, cryptonote::txin_to_key, in, false);
+          key_images << in.k_image << ' ';
           return true;
         });
         if(!all_are_txin_to_key) {
           throw std::invalid_argument("Not all are txin_to_key");
         }
-        cpend.key_images = key_images;
+        cpend.key_images = key_images.str();
 
         // KI sync
         for(size_t cidx=0, trans_max=unsigned_tx.transfers.second.size(); cidx < trans_max; ++cidx){
@@ -561,7 +562,7 @@ namespace trezor {
           idx_map_src -= unsigned_tx.transfers.first;
           CHECK_AND_ASSERT_THROW_MES(idx_map_src < signed_tx.key_images.size(), "Invalid key image index");
 
-          const auto vini = boost::get<cryptonote::txin_to_key>(cdata.tx.vin[src_idx]);
+          const auto& vini = std::get<cryptonote::txin_to_key>(cdata.tx.vin[src_idx]);
           signed_tx.key_images[idx_map_src] = vini.k_image;
         }
       }
@@ -699,7 +700,7 @@ namespace trezor {
       unsigned cversion = client_version();
 
       if (aux_data.client_version){
-        auto wanted_client_version = aux_data.client_version.get();
+        auto wanted_client_version = *aux_data.client_version;
         if (wanted_client_version > cversion){
           throw exc::TrezorException("Trezor has too old firmware version. Please update.");
         } else {

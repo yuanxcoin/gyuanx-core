@@ -29,9 +29,8 @@
 
 #include "device_trezor_base.hpp"
 #include "memwipe.h"
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/regex.hpp>
+#include "common/lock.h"
+#include "common/string_util.h"
 
 namespace hw {
 namespace trezor {
@@ -110,7 +109,7 @@ namespace trezor {
       disconnect();
 
       // Enumerate all available devices
-      TREZOR_AUTO_LOCK_DEVICE();
+      std::lock_guard lock{device_locker};
       try {
         hw::trezor::t_transport_vect trans;
 
@@ -125,7 +124,7 @@ namespace trezor {
 
         for (auto &cur : trans) {
           std::string cur_path = cur->get_path();
-          if (boost::starts_with(cur_path, this->name)) {
+          if (tools::starts_with(cur_path, this->name)) {
             MDEBUG("Device Match: " << cur_path);
             m_transport = cur;
             break;
@@ -151,7 +150,7 @@ namespace trezor {
     }
 
     bool device_trezor_base::disconnect() {
-      TREZOR_AUTO_LOCK_DEVICE();
+      std::lock_guard lock{device_locker};
       m_device_session_id.clear();
       m_features.reset();
 
@@ -320,21 +319,20 @@ namespace trezor {
 
       CHECK_AND_ASSERT_THROW_MES(deriv_path.size() <= 255, "Derivation path is too long");
 
-      std::vector<std::string> fields;
-      boost::split(fields, deriv_path, boost::is_any_of("/"));
+      std::vector<std::string_view> fields = tools::split(deriv_path, "/");
       CHECK_AND_ASSERT_THROW_MES(fields.size() <= 10, "Derivation path is too long");
 
-      boost::regex rgx("^([0-9]+)'?$");
-      boost::cmatch match;
-
       this->m_wallet_deriv_path.reserve(fields.size());
-      for(const std::string & cur : fields){
-        const bool ok = boost::regex_match(cur.c_str(), match, rgx);
-        CHECK_AND_ASSERT_THROW_MES(ok, "Invalid wallet code: " << deriv_path << ". Invalid path element: " << cur);
-        CHECK_AND_ASSERT_THROW_MES(match[0].length() > 0, "Invalid wallet code: " << deriv_path << ". Invalid path element: " << cur);
+      for (auto& cur : fields) {
+        // Required pattern: [0-9]+'? but this is simple enough we can avoid using a regex
+        if (!cur.empty() && cur.back() == '\'') cur.remove_suffix(1);
 
-        const unsigned long cidx = std::stoul(match[0].str()) | TREZOR_BIP44_HARDENED_ZERO;
-        this->m_wallet_deriv_path.push_back((unsigned int)cidx);
+        unsigned int cidx;
+        bool ok = !cur.empty() && cur.find_first_not_of("0123456789"sv) == std::string_view::npos;
+        if (ok) ok = tools::parse_int(cur, cidx);
+        CHECK_AND_ASSERT_THROW_MES(ok, "Invalid wallet code: " << deriv_path << ". Invalid path element: " << cur);
+
+        m_wallet_deriv_path.push_back(cidx | TREZOR_BIP44_HARDENED_ZERO);
       }
     }
 
@@ -343,7 +341,7 @@ namespace trezor {
     /* ======================================================================= */
 
     bool device_trezor_base::ping() {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       if (!m_transport){
         MINFO("Ping failed, device not connected");
         return false;
@@ -356,7 +354,7 @@ namespace trezor {
       } catch(std::exception const& e) {
         MERROR("Ping failed, exception thrown " << e.what());
       } catch(...){
-        MERROR("Ping failed, general exception thrown" << boost::current_exception_diagnostic_information());
+        MERROR("Ping failed, general exception thrown");
       }
 
       return false;
@@ -388,7 +386,7 @@ namespace trezor {
 
     void device_trezor_base::device_state_reset()
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       device_state_initialize_unsafe();
     }
 
@@ -420,7 +418,7 @@ namespace trezor {
 
 #else
 #define TREZOR_CALLBACK(method, ...) do { if (m_callback) m_callback->method(__VA_ARGS__); } while(0)
-#define TREZOR_CALLBACK_GET(VAR, method, ...) VAR = (m_callback ? m_callback->method(__VA_ARGS__) : boost::none)
+#define TREZOR_CALLBACK_GET(VAR, method, ...) VAR = (m_callback ? m_callback->method(__VA_ARGS__) : std::nullopt)
 #endif
 
     void device_trezor_base::on_button_request(GenericMessage & resp, const messages::common::ButtonRequest * msg)
@@ -446,7 +444,7 @@ namespace trezor {
       MDEBUG("on_pin_request");
       CHECK_AND_ASSERT_THROW_MES(msg, "Empty message");
 
-      boost::optional<epee::wipeable_string> pin;
+      std::optional<epee::wipeable_string> pin;
       TREZOR_CALLBACK_GET(pin, on_pin_request);
 
       if (!pin && m_pin){
@@ -496,7 +494,7 @@ namespace trezor {
         }
       }
 
-      boost::optional<epee::wipeable_string> passphrase;
+      std::optional<epee::wipeable_string> passphrase;
       TREZOR_CALLBACK_GET(passphrase, on_passphrase_request, on_device);
 
       std::string passphrase_field;
@@ -508,7 +506,7 @@ namespace trezor {
         }
 
         if (m_passphrase) {
-          m_passphrase = boost::none;
+          m_passphrase = std::nullopt;
         }
 
         if (passphrase) {
@@ -584,13 +582,13 @@ namespace trezor {
       if (m_debug_link) m_debug_link->press_yes();
     }
 
-    boost::optional<epee::wipeable_string> trezor_debug_callback::on_pin_request() {
-      return boost::none;
+    std::optional<epee::wipeable_string> trezor_debug_callback::on_pin_request() {
+      return std::nullopt;
     }
 
-    boost::optional<epee::wipeable_string> trezor_debug_callback::on_passphrase_request(bool & on_device) {
+    std::optional<epee::wipeable_string> trezor_debug_callback::on_passphrase_request(bool& on_device) {
       on_device = true;
-      return boost::none;
+      return std::nullopt;
     }
 
     void trezor_debug_callback::on_passphrase_state_request(const std::string &state) {
