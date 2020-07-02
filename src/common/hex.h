@@ -13,7 +13,7 @@ namespace tools {
   bool hex_to_type(std::string_view hex, T& x) {
     if (!lokimq::is_hex(hex) || hex.size() != 2*sizeof(T))
       return false;
-    lokimq::to_hex(hex.begin(), hex.end(), reinterpret_cast<char*>(&x));
+    lokimq::from_hex(hex.begin(), hex.end(), reinterpret_cast<char*>(&x));
     return true;
   }
 }
