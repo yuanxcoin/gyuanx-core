@@ -308,8 +308,6 @@ namespace service_nodes
   {
     crypto::public_key key;
     std::vector<payout_entry> payouts;
-
-    bool operator==(const block_winner& x) const { return key == x.key && payouts == x.payouts; }
   };
 
   /// Collection of keys used by a service node
