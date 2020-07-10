@@ -33,7 +33,16 @@ extern "C" {
 #include "keccak.h"
 #include "jh.h"
 #include "skein.h"
+#include "stdlib.h"
+#if !defined(__clang__) && defined(HAS_INTEL_HW)
+#  include <x86intrin.h>
+#endif
 }
+
+
+#if !defined(HAS_INTEL_HW) && !defined(HAS_ARM_HW)
+extern "C" const bool cpu_aes_enabled = false;
+#endif
 
 /*
 AES Tables Implementation is
@@ -169,7 +178,7 @@ inline uint32_t sub_word(uint32_t key)
 		(saes_sbox[(key >> 8)  & 0xff] << 8  ) | saes_sbox[key & 0xff];
 }
 
-#if defined(__clang__) || !(defined(__x86_64__) || defined(__i386__))
+#if defined(__clang__) || !defined(HAS_INTEL_HW)
 inline uint32_t rotr(uint32_t value, uint32_t amount)
 {
 	return (value >> amount) | (value << ((32 - amount) & 31));
