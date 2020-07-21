@@ -1405,7 +1405,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 
     if (!validate_governance_reward_key(
                 m_db->height(),
-                *cryptonote::get_config(m_nettype, version).GOVERNANCE_WALLET_ADDRESS,
+                cryptonote::get_config(m_nettype).governance_wallet_address(version),
                 b.miner_tx.vout.size() - 1,
                 std::get<txout_to_key>(b.miner_tx.vout.back().target).key,
                 m_nettype))
@@ -4794,8 +4794,7 @@ bool Blockchain::calc_batched_governance_reward(uint64_t height, uint64_t &rewar
   // 0 if it's not time to pay out the batched payments (in which case we
   // already returned, above).
 
-  const cryptonote::config_t &network = cryptonote::get_config(nettype(), hard_fork_version);
-  size_t num_blocks                   = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
+  size_t num_blocks = cryptonote::get_config(nettype()).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
 
   // Fixed reward starting at HF15
   if (hard_fork_version >= network_version_15_lns)

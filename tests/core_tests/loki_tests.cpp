@@ -620,7 +620,6 @@ bool loki_core_fee_burning::generate(std::vector<test_event_entry>& events)
 bool loki_core_governance_batched_reward::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(cryptonote::network_version_10_bulletproofs);
-  const cryptonote::config_t &network = cryptonote::get_config(cryptonote::FAKECHAIN, cryptonote::network_version_count - 1);
 
   uint64_t hf10_height = 0;
   for (std::pair<uint8_t, uint64_t> hf_pair : hard_forks)
@@ -637,6 +636,7 @@ bool loki_core_governance_batched_reward::generate(std::vector<test_event_entry>
   loki_chain_generator batched_governance_generator(events, hard_forks);
   {
     batched_governance_generator.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
+    constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
     uint64_t blocks_to_gen = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS - batched_governance_generator.height();
     batched_governance_generator.add_n_blocks(blocks_to_gen);
   }
@@ -694,7 +694,7 @@ bool loki_core_governance_batched_reward::generate(std::vector<test_event_entry>
 
 bool loki_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& events)
 {
-  auto& network = cryptonote::get_config(cryptonote::FAKECHAIN, cryptonote::network_version_16);
+  constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(cryptonote::network_version_15_lns);
   hard_forks.emplace_back(cryptonote::network_version_16, hard_forks.back().second + network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS + 10);
   loki_chain_generator batched_governance_generator(events, hard_forks);
