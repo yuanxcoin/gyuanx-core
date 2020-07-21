@@ -13112,10 +13112,9 @@ uint64_t wallet2::get_daemon_blockchain_target_height(std::string& err)
 
 uint64_t wallet2::get_approximate_blockchain_height() const
 {
-  const int seconds_per_block         = DIFFICULTY_TARGET_V2;
-  const time_t epochTimeMiningStarted = (m_nettype == TESTNET || m_nettype == STAGENET ?  1551950093: 1525067730) + (60 * 60 * 24 * 7); // 2018-04-30 ~3:55PM + 1 week to be conservative.
-  const time_t currentTime            = time(NULL);
-  uint64_t approx_blockchain_height   = (currentTime < epochTimeMiningStarted) ? 0 : (currentTime - epochTimeMiningStarted)/seconds_per_block;
+  const auto& netconf = cryptonote::get_config(m_nettype);
+  const time_t since_ts = time(nullptr) - netconf.HEIGHT_ESTIMATE_TIMESTAMP;
+  uint64_t approx_blockchain_height = netconf.HEIGHT_ESTIMATE_HEIGHT + (since_ts > 0 ? (uint64_t)since_ts / DIFFICULTY_TARGET_V2 : 0) - BLOCKS_EXPECTED_IN_DAYS(7); // subtract a week's worth of blocks to be conservative
   LOG_PRINT_L2("Calculated blockchain height: " << approx_blockchain_height);
   return approx_blockchain_height;
 }

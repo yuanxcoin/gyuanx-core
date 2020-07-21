@@ -196,6 +196,12 @@ namespace config
   inline constexpr uint64_t DEFAULT_DUST_THRESHOLD = 2000000000; // 2 * pow(10, 9)
   inline constexpr uint64_t BASE_REWARD_CLAMP_THRESHOLD = 100000000; // pow(10, 8)
 
+  // Used to estimate the blockchain height from a timestamp, with some grace time.  This can drift
+  // slightly over time (because average block time is not typically *exactly*
+  // DIFFICULTY_TARGET_V2).
+  inline constexpr uint64_t HEIGHT_ESTIMATE_HEIGHT = 582088;
+  inline constexpr time_t HEIGHT_ESTIMATE_TIMESTAMP = 1595359932;
+
   inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 114;
   inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 115;
   inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 116;
@@ -229,6 +235,8 @@ namespace config
 
   namespace testnet
   {
+    inline constexpr uint64_t HEIGHT_ESTIMATE_HEIGHT = 339767;
+    inline constexpr time_t HEIGHT_ESTIMATE_TIMESTAMP = 1595360006;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 156;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 157;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 158;
@@ -253,6 +261,8 @@ namespace config
 
   namespace stagenet
   {
+    inline constexpr uint64_t HEIGHT_ESTIMATE_HEIGHT = 339767;
+    inline constexpr time_t HEIGHT_ESTIMATE_TIMESTAMP = 1595360006;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 24;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 25;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 36;
@@ -304,6 +314,8 @@ namespace cryptonote
   struct network_config
   {
     network_type NETWORK_TYPE;
+    uint64_t HEIGHT_ESTIMATE_HEIGHT;
+    time_t HEIGHT_ESTIMATE_TIMESTAMP;
     uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
     uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX;
@@ -327,6 +339,8 @@ namespace cryptonote
   };
   inline constexpr network_config mainnet_config = {
     MAINNET,
+    ::config::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
     ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
     ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
     ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
@@ -342,6 +356,8 @@ namespace cryptonote
   };
   inline constexpr network_config testnet_config = {
     TESTNET,
+    ::config::testnet::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::testnet::HEIGHT_ESTIMATE_TIMESTAMP,
     ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
     ::config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
     ::config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
@@ -357,6 +373,8 @@ namespace cryptonote
   };
   inline constexpr network_config stagenet_config = {
     STAGENET,
+    ::config::stagenet::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::stagenet::HEIGHT_ESTIMATE_TIMESTAMP,
     ::config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
     ::config::stagenet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
     ::config::stagenet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
@@ -372,6 +390,8 @@ namespace cryptonote
   };
   inline constexpr network_config fakenet_config = {
     FAKECHAIN,
+    ::config::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
     ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
     ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
     ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
