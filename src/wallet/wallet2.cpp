@@ -751,7 +751,7 @@ std::string strjoin(const std::vector<size_t> &V, const char *sep)
   return ss.str();
 }
 
-static bool emplace_or_replace(std::unordered_multimap<crypto::hash, tools::wallet2::pool_payment_details> &container,
+bool emplace_or_replace(std::unordered_multimap<crypto::hash, tools::wallet2::pool_payment_details> &container,
   const crypto::hash &key, const tools::wallet2::pool_payment_details &pd)
 {
   auto range = container.equal_range(key);
@@ -897,13 +897,13 @@ tools::wallet2::tx_construction_data get_construction_data_with_decrypted_short_
 
 uint32_t get_subaddress_clamped_sum(uint32_t idx, uint32_t extra)
 {
-  static constexpr uint32_t uint32_max = std::numeric_limits<uint32_t>::max();
+  constexpr uint32_t uint32_max = std::numeric_limits<uint32_t>::max();
   if (idx > uint32_max - extra)
     return uint32_max;
   return idx + extra;
 }
 
-static void setup_shim(hw::wallet_shim * shim, tools::wallet2 * wallet)
+void setup_shim(hw::wallet_shim * shim, tools::wallet2 * wallet)
 {
   shim->get_tx_pub_key_from_received_outs = [wallet] (const auto& td) { return wallet->get_tx_pub_key_from_received_outs(td); };
 }
