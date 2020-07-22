@@ -4080,7 +4080,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
 
     cryptonote::rpc::GET_INFO::request req;
     cryptonote::rpc::GET_INFO::response res;
-    bool r = m_wallet->invoke_http_json("/get_info", req, res);
+    bool r = m_wallet->invoke_http<rpc::GET_INFO>(req, res);
     std::string err = interpret_rpc_response(r, res.status);
     if (r && err.empty() && (res.was_bootstrap_ever_used || !res.bootstrap_daemon_address.empty()))
       message_writer(epee::console_color_red, true) << boost::format(tr("Moreover, a daemon is also less secure when running in bootstrap mode"));
@@ -4693,7 +4693,7 @@ bool simple_wallet::start_mining(const std::vector<std::string>& args)
   }
 
   rpc::START_MINING::response res{};
-  bool r = m_wallet->invoke_http_json("/start_mining", req, res);
+  bool r = m_wallet->invoke_http<rpc::START_MINING>(req, res);
   std::string err = interpret_rpc_response(r, res.status);
   if (err.empty())
     success_msg_writer() << tr("Mining started in daemon");
@@ -4713,9 +4713,8 @@ bool simple_wallet::stop_mining(const std::vector<std::string>& args)
     return true;
   }
 
-  rpc::STOP_MINING::request req{};
   rpc::STOP_MINING::response res{};
-  bool r = m_wallet->invoke_http_json("/stop_mining", req, res);
+  bool r = m_wallet->invoke_http<rpc::STOP_MINING>({}, res);
   std::string err = interpret_rpc_response(r, res.status);
   if (err.empty())
     success_msg_writer() << tr("Mining stopped in daemon");
@@ -4794,7 +4793,7 @@ bool simple_wallet::save_bc(const std::vector<std::string>& args)
   }
   rpc::SAVE_BC::request req{};
   rpc::SAVE_BC::response res{};
-  bool r = m_wallet->invoke_http_json("/save_bc", req, res);
+  bool r = m_wallet->invoke_http<rpc::SAVE_BC>(req, res);
   std::string err = interpret_rpc_response(r, res.status);
   if (err.empty())
     success_msg_writer() << tr("Blockchain saved");
@@ -5498,7 +5497,7 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
         req.outputs[j].index = absolute_offsets[j];
       }
       rpc::GET_OUTPUTS_BIN::response res{};
-      bool r = m_wallet->invoke_http_bin("/get_outs.bin", req, res);
+      bool r = m_wallet->invoke_http<rpc::GET_OUTPUTS_BIN>(req, res);
       err = interpret_rpc_response(r, res.status);
       if (!err.empty())
       {

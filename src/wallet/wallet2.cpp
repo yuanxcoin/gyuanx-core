@@ -2698,7 +2698,7 @@ void wallet2::pull_blocks(uint64_t start_height, uint64_t &blocks_start_height, 
   req.prune = true;
   req.start_height = start_height;
   req.no_miner_tx = m_refresh_type == RefreshNoCoinbase;
-  bool r = invoke_http_bin("/getblocks.bin", req, res, rpc_timeout);
+  bool r = invoke_http<rpc::GET_BLOCKS_FAST>(req, res);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "getblocks.bin");
   THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "getblocks.bin");
   THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::get_blocks_error, get_rpc_status(res.status));
@@ -2723,7 +2723,7 @@ void wallet2::pull_hashes(uint64_t start_height, uint64_t &blocks_start_height, 
 
   req.start_height = start_height;
   m_daemon_rpc_mutex.lock();
-  bool r = invoke_http_bin("/gethashes.bin", req, res, rpc_timeout);
+  bool r = invoke_http<rpc::GET_HASHES_FAST>(req, res);
   m_daemon_rpc_mutex.unlock();
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "gethashes.bin");
   THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "gethashes.bin");
@@ -3022,7 +3022,7 @@ bool wallet2::long_poll_pool_state()
   bool r               = false;
   {
     std::lock_guard<decltype(m_long_poll_mutex)> lock(m_long_poll_mutex);
-    r = epee::net_utils::invoke_http_bin("/get_transaction_pool_hashes.bin",
+    r = epee::net_utils::invoke_http_bin("/" + std::string{rpc::GET_TRANSACTION_POOL_HASHES_BIN::names().front()},
                                           req,
                                           res,
                                           m_long_poll_client,
@@ -3059,9 +3059,8 @@ std::vector<wallet2::get_pool_state_tx> wallet2::get_pool_state(bool refreshed)
   std::vector<crypto::hash> tx_hashes;
   {
     // get the pool state
-    cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::request req{};
     cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::response res{};
-    bool r = invoke_http_bin("/get_transaction_pool_hashes.bin", req, res, rpc_timeout);
+    bool r = invoke_http<rpc::GET_TRANSACTION_POOL_HASHES_BIN>({}, res);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::get_tx_pool_error);
@@ -3210,7 +3209,7 @@ std::vector<wallet2::get_pool_state_tx> wallet2::get_pool_state(bool refreshed)
     MDEBUG("asking for " << txids.size() << " transactions");
     req.decode_as_json = false;
     req.prune = true;
-    bool r = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+    bool r = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
     MDEBUG("Got " << r << " and " << res.status);
     if (r && res.status == rpc::STATUS_OK)
     {
@@ -3395,6 +3394,7 @@ std::shared_ptr<std::map<std::pair<uint64_t, uint64_t>, size_t>> wallet2::create
   }
   return cache;
 }
+
 //----------------------------------------------------------------------------------------------------
 void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blocks_fetched, bool& received_money, bool check_pool)
 {
@@ -3673,7 +3673,7 @@ bool wallet2::get_rct_distribution(uint64_t &start_height, std::vector<uint64_t>
   req.cumulative = false;
   req.binary = true;
   req.compress = true;
-  bool r = invoke_http_bin("/get_output_distribution.bin", req, res, rpc_timeout);
+  bool r = invoke_http<rpc::GET_OUTPUT_DISTRIBUTION>(req, res);
   if (!r)
   {
     MWARNING("Failed to request output distribution: no connection to daemon");
@@ -3734,9 +3734,8 @@ bool wallet2::get_output_blacklist(std::vector<uint64_t> &blacklist)
     }
   }
 
-  cryptonote::rpc::GET_OUTPUT_BLACKLIST::request req  = {};
   cryptonote::rpc::GET_OUTPUT_BLACKLIST::response res = {};
-  bool r = invoke_http_bin("/get_output_blacklist.bin", req, res, rpc_timeout);
+  bool r = invoke_http<rpc::GET_OUTPUT_BLACKLIST>({}, res);
 
   if (!r)
   {
@@ -5650,9 +5649,8 @@ bool wallet2::check_connection(rpc::version_t *version, bool *ssl, uint32_t time
 
   if (!m_rpc_version)
   {
-    cryptonote::rpc::GET_VERSION::request req_t{};
     cryptonote::rpc::GET_VERSION::response resp_t{};
-    bool r = invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t);
+    bool r = invoke_http<rpc::GET_VERSION>({}, resp_t);
     if(!r || resp_t.status != rpc::STATUS_OK) return false;
     m_rpc_version = resp_t.version;
   }
@@ -5880,7 +5878,7 @@ void wallet2::trim_hashchain()
     cryptonote::rpc::GET_BLOCK_HEADER_BY_HEIGHT::request req{};
     cryptonote::rpc::GET_BLOCK_HEADER_BY_HEIGHT::response res{};
     req.height = m_blockchain.size() - 1;
-    bool r = invoke_http_json_rpc("/json_rpc", "getblockheaderbyheight", req, res, rpc_timeout);
+    bool r = invoke_http<rpc::GET_BLOCK_HEADER_BY_HEIGHT>(req, res);
     if (r && res.status == rpc::STATUS_OK)
     {
       crypto::hash hash;
@@ -6603,7 +6601,7 @@ void wallet2::rescan_spent()
     rpc::IS_KEY_IMAGE_SPENT::response daemon_resp{};
     for (size_t n = start_offset; n < start_offset + n_outputs; ++n)
       req.key_images.push_back(string_tools::pod_to_hex(m_transfers[n].m_key_image));
-    bool r = invoke_http_json("/is_key_image_spent", req, daemon_resp, rpc_timeout);
+    bool r = invoke_http<rpc::IS_KEY_IMAGE_SPENT>(req, daemon_resp);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "is_key_image_spent");
     THROW_WALLET_EXCEPTION_IF(daemon_resp.status == rpc::STATUS_BUSY, error::daemon_busy, "is_key_image_spent");
     THROW_WALLET_EXCEPTION_IF(daemon_resp.status != rpc::STATUS_OK, error::is_key_image_spent_error, get_rpc_status(daemon_resp.status));
@@ -6986,7 +6984,7 @@ void wallet2::commit_tx(pending_tx& ptx, bool blink)
     oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
     oreq.tx = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(ptx.tx));
     oreq.blink = blink;
-    bool r = invoke_http_json("/submit_raw_tx", oreq, ores, rpc_timeout, "POST");
+    bool r = invoke_http<light_rpc::SUBMIT_RAW_TX>(oreq, ores);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "submit_raw_tx");
     // MyMonero and OpenMonero use different status strings
     THROW_WALLET_EXCEPTION_IF(ores.status != "OK" && ores.status != "success" , error::tx_rejected, ptx.tx, get_rpc_status(ores.status), ores.error);
@@ -7000,7 +6998,7 @@ void wallet2::commit_tx(pending_tx& ptx, bool blink)
     req.do_sanity_checks = true;
     req.blink = blink;
     rpc::SEND_RAW_TX::response daemon_send_resp{};
-    bool r = invoke_http_json("/sendrawtransaction", req, daemon_send_resp, rpc_timeout);
+    bool r = invoke_http<rpc::SEND_RAW_TX>(req, daemon_send_resp);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "sendrawtransaction");
     THROW_WALLET_EXCEPTION_IF(daemon_send_resp.status == rpc::STATUS_BUSY, error::daemon_busy, "sendrawtransaction");
     if (blink)
@@ -8019,7 +8017,7 @@ bool wallet2::unset_ring(const crypto::hash &txid)
   req.decode_as_json = false;
   req.prune = true;
   m_daemon_rpc_mutex.lock();
-  bool ok = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+  bool ok = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
   m_daemon_rpc_mutex.unlock();
   THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to get transaction from daemon");
   THROW_WALLET_EXCEPTION_IF(res.txs.size() != 1, error::wallet_internal_error, "Failed to get transaction from daemon");
@@ -8072,7 +8070,8 @@ bool wallet2::find_and_save_rings(bool force)
     bool r;
     {
       const std::lock_guard<std::recursive_mutex> lock{m_daemon_rpc_mutex};
-      r = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+      r = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
+
     }
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "gettransactions");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "gettransactions");
@@ -9148,7 +9147,7 @@ void wallet2::light_wallet_get_outs(std::vector<std::vector<tools::wallet2::get_
   }
 
   oreq.count = light_wallet_requested_outputs_count;
-  bool r = invoke_http_json("/get_random_outs", oreq, ores, rpc_timeout, "POST");
+  bool r = invoke_http<light_rpc::GET_RANDOM_OUTS>(oreq, ores);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_random_outs");
   THROW_WALLET_EXCEPTION_IF(ores.amount_outs.empty() , error::wallet_internal_error, "No outputs received from light wallet node. Error: " + ores.Error);
   
@@ -9346,7 +9345,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       req_t.amounts.resize(std::distance(req_t.amounts.begin(), end));
       req_t.unlocked = true;
       req_t.recent_cutoff = time(NULL) - RECENT_OUTPUT_ZONE;
-      bool r = invoke_http_json_rpc("/json_rpc", "get_output_histogram", req_t, resp_t, rpc_timeout);
+      bool r = invoke_http<rpc::GET_OUTPUT_HISTOGRAM>(req_t, resp_t);
       THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "transfer_selected");
       THROW_WALLET_EXCEPTION_IF(resp_t.status == rpc::STATUS_BUSY, error::daemon_busy, "get_output_histogram");
       THROW_WALLET_EXCEPTION_IF(resp_t.status != rpc::STATUS_OK, error::get_histogram_error, get_rpc_status(resp_t.status));
@@ -9367,7 +9366,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       req_t.to_height = segregation_fork_height + 1;
       req_t.cumulative = true;
       req_t.binary = true;
-      bool r = invoke_http_json_rpc("/json_rpc", "get_output_distribution", req_t, resp_t, rpc_timeout * 1000);
+      bool r = invoke_http<rpc::GET_OUTPUT_DISTRIBUTION>(req_t, resp_t);
       THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "transfer_selected");
       THROW_WALLET_EXCEPTION_IF(resp_t.status == rpc::STATUS_BUSY, error::daemon_busy, "get_output_distribution");
       THROW_WALLET_EXCEPTION_IF(resp_t.status != rpc::STATUS_OK, error::get_output_distribution, get_rpc_status(resp_t.status));
@@ -9732,7 +9731,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
 
     // get the keys for those
     req.get_txid = false;
-    bool r = invoke_http_bin("/get_outs.bin", req, daemon_resp, rpc_timeout);
+    bool r = invoke_http<rpc::GET_OUTPUTS_BIN>(req, daemon_resp);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_outs.bin");
     THROW_WALLET_EXCEPTION_IF(daemon_resp.status == rpc::STATUS_BUSY, error::daemon_busy, "get_outs.bin");
     THROW_WALLET_EXCEPTION_IF(daemon_resp.status != rpc::STATUS_OK, error::get_outs_error, get_rpc_status(daemon_resp.status));
@@ -10346,7 +10345,7 @@ bool wallet2::light_wallet_login(bool &new_address)
   // Always create account if it doesn't exist.
   request.create_account = true;
   m_daemon_rpc_mutex.lock();
-  bool connected = invoke_http_json("/login", request, response, rpc_timeout, "POST");
+  bool connected = invoke_http<light_rpc::LOGIN>(request, response);
   m_daemon_rpc_mutex.unlock();
   // MyMonero doesn't send any status message. OpenMonero does. 
   m_light_wallet_connected  = connected && (response.status.empty() || response.status == "success");
@@ -10371,7 +10370,7 @@ bool wallet2::light_wallet_import_wallet_request(light_rpc::IMPORT_WALLET_REQUES
   oreq.address = get_account().get_public_address_str(m_nettype);
   oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
   m_daemon_rpc_mutex.lock();
-  bool r = invoke_http_json("/import_wallet_request", oreq, response, rpc_timeout, "POST");
+  bool r = invoke_http<light_rpc::IMPORT_WALLET_REQUEST>(oreq, response);
   m_daemon_rpc_mutex.unlock();
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "import_wallet_request");
 
@@ -10397,7 +10396,7 @@ void wallet2::light_wallet_get_unspent_outs()
 
 
   m_daemon_rpc_mutex.lock();
-  bool r = invoke_http_json("/get_unspent_outs", oreq, ores, rpc_timeout, "POST");
+  bool r = invoke_http<light_rpc::GET_UNSPENT_OUTS>(oreq, ores);
   m_daemon_rpc_mutex.unlock();
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_unspent_outs");
   THROW_WALLET_EXCEPTION_IF(ores.status == "error", error::wallet_internal_error, ores.reason);
@@ -10544,7 +10543,7 @@ bool wallet2::light_wallet_get_address_info(light_rpc::GET_ADDRESS_INFO::respons
   request.address = get_account().get_public_address_str(m_nettype);
   request.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
   m_daemon_rpc_mutex.lock();
-  bool r = invoke_http_json("/get_address_info", request, response, rpc_timeout, "POST");
+  bool r = invoke_http<light_rpc::GET_ADDRESS_INFO>(request, response);
   m_daemon_rpc_mutex.unlock();
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_address_info");
   // TODO: Validate result
@@ -10561,7 +10560,7 @@ void wallet2::light_wallet_get_address_txs()
   ireq.address = get_account().get_public_address_str(m_nettype);
   ireq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
   m_daemon_rpc_mutex.lock();
-  bool r = invoke_http_json("/get_address_txs", ireq, ires, rpc_timeout, "POST");
+  bool r = invoke_http<light_rpc::GET_ADDRESS_TXS>(ireq, ires);
   m_daemon_rpc_mutex.unlock();
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_address_txs");
   //OpenMonero sends status=success, Mymonero doesn't. 
@@ -11921,7 +11920,7 @@ std::vector<size_t> wallet2::select_available_outputs_from_histogram(uint64_t co
   req_t.max_count = 0;
   req_t.unlocked = unlocked;
   req_t.recent_cutoff = 0;
-  bool r = invoke_http_json_rpc("/json_rpc", "get_output_histogram", req_t, resp_t, rpc_timeout);
+  bool r = invoke_http<rpc::GET_OUTPUT_HISTOGRAM>(req_t, resp_t);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "select_available_outputs_from_histogram");
   THROW_WALLET_EXCEPTION_IF(resp_t.status == rpc::STATUS_BUSY, error::daemon_busy, "get_output_histogram");
   THROW_WALLET_EXCEPTION_IF(resp_t.status != rpc::STATUS_OK, error::get_histogram_error, resp_t.status);
@@ -11957,7 +11956,7 @@ uint64_t wallet2::get_num_rct_outputs()
   req_t.max_count = 0;
   req_t.unlocked = true;
   req_t.recent_cutoff = 0;
-  bool r = invoke_http_json_rpc("/json_rpc", "get_output_histogram", req_t, resp_t, rpc_timeout);
+  bool r = invoke_http<rpc::GET_OUTPUT_HISTOGRAM>(req_t, resp_t);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_num_rct_outputs");
   THROW_WALLET_EXCEPTION_IF(resp_t.status == rpc::STATUS_BUSY, error::daemon_busy, "get_output_histogram");
   THROW_WALLET_EXCEPTION_IF(resp_t.status != rpc::STATUS_OK, error::get_histogram_error, resp_t.status);
@@ -12081,7 +12080,7 @@ bool wallet2::get_tx_key(const crypto::hash &txid, crypto::secret_key &tx_key, s
     req.txs_hashes.push_back(epee::string_tools::pod_to_hex(txid));
     req.decode_as_json = false;
     req.prune = true;
-    bool ok = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+    bool ok = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
     THROW_WALLET_EXCEPTION_IF(!ok || (res.txs.size() != 1 && res.txs_as_hex.size() != 1),
                               error::wallet_internal_error, "Failed to get transaction from daemon");
 
@@ -12126,7 +12125,7 @@ void wallet2::set_tx_key(const crypto::hash &txid, const crypto::secret_key &tx_
   req.decode_as_json = false;
   req.prune = true;
   rpc::GET_TRANSACTIONS::response res{};
-  bool r = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+  bool r = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "gettransactions");
   THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "gettransactions");
   THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::wallet_internal_error, "gettransactions");
@@ -12172,7 +12171,7 @@ std::string wallet2::get_spend_proof(const crypto::hash &txid, std::string_view 
   req.decode_as_json = false;
   req.prune = true;
   rpc::GET_TRANSACTIONS::response res{};
-  bool r = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+  bool r = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "gettransactions");
   THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "gettransactions");
   THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::wallet_internal_error, "gettransactions");
@@ -12230,7 +12229,7 @@ std::string wallet2::get_spend_proof(const crypto::hash &txid, std::string_view 
       req.outputs[j].index = absolute_offsets[j];
     }
     rpc::GET_OUTPUTS_BIN::response res{};
-    bool r = invoke_http_bin("/get_outs.bin", req, res, rpc_timeout);
+    bool r = invoke_http<rpc::GET_OUTPUTS_BIN>(req, res);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_outs.bin");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "get_outs.bin");
     THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::wallet_internal_error, "get_outs.bin");
@@ -12281,7 +12280,7 @@ bool wallet2::check_spend_proof(const crypto::hash &txid, std::string_view messa
   req.decode_as_json = false;
   req.prune = true;
   rpc::GET_TRANSACTIONS::response res{};
-  bool r = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+  bool r = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "gettransactions");
   THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "gettransactions");
   THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::wallet_internal_error, "gettransactions");
@@ -12349,7 +12348,7 @@ bool wallet2::check_spend_proof(const crypto::hash &txid, std::string_view messa
       req.outputs[j].index = absolute_offsets[j];
     }
     rpc::GET_OUTPUTS_BIN::response res{};
-    bool r = invoke_http_bin("/get_outs.bin", req, res, rpc_timeout);
+    bool r = invoke_http<rpc::GET_OUTPUTS_BIN>(req, res);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_outs.bin");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "get_outs.bin");
     THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::wallet_internal_error, "get_outs.bin");
@@ -12445,7 +12444,7 @@ void wallet2::check_tx_key_helper(const crypto::hash &txid, const crypto::key_de
   req.txs_hashes.push_back(epee::string_tools::pod_to_hex(txid));
   req.decode_as_json = false;
   req.prune = true;
-  bool ok = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+  bool ok = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
   THROW_WALLET_EXCEPTION_IF(!ok || (res.txs.size() != 1 && res.txs_as_hex.size() != 1),
     error::wallet_internal_error, "Failed to get transaction from daemon");
 
@@ -12492,7 +12491,7 @@ std::string wallet2::get_tx_proof(const crypto::hash &txid, const cryptonote::ac
     req.txs_hashes.push_back(epee::string_tools::pod_to_hex(txid));
     req.decode_as_json = false;
     req.prune = true;
-    bool ok = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+    bool ok = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
     THROW_WALLET_EXCEPTION_IF(!ok || (res.txs.size() != 1 && res.txs_as_hex.size() != 1),
       error::wallet_internal_error, "Failed to get transaction from daemon");
 
@@ -12646,7 +12645,7 @@ bool wallet2::check_tx_proof(const crypto::hash &txid, const cryptonote::account
   req.txs_hashes.push_back(epee::string_tools::pod_to_hex(txid));
   req.decode_as_json = false;
   req.prune = true;
-  bool ok = invoke_http_json("/gettransactions", req, res, rpc_timeout);
+  bool ok = invoke_http<rpc::GET_TRANSACTIONS>(req, res);
   THROW_WALLET_EXCEPTION_IF(!ok || (res.txs.size() != 1 && res.txs_as_hex.size() != 1),
     error::wallet_internal_error, "Failed to get transaction from daemon");
 
@@ -12947,7 +12946,7 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
     gettx_req.txs_hashes.push_back(epee::string_tools::pod_to_hex(proofs[i].txid));
   gettx_req.decode_as_json = false;
   gettx_req.prune = true;
-  bool ok = invoke_http_json("/gettransactions", gettx_req, gettx_res, rpc_timeout);
+  bool ok = invoke_http<rpc::GET_TRANSACTIONS>(gettx_req, gettx_res);
   THROW_WALLET_EXCEPTION_IF(!ok || gettx_res.txs.size() != proofs.size(),
     error::wallet_internal_error, "Failed to get transaction from daemon");
 
@@ -12956,7 +12955,7 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
   rpc::IS_KEY_IMAGE_SPENT::response kispent_res{};
   for (size_t i = 0; i < proofs.size(); ++i)
     kispent_req.key_images.push_back(epee::string_tools::pod_to_hex(proofs[i].key_image));
-  ok = invoke_http_json("/is_key_image_spent", kispent_req, kispent_res, rpc_timeout);
+  ok = invoke_http<rpc::IS_KEY_IMAGE_SPENT>(kispent_req, kispent_res);
   THROW_WALLET_EXCEPTION_IF(!ok || kispent_res.spent_status.size() != proofs.size(),
     error::wallet_internal_error, "Failed to get key image spent status from daemon");
 
@@ -13584,7 +13583,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
   if(check_spent)
   {
     PERF_TIMER(import_key_images_RPC);
-    bool r = invoke_http_json("/is_key_image_spent", req, daemon_resp, rpc_timeout);
+    bool r = invoke_http<rpc::IS_KEY_IMAGE_SPENT>(req, daemon_resp);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "is_key_image_spent");
     THROW_WALLET_EXCEPTION_IF(daemon_resp.status == rpc::STATUS_BUSY, error::daemon_busy, "is_key_image_spent");
     THROW_WALLET_EXCEPTION_IF(daemon_resp.status != rpc::STATUS_OK, error::is_key_image_spent_error, daemon_resp.status);
@@ -13666,7 +13665,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
 
 
     PERF_TIMER_START(import_key_images_E);
-    bool r = invoke_http_json("/gettransactions", gettxs_req, gettxs_res, rpc_timeout);
+    bool r = invoke_http<rpc::GET_TRANSACTIONS>(gettxs_req, gettxs_res);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "gettransactions");
     THROW_WALLET_EXCEPTION_IF(gettxs_res.status == rpc::STATUS_BUSY, error::daemon_busy, "gettransactions");
     THROW_WALLET_EXCEPTION_IF(gettxs_res.txs.size() != spent_txids.size(), error::wallet_internal_error,
@@ -14603,7 +14602,7 @@ uint64_t wallet2::get_blockchain_height_by_date(uint16_t year, uint8_t month, ui
       height_mid,
       height_max
     };
-    bool r = invoke_http_bin("/getblocks_by_height.bin", req, res, rpc_timeout);
+    bool r = invoke_http<rpc::GET_BLOCKS_BY_HEIGHT>(req, res);
     if (!r || res.status != rpc::STATUS_OK)
     {
       std::ostringstream oss;
