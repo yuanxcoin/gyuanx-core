@@ -1636,6 +1636,17 @@ private:
     std::atomic<bool> m_long_poll_disabled;
     static std::string get_default_daemon_address() { std::lock_guard lock{default_daemon_address_mutex}; return default_daemon_address; }
 
+    /// Requests transactions from daemon given hex strings of the tx ids; throws a wallet exception
+    /// on error, otherwise returns the response.
+    cryptonote::rpc::GET_TRANSACTIONS::response request_transactions(std::vector<std::string> txids_hex);
+
+    /// Requests transactions from daemon given a vector of crypto::hash.  Throws a wallet exception
+    /// on error, otherwise returns the response.
+    cryptonote::rpc::GET_TRANSACTIONS::response request_transactions(const std::vector<crypto::hash>& txids);
+
+    /// Same as above, but for a single transaction.
+    cryptonote::rpc::GET_TRANSACTIONS::response request_transaction(const crypto::hash& txid) { return request_transactions(std::vector<crypto::hash>{{txid}}); }
+
   private:
     /*!
      * \brief  Stores wallet information to wallet file.
