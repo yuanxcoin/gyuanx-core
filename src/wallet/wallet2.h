@@ -334,7 +334,7 @@ private:
     friend class wallet_keys_unlocker;
     friend class wallet_device_callback;
   public:
-    static constexpr const std::chrono::seconds rpc_timeout = 3min + 30s;
+    static constexpr std::chrono::seconds rpc_timeout = 30s;
     enum RefreshType {
       RefreshFull,
       RefreshOptimizeCoinbase,
