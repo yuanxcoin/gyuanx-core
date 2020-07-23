@@ -201,7 +201,7 @@ namespace rpc {
   // Get blocks by height. Binary request.
   struct GET_BLOCKS_BY_HEIGHT : PUBLIC, BINARY
   {
-    static constexpr auto names() { return NAMES("get_blocks_by_height.bin", "getblocksbyheight.bin"); }
+    static constexpr auto names() { return NAMES("get_blocks_by_height.bin", "getblocks_by_height.bin"); }
 
     struct request
     {

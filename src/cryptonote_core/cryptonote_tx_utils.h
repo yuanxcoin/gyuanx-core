@@ -40,7 +40,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   keypair  get_deterministic_keypair_from_height(uint64_t height);
   bool     get_deterministic_output_key         (const account_public_address& address, const keypair& tx_key, size_t output_index, crypto::public_key& output_key);
-  bool     validate_governance_reward_key       (uint64_t height, const std::string& governance_wallet_address_str, size_t output_index, const crypto::public_key& output_key, const cryptonote::network_type nettype);
+  bool     validate_governance_reward_key       (uint64_t height, std::string_view governance_wallet_address_str, size_t output_index, const crypto::public_key& output_key, const cryptonote::network_type nettype);
 
   uint64_t governance_reward_formula            (uint64_t base_reward, uint8_t hf_version);
   bool     block_has_governance_output          (network_type nettype, cryptonote::block const &block);
@@ -217,7 +217,7 @@ namespace cryptonote
 
   bool generate_genesis_block(
       block& bl
-    , std::string const & genesis_tx
+    , std::string_view genesis_tx_hex
     , uint32_t nonce
     );
 

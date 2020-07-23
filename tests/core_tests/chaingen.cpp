@@ -801,8 +801,7 @@ bool loki_chain_generator::create_block(loki_blockchain_entry &entry,
   if (hf_version >= cryptonote::network_version_10_bulletproofs &&
       cryptonote::height_has_governance_output(cryptonote::FAKECHAIN, hf_version, height))
   {
-    const cryptonote::config_t &network = cryptonote::get_config(cryptonote::FAKECHAIN, hf_version);
-    uint64_t num_blocks                 = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
+    constexpr uint64_t num_blocks       = cryptonote::get_config(cryptonote::FAKECHAIN).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
     uint64_t start_height               = height - num_blocks;
 
     if (hf_version == cryptonote::network_version_15_lns)
@@ -1028,8 +1027,7 @@ static void manual_calc_batched_governance(const test_generator &generator,
   if (hard_fork_version >= cryptonote::network_version_10_bulletproofs &&
       cryptonote::height_has_governance_output(cryptonote::FAKECHAIN, hard_fork_version, height))
   {
-    const cryptonote::config_t &network = cryptonote::get_config(cryptonote::FAKECHAIN, hard_fork_version);
-    uint64_t num_blocks                 = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
+    uint64_t num_blocks                 = cryptonote::get_config(cryptonote::FAKECHAIN).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
     uint64_t start_height               = height - num_blocks;
 
     if (hard_fork_version >= cryptonote::network_version_15_lns)

@@ -466,7 +466,7 @@ static bool construct_miner_tx_with_extra_output(cryptonote::transaction& tx,
     if (already_generated_coins != 0) {
         const cryptonote::network_type nettype = cryptonote::FAKECHAIN;
         cryptonote::address_parse_info governance_wallet_address;
-        cryptonote::get_account_address_from_str(governance_wallet_address, nettype, *cryptonote::get_config(nettype, hard_fork_version).GOVERNANCE_WALLET_ADDRESS);
+        cryptonote::get_account_address_from_str(governance_wallet_address, nettype, cryptonote::get_config(nettype).governance_wallet_address(hard_fork_version));
 
         crypto::public_key out_eph_public_key{};
 

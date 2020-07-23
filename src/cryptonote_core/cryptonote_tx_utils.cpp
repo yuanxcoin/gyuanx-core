@@ -33,6 +33,7 @@
 #include "include_base_utils.h"
 #include "string_tools.h"
 #include "common/apply_permutation.h"
+#include "common/hex.h"
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_config.h"
 #include "blockchain.h"
@@ -114,7 +115,7 @@ namespace cryptonote
     return true;
   }
 
-  bool validate_governance_reward_key(uint64_t height, const std::string& governance_wallet_address_str, size_t output_index, const crypto::public_key& output_key, const cryptonote::network_type nettype)
+  bool validate_governance_reward_key(uint64_t height, std::string_view governance_wallet_address_str, size_t output_index, const crypto::public_key& output_key, const cryptonote::network_type nettype)
   {
     keypair gov_key = get_deterministic_keypair_from_height(height);
 
@@ -152,8 +153,7 @@ namespace cryptonote
     if (hard_fork_version <= network_version_9_service_nodes)
       return true;
 
-    const cryptonote::config_t &network = cryptonote::get_config(nettype, hard_fork_version);
-    if (height % network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS != 0)
+    if (height % cryptonote::get_config(nettype).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS != 0)
     {
       return false;
     }
@@ -330,7 +330,7 @@ namespace cryptonote
       else
       {
         cryptonote::address_parse_info governance_wallet_address;
-        cryptonote::get_account_address_from_str(governance_wallet_address, nettype, *cryptonote::get_config(nettype, hard_fork_version).GOVERNANCE_WALLET_ADDRESS);
+        cryptonote::get_account_address_from_str(governance_wallet_address, nettype, cryptonote::get_config(nettype).governance_wallet_address(hard_fork_version));
         crypto::public_key out_eph_public_key{};
 
         if (!get_deterministic_output_key(governance_wallet_address.address, gov_key, tx.vout.size(), out_eph_public_key))
@@ -973,17 +973,16 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool generate_genesis_block(
       block& bl
-    , std::string const & genesis_tx
+    , std::string_view genesis_tx_hex
     , uint32_t nonce
     )
   {
     //genesis block
     bl = {};
 
-    blobdata tx_bl;
-    bool r = epee::string_tools::parse_hexstr_to_binbuff(genesis_tx, tx_bl);
-    CHECK_AND_ASSERT_MES(r, false, "failed to parse coinbase tx from hard coded blob");
-    r = parse_and_validate_tx_from_blob(tx_bl, bl.miner_tx);
+    CHECK_AND_ASSERT_MES(lokimq::is_hex(genesis_tx_hex), false, "failed to parse coinbase tx from hard coded blob");
+    std::string tx_bl = lokimq::from_hex(genesis_tx_hex);
+    bool r = parse_and_validate_tx_from_blob(tx_bl, bl.miner_tx);
     CHECK_AND_ASSERT_MES(r, false, "failed to parse coinbase tx from hard coded blob");
     bl.major_version = 7;
     bl.minor_version = 7;
