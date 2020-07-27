@@ -8044,7 +8044,6 @@ wallet2::stake_result wallet2::check_stake_allowed(const crypto::public_key& sn_
   }
 
   /// check that the service node is registered
-  std::optional<std::string> failed;
   const auto [success, response] = get_service_nodes({ tools::type_to_hex(sn_key) });
   if (!success)
   {
