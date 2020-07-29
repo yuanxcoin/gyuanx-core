@@ -33,6 +33,7 @@
 #include "cryptonote_core/blockchain.h"
 #include "common/command_line.h"
 #include "loki_economy.h"
+#include "common/hex.h"
 #include "version.h"
 #include <lokimq/hex.h>
 

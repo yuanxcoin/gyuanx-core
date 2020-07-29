@@ -30,7 +30,6 @@ add_library(epee
     buffer.cpp
     connection_basic.cpp
     hex.cpp
-    http_auth.cpp
     levin_base.cpp
     memwipe.c
     mlocker.cpp

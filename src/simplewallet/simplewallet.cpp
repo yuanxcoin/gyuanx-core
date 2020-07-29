@@ -68,7 +68,6 @@
 #include "cryptonote_core/loki_name_system.h"
 #include "simplewallet.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "storages/http_abstract_invoke.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "crypto/crypto.h"  // for crypto::secret_key definition
 #include "mnemonics/electrum-words.h"
@@ -3170,12 +3169,12 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
   m_cmd_binder.set_handler("lns_buy_mapping",
                            [this](const auto& x) { return lns_buy_mapping(x); },
                            tr(USAGE_LNS_BUY_MAPPING),
-                           tr(tools::wallet_rpc::COMMAND_RPC_LNS_BUY_MAPPING::description));
+                           tr(tools::wallet_rpc::LNS_BUY_MAPPING::description));
 
   m_cmd_binder.set_handler("lns_update_mapping",
                            [this](const auto& x) { return lns_update_mapping(x); },
                            tr(USAGE_LNS_UPDATE_MAPPING),
-                           tr(tools::wallet_rpc::COMMAND_RPC_LNS_UPDATE_MAPPING::description));
+                           tr(tools::wallet_rpc::LNS_UPDATE_MAPPING::description));
 
   m_cmd_binder.set_handler("lns_print_owners_to_names",
                            [this](const auto& x) { return lns_print_owners_to_names(x); },
@@ -3190,7 +3189,7 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
   m_cmd_binder.set_handler("lns_make_update_mapping_signature",
                            [this](const auto& x) { return lns_make_update_mapping_signature(x); },
                            tr(USAGE_LNS_MAKE_UPDATE_MAPPING_SIGNATURE),
-                           tr(tools::wallet_rpc::COMMAND_RPC_LNS_MAKE_UPDATE_SIGNATURE::description));
+                           tr(tools::wallet_rpc::LNS_MAKE_UPDATE_SIGNATURE::description));
 }
 
 simple_wallet::~simple_wallet()
