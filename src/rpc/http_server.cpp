@@ -115,6 +115,8 @@ namespace cryptonote::rpc {
 
       m_login = rpc_config.login;
 
+      m_cors = {rpc_config.access_control_origins.begin(), rpc_config.access_control_origins.end()};
+
       std::vector<us_listen_socket_t*> listening;
       try {
         bool bad = false;
@@ -196,6 +198,7 @@ namespace cryptonote::rpc {
     bool replied{false};
     bool jsonrpc{false};
     std::string jsonrpc_id; // pre-formatted json value
+    std::vector<std::pair<std::string, std::string>> extra_headers; // Extra headers to send
 
     // If we have to drop the request because we are overloaded we want to reply with an error (so
     // that we close the connection instead of leaking it and leaving it hanging).  We don't do
@@ -225,11 +228,16 @@ namespace cryptonote::rpc {
     http.loop_defer([data=std::move(data), body=std::move(body)] {
       if (data->aborted)
         return;
-      data->res.cork([&res=data->res, &svr=data->http.server_header(), body=std::move(body), binary=data->call->is_binary] {
-        res.writeHeader("Server", svr);
-        res.writeHeader("Content-Type", binary ? "application/octet-stream"sv : "application/json"sv);
+      data->res.cork([data=std::move(data), body=std::move(body)] {
+        auto& res = data->res;
+        res.writeHeader("Server", data->http.server_header());
+        res.writeHeader("Content-Type", data->call->is_binary ? "application/octet-stream"sv : "application/json"sv);
+        for (const auto& [name, value] : data->extra_headers)
+          res.writeHeader(name, value);
+
         for (const auto& piece : body)
           res.write(piece);
+
         res.end();
       });
     });
@@ -440,6 +448,7 @@ namespace cryptonote::rpc {
     request.context.admin = !m_restricted;
     request.context.source = rpc_source::http;
     request.context.remote = get_remote_address(res);
+    handle_cors(req, data->extra_headers);
     MTRACE("Received " << req.getMethod() << " " << req.getUrl() << " request from " << request.context.remote);
 
     res.onAborted([data] { data->aborted = true; });
@@ -470,6 +479,7 @@ namespace cryptonote::rpc {
     request.context.admin = !m_restricted;
     request.context.source = rpc_source::http;
     request.context.remote = get_remote_address(res);
+    handle_cors(req, data->extra_headers);
 
     res.onAborted([data] { data->aborted = true; });
     res.onData([buffer=""s, data, restricted=m_restricted](std::string_view d, bool done) mutable {

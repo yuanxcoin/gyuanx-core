@@ -64,6 +64,9 @@ namespace cryptonote::rpc {
 
     virtual void create_rpc_endpoints(uWS::App& http) = 0;
 
+    /// handles cors headers by adding any needed headers to the given vector
+    void handle_cors(HttpRequest& req, std::vector<std::pair<std::string, std::string>>& extra_headers);
+
     // The uWebSockets event loop pointer (so that we can inject a callback to shut it down)
     uWS::Loop* m_loop{nullptr};
     // The socket(s) we are listening on
@@ -74,5 +77,10 @@ namespace cryptonote::rpc {
     std::optional<tools::login> m_login;
     // Cached string we send for the Server header
     std::string m_server_header = "Loki RPC HTTP/"s + LOKI_VERSION_STR;
+    // Access-Control-Allow-Origin header values; if one of these match the incoming Origin header
+    // we return it in the ACAO header; otherwise (or if this is empty) we omit the header entirely.
+    std::unordered_set<std::string> m_cors;
+    // If true then always reply with 'Access-Control-Allow-Origin: *' to allow anything.
+    bool m_cors_any = false;
   };
 }

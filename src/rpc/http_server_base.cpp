@@ -141,4 +141,15 @@ namespace cryptonote::rpc {
       result << "{unknown:" << lokimq::to_hex(addr) << "}";
     return result.str();
   }
+
+  void http_server_base::handle_cors(HttpRequest& req, std::vector<std::pair<std::string, std::string>>& extra_headers) {
+    if (m_cors_any)
+      extra_headers.emplace_back("Access-Control-Allow-Origin", "*");
+    else if (!m_cors.empty()) {
+      if (std::string origin{req.getHeader("origin")}; !origin.empty() && m_cors.count(origin)) {
+        extra_headers.emplace_back("Access-Control-Allow-Origin", "*");
+        extra_headers.emplace_back("Vary", "Origin");
+      }
+    }
+  }
 }
