@@ -113,6 +113,8 @@ namespace cryptonote::rpc {
       if (rpc_config.use_ipv6 && !rpc_config.bind_ipv6_address.empty())
         bind_addr.emplace_back(rpc_config.bind_ipv6_address, true);
 
+      m_login = rpc_config.login;
+
       std::vector<us_listen_socket_t*> listening;
       try {
         bool bad = false;
