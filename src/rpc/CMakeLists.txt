@@ -31,8 +31,9 @@ add_library(rpc_commands
   core_rpc_server_commands_defs.cpp
   )
 
-add_library(rpc_args
+add_library(rpc_server_base
   rpc_args.cpp
+  http_server_base.cpp
   )
 
 add_library(rpc
@@ -63,9 +64,10 @@ target_link_libraries(rpc_commands
     cryptonote_protocol
     extra)
 
-target_link_libraries(rpc_args
+target_link_libraries(rpc_server_base
   PUBLIC
     common
+    uWebSockets
   PRIVATE
     extra)
 
@@ -73,7 +75,7 @@ target_link_libraries(rpc
   PUBLIC
     cryptonote_core
     rpc_commands
-    rpc_args
+    rpc_server_base
     net
     version
   PRIVATE
@@ -92,9 +94,8 @@ target_link_libraries(daemon_messages
     extra)
 
 target_link_libraries(daemon_rpc_server
-  PUBLIC
-    uWebSockets
   PRIVATE
+    rpc_server_base
     rpc
     daemon_messages
     serialization

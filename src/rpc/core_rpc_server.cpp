@@ -167,7 +167,7 @@ namespace cryptonote { namespace rpc {
     }
 
     template <typename... RPC>
-    std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands(rpc::type_list<RPC...>) {
+    std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands(tools::type_list<RPC...>) {
       std::unordered_map<std::string, std::shared_ptr<const rpc_command>> regs;
 
       (register_rpc_command<RPC>(regs), ...);

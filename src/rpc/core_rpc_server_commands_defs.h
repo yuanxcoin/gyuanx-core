@@ -43,6 +43,7 @@
 #include "rpc/rpc_handler.h"
 #include "common/varint.h"
 #include "common/perf_timer.h"
+#include "common/meta.h"
 #include "checkpoints/checkpoints.h"
 
 #include "cryptonote_core/service_node_quorum_cop.h"
@@ -2425,14 +2426,12 @@ namespace rpc {
     struct response : STATUS { };
   };
 
-  template <typename...> struct type_list {};
-
   /// List of all supported rpc command structs to allow compile-time enumeration of all supported
   /// RPC types.  Every type added above that has an RPC endpoint needs to be added here, and needs
   /// a core_rpc_server::invoke() overload that takes a <TYPE>::request and returns a
   /// <TYPE>::response.  The <TYPE>::request has to be unique (for overload resolution);
   /// <TYPE>::response does not.
-  using core_rpc_types = type_list<
+  using core_rpc_types = tools::type_list<
     GET_HEIGHT,
     GET_BLOCKS_FAST,
     GET_BLOCKS_BY_HEIGHT,

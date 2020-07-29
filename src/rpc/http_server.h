@@ -31,22 +31,17 @@
 
 #pragma once
 
-#include <uWebSockets/App.h>
 #include "common/command_line.h"
 #include "common/password.h"
 #include "core_rpc_server.h"
+#include "http_server_base.h"
 
 namespace cryptonote::rpc {
-
-  using HttpRequest = uWS::HttpRequest;
-  using HttpResponse = uWS::HttpResponse<false/*SSL*/>;
-
-  using http_response_code = std::pair<int, std::string_view>;
 
   /************************************************************************/
   /* Core HTTP RPC server                                                 */
   /************************************************************************/
-  class http_server
+  class http_server : public http_server_base
   {
   public:
     static const command_line::arg_descriptor<uint16_t, false, true, 2> arg_rpc_bind_port;
@@ -76,10 +71,9 @@ namespace cryptonote::rpc {
     /// during destruction.
     void shutdown(bool join = false);
 
-    /// Checks for required authentication, if enabled.  If authentication fails, sets a "failed"
-    /// response and returns false; if authentication isn't required or passes, returns true (and
-    /// doesn't touch the response).
-    bool check_auth(HttpRequest& req, HttpResponse& res);
+  private:
+
+    void create_rpc_endpoints(uWS::App& http) override;
 
     /// Handles a request for a base url, e.g. /foo (but not /json_rpc).  `call` is the callback
     /// we've already mapped the request to; restricted commands have also already been rejected
@@ -92,43 +86,8 @@ namespace cryptonote::rpc {
     /// Handles a POST request to /json_rpc.
     void handle_json_rpc_request(HttpResponse& res, HttpRequest& req);
 
-    // Posts a callback to the uWebSockets thread loop controlling this connection; all writes must
-    // be done from that thread, and so this method is provided to defer a callback from another
-    // thread into that one.  The function should have signature `void ()`.
-    template <typename Func>
-    void loop_defer(Func&& f) {
-      m_loop->defer(std::forward<Func>(f));
-    }
-
-    // Sends an error response and finalizes the response.  If body is empty, uses the default error
-    // response text.
-    void error_response(
-        HttpResponse& res,
-        http_response_code code,
-        std::optional<std::string_view> body = std::nullopt) const;
-
-    // Similar to the above, but for JSON RPC requests: we send "200 OK" at the HTTP layer; the
-    // error code and message gets encoded in JSON inside the response body.
-    void jsonrpc_error_response(
-        HttpResponse& res,
-        int code,
-        std::string message,
-        std::optional<epee::serialization::storage_entry> = std::nullopt) const;
-
-    const std::string& server_header() { return m_server_header; }
-
-  private:
-
-    void create_rpc_endpoints(uWS::App& http);
-
     // The core rpc server which handles the internal requests
     core_rpc_server& m_server;
-    // The uWebSockets event loop pointer (so that we can inject a callback to shut it down)
-    uWS::Loop* m_loop{nullptr};
-    // The socket(s) we are listening on
-    std::vector<us_listen_socket_t*> m_listen_socks;
-    // The thread in which the uWebSockets event listener is running
-    std::thread m_rpc_thread;
     // A promise we send from outside into the event loop thread to signal it to start.  We sent
     // "true" to go ahead with binding + starting the event loop, or false to abort.
     std::promise<bool> m_startup_promise;
@@ -138,13 +97,8 @@ namespace cryptonote::rpc {
     std::future<std::vector<us_listen_socket_t*>> m_startup_success;
     // Whether we have sent the startup/shutdown signals
     bool m_sent_startup{false}, m_sent_shutdown{false};
-    // An optional required login for this HTTP RPC interface
-    std::optional<tools::login> m_login;
     // Whether this is restricted, i.e. public.  Unrestricted allows admin commands.
     bool m_restricted;
-    // Cached string we send for the Server header; full version if unrestricted, just the major
-    // version if restricted
-    std::string m_server_header;
   };
 
 } // namespace cryptonote::rpc

@@ -15,33 +15,6 @@
 
 namespace cryptonote::rpc {
 
-  /// Checks an Authorization header for Basic login credentials.
-  ///
-  /// We don't support Digest because it it is deprecated, expensive, and useless: any
-  /// authentication should either be constrained to a localhost connection or done over HTTPS (in
-  /// which case Basic is perfectly fine).  It's expensive in that it requires multiple requests in
-  /// order to request a nonce, and requires considerable code to proper support (e.g. with nonce
-  /// tracking, etc.).  Given that it adds nothing security-wise it it is not worth supporting.
-  ///
-  /// Takes the auth header and a callback to invoke to check the username/password which should
-  /// return true if the user is allowed, false if denied.  The callback should be callable with two
-  /// std::string_view's: username and password.
-  template <typename Callback>
-  std::optional<std::string_view> check_authorization(std::string_view auth_header, Callback check_login) {
-    constexpr std::optional<std::string_view> fail = "Basic realm=\"lokid rpc\", charset=\"UTF-8\""sv;
-    auto parts = tools::split_any(auth_header, " \t\r\n", true);
-    if (parts.size() < 2 || parts[0] != "Basic"sv || !lokimq::is_base64(parts[1]))
-      return fail;
-    auto login = lokimq::from_base64(parts[1]);
-    auto colon = login.find(':');
-    if (colon == std::string_view::npos)
-      return fail;
-    if (check_login(std::string_view{login}.substr(0, colon), std::string_view{login}.substr(colon+1)))
-      return std::nullopt;
-    return fail;
-  }
-
-
   const command_line::arg_descriptor<uint16_t, false, true, 2> http_server::arg_rpc_bind_port = {
       "rpc-bind-port"
     , "Port for RPC server"
@@ -85,46 +58,6 @@ namespace cryptonote::rpc {
     command_line::add_arg(desc, arg_public_node);
 
     cryptonote::long_poll_trigger = long_poll_trigger;
-  }
-
-  static constexpr http_response_code
-    HTTP_OK{200, "OK"sv},
-    HTTP_BAD_REQUEST{400, "Bad Request"sv},
-    HTTP_FORBIDDEN{403, "Forbidden"sv},
-    HTTP_NOT_FOUND{404, "Not Found"sv},
-    HTTP_ERROR{500, "Internal Server Error"sv},
-    HTTP_SERVICE_UNAVAILABLE{503, "Service Unavailable"sv};
-
-
-  // Sends an error response and finalizes the response.
-  void http_server::error_response(
-      HttpResponse& res,
-      http_response_code code,
-      std::optional<std::string_view> body) const {
-    res.writeStatus(std::to_string(code.first) + " " + std::string{code.second});
-    res.writeHeader("Server", m_server_header);
-    res.writeHeader("Content-Type", "text/plain");
-    if (body)
-      res.end(*body);
-    else
-      res.end(std::string{code.second} + "\n");
-  }
-
-  // Similar to the above, but for JSON errors (which are 200 OK + error embedded in JSON)
-  void http_server::jsonrpc_error_response(HttpResponse& res, int code, std::string message, std::optional<epee::serialization::storage_entry> id) const
-  {
-    epee::json_rpc::error_response rsp;
-    rsp.jsonrpc = "2.0";
-    if (id)
-      rsp.id = *id;
-    rsp.error.code = code;
-    rsp.error.message = std::move(message);
-    std::string body;
-    epee::serialization::store_t_to_json(rsp, body);
-    res.writeStatus("200 OK"sv);
-    res.writeHeader("Server", m_server_header);
-    res.writeHeader("Content-Type", "application/json");
-    res.end(body);
   }
 
   //------------------------------------------------------------------------------------------------------------------------------
@@ -200,7 +133,7 @@ namespace cryptonote::rpc {
             for (const auto& [addr, required] : bind_addr)
               error << ' ' << addr << ':' << port;
           }
-          throw std::logic_error(error.str());
+          throw std::runtime_error(error.str());
         }
       } catch (...) {
         startup_success.set_exception(std::current_exception());
@@ -248,23 +181,6 @@ namespace cryptonote::rpc {
     });
   }
 
-  bool http_server::check_auth(HttpRequest& req, HttpResponse& res)
-  {
-    if (auto www_auth = check_authorization(req.getHeader("authorization"),
-          [this] (const std::string_view user, const std::string_view pass) {
-            return user == m_login->username && pass == m_login->password.password().view(); }))
-    {
-      res.writeStatus("401 Unauthorized");
-      res.writeHeader("Server", m_server_header);
-      res.writeHeader("WWW-Authenticate", *www_auth);
-      res.writeHeader("Content-Type", "text/plain");
-      if (req.getMethod() != "HEAD"sv)
-        res.end("Login required");
-      return false;
-    }
-    return true;
-  }
-
   namespace {
 
   struct call_data {
@@ -288,7 +204,7 @@ namespace cryptonote::rpc {
         if (jsonrpc)
           http.jsonrpc_error_response(res, -32003, "Server busy, try again later");
         else
-          http.error_response(res, HTTP_SERVICE_UNAVAILABLE, "Server busy, try again later");
+          http.error_response(res, http_server::HTTP_SERVICE_UNAVAILABLE, "Server busy, try again later");
       });
     }
 
@@ -383,7 +299,7 @@ namespace cryptonote::rpc {
         if (data->jsonrpc)
           data->http.jsonrpc_error_response(data->res, json_error, msg);
         else
-          data->http.error_response(data->res, HTTP_ERROR, msg.empty() ? std::nullopt : std::make_optional<std::string_view>(msg));
+          data->http.error_response(data->res, http_server::HTTP_ERROR, msg.empty() ? std::nullopt : std::make_optional<std::string_view>(msg));
       });
       return;
     }
@@ -510,60 +426,6 @@ namespace cryptonote::rpc {
       MTRACE("None of " << long_pollers.size() << " established long poll connections reached timeout");
   }
 
-  std::string get_remote_address(HttpResponse& res) {
-    std::ostringstream result;
-    bool first = true;
-    auto addr = res.getRemoteAddress();
-    if (addr.size() == 4)
-    { // IPv4, packed into bytes
-      for (auto c : addr) {
-        if (first) first = false;
-        else result << '.';
-        result << +static_cast<uint8_t>(c);
-      }
-    }
-    else if (addr.size() == 16)
-    {
-      // IPv6, packed into bytes.  Interpret as a series of 8 big-endian shorts and convert to hex,
-      // joined with :.  But we also want to drop leading insignificant 0's (i.e. '34f' instead of
-      // '034f'), and we want to collapse the longest sequence of 0's that we come across (so that,
-      // for example, localhost becomes `::1` instead of `0:0:0:0:0:0:0:1`).
-      std::array<uint16_t, 8> a;
-      std::memcpy(a.data(), addr.data(), 16);
-      for (auto& x : a) boost::endian::big_to_native_inplace(x);
-
-      size_t zero_start = 0, zero_end = 0;
-      for (size_t i = 0, start = 0, end = 0; i < a.size(); i++) {
-        if (a[i] != 0)
-          continue;
-        if (end != i) // This zero value starts a new zero sequence
-          start = i;
-        end = i + 1;
-        if (end - start > zero_end - zero_start)
-        {
-          zero_end = end;
-          zero_start = start;
-        }
-      }
-      result << '[' << std::hex;
-      for (size_t i = 0; i < a.size(); i++)
-      {
-        if (i >= zero_start && i < zero_end)
-        {
-          if (i == zero_start) result << "::";
-          continue;
-        }
-        if (i > 0 && i != zero_end)
-          result << ':';
-        result << a[i];
-      }
-      result << ']';
-    }
-    else
-      result << "{unknown:" << lokimq::to_hex(addr) << "}";
-    return result.str();
-  }
-
   } // anonymous namespace
 
   void http_server::handle_base_request(
@@ -620,8 +482,7 @@ namespace cryptonote::rpc {
       else
         body = (buffer += d);
 
-      auto& epee_stuff = std::get<jsonrpc_params>(data->request.body = jsonrpc_params{});
-      auto& [ps, st_entry] = epee_stuff;
+      auto& [ps, st_entry] = std::get<jsonrpc_params>(data->request.body = jsonrpc_params{});
       if(!ps.load_from_json(body))
         return data->http.jsonrpc_error_response(data->res, -32700, "Parse error");
 
@@ -660,7 +521,7 @@ namespace cryptonote::rpc {
       // Try to load "params" into a generic epee value; if it fails (because there is no "params")
       // then we replace request.body with an empty string (instead of the epee jsonrpc_params
       // alternative) to signal that no params were provided at all.
-      if (!ps.get_value("params", epee_stuff.second, nullptr))
+      if (!ps.get_value("params", st_entry, nullptr))
         data->request.body = ""sv;
 
       auto& lmq = data->core_rpc.get_core().get_lmq();
