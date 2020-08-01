@@ -9322,7 +9322,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
 
     std::vector<uint64_t> output_blacklist;
     if (!get_output_blacklist(output_blacklist))
-      THROW_WALLET_EXCEPTION_IF(true, error::get_output_blacklist, "Couldn't retrive list of outputs that are to be exlcuded from selection");
+      THROW_WALLET_EXCEPTION_IF(true, error::get_output_blacklist, "Couldn't retrive list of outputs that are to be excluded from selection");
 
     std::sort(output_blacklist.begin(), output_blacklist.end());
     if (output_blacklist.size() * 0.05 > (double)rct_offsets.size())
