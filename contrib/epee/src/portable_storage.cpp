@@ -44,7 +44,7 @@ namespace epee {
           case 0x18: case 0x19: case 0x1a: case 0x1b: case 0x1c: case 0x1d: case 0x1e: case 0x1f:
             s << "\\u00" << (c >= 0x10 ? '1' : '0');
             c &= 0xf;
-            s << (c < 0xa ? '0' + c : ('a' - 10) + c);
+            s << char(c < 0xa ? '0' + c : ('a' - 10) + c);
             break;
           default:
             s << c;
