@@ -475,6 +475,10 @@ namespace cryptonote
       << " [Your node is " << abs_diff << " blocks (" << (abs_diff / (24 * 60 * 60 / DIFFICULTY_TARGET_V2)) << " days) "
       << (0 <= diff ? std::string("behind") : std::string("ahead"))
       << "]\nSYNCHRONIZATION started");
+
+      m_period_start_time = m_sync_start_time = std::chrono::steady_clock::now();
+      m_sync_start_height = curr_height;
+
       if (hshd.current_height >= curr_height + 5) // don't switch to unsafe mode just for a few blocks
       {
         m_core.safesyncmode(false);
@@ -1366,10 +1370,6 @@ namespace cryptonote
           m_core.resume_mine();
           if (!starting) m_last_add_end_time = epee::misc_utils::get_ns_count();
         };
-
-        m_sync_start_time = std::chrono::steady_clock::now();
-        m_sync_start_height = m_core.get_current_blockchain_height();
-        m_period_start_time = m_sync_start_time;
 
         while (1)
         {
