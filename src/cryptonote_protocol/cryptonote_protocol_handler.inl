@@ -1330,7 +1330,7 @@ namespace cryptonote
     std::string text;
     const auto now = std::chrono::steady_clock::now();
     auto period_sync_time = now - m_period_start_time;
-    if (period_sync_time > 2min)
+    if (period_sync_time > 30s)
     {
       // Period is over, time to report another estimate
       uint64_t remaining_seconds = get_estimated_remaining_sync_seconds(current_blockchain_height, target_blockchain_height);
