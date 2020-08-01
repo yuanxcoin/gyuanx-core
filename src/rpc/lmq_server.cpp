@@ -154,6 +154,7 @@ lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::prog
 
       try {
         m.send_reply(LMQ_OK, call.invoke(std::move(request), rpc_));
+        return;
       } catch (const parse_error& e) {
         // This isn't really WARNable as it's the client fault; log at info level instead.
         //
