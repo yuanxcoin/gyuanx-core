@@ -3692,14 +3692,14 @@ bool wallet2::get_rct_distribution(uint64_t &start_height, std::vector<uint64_t>
     }
   }
 
-  cryptonote::rpc::GET_OUTPUT_DISTRIBUTION::request req{};
-  cryptonote::rpc::GET_OUTPUT_DISTRIBUTION::response res{};
+  cryptonote::rpc::GET_OUTPUT_DISTRIBUTION_BIN::request req{};
+  cryptonote::rpc::GET_OUTPUT_DISTRIBUTION_BIN::response res{};
   req.amounts.push_back(0);
   req.from_height = 0;
   req.cumulative = false;
   req.binary = true;
   req.compress = true;
-  bool r = invoke_http<rpc::GET_OUTPUT_DISTRIBUTION>(req, res);
+  bool r = invoke_http<rpc::GET_OUTPUT_DISTRIBUTION_BIN>(req, res);
   if (!r)
   {
     MWARNING("Failed to request output distribution: no connection to daemon");
@@ -9349,8 +9349,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
     std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> segregation_limit;
     if (is_after_segregation_fork && (m_segregate_pre_fork_outputs || m_key_reuse_mitigation2))
     {
-      cryptonote::rpc::GET_OUTPUT_DISTRIBUTION::request req_t{};
-      cryptonote::rpc::GET_OUTPUT_DISTRIBUTION::response resp_t{};
+      cryptonote::rpc::GET_OUTPUT_DISTRIBUTION_BIN::request req_t{};
+      cryptonote::rpc::GET_OUTPUT_DISTRIBUTION_BIN::response resp_t{};
       for(size_t idx: selected_transfers)
         req_t.amounts.push_back(m_transfers[idx].is_rct() ? 0 : m_transfers[idx].amount());
       std::sort(req_t.amounts.begin(), req_t.amounts.end());
@@ -9360,7 +9360,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       req_t.to_height = segregation_fork_height + 1;
       req_t.cumulative = true;
       req_t.binary = true;
-      bool r = invoke_http<rpc::GET_OUTPUT_DISTRIBUTION>(req_t, resp_t);
+      req_t.compress = true;
+      bool r = invoke_http<rpc::GET_OUTPUT_DISTRIBUTION_BIN>(req_t, resp_t);
       THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "transfer_selected");
       THROW_WALLET_EXCEPTION_IF(resp_t.status == rpc::STATUS_BUSY, error::daemon_busy, "get_output_distribution");
       THROW_WALLET_EXCEPTION_IF(resp_t.status != rpc::STATUS_OK, error::get_output_distribution, get_rpc_status(resp_t.status));
