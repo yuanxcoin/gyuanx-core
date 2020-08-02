@@ -1965,6 +1965,7 @@ bool rpc_command_executor::prepare_registration()
     res.mainnet  ? cryptonote::MAINNET :
     res.stagenet ? cryptonote::STAGENET :
     res.testnet  ? cryptonote::TESTNET :
+    res.nettype == "fakechain" ? cryptonote::FAKECHAIN :
     cryptonote::UNDEFINED;
 #endif
 
