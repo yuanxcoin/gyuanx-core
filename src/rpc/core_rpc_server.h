@@ -212,7 +212,7 @@ namespace cryptonote { namespace rpc {
     OUT_PEERS::response                                 invoke(OUT_PEERS::request&& req, rpc_context context);
     IN_PEERS::response                                  invoke(IN_PEERS::request&& req, rpc_context context);
     UPDATE::response                                    invoke(UPDATE::request&& req, rpc_context context);
-    GET_OUTPUT_DISTRIBUTION::response                   invoke(GET_OUTPUT_DISTRIBUTION::request&& req, rpc_context context);
+    GET_OUTPUT_DISTRIBUTION::response                   invoke(GET_OUTPUT_DISTRIBUTION::request&& req, rpc_context context, bool binary = false);
     GET_OUTPUT_DISTRIBUTION_BIN::response               invoke(GET_OUTPUT_DISTRIBUTION_BIN::request&& req, rpc_context context);
     POP_BLOCKS::response                                invoke(POP_BLOCKS::request&& req, rpc_context context);
     GETBLOCKCOUNT::response                             invoke(GETBLOCKCOUNT::request&& req, rpc_context context);

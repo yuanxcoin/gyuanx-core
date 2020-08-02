@@ -2571,7 +2571,7 @@ namespace cryptonote { namespace rpc {
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  GET_OUTPUT_DISTRIBUTION::response core_rpc_server::invoke(GET_OUTPUT_DISTRIBUTION::request&& req, rpc_context context)
+  GET_OUTPUT_DISTRIBUTION::response core_rpc_server::invoke(GET_OUTPUT_DISTRIBUTION::request&& req, rpc_context context, bool binary)
   {
     GET_OUTPUT_DISTRIBUTION::response res{};
 
@@ -2596,7 +2596,10 @@ namespace cryptonote { namespace rpc {
         if (!data)
           throw rpc_error{ERROR_INTERNAL, "Failed to get output distribution"};
 
-        res.distributions.push_back({std::move(*data), amount, "", req.binary, req.compress});
+        // Force binary & compression off if this is a JSON request because trying to pass binary
+        // data through JSON explodes it in terms of size (most values under 0x20 have to be encoded
+        // using 6 chars such as "\u0002").
+        res.distributions.push_back({std::move(*data), amount, "", binary && req.binary, binary && req.compress});
       }
     }
     catch (const std::exception &e)
@@ -2623,7 +2626,7 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_OUTPUT_DISTRIBUTION_BIN>(req, res))
       return res;
 
-    return invoke(std::move(static_cast<GET_OUTPUT_DISTRIBUTION::request&>(req)), context);
+    return invoke(std::move(static_cast<GET_OUTPUT_DISTRIBUTION::request&>(req)), context, true);
   }
   //------------------------------------------------------------------------------------------------------------------------------
   PRUNE_BLOCKCHAIN::response core_rpc_server::invoke(PRUNE_BLOCKCHAIN::request&& req, rpc_context context)
