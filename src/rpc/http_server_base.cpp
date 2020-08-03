@@ -26,14 +26,14 @@ namespace cryptonote::rpc {
     std::string fail = "Basic realm=\"" + std::string{realm} + "\", charset=\"UTF-8\"";
     auto parts = tools::split_any(auth_header, " \t\r\n", true);
     if (parts.size() < 2 || parts[0] != "Basic"sv || !lokimq::is_base64(parts[1]))
-      return std::move(fail);
+      return fail;
     auto login = lokimq::from_base64(parts[1]);
     auto colon = login.find(':');
     if (colon == std::string_view::npos)
-      return std::move(fail);
+      return fail;
     if (check_login(std::string_view{login}.substr(0, colon), std::string_view{login}.substr(colon+1)))
       return std::nullopt;
-    return std::move(fail);
+    return fail;
   }
 
 
