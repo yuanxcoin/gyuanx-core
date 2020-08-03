@@ -3301,6 +3301,12 @@ namespace {
     }
     return true;
   }
+
+  void wallet_rpc_server::stop()
+  {
+    m_stop = true;
+  }
+
 }
 
 int main(int argc, char **argv)

@@ -63,6 +63,7 @@ namespace tools
 
     bool init();
     bool run(bool /*interactive - ignored (rpc wallet is always non-interactive) */);
+    void stop(); // Makes run() start cleaning up and shutting down
 
     /// Thrown if we get invalid/unparseable JSON data.
     struct parse_error : std::runtime_error { using std::runtime_error::runtime_error; };
