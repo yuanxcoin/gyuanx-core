@@ -477,8 +477,9 @@ namespace cryptonote
 
       if (height >= m_stop_height)
       {
-        m_stop = true;
-        call_stop = true;
+        // Whoever actually first sets m_stop has the responsibility of calling stop():
+        bool already_stopping = m_stop.exchange(true);
+        call_stop = !already_stopping;
         break;
       }
 
