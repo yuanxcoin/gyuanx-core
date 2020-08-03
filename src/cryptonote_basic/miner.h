@@ -121,7 +121,6 @@ namespace cryptonote
     uint64_t m_height;
     std::atomic<uint32_t> m_thread_index; 
     std::atomic<uint32_t> m_threads_total;
-    std::atomic<uint32_t> m_threads_active;
     std::atomic<int32_t> m_pausers_count;
     std::mutex m_miners_count_lock;
 
