@@ -33,8 +33,6 @@ extern "C"
 namespace lns
 {
 
-using namespace std::literals;
-
 enum struct lns_sql_type
 {
   save_owner,
