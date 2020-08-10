@@ -131,10 +131,13 @@ if(NOT BUILD_STATIC_DEPS)
 
   # CURL::libcurl wasn't added to FindCURL until cmake 3.12, so add it if necessary
   if (CMAKE_VERSION VERSION_LESS 3.12 AND NOT TARGET CURL::libcurl)
-    add_library(CURL::libcurl UNKNOWN IMPORTED GLOBAL)
-    set_target_properties(CURL::libcurl PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${CURL_INCLUDE_DIRS}"
-      INTERFACE_LINK_LIBRARIES ${CURL_LIBRARIES})
+    add_library(libcurl UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(libcurl PROPERTIES
+      IMPORTED_LOCATION ${CURL_LIBRARIES}
+      INTERFACE_INCLUDE_DIRECTORIES "${CURL_INCLUDE_DIRS}")
+    add_library(CURL_libcurl INTERFACE)
+    target_link_libraries(CURL_libcurl INTERFACE libcurl)
+    add_library(CURL::libcurl ALIAS CURL_libcurl)
   endif()
 endif()
 
