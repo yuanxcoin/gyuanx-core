@@ -110,17 +110,21 @@ namespace cryptonote { namespace rpc {
   };
 
   struct rpc_request {
-    // The request body; for a non-HTTP-JSON-RPC request the string will be populated with the
-    // unparsed request body (though may be empty, e.g. for GET requests).  For HTTP JSON-RPC
-    // request, if the request has a "params" value then the epee storage pair will be set to the
-    // portable_storage entry and the storage entry containing "params".  If "params" is omitted
-    // entirely (or, for LMQ, there is no data part) then the string will be set in the variant (and
-    // empty).
+    // The request body; for a non-HTTP-JSON-RPC request the string or string_view will be populated
+    // with the unparsed request body (though may be empty, e.g. for GET requests).  For HTTP
+    // JSON-RPC request, if the request has a "params" value then the epee storage pair will be set
+    // to the portable_storage entry and the storage entry containing "params".  If "params" is
+    // omitted entirely (or, for LMQ, there is no data part) then the string will be set in the
+    // variant (and empty).
     //
     // The returned value in either case is the serialized value to return.
     //
     // If sometimes goes wrong, throw.
-    std::variant<std::string_view, jsonrpc_params> body;
+    std::variant<std::string_view, std::string, jsonrpc_params> body;
+
+    // Returns a string_view of the body, if the body is a string or string_view.  Returns
+    // std::nullopt if the body is a jsonrpc_params.
+    std::optional<std::string_view> body_view() const;
 
     // Values to pass through to the invoke() call
     rpc_context context;

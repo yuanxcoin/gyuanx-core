@@ -4,6 +4,7 @@
 #include <exception>
 #include <lokimq/base64.h>
 #include <boost/endian/conversion.hpp>
+#include <variant>
 #include "common/string_util.h"
 #include "net/jsonrpc_structs.h" // epee
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -345,7 +346,13 @@ namespace cryptonote::rpc {
   // HTTP-only long-polling support for the transaction pool hashes command
   void invoke_txpool_hashes_bin(std::shared_ptr<call_data> data) {
     GET_TRANSACTION_POOL_HASHES_BIN::request req{};
-    if (!epee::serialization::load_t_from_binary(req, std::get<std::string_view>(data->request.body)))
+    std::string_view body;
+    if (auto body_sv = data->request.body_view())
+      body = *body_sv;
+    else
+      throw parse_error{"Internal error: got unexpected request body type"};
+
+    if (!epee::serialization::load_t_from_binary(req, body))
       throw parse_error{"Failed to parse binary data parameters"};
 
     std::vector<crypto::hash> pool_hashes;
@@ -445,6 +452,7 @@ namespace cryptonote::rpc {
   {
     std::shared_ptr<call_data> data{new call_data{*this, m_server, res, std::string{req.getUrl()}, &call}};
     auto& request = data->request;
+    request.body = ""s;
     request.context.admin = !m_restricted;
     request.context.source = rpc_source::http;
     request.context.remote = get_remote_address(res);
@@ -452,16 +460,10 @@ namespace cryptonote::rpc {
     MTRACE("Received " << req.getMethod() << " " << req.getUrl() << " request from " << request.context.remote);
 
     res.onAborted([data] { data->aborted = true; });
-    res.onData([buffer=""s, data=std::move(data)](std::string_view d, bool done) mutable {
-      if (!done) {
-        buffer += d;
+    res.onData([data=std::move(data)](std::string_view d, bool done) mutable {
+      std::get<std::string>(data->request.body) += d;
+      if (!done)
         return;
-      }
-
-      if (buffer.empty())
-        data->request.body = d; // bypass copying the string_view to a string
-      else
-        data->request.body = (buffer += d);
 
       auto& lmq = data->core_rpc.get_core().get_lmq();
       std::string cat{data->call->is_public ? "rpc" : "admin"};

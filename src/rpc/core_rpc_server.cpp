@@ -75,8 +75,8 @@ namespace cryptonote { namespace rpc {
 
       Request load(rpc_request& request) {
         Request req{};
-        if (std::holds_alternative<std::string_view>(request.body)) {
-          if (!epee::serialization::load_t_from_json(req, std::get<std::string_view>(request.body)))
+        if (auto body = request.body_view()) {
+          if (!epee::serialization::load_t_from_json(req, *body))
             throw parse_error{"Failed to parse JSON parameters"};
         } else {
           // This is nasty.  TODO: get rid of epee's horrible serialization code.
@@ -126,9 +126,11 @@ namespace cryptonote { namespace rpc {
       using Request = typename RPC::request;
       Request load(rpc_request& request) { 
         Request req{};
-        if (!std::holds_alternative<std::string_view>(request.body))
+        std::string_view data;
+        if (auto body = request.body_view())
+          data = *body;
+        else
           throw std::runtime_error{"Internal error: can't load binary a RPC command with non-string body"};
-        auto data = std::get<std::string_view>(request.body);
         if (!epee::serialization::load_t_from_binary(req, data))
           throw parse_error{"Failed to parse binary data parameters"};
         return req;
@@ -196,6 +198,12 @@ namespace cryptonote { namespace rpc {
     , "Specify username:password for the bootstrap daemon login"
     , ""
     };
+
+  std::optional<std::string_view> rpc_request::body_view() const {
+    if (auto* sv = std::get_if<std::string_view>(&body)) return *sv;
+    if (auto* s = std::get_if<std::string>(&body)) return *s;
+    return std::nullopt;
+  }
 
   //-----------------------------------------------------------------------------------
   void core_rpc_server::init_options(boost::program_options::options_description& desc, boost::program_options::options_description& hidden)
