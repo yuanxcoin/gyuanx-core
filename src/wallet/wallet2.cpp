@@ -5811,7 +5811,7 @@ void wallet2::trim_hashchain()
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::check_genesis(const crypto::hash& genesis_hash) const {
-  std::string what("Genesis block mismatch. You probably use wallet without testnet (or devnet) flag with blockchain from test (or dev) network or vice versa");
+  std::string what("Genesis block mismatch. (Perhaps you forgot to use --testnet or --stagenet for a testnet/stagenet wallet?)");
 
   THROW_WALLET_EXCEPTION_IF(genesis_hash != m_blockchain.genesis(), error::wallet_internal_error, what);
 }
