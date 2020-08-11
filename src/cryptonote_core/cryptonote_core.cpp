@@ -2215,21 +2215,13 @@ namespace cryptonote
               "is running! It is required to run alongside the Loki daemon");
           return;
         }
-        uint8_t hf_version = get_blockchain_storage().get_current_hard_fork_version();
         if (!check_external_ping(m_last_lokinet_ping, LOKINET_PING_LIFETIME, "Lokinet"))
         {
-          if (hf_version >= cryptonote::network_version_14_blink)
           {
             MGINFO_RED(
                 "Failed to submit uptime proof: have not heard from lokinet recently. Make sure that it "
                 "is running! It is required to run alongside the Loki daemon");
             return;
-          }
-          else
-          {
-            MGINFO_RED(
-                "Have not heard from lokinet recently. Make sure that it is running! "
-                "It is required to run alongside the Loki daemon after hard fork 14");
           }
         }
 
