@@ -2208,15 +2208,16 @@ namespace cryptonote
           return;
         }
 
-        if (!check_external_ping(m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, "the storage server"))
+        if (m_nettype != DEVNET)
         {
-          MGINFO_RED(
-              "Failed to submit uptime proof: have not heard from the storage server recently. Make sure that it "
-              "is running! It is required to run alongside the Loki daemon");
-          return;
-        }
-        if (!check_external_ping(m_last_lokinet_ping, LOKINET_PING_LIFETIME, "Lokinet"))
-        {
+          if (!check_external_ping(m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, "the storage server"))
+          {
+            MGINFO_RED(
+                "Failed to submit uptime proof: have not heard from the storage server recently. Make sure that it "
+                "is running! It is required to run alongside the Loki daemon");
+            return;
+          }
+          if (!check_external_ping(m_last_lokinet_ping, LOKINET_PING_LIFETIME, "Lokinet"))
           {
             MGINFO_RED(
                 "Failed to submit uptime proof: have not heard from lokinet recently. Make sure that it "
