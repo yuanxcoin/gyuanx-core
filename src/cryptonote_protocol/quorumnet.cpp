@@ -1084,7 +1084,7 @@ void extract_signature_values(bt_dict_consumer& data, std::string_view key, std:
 crypto::signature convert_string_view_bytes_to_signature(std::string_view sig_str)
 {
   if (sig_str.size() != sizeof(crypto::signature))
-      throw std::invalid_argument("Invalid signature data size: " + std::to_string(sizeof(crypto::signature)));
+      throw std::invalid_argument("Invalid signature data size: " + std::to_string(sig_str.size()));
 
   crypto::signature result;
   std::memcpy(&result, sig_str.data(), sizeof(crypto::signature));
@@ -1421,18 +1421,21 @@ void handle_blink_success(Message& m) {
 //
 // Pulse
 //
-const std::string PULSE_TAG_VALIDATOR_BITSET = "b";
-const std::string PULSE_TAG_QUORUM_POSITION  = "q";
-const std::string PULSE_TAG_SIGNATURE        = "s";
-const std::string PULSE_TAG_BLOCK_TEMPLATE   = "t";
+const std::string PULSE_TAG_VALIDATOR_BITSET  = "b";
+const std::string PULSE_TAG_QUORUM_POSITION   = "q";
+const std::string PULSE_TAG_SIGNATURE         = "s";
+const std::string PULSE_TAG_BLOCK_TEMPLATE    = "t";
+const std::string PULSE_TAG_RANDOM_VALUE_HASH = "#";
 
-const std::string PULSE_CMD_CATEGORY              = "pulse";
-const std::string PULSE_CMD_VALIDATOR_BITSET      = "validator_bitset";
-const std::string PULSE_CMD_VALIDATOR_BIT         = "validator_bit";
-const std::string PULSE_CMD_BLOCK_TEMPLATE        = "block_template";
-const std::string PULSE_CMD_SEND_VALIDATOR_BITSET = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BITSET;
-const std::string PULSE_CMD_SEND_VALIDATOR_BIT    = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BIT;
-const std::string PULSE_CMD_SEND_BLOCK_TEMPLATE   = PULSE_CMD_CATEGORY + "." + PULSE_CMD_BLOCK_TEMPLATE;
+const std::string PULSE_CMD_CATEGORY               = "pulse";
+const std::string PULSE_CMD_VALIDATOR_BITSET       = "validator_bitset";
+const std::string PULSE_CMD_VALIDATOR_BIT          = "validator_bit";
+const std::string PULSE_CMD_BLOCK_TEMPLATE         = "block_template";
+const std::string PULSE_CMD_RANDOM_VALUE_HASH      = "random_value_hash";
+const std::string PULSE_CMD_SEND_VALIDATOR_BITSET  = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BITSET;
+const std::string PULSE_CMD_SEND_VALIDATOR_BIT     = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BIT;
+const std::string PULSE_CMD_SEND_BLOCK_TEMPLATE    = PULSE_CMD_CATEGORY + "." + PULSE_CMD_BLOCK_TEMPLATE;
+const std::string PULSE_CMD_SEND_RANDOM_VALUE_HASH = PULSE_CMD_CATEGORY + "." + PULSE_CMD_RANDOM_VALUE_HASH;
 
 bt_dict pulse_serialize_message(pulse::message const &msg)
 {
@@ -1440,7 +1443,6 @@ bt_dict pulse_serialize_message(pulse::message const &msg)
 
   switch(msg.type)
   {
-    default:
     case pulse::message_type::invalid:
     {
       assert(!"Invalid Code Path");
@@ -1468,6 +1470,14 @@ bt_dict pulse_serialize_message(pulse::message const &msg)
                 {PULSE_TAG_BLOCK_TEMPLATE, msg.block_template.blob}};
     }
     break;
+
+    case pulse::message_type::random_value_hash:
+    {
+      result = {{PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
+                {PULSE_TAG_SIGNATURE, tools::view_guts(msg.signature)},
+                {PULSE_TAG_RANDOM_VALUE_HASH, tools::view_guts(msg.random_value_hash.hash)}};
+    }
+    break;
   }
 
   return result;
@@ -1481,12 +1491,12 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
   std::string_view command    = {};
   switch(msg.type)
   {
-    default: break;
+    case pulse::message_type::invalid:
+      assert("Invalid Code Path" == nullptr);
+      break;
 
     case pulse::message_type::block_template:
-    {
       command = PULSE_CMD_SEND_BLOCK_TEMPLATE;
-    }
     break;
 
     case pulse::message_type::handshake: /* FALLTHRU */
@@ -1505,6 +1515,10 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
         command = PULSE_CMD_SEND_VALIDATOR_BITSET;
       }
     }
+    break;
+
+    case pulse::message_type::random_value_hash:
+      command = PULSE_CMD_SEND_RANDOM_VALUE_HASH;
     break;
   }
 
@@ -1687,6 +1701,51 @@ void handle_pulse_block_template(Message &m, QnetState &qnet)
   qnet.lmq.job([&qnet, data = std::move(msg)]() { pulse::handle_message(&qnet, data); }, qnet.core.pulse_thread_id());
 }
 
+void handle_pulse_random_value_hash(Message &m, QnetState &qnet)
+{
+  if (m.data.size() != 1)
+      throw std::runtime_error(std::string("Rejecting pulse block template expected one data entry not ") + std::to_string(m.data.size()));
+
+  bt_dict_consumer data{m.data[0]};
+
+  int quorum_position            = -1;
+  crypto::hash random_value_hash = {};
+  crypto::signature signature    = {};
+  {
+    std::string_view INVALID_ARG_PREFIX = "Invalid pulse random value hash: missing required field '"sv;
+    if (auto const &tag = PULSE_TAG_RANDOM_VALUE_HASH; data.skip_until(tag)) {
+      auto str = data.consume_string_view();
+      if (str.size() != sizeof(random_value_hash))
+        throw std::invalid_argument("Invalid hash data size: " + std::to_string(str.size()));
+
+      std::memcpy(random_value_hash.data, str.data(), str.size());
+    } else {
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+    }
+
+    if (auto const &tag = PULSE_TAG_QUORUM_POSITION; data.skip_until(tag))
+      quorum_position = data.consume_integer<int>();
+    else
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+
+    if (auto const &tag = PULSE_TAG_SIGNATURE; data.skip_until(tag)) {
+      auto sig_str = data.consume_string_view();
+      signature    = convert_string_view_bytes_to_signature(sig_str);
+    } else {
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+    }
+  }
+
+  pulse::message msg         = {};
+  msg.type                   = pulse::message_type::random_value_hash;
+  msg.quorum_position        = quorum_position;
+  msg.signature              = signature;
+  msg.random_value_hash.hash = random_value_hash;
+
+  auto *self = reinterpret_cast<void *>(&qnet);
+  qnet.lmq.job([self, data = std::move(msg)]() { pulse::handle_message(self, data); }, qnet.core.pulse_thread_id());
+}
+
 } // end empty namespace
 
 
@@ -1746,6 +1805,7 @@ void setup_endpoints(QnetState& qnet) {
         .add_command(PULSE_CMD_VALIDATOR_BIT, [&qnet](Message& m) { handle_pulse_participation_bit_or_bitset(m, qnet, false /*bitset*/); })
         .add_command(PULSE_CMD_VALIDATOR_BITSET, [&qnet](Message& m) { handle_pulse_participation_bit_or_bitset(m, qnet, true /*bitset*/); })
         .add_command(PULSE_CMD_BLOCK_TEMPLATE, [&qnet](Message& m) { handle_pulse_block_template(m, qnet); })
+        .add_command(PULSE_CMD_RANDOM_VALUE_HASH, [&qnet](Message& m) { handle_pulse_random_value_hash(m, qnet); })
         ;
 
     // Compatibility aliases.  No longer used since 7.1.4, but can still be received from previous

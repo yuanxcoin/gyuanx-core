@@ -32,6 +32,7 @@ enum struct message_type : uint8_t
   handshake,
   handshake_bitset,
   block_template,
+  random_value_hash,
 };
 
 constexpr std::string_view message_type_string(message_type type)
@@ -42,6 +43,7 @@ constexpr std::string_view message_type_string(message_type type)
     case message_type::handshake: return "Handshake"sv;
     case message_type::handshake_bitset: return "Handshake Bitset"sv;
     case message_type::block_template: return "Block Template"sv;
+    case message_type::random_value_hash: return "Random Value Hash"sv;
   }
   return "Invalid2"sv;
 }
@@ -61,6 +63,11 @@ struct message
   {
     std::string blob;
   } block_template;
+
+  struct
+  {
+    crypto::hash hash;
+  } random_value_hash;
 };
 
 void main(void *quorumnet_state, cryptonote::core &core);
