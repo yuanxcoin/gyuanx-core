@@ -612,7 +612,7 @@ namespace nodetool
     }
     else if (nettype == cryptonote::DEVNET)
     {
-      full_addrs.insert("159.69.109.145:38153");
+      full_addrs.insert("144.76.164.202:38856");
     }
     else if (nettype == cryptonote::FAKECHAIN)
     {
