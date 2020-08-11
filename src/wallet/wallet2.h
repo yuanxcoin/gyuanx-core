@@ -262,7 +262,7 @@ private:
     static const char* tr(const char* str);
 
     static bool has_testnet_option(const boost::program_options::variables_map& vm);
-    static bool has_stagenet_option(const boost::program_options::variables_map& vm);
+    static bool has_devnet_option(const boost::program_options::variables_map& vm);
     static std::vector<std::string> has_deprecated_options(const boost::program_options::variables_map& vm);
     static bool has_disable_rpc_long_poll(const boost::program_options::variables_map& vm);
     static std::string device_name_option(const boost::program_options::variables_map& vm);

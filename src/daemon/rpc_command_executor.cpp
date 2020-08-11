@@ -518,7 +518,7 @@ bool rpc_command_executor::show_status() {
     % (unsigned long long)ires.height
     % (unsigned long long)net_height
     % get_sync_percentage(ires)
-    % (ires.testnet ? " ON TESTNET" : ires.stagenet ? " ON STAGENET" : ""/*mainnet*/)
+    % (ires.testnet ? " ON TESTNET" : ires.devnet ? " ON DEVNET" : ""/*mainnet*/)
     % bootstrap_msg
     % (!has_mining_info ? ", mining info unavailable" : mining_busy ? ", syncing" : mres.active ? ( ", mining at " + get_mining_speed(mres.speed)) : ""/*not mining*/)
     % get_mining_speed(ires.difficulty / ires.target)
@@ -1694,7 +1694,7 @@ bool rpc_command_executor::print_sn(const std::vector<std::string> &args)
 
     cryptonote::network_type nettype =
       get_info_res.mainnet  ? cryptonote::MAINNET :
-      get_info_res.stagenet ? cryptonote::STAGENET :
+      get_info_res.devnet ? cryptonote::DEVNET :
       get_info_res.testnet  ? cryptonote::TESTNET :
       cryptonote::UNDEFINED;
     uint64_t curr_height = get_info_res.height;
@@ -1894,7 +1894,7 @@ bool rpc_command_executor::prepare_registration()
 #else
   cryptonote::network_type const nettype =
     res.mainnet  ? cryptonote::MAINNET :
-    res.stagenet ? cryptonote::STAGENET :
+    res.devnet ? cryptonote::DEVNET :
     res.testnet  ? cryptonote::TESTNET :
     res.nettype == "fakechain" ? cryptonote::FAKECHAIN :
     cryptonote::UNDEFINED;

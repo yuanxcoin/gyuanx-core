@@ -1197,7 +1197,7 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::rpc::DaemonInfo& in
   insert_into_json_object(val, doc, "grey_peerlist_size", info.grey_peerlist_size);
   insert_into_json_object(val, doc, "mainnet", info.mainnet);
   insert_into_json_object(val, doc, "testnet", info.testnet);
-  insert_into_json_object(val, doc, "stagenet", info.stagenet);
+  insert_into_json_object(val, doc, "devnet", info.devnet);
   insert_into_json_object(val, doc, "nettype", info.nettype);
   insert_into_json_object(val, doc, "top_block_hash", info.top_block_hash);
   insert_into_json_object(val, doc, "cumulative_difficulty", info.cumulative_difficulty);
@@ -1228,7 +1228,7 @@ void fromJsonValue(const rapidjson::Value& val, cryptonote::rpc::DaemonInfo& inf
   load_from_json_object(val, "grey_peerlist_size", info.grey_peerlist_size);
   load_from_json_object(val, "mainnet", info.mainnet);
   load_from_json_object(val, "testnet", info.testnet);
-  load_from_json_object(val, "stagenet", info.stagenet);
+  load_from_json_object(val, "devnet", info.devnet);
   load_from_json_object(val, "nettype", info.nettype);
   load_from_json_object(val, "top_block_hash", info.top_block_hash);
   load_from_json_object(val, "cumulative_difficulty", info.cumulative_difficulty);

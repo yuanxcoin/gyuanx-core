@@ -2850,7 +2850,7 @@ namespace {
     const struct { cryptonote::network_type type; const char *stype; } net_types[] = {
       { cryptonote::MAINNET, "mainnet" },
       { cryptonote::TESTNET, "testnet" },
-      { cryptonote::STAGENET, "stagenet" },
+      { cryptonote::DEVNET, "devnet" },
     };
     if (!req.any_net_type && !m_wallet)
       require_open();
@@ -3198,9 +3198,9 @@ namespace {
     std::unique_ptr<tools::wallet2> wal;
     {
       const bool testnet = tools::wallet2::has_testnet_option(m_vm);
-      const bool stagenet = tools::wallet2::has_stagenet_option(m_vm);
-      if (testnet && stagenet)
-        throw std::logic_error{tr("Can't specify more than one of --testnet and --stagenet")};
+      const bool devnet = tools::wallet2::has_devnet_option(m_vm);
+      if (testnet && devnet)
+        throw std::logic_error{tr("Can't specify more than one of --testnet and --devnet")};
 
       const auto arg_wallet_file = wallet_args::arg_wallet_file();
       const auto arg_from_json = wallet_args::arg_generate_from_json();

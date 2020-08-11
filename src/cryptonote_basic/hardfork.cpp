@@ -88,7 +88,7 @@ static constexpr HardFork::Params testnet_hard_forks[] =
   { network_version_15_lns,                 244777, 0, 1583940000 }, // 2020-03-11 15:20UTC
 };
 
-static constexpr HardFork::Params stagenet_hard_forks[] =
+static constexpr HardFork::Params devnet_hard_forks[] =
 {
   { network_version_7,                   1,      0, 1341378000 },
   { network_version_8,                   64324,  0, 1533006000 },
@@ -117,7 +117,7 @@ HardFork::ParamsIterator HardFork::get_hardcoded_hard_forks(network_type nettype
 {
   if (nettype == MAINNET)       return {mainnet_hard_forks, std::end(mainnet_hard_forks)};
   else if (nettype == TESTNET)  return {testnet_hard_forks, std::end(testnet_hard_forks)};
-  else if (nettype == STAGENET) return {stagenet_hard_forks, std::end(stagenet_hard_forks)};
+  else if (nettype == DEVNET) return {devnet_hard_forks, std::end(devnet_hard_forks)};
   return {nullptr, nullptr};
 }
 

@@ -266,7 +266,7 @@ namespace config
 
   }
 
-  namespace stagenet
+  namespace devnet
   {
     inline constexpr uint64_t HEIGHT_ESTIMATE_HEIGHT = 339767;
     inline constexpr time_t HEIGHT_ESTIMATE_TIMESTAMP = 1595360006;
@@ -314,7 +314,7 @@ namespace cryptonote
   {
     MAINNET = 0,
     TESTNET,
-    STAGENET,
+    DEVNET,
     FAKECHAIN,
     UNDEFINED = 255
   };
@@ -378,22 +378,22 @@ namespace cryptonote
     ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
     ::config::testnet::GOVERNANCE_WALLET_ADDRESS,
   };
-  inline constexpr network_config stagenet_config = {
-    STAGENET,
-    ::config::stagenet::HEIGHT_ESTIMATE_HEIGHT,
-    ::config::stagenet::HEIGHT_ESTIMATE_TIMESTAMP,
-    ::config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-    ::config::stagenet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-    ::config::stagenet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-    ::config::stagenet::P2P_DEFAULT_PORT,
-    ::config::stagenet::RPC_DEFAULT_PORT,
-    ::config::stagenet::ZMQ_RPC_DEFAULT_PORT,
-    ::config::stagenet::QNET_DEFAULT_PORT,
-    ::config::stagenet::NETWORK_ID,
-    ::config::stagenet::GENESIS_TX,
-    ::config::stagenet::GENESIS_NONCE,
-    ::config::stagenet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-    ::config::stagenet::GOVERNANCE_WALLET_ADDRESS,
+  inline constexpr network_config devnet_config = {
+    DEVNET,
+    ::config::devnet::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::devnet::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::devnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::devnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::devnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::devnet::P2P_DEFAULT_PORT,
+    ::config::devnet::RPC_DEFAULT_PORT,
+    ::config::devnet::ZMQ_RPC_DEFAULT_PORT,
+    ::config::devnet::QNET_DEFAULT_PORT,
+    ::config::devnet::NETWORK_ID,
+    ::config::devnet::GENESIS_TX,
+    ::config::devnet::GENESIS_NONCE,
+    ::config::devnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::devnet::GOVERNANCE_WALLET_ADDRESS,
   };
   inline constexpr network_config fakenet_config = {
     FAKECHAIN,
@@ -419,7 +419,7 @@ namespace cryptonote
     {
       case MAINNET: return mainnet_config;
       case TESTNET: return testnet_config;
-      case STAGENET: return stagenet_config;
+      case DEVNET: return devnet_config;
       case FAKECHAIN: return fakenet_config;
       default: throw std::runtime_error{"Invalid network type"};
     }
