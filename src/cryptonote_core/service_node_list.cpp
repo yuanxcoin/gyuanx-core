@@ -1767,6 +1767,9 @@ namespace service_nodes
       return false;
     }
 
+    if (winner == null_block_winner)
+      return true;
+
     if ((miner_tx.vout.size() - 1) < winner.payouts.size())
     {
       MERROR("Service node reward specifies more winners than available outputs: " << (miner_tx.vout.size() - 1) << ", winners: " << winner.payouts.size());
