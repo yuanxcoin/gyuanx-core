@@ -275,10 +275,6 @@ namespace cryptonote
   quorumnet_delete_proc *quorumnet_delete = [](void*&) { need_core_init(); };
   quorumnet_relay_obligation_votes_proc *quorumnet_relay_obligation_votes = [](void*, const std::vector<service_nodes::quorum_vote_t>&) { need_core_init(); };
   quorumnet_send_blink_proc *quorumnet_send_blink = [](core&, const std::string&) -> std::future<std::pair<blink_result, std::string>> { need_core_init(); };
-
-  quorumnet_send_pulse_validator_handshake_bit_proc    *quorumnet_send_pulse_validator_handshake_bit = [](void *, service_nodes::quorum const &, crypto::hash const &) -> void { need_core_init(); };
-  quorumnet_send_pulse_validator_handshake_bitset_proc *quorumnet_send_pulse_validator_handshake_bitset = [](void *, service_nodes::quorum const &, crypto::hash const &, uint16_t) -> void { need_core_init(); };
-
   quorumnet_pulse_relay_message_to_quorum_proc *quorumnet_pulse_relay_message_to_quorum = [](void *, pulse::message const &, service_nodes::quorum const &, bool) -> void { need_core_init(); };
 
   //-----------------------------------------------------------------------------------------------

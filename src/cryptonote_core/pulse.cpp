@@ -254,6 +254,26 @@ bool message_signature_check(pulse::message const &msg, service_nodes::quorum co
   return true;
 }
 
+void relay_validator_handshake_bit_or_bitset(round_context const &context, void *quorumnet_state, service_nodes::service_node_keys const &key, bool sending_bitset)
+{
+  assert(context.prepare_for_round.participant == sn_type::validator);
+
+  pulse::message msg  = {};
+  msg.quorum_position = context.prepare_for_round.my_quorum_position;
+  if (sending_bitset)
+  {
+    msg.type                        = pulse::message_type::handshake_bitset;
+    msg.handshakes.validator_bitset = context.wait_for_handshakes.validator_bits;
+  }
+  else
+  {
+    msg.type = pulse::message_type::handshake;
+  }
+
+  crypto::generate_signature(make_message_signature_hash(context, msg), key.pub, key.key, msg.signature);
+  cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+}
+
 } // anonymous namespace
 
 void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
@@ -726,13 +746,13 @@ event_loop wait_for_round(round_context &context, cryptonote::Blockchain const &
   return event_loop::keep_running;
 }
 
-event_loop submit_handshakes(round_context &context, void *quorumnet_state)
+event_loop submit_handshakes(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
   try
   {
     context.wait_for_handshakes.validator_bits |= (1 << context.prepare_for_round.my_quorum_position); // Add myself
-    cryptonote::quorumnet_send_pulse_validator_handshake_bit(quorumnet_state, context.prepare_for_round.quorum, context.wait_for_next_block.top_hash);
+    relay_validator_handshake_bit_or_bitset(context, quorumnet_state, key, false /*sending_bitset*/);
     context.state = round_state::wait_for_handshakes;
   }
   catch (std::exception const &e)
@@ -772,12 +792,12 @@ event_loop wait_for_handshakes(round_context &context, void *quorumnet_state)
   return event_loop::return_to_caller;
 }
 
-event_loop submit_handshake_bitset(round_context &context, void *quorumnet_state)
+event_loop submit_handshake_bitset(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
   try
   {
-    cryptonote::quorumnet_send_pulse_validator_handshake_bitset(quorumnet_state, context.prepare_for_round.quorum, context.wait_for_next_block.top_hash, context.wait_for_handshakes.validator_bits);
+    relay_validator_handshake_bit_or_bitset(context, quorumnet_state, key, true /*sending_bitset*/);
     context.state = round_state::wait_for_handshake_bitsets;
   }
   catch(std::exception const &e)
@@ -1041,7 +1061,7 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
         break;
 
       case round_state::submit_handshakes:
-        loop = submit_handshakes(context, quorumnet_state);
+        loop = submit_handshakes(context, quorumnet_state, key);
         break;
 
       case round_state::wait_for_handshakes:
@@ -1049,7 +1069,7 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
         break;
 
       case round_state::submit_handshake_bitset:
-        loop = submit_handshake_bitset(context, quorumnet_state);
+        loop = submit_handshake_bitset(context, quorumnet_state, key);
         break;
 
       case round_state::wait_for_handshake_bitsets:

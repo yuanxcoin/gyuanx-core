@@ -1542,57 +1542,6 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
   }
 }
 
-// Send participation handshake to other validators in the quorum. Caller must
-// be a valid Service Node that is in the current quorum.
-// sending_bitset: When false, validator_bitset parameter is ignored.
-void send_pulse_validator_handshake_bit_or_bitset(void *self, bool sending_bitset, service_nodes::quorum const &quorum, crypto::hash const &top_hash, uint16_t validator_bitset)
-{
-  QnetState &qnet = *static_cast<QnetState *>(self);
-  cryptonote::core &core = qnet.core;
-
-  // NOTE: Invariants
-  if (!core.service_node())
-    throw std::runtime_error("Pulse: Daemon is not a service node.");
-
-  pulse::message msg = {};
-  if (auto it = std::find(quorum.validators.begin(), quorum.validators.end(), core.get_service_keys().pub); it == quorum.validators.end())
-    throw std::runtime_error("Pulse: Could not find this node's public key in quorum");
-  else
-    msg.quorum_position = it - quorum.validators.begin();
-
-  if (sending_bitset)
-  {
-    auto buf = tools::memcpy_le(validator_bitset, top_hash.data, msg.quorum_position);
-    crypto::hash hash;
-    crypto::cn_fast_hash(buf.data(), buf.size(), hash);
-    crypto::generate_signature(hash, core.get_service_keys().pub, core.get_service_keys().key, msg.signature);
-
-    msg.type                        = pulse::message_type::handshake_bitset;
-    msg.handshakes.validator_bitset = validator_bitset;
-  }
-  else
-  {
-    auto buf = tools::memcpy_le(top_hash.data, msg.quorum_position);
-    crypto::hash hash;
-    crypto::cn_fast_hash(buf.data(), buf.size(), hash);
-    crypto::generate_signature(hash, core.get_service_keys().pub, core.get_service_keys().key, msg.signature);
-
-    msg.type = pulse::message_type::handshake;
-  }
-
-  pulse_relay_message_to_quorum(self, msg, quorum, false /*block_producer*/);
-}
-
-void send_pulse_validator_handshake_bit(void *self, service_nodes::quorum const &quorum, crypto::hash const &top_hash)
-{
-  send_pulse_validator_handshake_bit_or_bitset(self, false /*sending_bitset*/, quorum, top_hash, 0);
-}
-
-void send_pulse_validator_handshake_bitset(void *self, service_nodes::quorum const &quorum, crypto::hash const &top_hash, uint16_t validator_bitset)
-{
-  send_pulse_validator_handshake_bit_or_bitset(self, true /*sending_bitset*/, quorum, top_hash, validator_bitset);
-}
-
 // Invoked when daemon has received a participation handshake message via
 // QuorumNet from another validator, either forwarded or originating from that
 // node. The message is added to the Pulse message queue and validating the
@@ -1743,10 +1692,6 @@ void init_core_callbacks() {
     cryptonote::quorumnet_delete = delete_qnetstate;
     cryptonote::quorumnet_relay_obligation_votes = relay_obligation_votes;
     cryptonote::quorumnet_send_blink = send_blink;
-
-    cryptonote::quorumnet_send_pulse_validator_handshake_bit    = send_pulse_validator_handshake_bit;
-    cryptonote::quorumnet_send_pulse_validator_handshake_bitset = send_pulse_validator_handshake_bitset;
-
     cryptonote::quorumnet_pulse_relay_message_to_quorum = pulse_relay_message_to_quorum;
 }
 

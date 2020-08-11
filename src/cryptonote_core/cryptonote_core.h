@@ -92,28 +92,19 @@ namespace cryptonote
   // result.
   using quorumnet_send_blink_proc = std::future<std::pair<blink_result, std::string>> (core& core, const std::string& tx_blob);
 
+  // Relay a Pulse message to members specified in the quorum excluding the originating message owner.
+  using quorumnet_pulse_relay_message_to_quorum_proc = void (void *, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer);
+
   // Function pointer that we invoke when the mempool has changed; this gets set during
   // rpc/http_server.cpp's init_options().
   extern void (*long_poll_trigger)(tx_memory_pool& pool);
-
-  //
-  // Pulse
-  //
-  // Send the validator handshake bit, or bitset to the members in the quorum.
-  // When sending the validator handshake bitset, the message is also sent to the block producer.
-  using quorumnet_send_pulse_validator_handshake_bit_proc = void (void *self, service_nodes::quorum const &quorum, crypto::hash const &top_hash);
-  using quorumnet_send_pulse_validator_handshake_bitset_proc = void (void *self, service_nodes::quorum const &quorum, crypto::hash const &top_hash, uint16_t handshake_bitset);
-  // Relay a Pulse message to members specified in the quorum excluding the originating message owner.
-  using quorumnet_pulse_relay_message_to_quorum_proc = void (void *, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer);
 
   extern quorumnet_new_proc *quorumnet_new;
   extern quorumnet_delete_proc *quorumnet_delete;
   extern quorumnet_relay_obligation_votes_proc *quorumnet_relay_obligation_votes;
   extern quorumnet_send_blink_proc *quorumnet_send_blink;
 
-  extern quorumnet_send_pulse_validator_handshake_bit_proc    *quorumnet_send_pulse_validator_handshake_bit;
-  extern quorumnet_send_pulse_validator_handshake_bitset_proc *quorumnet_send_pulse_validator_handshake_bitset;
-  extern quorumnet_pulse_relay_message_to_quorum_proc         *quorumnet_pulse_relay_message_to_quorum;
+  extern quorumnet_pulse_relay_message_to_quorum_proc *quorumnet_pulse_relay_message_to_quorum;
 
   /************************************************************************/
   /*                                                                      */
