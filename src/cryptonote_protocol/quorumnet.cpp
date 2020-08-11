@@ -1593,19 +1593,6 @@ void send_pulse_validator_handshake_bitset(void *self, service_nodes::quorum con
   send_pulse_validator_handshake_bit_or_bitset(self, true /*sending_bitset*/, quorum, top_hash, validator_bitset);
 }
 
-void send_pulse_block_template(void *self, std::string &&blob, crypto::signature const &signature, service_nodes::quorum const &quorum)
-{
-  QnetState &qnet        = *static_cast<QnetState *>(self);
-  cryptonote::core &core = qnet.core;
-
-  pulse::message msg      = {};
-  msg.type                = pulse::message_type::block_template;
-  msg.signature           = signature;
-  msg.block_template.blob = std::move(blob);
-
-  pulse_relay_message_to_quorum(self, msg, quorum, true /*block_producer*/);
-}
-
 // Invoked when daemon has received a participation handshake message via
 // QuorumNet from another validator, either forwarded or originating from that
 // node. The message is added to the Pulse message queue and validating the
@@ -1759,7 +1746,6 @@ void init_core_callbacks() {
 
     cryptonote::quorumnet_send_pulse_validator_handshake_bit    = send_pulse_validator_handshake_bit;
     cryptonote::quorumnet_send_pulse_validator_handshake_bitset = send_pulse_validator_handshake_bitset;
-    cryptonote::quorumnet_send_pulse_block_template             = send_pulse_block_template;
 
     cryptonote::quorumnet_pulse_relay_message_to_quorum = pulse_relay_message_to_quorum;
 }

@@ -103,7 +103,6 @@ namespace cryptonote
   // When sending the validator handshake bitset, the message is also sent to the block producer.
   using quorumnet_send_pulse_validator_handshake_bit_proc = void (void *self, service_nodes::quorum const &quorum, crypto::hash const &top_hash);
   using quorumnet_send_pulse_validator_handshake_bitset_proc = void (void *self, service_nodes::quorum const &quorum, crypto::hash const &top_hash, uint16_t handshake_bitset);
-  using quorumnet_send_pulse_block_template_proc = void (void *, std::string &&blob, crypto::signature const &, service_nodes::quorum const &);
   // Relay a Pulse message to members specified in the quorum excluding the originating message owner.
   using quorumnet_pulse_relay_message_to_quorum_proc = void (void *, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer);
 
@@ -114,7 +113,6 @@ namespace cryptonote
 
   extern quorumnet_send_pulse_validator_handshake_bit_proc    *quorumnet_send_pulse_validator_handshake_bit;
   extern quorumnet_send_pulse_validator_handshake_bitset_proc *quorumnet_send_pulse_validator_handshake_bitset;
-  extern quorumnet_send_pulse_block_template_proc             *quorumnet_send_pulse_block_template;
   extern quorumnet_pulse_relay_message_to_quorum_proc         *quorumnet_pulse_relay_message_to_quorum;
 
   /************************************************************************/

@@ -860,13 +860,14 @@ event_loop submit_block_template(round_context &context, service_nodes::service_
   assert(context.prepare_for_round.participant == sn_type::producer);
   std::vector<service_nodes::service_node_pubkey_info> list_state = blockchain.get_service_node_list().get_service_node_list_state({key.pub});
 
+  // Invariants
+  // TODO(doyle): These checks can be done earlier?
   if (list_state.empty())
   {
     MINFO(log_prefix(context) << "Block producer (us) is not available on the service node list, waiting until next round");
     return goto_preparing_for_next_round(context);
   }
 
-  // TODO(doyle): These checks can be done earlier?
   std::shared_ptr<const service_nodes::service_node_info> info = list_state[0].info;
   if (!info->is_active())
   {
@@ -874,25 +875,29 @@ event_loop submit_block_template(round_context &context, service_nodes::service_
     return goto_preparing_for_next_round(context);
   }
 
-  service_nodes::payout block_producer_payouts = service_nodes::service_node_info_to_payout(key.pub, *info);
-
+  // Block
+  // TODO(doyle): Round and validator bitset should go into the create_next_pulse_block_template arguments
   cryptonote::block block = {};
-  uint64_t expected_reward = 0;
-  blockchain.create_next_pulse_block_template(block, block_producer_payouts, context.wait_for_next_block.height, expected_reward);
+  {
+    uint64_t expected_reward = 0;
+    service_nodes::payout block_producer_payouts = service_nodes::service_node_info_to_payout(key.pub, *info);
+    blockchain.create_next_pulse_block_template(block, block_producer_payouts, context.wait_for_next_block.height, expected_reward);
 
-  block.pulse.round            = context.prepare_for_round.round;
-  block.pulse.validator_bitset = context.submit_block_template.validator_bitset;
+    block.pulse.round            = context.prepare_for_round.round;
+    block.pulse.validator_bitset = context.submit_block_template.validator_bitset;
+  }
 
-  std::string block_blob = cryptonote::t_serializable_object_to_blob(block);
-  crypto::hash hash      = crypto::cn_fast_hash(block_blob.data(), block_blob.size());
+  // Message
+  pulse::message msg      = {};
+  msg.type                = pulse::message_type::block_template;
+  msg.block_template.blob = cryptonote::t_serializable_object_to_blob(block);
+  crypto::generate_signature(make_message_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
-  crypto::signature block_signature = {};
-  crypto::generate_signature(hash, key.pub, key.key, block_signature);
-
+  // Send
   MINFO(log_prefix(context) << "Validators are handshaken and ready, sending block template from producer (us) to validators.\n" << cryptonote::obj_to_json_str(block));
-  cryptonote::quorumnet_send_pulse_block_template(quorumnet_state, std::move(block_blob), block_signature, context.prepare_for_round.quorum);
-  context.state = round_state::wait_for_next_block;
+  cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, true /*block_producer*/);
 
+  context.state = round_state::wait_for_next_block;
   return event_loop::keep_running;
 }
 
