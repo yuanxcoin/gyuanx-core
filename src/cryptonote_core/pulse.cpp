@@ -121,6 +121,8 @@ struct round_context
   struct
   {
     std::array<std::pair<crypto::hash, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> hashes;
+    uint16_t          validator_bitset;
+    uint16_t          count;
     pulse::time_point end_time;
   } wait_for_random_value_hashes;
 
@@ -354,12 +356,24 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 
     case pulse::message_type::random_value_hash:
     {
+      assert(msg.quorum_position < context.wait_for_random_value_hashes.hashes.size());
       if (!msg_time_check(context, msg, pulse::clock::now(), context.wait_for_handshakes.start_time, context.wait_for_random_value_hashes.end_time))
         return;
+
+      uint16_t validator_bit = 1 << msg.quorum_position;
+      if ((validator_bit & context.wait_for_block_template.block.pulse.validator_bitset) == 0)
+      {
+        crypto::public_key const &src = context.prepare_for_round.quorum.validators[msg.quorum_position];
+        MINFO(log_prefix(context) << "Dropping '" << message_type_string(msg.type) << "' from V[" << msg.quorum_position << "]:" << lokimq::to_hex(tools::view_guts(src)) << ". Not a locked in participant.");
+        return;
+      }
 
       auto &[hash, received] = context.wait_for_random_value_hashes.hashes[msg.quorum_position];
       if (received)
         return; // Already received their hash
+
+      context.wait_for_random_value_hashes.validator_bitset |= validator_bit;
+      context.wait_for_random_value_hashes.count++;
 
       received      = true;
       relay_message = true;
@@ -978,42 +992,40 @@ event_loop submit_random_value_hash(round_context &context, void *quorumnet_stat
 
 event_loop wait_for_random_value_hashes(round_context &context)
 {
-  bool timed_out = pulse::clock::now() >= context.wait_for_block_template.end_time;
-
-  int received_hashes             = 0;
-  int expected_hashes             = 0;
-  uint16_t received_hashes_bitset = 0;
-  uint16_t validator_bitset       = context.wait_for_block_template.block.pulse.validator_bitset;
-  for (size_t i = 0; i < service_nodes::PULSE_QUORUM_NUM_VALIDATORS; i++)
+  bool timed_out         = pulse::clock::now() >= context.wait_for_block_template.end_time;
+  bool enough_signatures = context.wait_for_random_value_hashes.count >= service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES;
+  if (timed_out || enough_signatures)
   {
-    auto &[hash, received] = context.wait_for_random_value_hashes.hashes[i];
-    uint16_t bit           = (1 << i);
+    uint16_t const validator_bitset = context.wait_for_block_template.block.pulse.validator_bitset;
+    uint16_t const received_bitset  = context.wait_for_random_value_hashes.validator_bitset;
+    auto const our_bitset           = std::bitset<sizeof(validator_bitset) * 8>(received_bitset);
 
-    if (validator_bitset & bit) // This validator is locked in for this round
+    // Invariant Check
+    if (timed_out && !enough_signatures)
     {
-      received_hashes_bitset |= bit;
-      received_hashes += received;
-      expected_hashes++;
-    }
-  }
-
-  if (expected_hashes == 0)
-  {
-    auto block_bitset = std::bitset<sizeof(validator_bitset) * 8>(context.wait_for_block_template.block.pulse.validator_bitset);
-    auto our_bitset   = std::bitset<sizeof(validator_bitset) * 8>(context.submit_block_template.validator_bitset);
-    MERROR(log_prefix(context) << "Internal error, unexpected block validator bitset is empty " << block_bitset << ", our bitset was " << our_bitset);
-    return event_loop::keep_running;
-  }
-
-  // TODO(doyle): Does this need to be == expected hashes or can it just be > min validator nodes for signing, i.e. 7.
-  if (timed_out || received_hashes == expected_hashes)
-  {
-    if (timed_out && received_hashes != expected_hashes)
+      MDEBUG(log_prefix(context) << "We timed out and there were insufficient signatures, required "
+                                 << service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES << ", received "
+                                 << context.wait_for_random_value_hashes.count << " from " << our_bitset);
       return goto_preparing_for_next_round(context);
+    }
 
+    bool unexpected_items = (received_bitset | validator_bitset) != validator_bitset;
+    if (context.wait_for_random_value_hashes.count == 0 || unexpected_items)
+    {
+      auto block_bitset = std::bitset<sizeof(validator_bitset) * 8>(validator_bitset);
+      if (unexpected_items)
+        MERROR(log_prefix(context) << "Internal error, unexpected block validator bitset is " << block_bitset << ", our bitset was " << our_bitset);
+      else
+        MERROR(log_prefix(context) << "Internal error, unexpected empty bitset received, we expected " << block_bitset);
+
+      return goto_preparing_for_next_round(context);
+    }
+
+    // Accept
     context.state = round_state::wait_for_next_block;
-    auto received_bitset = std::bitset<sizeof(validator_bitset) * 8>(context.submit_block_template.validator_bitset);
-    MINFO(log_prefix(context) << "Received " << received_hashes << " random value hashes from " << received_bitset << (timed_out ? ". We timed out and some hashes are missing" : ""));
+    MINFO(log_prefix(context) << "Received " << context.wait_for_random_value_hashes.count
+                              << " random value hashes from " << our_bitset
+                              << (timed_out ? ". We timed out and some hashes are missing" : ""));
     return event_loop::keep_running;
   }
 
