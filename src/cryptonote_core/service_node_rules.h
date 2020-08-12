@@ -9,21 +9,23 @@ namespace service_nodes {
   constexpr size_t PULSE_QUORUM_ENTROPY_LAG    = 21; // How many blocks back from the tip of the Blockchain to source entropy for the Pulse quorums.
 #if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
   constexpr auto PULSE_ROUND_TIME                                   = 20s;
-  constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 4s;
-  constexpr auto PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION = 4s;
-  constexpr auto PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION             = 4s;
-  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION          = 4s;
-  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 4s;
+  constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 3s;
+  constexpr auto PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION = 3s;
+  constexpr auto PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION             = 3s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION          = 3s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 3s;
+  constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 5s;
 
   constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 0;
   constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 0;
 #else
   constexpr auto PULSE_ROUND_TIME                                   = 60s;
-  constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 12s;
-  constexpr auto PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION = 12s;
-  constexpr auto PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION             = 12s;
-  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION          = 12s;
-  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 12s;
+  constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 10s;
+  constexpr auto PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION = 10s;
+  constexpr auto PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION             = 10s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION          = 10s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 10s;
+  constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 10s;
 
   constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 7;
   constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 7;  // A block must have exactly N signatures to be considered properly
@@ -38,7 +40,8 @@ namespace service_nodes {
                 PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION +
                 PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION +
                 PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION +
-                PULSE_WAIT_FOR_RANDOM_VALUE_DURATION);
+                PULSE_WAIT_FOR_RANDOM_VALUE_DURATION +
+                PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION);
 
   static_assert(PULSE_QUORUM_NUM_VALIDATORS >= PULSE_BLOCK_REQUIRED_SIGNATURES);
   static_assert(PULSE_QUORUM_ENTROPY_LAG >= PULSE_QUORUM_SIZE, "We need to pull atleast PULSE_QUORUM_SIZE number of blocks from the Blockchain, we can't if the amount of blocks to go back from the tip of the Blockchain is less than the blocks we need.");

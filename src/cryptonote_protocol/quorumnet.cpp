@@ -1434,11 +1434,13 @@ const std::string PULSE_CMD_VALIDATOR_BIT          = "validator_bit";
 const std::string PULSE_CMD_BLOCK_TEMPLATE         = "block_template";
 const std::string PULSE_CMD_RANDOM_VALUE_HASH      = "random_value_hash";
 const std::string PULSE_CMD_RANDOM_VALUE           = "random_value";
+const std::string PULSE_CMD_SIGNED_BLOCK           = "signed_block";
 const std::string PULSE_CMD_SEND_VALIDATOR_BITSET  = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BITSET;
 const std::string PULSE_CMD_SEND_VALIDATOR_BIT     = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BIT;
 const std::string PULSE_CMD_SEND_BLOCK_TEMPLATE    = PULSE_CMD_CATEGORY + "." + PULSE_CMD_BLOCK_TEMPLATE;
 const std::string PULSE_CMD_SEND_RANDOM_VALUE_HASH = PULSE_CMD_CATEGORY + "." + PULSE_CMD_RANDOM_VALUE_HASH;
 const std::string PULSE_CMD_SEND_RANDOM_VALUE      = PULSE_CMD_CATEGORY + "." + PULSE_CMD_RANDOM_VALUE;
+const std::string PULSE_CMD_SEND_SIGNED_BLOCK      = PULSE_CMD_CATEGORY + "." + PULSE_CMD_SIGNED_BLOCK;
 
 void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer)
 {
@@ -1501,6 +1503,14 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
       data    = {{PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
                  {PULSE_TAG_SIGNATURE,       tools::view_guts(msg.signature)},
                  {PULSE_TAG_RANDOM_VALUE,    tools::view_guts(msg.random_value.value)}};
+    }
+    break;
+
+    case pulse::message_type::signed_block:
+    {
+      command = PULSE_CMD_SEND_SIGNED_BLOCK;
+      data    = {{PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
+                 {PULSE_TAG_SIGNATURE,       tools::view_guts(msg.signature)}};
     }
     break;
   }
@@ -1709,6 +1719,39 @@ void handle_pulse_random_value(Message &m, QnetState &qnet)
   qnet.lmq.job([self, data = std::move(msg)]() { pulse::handle_message(self, data); }, qnet.core.pulse_thread_id());
 }
 
+void handle_pulse_signed_block(Message &m, QnetState &qnet)
+{
+  if (m.data.size() != 1)
+      throw std::runtime_error(std::string("Rejecting pulse signed block expected one data entry not ") + std::to_string(m.data.size()));
+
+  bt_dict_consumer data{m.data[0]};
+  int quorum_position         = -1;
+  crypto::signature signature = {};
+  {
+    // TODO(doyle): DRY
+    std::string_view INVALID_ARG_PREFIX = "Invalid pulse signed block: missing required field '"sv;
+    if (auto const &tag = PULSE_TAG_QUORUM_POSITION; data.skip_until(tag))
+      quorum_position = data.consume_integer<int>();
+    else
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+
+    if (auto const &tag = PULSE_TAG_SIGNATURE; data.skip_until(tag)) {
+      auto sig_str = data.consume_string_view();
+      signature    = convert_string_view_bytes_to_signature(sig_str);
+    } else {
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+    }
+  }
+
+  pulse::message msg  = {};
+  msg.type            = pulse::message_type::signed_block;
+  msg.quorum_position = quorum_position;
+  msg.signature       = signature;
+
+  auto *self = reinterpret_cast<void *>(&qnet);
+  qnet.lmq.job([self, data = std::move(msg)]() { pulse::handle_message(self, data); }, qnet.core.pulse_thread_id());
+}
+
 } // end empty namespace
 
 
@@ -1765,6 +1808,7 @@ void setup_endpoints(QnetState& qnet) {
         .add_command(PULSE_CMD_BLOCK_TEMPLATE, [&qnet](Message& m) { handle_pulse_block_template(m, qnet); })
         .add_command(PULSE_CMD_RANDOM_VALUE_HASH, [&qnet](Message& m) { handle_pulse_random_value_hash(m, qnet); })
         .add_command(PULSE_CMD_RANDOM_VALUE, [&qnet](Message& m) { handle_pulse_random_value(m, qnet); })
+        .add_command(PULSE_CMD_SIGNED_BLOCK, [&qnet](Message& m) { handle_pulse_signed_block(m, qnet); })
         ;
 
     // Compatibility aliases.  No longer used since 7.1.4, but can still be received from previous

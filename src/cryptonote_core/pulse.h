@@ -34,6 +34,7 @@ enum struct message_type : uint8_t
   block_template,
   random_value_hash,
   random_value,
+  signed_block,
 };
 
 constexpr std::string_view message_type_string(message_type type)
@@ -46,6 +47,7 @@ constexpr std::string_view message_type_string(message_type type)
     case message_type::block_template: return "Block Template"sv;
     case message_type::random_value_hash: return "Random Value Hash"sv;
     case message_type::random_value: return "Random Value"sv;
+    case message_type::signed_block: return "Signed Block"sv;
   }
   return "Invalid2"sv;
 }
