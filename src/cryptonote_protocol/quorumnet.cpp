@@ -1421,67 +1421,24 @@ void handle_blink_success(Message& m) {
 //
 // Pulse
 //
+const std::string PULSE_TAG_RANDOM_VALUE_HASH = "#";
 const std::string PULSE_TAG_VALIDATOR_BITSET  = "b";
 const std::string PULSE_TAG_QUORUM_POSITION   = "q";
+const std::string PULSE_TAG_RANDOM_VALUE      = "r";
 const std::string PULSE_TAG_SIGNATURE         = "s";
 const std::string PULSE_TAG_BLOCK_TEMPLATE    = "t";
-const std::string PULSE_TAG_RANDOM_VALUE_HASH = "#";
 
 const std::string PULSE_CMD_CATEGORY               = "pulse";
 const std::string PULSE_CMD_VALIDATOR_BITSET       = "validator_bitset";
 const std::string PULSE_CMD_VALIDATOR_BIT          = "validator_bit";
 const std::string PULSE_CMD_BLOCK_TEMPLATE         = "block_template";
 const std::string PULSE_CMD_RANDOM_VALUE_HASH      = "random_value_hash";
+const std::string PULSE_CMD_RANDOM_VALUE           = "random_value";
 const std::string PULSE_CMD_SEND_VALIDATOR_BITSET  = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BITSET;
 const std::string PULSE_CMD_SEND_VALIDATOR_BIT     = PULSE_CMD_CATEGORY + "." + PULSE_CMD_VALIDATOR_BIT;
 const std::string PULSE_CMD_SEND_BLOCK_TEMPLATE    = PULSE_CMD_CATEGORY + "." + PULSE_CMD_BLOCK_TEMPLATE;
 const std::string PULSE_CMD_SEND_RANDOM_VALUE_HASH = PULSE_CMD_CATEGORY + "." + PULSE_CMD_RANDOM_VALUE_HASH;
-
-bt_dict pulse_serialize_message(pulse::message const &msg)
-{
-  bt_dict result;
-
-  switch(msg.type)
-  {
-    case pulse::message_type::invalid:
-    {
-      assert(!"Invalid Code Path");
-      return result;
-    }
-
-    case pulse::message_type::handshake:
-    {
-      result = {{PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
-                {PULSE_TAG_SIGNATURE, tools::view_guts(msg.signature)}};
-    }
-    break;
-
-    case pulse::message_type::handshake_bitset:
-    {
-      result = {{PULSE_TAG_VALIDATOR_BITSET, msg.handshakes.validator_bitset},
-                {PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
-                {PULSE_TAG_SIGNATURE, tools::view_guts(msg.signature)}};
-    }
-    break;
-
-    case pulse::message_type::block_template:
-    {
-      result = {{PULSE_TAG_SIGNATURE, tools::view_guts(msg.signature)},
-                {PULSE_TAG_BLOCK_TEMPLATE, msg.block_template.blob}};
-    }
-    break;
-
-    case pulse::message_type::random_value_hash:
-    {
-      result = {{PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
-                {PULSE_TAG_SIGNATURE, tools::view_guts(msg.signature)},
-                {PULSE_TAG_RANDOM_VALUE_HASH, tools::view_guts(msg.random_value_hash.hash)}};
-    }
-    break;
-  }
-
-  return result;
-}
+const std::string PULSE_CMD_SEND_RANDOM_VALUE      = PULSE_CMD_CATEGORY + "." + PULSE_CMD_RANDOM_VALUE;
 
 void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer)
 {
@@ -1489,6 +1446,7 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
 
   bool include_block_producer = false;
   std::string_view command    = {};
+  bt_dict data                = {};
   switch(msg.type)
   {
     case pulse::message_type::invalid:
@@ -1496,7 +1454,11 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
       break;
 
     case pulse::message_type::block_template:
+    {
       command = PULSE_CMD_SEND_BLOCK_TEMPLATE;
+      data    = {{PULSE_TAG_SIGNATURE,      tools::view_guts(msg.signature)},
+                 {PULSE_TAG_BLOCK_TEMPLATE, msg.block_template.blob}};
+    }
     break;
 
     case pulse::message_type::handshake: /* FALLTHRU */
@@ -1508,17 +1470,38 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
       relay_exclude.insert(quorum.validators[msg.quorum_position]);
 
       if (msg.type == pulse::message_type::handshake)
+      {
         command = PULSE_CMD_SEND_VALIDATOR_BIT;
+        data    = {{PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
+                   {PULSE_TAG_SIGNATURE,       tools::view_guts(msg.signature)}};
+      }
       else
       {
         assert(msg.type == pulse::message_type::handshake_bitset);
         command = PULSE_CMD_SEND_VALIDATOR_BITSET;
+        data    = {{PULSE_TAG_VALIDATOR_BITSET, msg.handshakes.validator_bitset},
+                   {PULSE_TAG_QUORUM_POSITION,  msg.quorum_position},
+                   {PULSE_TAG_SIGNATURE,        tools::view_guts(msg.signature)}};
       }
     }
     break;
 
     case pulse::message_type::random_value_hash:
+    {
       command = PULSE_CMD_SEND_RANDOM_VALUE_HASH;
+      data    = {{PULSE_TAG_QUORUM_POSITION,   msg.quorum_position},
+                 {PULSE_TAG_SIGNATURE,         tools::view_guts(msg.signature)},
+                 {PULSE_TAG_RANDOM_VALUE_HASH, tools::view_guts(msg.random_value_hash.hash)}};
+    }
+    break;
+
+    case pulse::message_type::random_value:
+    {
+      command = PULSE_CMD_SEND_RANDOM_VALUE;
+      data    = {{PULSE_TAG_QUORUM_POSITION, msg.quorum_position},
+                 {PULSE_TAG_SIGNATURE,       tools::view_guts(msg.signature)},
+                 {PULSE_TAG_RANDOM_VALUE,    tools::view_guts(msg.random_value.value)}};
+    }
     break;
   }
 
@@ -1527,7 +1510,7 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
   {
     service_nodes::quorum const *quorum_ptr = &quorum;
     auto destinations = peer_prepare_relay_to_quorum_subset(qnet.core, &quorum_ptr, &quorum_ptr + 1, 4 /*num_peers*/);
-    peer_relay_to_prepared_destinations(qnet.core, destinations, command, bt_serialize(pulse_serialize_message(msg)));
+    peer_relay_to_prepared_destinations(qnet.core, destinations, command, bt_serialize(data));
   }
   else
   {
@@ -1537,8 +1520,7 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
                         true /*opportunistic*/,
                         std::move(relay_exclude),
                         include_block_producer /*include_workers*/};
-
-    peer_list.relay_to_peers(command, pulse_serialize_message(msg));
+    peer_list.relay_to_peers(command, data);
   }
 }
 
@@ -1640,7 +1622,7 @@ void handle_pulse_block_template(Message &m, QnetState &qnet)
 void handle_pulse_random_value_hash(Message &m, QnetState &qnet)
 {
   if (m.data.size() != 1)
-      throw std::runtime_error(std::string("Rejecting pulse block template expected one data entry not ") + std::to_string(m.data.size()));
+      throw std::runtime_error(std::string("Rejecting pulse random value hash expected one data entry not ") + std::to_string(m.data.size()));
 
   bt_dict_consumer data{m.data[0]};
 
@@ -1677,6 +1659,51 @@ void handle_pulse_random_value_hash(Message &m, QnetState &qnet)
   msg.quorum_position        = quorum_position;
   msg.signature              = signature;
   msg.random_value_hash.hash = random_value_hash;
+
+  auto *self = reinterpret_cast<void *>(&qnet);
+  qnet.lmq.job([self, data = std::move(msg)]() { pulse::handle_message(self, data); }, qnet.core.pulse_thread_id());
+}
+
+void handle_pulse_random_value(Message &m, QnetState &qnet)
+{
+  if (m.data.size() != 1)
+      throw std::runtime_error(std::string("Rejecting pulse random value expected one data entry not ") + std::to_string(m.data.size()));
+
+  bt_dict_consumer data{m.data[0]};
+
+  int quorum_position                         = -1;
+  cryptonote::pulse_random_value random_value = {};
+  crypto::signature signature                 = {};
+  {
+    // TODO(doyle): DRY
+    std::string_view INVALID_ARG_PREFIX = "Invalid pulse random value: missing required field '"sv;
+    if (auto const &tag = PULSE_TAG_QUORUM_POSITION; data.skip_until(tag))
+      quorum_position = data.consume_integer<int>();
+    else
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+
+    if (auto const &tag = PULSE_TAG_RANDOM_VALUE; data.skip_until(tag)) {
+      auto str = data.consume_string_view();
+      if (str.size() != sizeof(random_value))
+        throw std::invalid_argument("Invalid data size: " + std::to_string(str.size()));
+      std::memcpy(random_value.data, str.data(), str.size());
+    } else {
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+    }
+
+    if (auto const &tag = PULSE_TAG_SIGNATURE; data.skip_until(tag)) {
+      auto sig_str = data.consume_string_view();
+      signature    = convert_string_view_bytes_to_signature(sig_str);
+    } else {
+      throw std::invalid_argument(std::string(INVALID_ARG_PREFIX) + std::string(tag) + "'");
+    }
+  }
+
+  pulse::message msg     = {};
+  msg.type               = pulse::message_type::random_value;
+  msg.quorum_position    = quorum_position;
+  msg.signature          = signature;
+  msg.random_value.value = random_value;
 
   auto *self = reinterpret_cast<void *>(&qnet);
   qnet.lmq.job([self, data = std::move(msg)]() { pulse::handle_message(self, data); }, qnet.core.pulse_thread_id());
@@ -1737,6 +1764,7 @@ void setup_endpoints(QnetState& qnet) {
         .add_command(PULSE_CMD_VALIDATOR_BITSET, [&qnet](Message& m) { handle_pulse_participation_bit_or_bitset(m, qnet, true /*bitset*/); })
         .add_command(PULSE_CMD_BLOCK_TEMPLATE, [&qnet](Message& m) { handle_pulse_block_template(m, qnet); })
         .add_command(PULSE_CMD_RANDOM_VALUE_HASH, [&qnet](Message& m) { handle_pulse_random_value_hash(m, qnet); })
+        .add_command(PULSE_CMD_RANDOM_VALUE, [&qnet](Message& m) { handle_pulse_random_value(m, qnet); })
         ;
 
     // Compatibility aliases.  No longer used since 7.1.4, but can still be received from previous
