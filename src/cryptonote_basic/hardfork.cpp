@@ -132,30 +132,31 @@ HardFork::HardFork(cryptonote::BlockchainDB &db, uint8_t original_version, time_
     throw std::logic_error{"default_threshold_percent needs to be between 0 and 100"};
 }
 
-bool HardFork::add_fork(uint8_t version, uint64_t height, uint8_t threshold, time_t time)
+void HardFork::add_fork(uint8_t version, uint64_t height, uint8_t threshold, time_t time)
 {
   std::unique_lock l{lock};
 
   // add in order
   if (version == 0)
-    return false;
+    throw std::runtime_error{"Cannot add a hard fork with HF version 0"};
   if (!heights.empty()) {
-    if (version <= heights.back().version)
-      return false;
-    if (height <= heights.back().height)
-      return false;
-    if (time <= heights.back().time)
-      return false;
+    const auto& [v, h, _thresh, t] = heights.back();
+    if (version <= v)
+      throw std::runtime_error{"Cannot add hard fork: version(" + std::to_string(version) + ") must be > previous HF version(" + std::to_string(v) + ")"};
+    if (height <= h)
+      throw std::runtime_error{"Cannot add hard fork: height(" + std::to_string(height) + ") must be > previous HF height(" + std::to_string(h) + ")"};
+    if (time < t)
+      throw std::runtime_error{"Cannot add hard fork: timestamp(" + std::to_string(time) + ") must be >= previous HF timestamp(" + std::to_string(t) + ")"};
   }
   if (threshold > 100)
-    return false;
+    throw std::runtime_error{"Cannot add hard fork: invalid threshold (" + std::to_string(threshold) + ")"};
+
   heights.push_back({version, height, threshold, time});
-  return true;
 }
 
-bool HardFork::add_fork(uint8_t version, uint64_t height, time_t time)
+void HardFork::add_fork(uint8_t version, uint64_t height, time_t time)
 {
-  return add_fork(version, height, default_threshold_percent, time);
+  add_fork(version, height, default_threshold_percent, time);
 }
 
 uint8_t HardFork::get_effective_version(uint8_t voting_version) const
