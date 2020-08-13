@@ -201,6 +201,14 @@ std::string log_prefix(round_context const &context)
 //
 // NOTE: pulse::message Utiliities
 //
+pulse::message msg_init_from_context(round_context const &context)
+{
+  pulse::message result  = {};
+  result.quorum_position = context.prepare_for_round.my_quorum_position;
+  result.round           = context.prepare_for_round.round;
+  return result;
+}
+
 // Generate the hash necessary for signing a message. All fields of the message
 // must have been set for that message type except the signature.
 crypto::hash msg_signature_hash(round_context const &context, pulse::message const &msg)
@@ -215,14 +223,14 @@ crypto::hash msg_signature_hash(round_context const &context, pulse::message con
 
     case pulse::message_type::handshake:
     {
-      auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position);
+      auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round);
       result   = crypto::cn_fast_hash(buf.data(), buf.size());
     }
     break;
 
     case pulse::message_type::handshake_bitset:
     {
-      auto buf = tools::memcpy_le(msg.handshakes.validator_bitset, context.wait_for_next_block.top_hash.data, msg.quorum_position);
+      auto buf = tools::memcpy_le(msg.handshakes.validator_bitset, context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round);
       result   = crypto::cn_fast_hash(buf.data(), buf.size());
     }
     break;
@@ -233,14 +241,14 @@ crypto::hash msg_signature_hash(round_context const &context, pulse::message con
 
     case pulse::message_type::random_value_hash:
     {
-      auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.random_value_hash.hash.data);
+      auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round, msg.random_value_hash.hash.data);
       result   = crypto::cn_fast_hash(buf.data(), buf.size());
     }
     break;
 
     case pulse::message_type::random_value:
     {
-      auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.random_value.value.data);
+      auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round, msg.random_value.value.data);
       result   = crypto::cn_fast_hash(buf.data(), buf.size());
     }
     break;
@@ -254,19 +262,21 @@ crypto::hash msg_signature_hash(round_context const &context, pulse::message con
 }
 
 // Generate a helper string that describes the origin of the message, i.e.
-// 'Signed Block' from 6:f9337ffc8bc30baf3fca92a13fa5a3a7ab7c93e69acb7136906e7feae9d3e769
+// 'Signed Block' from 6:f9337ffc8bc30baf3fca92a13fa5a3a7ab7c93e69acb7136906e7feae9d3e769 for round 1
 //   or
-// <Message Type> from <Validator Index>:<Validator Public Key>
+// <Message Type> from <Validator Index>:<Validator Public Key> for round <Round Number>
 std::string msg_source_string(round_context const &context, pulse::message const &msg)
 {
   if (msg.quorum_position >= context.prepare_for_round.quorum.validators.size()) return "XX";
-  assert(context.state >= round_state::prepare_for_round);
 
-  crypto::public_key const &key = context.prepare_for_round.quorum.validators[msg.quorum_position];
   std::stringstream stream;
   stream << "'" << message_type_string(msg.type) << "' from " << msg.quorum_position;
   if (context.state >= round_state::prepare_for_round)
+  {
+    crypto::public_key const &key = context.prepare_for_round.quorum.validators[msg.quorum_position];
     stream << ":" << lokimq::to_hex(tools::view_guts(key));
+  }
+
   return stream.str();
 }
 
@@ -331,9 +341,7 @@ void relay_validator_handshake_bit_or_bitset(round_context const &context, void 
   assert(context.prepare_for_round.participant == sn_type::validator);
 
   // Message
-  pulse::message msg  = {};
-  msg.quorum_position = context.prepare_for_round.my_quorum_position;
-
+  pulse::message msg = msg_init_from_context(context);
   if (sending_bitset)
   {
     msg.type = pulse::message_type::handshake_bitset;
@@ -450,6 +458,13 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     case pulse::message_type::random_value_hash: stage = &context.wait_for_random_value_hashes.stage; break;
     case pulse::message_type::random_value:      stage = &context.wait_for_random_value.stage;        break;
     case pulse::message_type::signed_block:      stage = &context.wait_for_signed_blocks.stage;       break;
+  }
+
+  // TODO(doyle): We need to support potentially receiving messages from the future up to 1 round.
+  if (msg.round != context.prepare_for_round.round)
+  {
+    MERROR(log_prefix(context) << "Message received from a future round too early, " << msg_source_string(context, msg) << ", dropping the message.");
+    return;
   }
 
   bool msg_received_early = false;
@@ -1144,7 +1159,7 @@ event_loop submit_block_template(round_context &context, service_nodes::service_
   }
 
   // Message
-  pulse::message msg      = {};
+  pulse::message msg      = msg_init_from_context(context);
   msg.type                = pulse::message_type::block_template;
   msg.block_template.blob = cryptonote::t_serializable_object_to_blob(block);
   crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
@@ -1203,9 +1218,8 @@ event_loop submit_random_value_hash(round_context &context, void *quorumnet_stat
   crypto::generate_random_bytes_thread_safe(sizeof(context.submit_random_value_hash.value.data), context.submit_random_value_hash.value.data);
 
   // Message
-  pulse::message msg         = {};
+  pulse::message msg         = msg_init_from_context(context);
   msg.type                   = pulse::message_type::random_value_hash;
-  msg.quorum_position        = context.prepare_for_round.my_quorum_position;
   msg.random_value_hash.hash = crypto::cn_fast_hash(context.submit_random_value_hash.value.data, sizeof(context.submit_random_value_hash.value.data));
   crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
@@ -1245,9 +1259,8 @@ event_loop submit_random_value(round_context &context, void *quorumnet_state, se
   assert(context.prepare_for_round.participant == sn_type::validator);
 
   // Message
-  pulse::message msg     = {};
+  pulse::message msg     = msg_init_from_context(context);
   msg.type               = pulse::message_type::random_value;
-  msg.quorum_position    = context.prepare_for_round.my_quorum_position;
   msg.random_value.value = context.submit_random_value_hash.value;
   crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
@@ -1305,9 +1318,8 @@ event_loop submit_signed_block(round_context &context, void *quorumnet_state, se
   assert(context.prepare_for_round.participant == sn_type::validator);
 
   // Message
-  pulse::message msg  = {};
-  msg.type            = pulse::message_type::signed_block;
-  msg.quorum_position = context.prepare_for_round.my_quorum_position;
+  pulse::message msg = msg_init_from_context(context);
+  msg.type           = pulse::message_type::signed_block;
   crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
   // Add Ourselves

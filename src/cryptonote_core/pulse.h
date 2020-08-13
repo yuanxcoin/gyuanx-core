@@ -56,6 +56,7 @@ struct message
 {
   message_type type;
   uint16_t quorum_position;
+  uint8_t  round;
   crypto::signature signature;
 
   struct
