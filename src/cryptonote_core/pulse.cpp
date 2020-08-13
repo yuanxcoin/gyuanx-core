@@ -246,9 +246,7 @@ crypto::hash message_signature_hash(round_context const &context, pulse::message
     break;
 
     case pulse::message_type::signed_block:
-    {
       result = crypto::cn_fast_hash(context.submit_signed_block.blob.data(), context.submit_signed_block.blob.size());
-    }
     break;
   }
 
@@ -344,8 +342,31 @@ void relay_validator_handshake_bit_or_bitset(round_context const &context, void 
 
 void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 {
-  if (!message_signature_check(msg, context.prepare_for_round.quorum))
-    return;
+  if (msg.type == pulse::message_type::signed_block)
+  {
+    // Signed Block is the last message in the Pulse stage. This message
+    // signs the final block blob, with the final random value inserted in
+    // it.
+
+    // To avoid re-sending the blob which we already agreed upon when
+    // receiving the Block Template from the leader, this message's signature
+    // signs the sender's Final Block Template blob.
+
+    // To verify this signature we verify it against our version of the Final
+    // Block Template. However, this message could be received by us, before
+    // we're in the final Pulse stage, so we delay signature verification until
+    // this is possible.
+
+    // The other stages are unaffected by this because they are signing the
+    // contents of the message itself, of which, these messages are processed
+    // when we have reached that Pulse stage (where we have all the necessary
+    // information to validate the contents).
+  }
+  else
+  {
+    if (!message_signature_check(msg, context.prepare_for_round.quorum))
+      return;
+  }
 
   bool relay_message = false;
   switch(msg.type)
@@ -488,15 +509,18 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
       if (!msg_time_check(context, msg, pulse::clock::now(), context.wait_for_handshakes.start_time, context.wait_for_signed_blocks.end_time))
         return;
 
-      // TODO(doyle): Its possible to receive the signed block before we've produced
-      // the final random value. We need to delay verification to after we're
-      // ready for it.  This is the case for all the stages that rely on
-      // previous stages data being ready.
+      // Execute the delayed signature verification that relies on us being in
+      // the final Pulse Stage.
+      if (!message_signature_check(msg, context.prepare_for_round.quorum))
+      {
+        MDEBUG(log_prefix(context) << "Dropping " << message_source_string(context, msg) << ". Sender's final block template signature does not match ours");
+        return;
+      }
 
       uint16_t validator_bit = 1 << msg.quorum_position;
       if ((validator_bit & context.wait_for_block_template.block.pulse.validator_bitset) == 0)
       {
-        MINFO(log_prefix(context) << "Dropping " << message_source_string(context, msg) << ". Not a locked in participant.");
+        MDEBUG(log_prefix(context) << "Dropping " << message_source_string(context, msg) << ". Not a locked in participant.");
         return;
       }
 
