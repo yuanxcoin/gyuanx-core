@@ -1360,9 +1360,10 @@ event_loop wait_for_signed_blocks(round_context &context, void *quorumnet_state,
     }
 
     // Propagate Final Block
-    MINFO(log_prefix(context) << "Final signed block received\n" << cryptonote::obj_to_json_str(final_block));
+    MINFO(log_prefix(context) << "Final signed block constructed\n" << cryptonote::obj_to_json_str(final_block));
     cryptonote::block_verification_context bvc = {};
-    core.handle_block_found(final_block, bvc);
+    if (!core.handle_block_found(final_block, bvc))
+      return goto_preparing_for_next_round(context);
 
     context.state = round_state::wait_for_next_block;
     return event_loop::keep_running;
