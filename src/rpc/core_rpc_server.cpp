@@ -2187,8 +2187,12 @@ namespace cryptonote { namespace rpc {
     GET_COINBASE_TX_SUM::response res{};
 
     PERF_TIMER(on_get_coinbase_tx_sum);
-    std::tie(res.emission_amount, res.fee_amount, res.burn_amount) = m_core.get_coinbase_tx_sum(req.height, req.count);
-    res.status = STATUS_OK;
+    if (auto sums = m_core.get_coinbase_tx_sum(req.height, req.count)) {
+        std::tie(res.emission_amount, res.fee_amount, res.burn_amount) = *sums;
+        res.status = STATUS_OK;
+    } else {
+        res.status = STATUS_BUSY; // some other request is already calculating it
+    }
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------

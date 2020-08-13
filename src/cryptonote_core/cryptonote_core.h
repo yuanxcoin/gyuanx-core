@@ -795,9 +795,20 @@ namespace cryptonote
      /**
       * @brief get the sum of coinbase tx amounts between blocks
       *
-      * @return the number of blocks to sync in one go
+      * @param start_offset the height to start counting from
+      * @param count the number of blocks to include
+      *
+      * When requesting from the beginning of the chain (i.e. with `start_offset=0` and count >=
+      * current height) the first thread to call this will take a very long time; during this
+      * initial calculation any other threads that attempt to make a similar request will fail
+      * immediately (getting back std::nullopt) until the first thread to calculate it has finished,
+      * after which we use the cached value and only calculate for the last few blocks.
+      *
+      * @return optional tuple of: coin emissions, total fees, and total burned coins in the
+      * requested range.  The optional value will be empty only if requesting the full chain *and*
+      * another thread is already calculating it.
       */
-     std::tuple<uint64_t, uint64_t, uint64_t> get_coinbase_tx_sum(const uint64_t start_offset, const size_t count);
+     std::optional<std::tuple<uint64_t, uint64_t, uint64_t>> get_coinbase_tx_sum(uint64_t start_offset, size_t count);
 
      /**
       * @brief get the network type we're on
@@ -1212,6 +1223,11 @@ namespace cryptonote
 
      std::shared_ptr<tools::Notify> m_block_rate_notify;
 
+     struct {
+       std::shared_mutex mutex;
+       bool building = false;
+       uint64_t height = 0, emissions = 0, fees = 0, burnt = 0;
+     } m_coinbase_cache;
    };
 }
 

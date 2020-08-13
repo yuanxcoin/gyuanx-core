@@ -1672,20 +1672,88 @@ namespace cryptonote
     return m_mempool.check_for_key_images(key_im, spent);
   }
   //-----------------------------------------------------------------------------------------------
-  std::tuple<uint64_t, uint64_t, uint64_t> core::get_coinbase_tx_sum(const uint64_t start_offset, const size_t count)
+  std::optional<std::tuple<uint64_t, uint64_t, uint64_t>> core::get_coinbase_tx_sum(uint64_t start_offset, size_t count)
   {
-    uint64_t emission_amount = 0;
-    uint64_t total_fee_amount = 0;
-    uint64_t burnt_loki = 0;
-    if (count)
-    {
-      const uint64_t end = start_offset + count - 1;
-      m_blockchain_storage.for_blocks_range(start_offset, end,
-        [this, &emission_amount, &total_fee_amount, &burnt_loki](uint64_t, const crypto::hash& hash, const block& b){
+    std::tuple<uint64_t, uint64_t, uint64_t> result{0, 0, 0};
+    if (count == 0)
+      return result;
+
+    auto& [emission_amount, total_fee_amount, burnt_loki] = result;
+
+    // Caching.
+    //
+    // Requesting this value from the beginning of the chain is very slow, so we cache it.  That
+    // still means the first request will be slow, but that's okay.  To prevent a bunch of threads
+    // getting backed up trying to calculate this, we lock out more than one thread building the
+    // cache at a time if we're requesting a large number of block values at once.  Any other thread
+    // requesting will get a nullopt back.
+
+    constexpr uint64_t CACHE_LAG = 30; // We cache the values up to this many blocks ago; we lag so that we don't have to worry about small reorgs
+    constexpr uint64_t CACHE_EXCLUSIVE = 1000; // If we need to load more than this, we block out other threads
+
+    // Check if we have a cacheable from-the-beginning result
+    uint64_t cache_to = 0;
+    std::chrono::steady_clock::time_point cache_build_started;
+    if (start_offset == 0) {
+      uint64_t height = m_blockchain_storage.get_current_blockchain_height();
+      if (count > height) count = height;
+      cache_to = height - std::min(CACHE_LAG, height);
+      {
+        std::shared_lock lock{m_coinbase_cache.mutex};
+        if (count >= m_coinbase_cache.height) {
+          emission_amount = m_coinbase_cache.emissions;
+          total_fee_amount = m_coinbase_cache.fees;
+          burnt_loki = m_coinbase_cache.burnt;
+          start_offset = m_coinbase_cache.height;
+          count -= m_coinbase_cache.height;
+        }
+        // else don't change anything; we need a subset of blocks that ends before the cache.
+
+        if (cache_to <= m_coinbase_cache.height)
+          cache_to = 0; // Cache doesn't need updating
+      }
+
+      // If we're loading a lot then acquire an exclusive lock, recheck our variables, and block out
+      // other threads until we're done.  (We don't do this if we're only loading a few because even
+      // if we have some competing cache updates they don't hurt anything).
+      if (cache_to > 0 && count > CACHE_EXCLUSIVE) {
+        std::unique_lock lock{m_coinbase_cache.mutex};
+        if (m_coinbase_cache.building)
+          return std::nullopt; // Another thread is already updating the cache
+
+        if (m_coinbase_cache.height > start_offset) {
+          // Someone else updated the cache while we were acquiring the unique lock, so update our variables
+          if (m_coinbase_cache.height >= start_offset + count) {
+            // The cache is now *beyond* us, which means we can't use it, so reset start/count back
+            // to what they were originally.
+            count += start_offset;
+            start_offset = 0;
+            cache_to = 0;
+          } else {
+            // The cache is updated and we can still use it, so update our variables.
+            emission_amount = m_coinbase_cache.emissions;
+            total_fee_amount = m_coinbase_cache.fees;
+            burnt_loki = m_coinbase_cache.burnt;
+            count -= m_coinbase_cache.height - start_offset;
+            start_offset = m_coinbase_cache.height;
+          }
+        }
+        if (cache_to > 0 && count > CACHE_EXCLUSIVE) {
+          cache_build_started = std::chrono::steady_clock::now();
+          m_coinbase_cache.building = true; // Block out other threads until we're done
+          MINFO("Starting slow cache build request for get_coinbase_tx_sum(" << start_offset << ", " << count << ")");
+        }
+      }
+    }
+
+    const uint64_t end = start_offset + count - 1;
+    m_blockchain_storage.for_blocks_range(start_offset, end,
+      [this, &cache_to, &result, &cache_build_started](uint64_t height, const crypto::hash& hash, const block& b){
+      auto& [emission_amount, total_fee_amount, burnt_loki] = result;
       std::vector<transaction> txs;
       std::vector<crypto::hash> missed_txs;
       uint64_t coinbase_amount = get_outs_money_amount(b.miner_tx);
-      this->get_transactions(b.tx_hashes, txs, missed_txs);      
+      get_transactions(b.tx_hashes, txs, missed_txs);
       uint64_t tx_fee_amount = 0;
       for(const auto& tx: txs)
       {
@@ -1695,14 +1763,28 @@ namespace cryptonote
           burnt_loki += get_burned_amount_from_tx_extra(tx.extra);
         }
       }
-      
+
       emission_amount += coinbase_amount - tx_fee_amount;
       total_fee_amount += tx_fee_amount;
+      if (cache_to && cache_to == height)
+      {
+        std::unique_lock lock{m_coinbase_cache.mutex};
+        m_coinbase_cache.height = height;
+        m_coinbase_cache.emissions = emission_amount;
+        m_coinbase_cache.fees = total_fee_amount;
+        m_coinbase_cache.burnt = burnt_loki;
+        if (m_coinbase_cache.building)
+        {
+          m_coinbase_cache.building = false;
+          MINFO("Finishing cache build for get_coinbase_tx_sum in " <<
+              std::chrono::duration<double>{std::chrono::steady_clock::now() - cache_build_started}.count() << "s");
+          cache_to = 0;
+        }
+      }
       return true;
-      });
-    }
+    });
 
-    return std::tuple<uint64_t, uint64_t, uint64_t>(emission_amount, total_fee_amount, burnt_loki);
+    return result;
   }
   //-----------------------------------------------------------------------------------------------
   bool core::check_tx_inputs_keyimages_diff(const transaction& tx) const
