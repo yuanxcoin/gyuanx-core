@@ -183,7 +183,6 @@ struct round_context
 static round_context context;
 namespace
 {
-
 std::string log_prefix(round_context const &context)
 {
   std::stringstream result;
@@ -199,7 +198,12 @@ std::string log_prefix(round_context const &context)
   return result.str();
 }
 
-crypto::hash message_signature_hash(round_context const &context, pulse::message const &msg)
+//
+// NOTE: pulse::message Utiliities
+//
+// Generate the hash necessary for signing a message. All fields of the message
+// must have been set for that message type except the signature.
+crypto::hash msg_signature_hash(round_context const &context, pulse::message const &msg)
 {
   assert(context.state >= round_state::wait_for_next_block);
   crypto::hash result = {};
@@ -249,7 +253,11 @@ crypto::hash message_signature_hash(round_context const &context, pulse::message
   return result;
 }
 
-std::string message_source_string(round_context const &context, pulse::message const &msg)
+// Generate a helper string that describes the origin of the message, i.e.
+// 'Signed Block' from 6:f9337ffc8bc30baf3fca92a13fa5a3a7ab7c93e69acb7136906e7feae9d3e769
+//   or
+// <Message Type> from <Validator Index>:<Validator Public Key>
+std::string msg_source_string(round_context const &context, pulse::message const &msg)
 {
   if (msg.quorum_position >= context.prepare_for_round.quorum.validators.size()) return "XX";
   assert(context.state >= round_state::prepare_for_round);
@@ -262,7 +270,7 @@ std::string message_source_string(round_context const &context, pulse::message c
   return stream.str();
 }
 
-bool message_signature_check(pulse::message const &msg, service_nodes::quorum const &quorum)
+bool msg_signature_check(pulse::message const &msg, service_nodes::quorum const &quorum)
 {
   // Get Service Node Key
   crypto::public_key const *key = nullptr;
@@ -305,15 +313,19 @@ bool message_signature_check(pulse::message const &msg, service_nodes::quorum co
     break;
   }
 
-  if (!crypto::check_signature(message_signature_hash(context, msg), *key, msg.signature))
+  if (!crypto::check_signature(msg_signature_hash(context, msg), *key, msg.signature))
   {
-    MERROR(log_prefix(context) << "Signature for " << message_source_string(context, msg) << " at height " << context.wait_for_next_block.height << "; is invalid");
+    MERROR(log_prefix(context) << "Signature for " << msg_source_string(context, msg) << " at height " << context.wait_for_next_block.height << "; is invalid");
     return false;
   }
 
   return true;
 }
 
+//
+// NOTE: round_context Utilities
+//
+// Construct a pulse::message for sending the handshake bit or bitset.
 void relay_validator_handshake_bit_or_bitset(round_context const &context, void *quorumnet_state, service_nodes::service_node_keys const &key, bool sending_bitset)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
@@ -336,7 +348,7 @@ void relay_validator_handshake_bit_or_bitset(round_context const &context, void 
   {
     msg.type = pulse::message_type::handshake;
   }
-  crypto::generate_signature(message_signature_hash(context, msg), key.pub, key.key, msg.signature);
+  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
   // Add our own handshake/bitset
   handle_message(nullptr, msg);
@@ -345,6 +357,9 @@ void relay_validator_handshake_bit_or_bitset(round_context const &context, void 
   cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
 }
 
+// Check the stage's queue for any messages that we received early and process
+// them if any. Any messages in the queue that we haven't received yet will also
+// be relayed to the quorum.
 void handle_messages_received_early_for(pulse_wait_stage &stage, void *quorumnet_state)
 {
   if (!stage.queue.count)
@@ -360,6 +375,8 @@ void handle_messages_received_early_for(pulse_wait_stage &stage, void *quorumnet
   }
 }
 
+// In Pulse, after the block template and validators are locked in, enforce that
+// all participating validators are doing their job in the stage.
 bool enforce_validator_participation_and_timeouts(round_context const &context,
                                                   pulse_wait_stage const &stage,
                                                   bool timed_out,
@@ -376,6 +393,8 @@ bool enforce_validator_participation_and_timeouts(round_context const &context,
     return false;
   }
 
+  // NOTE: This is not technically meant to hit, internal invariant checking
+  // that should have been triggered earlier.
   bool unexpected_items = (stage.bitset | validator_bitset) != validator_bitset;
   if (stage.msgs_received == 0 || unexpected_items)
   {
@@ -417,7 +436,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
   }
   else
   {
-    if (!message_signature_check(msg, context.prepare_for_round.quorum))
+    if (!msg_signature_check(msg, context.prepare_for_round.quorum))
       return;
   }
 
@@ -450,7 +469,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     auto &[entry, queued] = stage->queue.buffer[msg.quorum_position];
     if (queued == queueing_state::empty)
     {
-      MINFO(log_prefix(context) << "Message received early " << message_source_string(context, msg) << ", queueing until we're ready.");
+      MINFO(log_prefix(context) << "Message received early " << msg_source_string(context, msg) << ", queueing until we're ready.");
       stage->queue.count++;
       entry  = std::move(msg);
       queued = queueing_state::received;
@@ -466,7 +485,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     // locked in. Any stray messages from other validators are rejected.
     if ((validator_bit & context.wait_for_block_template.block.pulse.validator_bitset) == 0)
     {
-      MINFO(log_prefix(context) << "Dropping " << message_source_string(context, msg) << ". Not a locked in participant.");
+      MINFO(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Not a locked in participant.");
       return;
     }
   }
@@ -547,7 +566,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
         auto derived = crypto::cn_fast_hash(msg.random_value.value.data, sizeof(msg.random_value.value.data));
         if (derived != hash)
         {
-          MINFO(log_prefix(context) << "Dropping " << message_source_string(context, msg) << ". Rederived random value hash "
+          MINFO(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Rederived random value hash "
                                     << lokimq::to_hex(tools::view_guts(derived)) << " does not match original hash "
                                     << lokimq::to_hex(tools::view_guts(hash)));
           return;
@@ -563,13 +582,13 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     {
       // Delayed signature verification because signature contents relies on us
       // have the Pulse data from the final stage
-      if (!message_signature_check(msg, context.prepare_for_round.quorum))
+      if (!msg_signature_check(msg, context.prepare_for_round.quorum))
       {
-        MDEBUG(log_prefix(context) << "Dropping " << message_source_string(context, msg) << ". Sender's final block template signature does not match ours");
+        MDEBUG(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Sender's final block template signature does not match ours");
         return;
       }
 
-      // Signature already verified in message_signature_check(...)
+      // Signature already verified in msg_signature_check(...)
       auto &quorum                = context.wait_for_signed_blocks.data;
       auto &[signature, received] = quorum[msg.quorum_position];
       if (received) return;
@@ -750,7 +769,6 @@ Yes +-----[Insufficient Bitsets]
     - TODO(loki): TBD
 
 */
-
 
 enum struct event_loop
 {
@@ -1129,7 +1147,7 @@ event_loop submit_block_template(round_context &context, service_nodes::service_
   pulse::message msg      = {};
   msg.type                = pulse::message_type::block_template;
   msg.block_template.blob = cryptonote::t_serializable_object_to_blob(block);
-  crypto::generate_signature(message_signature_hash(context, msg), key.pub, key.key, msg.signature);
+  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
   // Send
   MINFO(log_prefix(context) << "Validators are handshaken and ready, sending block template from producer (us) to validators.\n" << cryptonote::obj_to_json_str(block));
@@ -1189,7 +1207,7 @@ event_loop submit_random_value_hash(round_context &context, void *quorumnet_stat
   msg.type                   = pulse::message_type::random_value_hash;
   msg.quorum_position        = context.prepare_for_round.my_quorum_position;
   msg.random_value_hash.hash = crypto::cn_fast_hash(context.submit_random_value_hash.value.data, sizeof(context.submit_random_value_hash.value.data));
-  crypto::generate_signature(message_signature_hash(context, msg), key.pub, key.key, msg.signature);
+  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
   // Add Ourselves
   handle_message(nullptr /*quorumnet_state*/, msg);
@@ -1231,7 +1249,7 @@ event_loop submit_random_value(round_context &context, void *quorumnet_state, se
   msg.type               = pulse::message_type::random_value;
   msg.quorum_position    = context.prepare_for_round.my_quorum_position;
   msg.random_value.value = context.submit_random_value_hash.value;
-  crypto::generate_signature(message_signature_hash(context, msg), key.pub, key.key, msg.signature);
+  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
   // Add Ourselves
   handle_message(nullptr /*quorumnet_state*/, msg);
@@ -1290,7 +1308,7 @@ event_loop submit_signed_block(round_context &context, void *quorumnet_state, se
   pulse::message msg  = {};
   msg.type            = pulse::message_type::signed_block;
   msg.quorum_position = context.prepare_for_round.my_quorum_position;
-  crypto::generate_signature(message_signature_hash(context, msg), key.pub, key.key, msg.signature);
+  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
   // Add Ourselves
   handle_message(nullptr /*quorumnet_state*/, msg);
@@ -1349,7 +1367,6 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
 {
   cryptonote::Blockchain &blockchain          = core.get_blockchain_storage();
   service_nodes::service_node_keys const &key = core.get_service_keys();
-  std::mutex pulse_mutex;
 
   //
   // NOTE: Early exit if too early
@@ -1371,6 +1388,11 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
 
   for (auto loop = event_loop::keep_running; loop == event_loop::keep_running;)
   {
+    // TODO(doyle): Combine submit and wait stages. Submit goes straight to wait
+    // stage, so instead of returning, looping in here again and
+    // heading to the next state just execute the next state.
+
+    // With that we can get rid of event_loop
     switch (context.state)
     {
       case round_state::wait_for_next_block:
