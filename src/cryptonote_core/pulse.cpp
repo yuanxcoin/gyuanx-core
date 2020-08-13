@@ -168,7 +168,7 @@ struct round_context
 
   struct
   {
-    std::string blob;
+    cryptonote::block block;
   } submit_signed_block;
 
   struct
@@ -246,7 +246,7 @@ crypto::hash msg_signature_hash(round_context const &context, pulse::message con
     break;
 
     case pulse::message_type::signed_block:
-      result = crypto::cn_fast_hash(context.submit_signed_block.blob.data(), context.submit_signed_block.blob.size());
+      result = cryptonote::get_block_hash(context.submit_signed_block.block);
     break;
   }
 
@@ -1292,8 +1292,8 @@ event_loop wait_for_random_value(round_context &context, void *quorumnet_state)
     std::memcpy(final_random_value.data, final_hash.data, sizeof(final_random_value.data));
 
     MINFO(log_prefix(context) << "Block final random value " << lokimq::to_hex(tools::view_guts(final_random_value.data)) << " generated from validators " << stage.bitset_view());
-    context.submit_signed_block.blob = cryptonote::t_serializable_object_to_blob(block);
-    context.state                    = round_state::submit_signed_block;
+    context.submit_signed_block.block = std::move(block);
+    context.state                     = round_state::submit_signed_block;
     return event_loop::keep_running;
   }
 
