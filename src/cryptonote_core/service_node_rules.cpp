@@ -16,13 +16,20 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
   if (m_nettype == cryptonote::TESTNET || m_nettype == cryptonote::FAKECHAIN)
       return COIN * 100;
 
-  // For devnet we use the 10% of mainnet requirement at height (650k + H) so that we follow the
-  // same linear approximation but stay a bit ahead of it (devnet launched at ~600k mainnet height).
+  // For devnet we use the 10% of mainnet requirement at height (650k + H) so that we follow
+  // (proportionally) whatever staking changes happen on mainnet.  (The 650k is because devnet
+  // launched at ~600k mainnet height, so this puts it a little ahead).
   if (m_nettype == cryptonote::DEVNET)
       return get_staking_requirement(cryptonote::MAINNET, 600000 + height, hf_version) / 10;
 
+  if (hf_version >= cryptonote::network_version_16)
+    return 15000'000000000;
+
   if (hf_version >= cryptonote::network_version_13_enforce_checkpoints)
   {
+    // TODO: after HF16 we can remove excess elements here: we need to keep the first one higher
+    // than the HF16 fork height, but can delete everything above that (which probably will mean
+    // removing 688244 and above).
     constexpr int64_t heights[] = {
         385824,
         429024,
