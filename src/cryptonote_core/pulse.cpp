@@ -75,6 +75,10 @@ enum struct queueing_state
   processed,
 };
 
+// Stores message for quorumnet per stage. Some validators may reach later
+// stages before we arrive at that stage. To properly validate messages we also
+// need to wait until we arrive at the same stage such that we have received all
+// the necessary information to do so on Quorumnet.
 struct message_queue
 {
   std::array<std::pair<pulse::message, queueing_state>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> buffer;
@@ -92,8 +96,8 @@ struct pulse_wait_stage
 template <typename T>
 struct pulse_send_stage
 {
-  T    data;
-  bool sent;
+  T    data; // Data that must be sent to Nodes via Quorumnet
+  bool sent; // When true, data has been sent via Quorumnet once already.
 
   bool one_time_only()
   {
@@ -110,44 +114,44 @@ struct round_context
 {
   struct
   {
-    uint64_t          height;
-    crypto::hash      top_hash;
-    uint64_t          top_block_timestamp;
-    pulse::time_point round_0_start_time;
+    uint64_t          height;              // Current blockchain height that Pulse wants to generate a block for
+    crypto::hash      top_hash;            // Latest block hash included in signatures for rejecting out of date nodes
+    uint64_t          top_block_timestamp; // Latest block timestamp for setting the ideal block target time
+    pulse::time_point round_0_start_time;  // When round 0 should start and subsequent round timings are derived from.
   } wait_for_next_block;
 
   struct
   {
-    bool                  queue_for_next_round;
-    uint8_t               round;
-    service_nodes::quorum quorum;
-    sn_type               participant;
-    size_t                my_quorum_position;
-    std::string           node_name;
-    pulse::time_point     start_time;
+    bool                  queue_for_next_round; // When set to true, invoking prepare_for_round(...) will wait for (round + 1)
+    uint8_t               round;                // The next round the Pulse ceremony will generate a block for
+    service_nodes::quorum quorum;               // The block producer/validator participating in the next round
+    sn_type               participant;          // Is this daemon a block producer, validator or non participant.
+    size_t                my_quorum_position;   // Position in the quorum, 0 if producer or neither, or [0, PULSE_QUORUM_NUM_VALIDATORS) if a validator
+    std::string           node_name;            // Short-hand string for describing the node in logs, i.e. V[0] for validator 0 or W[0] for the producer.
+    pulse::time_point     start_time;           // When the round starts
   } prepare_for_round;
 
   struct
   {
     struct
     {
-      bool sent;
-      std::array<bool, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+      bool sent;                                                         // When true, handshake sent and waiting for other handshakes
+      std::array<bool, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data; // Received data from messages from Quorumnet
       pulse_wait_stage stage;
     } send_and_wait_for_handshakes;
 
     struct
     {
-      std::array<std::pair<uint16_t, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+      std::array<std::pair<uint16_t, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
       pulse_wait_stage stage;
 
-      uint16_t best_bitset;
-      uint16_t best_count;
+      uint16_t best_bitset; // The most agreed upon validators for participating in rounds. Value is set when all handshake bitsets are received.
+      uint16_t best_count;  // How many validators agreed upon the best bitset.
     } wait_for_handshake_bitsets;
 
     struct
     {
-      cryptonote::block block;
+      cryptonote::block block; // The block template with the best validator bitset and Pulse round applied to it.
       pulse_wait_stage  stage;
     } wait_for_block_template;
 
@@ -156,7 +160,7 @@ struct round_context
       pulse_send_stage<crypto::hash> send;
       struct
       {
-        std::array<std::pair<crypto::hash, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        std::array<std::pair<crypto::hash, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
         pulse_wait_stage stage;
       } wait;
     } random_value_hashes;
@@ -167,7 +171,7 @@ struct round_context
 
       struct
       {
-        std::array<std::pair<cryptonote::pulse_random_value, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        std::array<std::pair<cryptonote::pulse_random_value, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
         pulse_wait_stage stage;
       } wait;
     } random_value;
@@ -178,7 +182,7 @@ struct round_context
 
       struct
       {
-        std::array<std::pair<crypto::signature, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        std::array<std::pair<crypto::signature, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
         pulse_wait_stage stage;
       } wait;
     } signed_block;
@@ -275,9 +279,9 @@ crypto::hash msg_signature_hash(round_context const &context, pulse::message con
 }
 
 // Generate a helper string that describes the origin of the message, i.e.
-// 'Signed Block' from 6:f9337ffc8bc30baf3fca92a13fa5a3a7ab7c93e69acb7136906e7feae9d3e769 for round 1
+// 'Signed Block' from 6:f9337ffc8bc30baf3fca92a13fa5a3a7ab7c93e69acb7136906e7feae9d3e769
 //   or
-// <Message Type> from <Validator Index>:<Validator Public Key> for round <Round Number>
+// <Message Type> from <Validator Index>:<Validator Public Key>
 std::string msg_source_string(round_context const &context, pulse::message const &msg)
 {
   if (msg.quorum_position >= context.prepare_for_round.quorum.validators.size()) return "XX";
@@ -286,8 +290,11 @@ std::string msg_source_string(round_context const &context, pulse::message const
   stream << "'" << message_type_string(msg.type) << "' from " << msg.quorum_position;
   if (context.state >= round_state::prepare_for_round)
   {
-    crypto::public_key const &key = context.prepare_for_round.quorum.validators[msg.quorum_position];
-    stream << ":" << lokimq::to_hex(tools::view_guts(key));
+    if (msg.quorum_position < context.prepare_for_round.quorum.validators.size())
+    {
+      crypto::public_key const &key = context.prepare_for_round.quorum.validators[msg.quorum_position];
+      stream << ":" << lokimq::to_hex(tools::view_guts(key));
+    }
   }
 
   return stream.str();
@@ -504,7 +511,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
   if (context.state > round_state::wait_for_handshake_bitsets &&
       msg.type > pulse::message_type::handshake_bitset)
   {
-    // After the validator bitset has been set, the partcipating validators are
+    // After the validator bitset has been set, the participating validators are
     // locked in. Any stray messages from other validators are rejected.
     if ((validator_bit & context.transient.wait_for_handshake_bitsets.best_bitset) == 0)
     {
@@ -514,10 +521,15 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     }
   }
 
+  if (msg.quorum_position >= service_nodes::PULSE_QUORUM_NUM_VALIDATORS)
+  {
+    MINFO(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Message quorum position indexes oob");
+    return;
+  }
+
   //
   // Add Message Data to Pulse Stage
   //
-  assert(msg.quorum_position < service_nodes::PULSE_QUORUM_NUM_VALIDATORS);
   switch(msg.type)
   {
     case pulse::message_type::invalid:
