@@ -16,56 +16,46 @@
 
 enum struct round_state
 {
+  null_state,
   wait_for_next_block,
 
   prepare_for_round,
   wait_for_round,
 
-  submit_handshakes,
-  wait_for_handshakes,
+  send_and_wait_for_handshakes,
 
-  submit_handshake_bitset,
+  send_handshake_bitsets,
   wait_for_handshake_bitsets,
 
-  submit_block_template,
+  send_block_template,
   wait_for_block_template,
 
-  submit_random_value_hash,
-  wait_for_random_value_hashes,
-
-  submit_random_value,
-  wait_for_random_value,
-
-  submit_signed_block,
-  wait_for_signed_blocks,
+  send_and_wait_for_random_value_hashes,
+  send_and_wait_for_random_value,
+  send_and_wait_for_signed_blocks,
 };
 
 constexpr std::string_view round_state_string(round_state state)
 {
   switch(state)
   {
+    case round_state::null_state: return "XX Null State"sv;
     case round_state::wait_for_next_block: return "Wait For Next Block"sv;
 
     case round_state::prepare_for_round: return "Prepare For Round"sv;
     case round_state::wait_for_round: return "Wait For Round"sv;
 
-    case round_state::submit_handshakes: return "Submit Handshakes"sv;
-    case round_state::wait_for_handshakes: return "Wait For Handshakes"sv;
+    case round_state::send_and_wait_for_handshakes: return "Send & Wait For Handshakes"sv;
 
-    case round_state::submit_handshake_bitset: return "Submit Handshake Bitset"sv;
+    case round_state::send_handshake_bitsets: return "Send Validator Handshake Bitsets"sv;
     case round_state::wait_for_handshake_bitsets: return "Wait For Validator Handshake Bitsets"sv;
 
-    case round_state::submit_block_template: return "Submit Block Template"sv;
+    case round_state::send_block_template: return "Send Block Template"sv;
     case round_state::wait_for_block_template: return "Wait For Block Template"sv;
 
-    case round_state::submit_random_value_hash: return "Submit Random Value Hash"sv;
-    case round_state::wait_for_random_value_hashes: return "Wait For Random Value Hash"sv;
-
-    case round_state::submit_random_value: return "Submit Random Value"sv;
-    case round_state::wait_for_random_value: return "Wait For Random Value"sv;
-
-    case round_state::submit_signed_block: return "Submit Signed Block"sv;
-    case round_state::wait_for_signed_blocks: return "Wait For Signed Blocks"sv;
+    case round_state::send_and_wait_for_random_value_hashes: return "Send & Wait For Random Value Hash"sv;
+    case round_state::send_and_wait_for_random_value: return "Send & Wait For Random Value"sv;
+    case round_state::send_and_wait_for_signed_blocks: return "Send & Wait For Signed Blocks"sv;
   }
 
   return "Invalid2"sv;
@@ -102,6 +92,20 @@ struct pulse_wait_stage
 };
 
 template <typename T>
+struct pulse_send_stage
+{
+  T    data;
+  bool sent;
+
+  bool one_time_only()
+  {
+    if (sent) return false;
+    sent = true;
+    return true;
+  }
+};
+
+template <typename T>
 using quorum_array = std::array<T, service_nodes::PULSE_QUORUM_NUM_VALIDATORS>;
 
 struct round_context
@@ -129,55 +133,57 @@ struct round_context
   {
     struct
     {
+      bool sent;
       std::array<bool, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
       pulse_wait_stage stage;
-    } wait_for_handshakes;
+    } send_and_wait_for_handshakes;
 
     struct
     {
       std::array<std::pair<uint16_t, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
       pulse_wait_stage stage;
+
+      uint16_t best_bitset;
+      uint16_t best_count;
     } wait_for_handshake_bitsets;
 
     struct
     {
-      uint16_t validator_bitset;
-      uint16_t validator_count;
-    } submit_block_template;
-
-    struct
-    {
       cryptonote::block block;
-      pulse_wait_stage stage;
+      pulse_wait_stage  stage;
     } wait_for_block_template;
 
     struct
     {
-      cryptonote::pulse_random_value value;
-    } submit_random_value_hash;
+      pulse_send_stage<crypto::hash> send;
+      struct
+      {
+        std::array<std::pair<crypto::hash, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        pulse_wait_stage stage;
+      } wait;
+    } random_value_hashes;
 
     struct
     {
-      std::array<std::pair<crypto::hash, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
-      pulse_wait_stage stage;
-    } wait_for_random_value_hashes;
+      pulse_send_stage<cryptonote::pulse_random_value> send;
+
+      struct
+      {
+        std::array<std::pair<cryptonote::pulse_random_value, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        pulse_wait_stage stage;
+      } wait;
+    } random_value;
 
     struct
     {
-      std::array<std::pair<cryptonote::pulse_random_value, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
-      pulse_wait_stage stage;
-    } wait_for_random_value;
+      pulse_send_stage<cryptonote::block> send;
 
-    struct
-    {
-      cryptonote::block block;
-    } submit_signed_block;
-
-    struct
-    {
-      std::array<std::pair<crypto::signature, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
-      pulse_wait_stage stage;
-    } wait_for_signed_blocks;
+      struct
+      {
+        std::array<std::pair<crypto::signature, bool>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        pulse_wait_stage stage;
+      } wait;
+    } signed_block;
   } transient;
 
   round_state state;
@@ -257,7 +263,7 @@ crypto::hash msg_signature_hash(round_context const &context, pulse::message con
     break;
 
     case pulse::message_type::signed_block:
-      result = cryptonote::get_block_hash(context.transient.submit_signed_block.block);
+      result = cryptonote::get_block_hash(context.transient.signed_block.send.data);
     break;
   }
 
@@ -350,7 +356,7 @@ void relay_validator_handshake_bit_or_bitset(round_context const &context, void 
     msg.type = pulse::message_type::handshake_bitset;
 
     // Generate the bitset from our received handshakes.
-    auto const &quorum = context.transient.wait_for_handshakes.data;
+    auto const &quorum = context.transient.send_and_wait_for_handshakes.data;
     for (size_t quorum_index = 0; quorum_index < quorum.size(); quorum_index++)
       if (bool received = quorum[quorum_index]; received)
         msg.handshakes.validator_bitset |= (1 << quorum_index);
@@ -454,13 +460,13 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
   pulse_wait_stage *stage = nullptr;
   switch(msg.type)
   {
-    case pulse::message_type::invalid:           assert("Invalid Code Path" != nullptr);              return;
-    case pulse::message_type::handshake:         stage = &context.transient.wait_for_handshakes.stage;          break;
+    case pulse::message_type::invalid:           assert("Invalid Code Path" != nullptr);                        return;
+    case pulse::message_type::handshake:         stage = &context.transient.send_and_wait_for_handshakes.stage; break;
     case pulse::message_type::handshake_bitset:  stage = &context.transient.wait_for_handshake_bitsets.stage;   break;
     case pulse::message_type::block_template:    stage = &context.transient.wait_for_block_template.stage;      break;
-    case pulse::message_type::random_value_hash: stage = &context.transient.wait_for_random_value_hashes.stage; break;
-    case pulse::message_type::random_value:      stage = &context.transient.wait_for_random_value.stage;        break;
-    case pulse::message_type::signed_block:      stage = &context.transient.wait_for_signed_blocks.stage;       break;
+    case pulse::message_type::random_value_hash: stage = &context.transient.random_value_hashes.wait.stage;     break;
+    case pulse::message_type::random_value:      stage = &context.transient.random_value.wait.stage;            break;
+    case pulse::message_type::signed_block:      stage = &context.transient.signed_block.wait.stage;            break;
   }
 
   // TODO(doyle): We need to support potentially receiving messages from the future up to 1 round.
@@ -474,12 +480,12 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
   switch(msg.type)
   {
     case pulse::message_type::invalid:           assert("Invalid Code Path" != nullptr); return;
-    case pulse::message_type::handshake:         msg_received_early = (context.state < round_state::wait_for_handshakes);          break;
-    case pulse::message_type::handshake_bitset:  msg_received_early = (context.state < round_state::wait_for_handshake_bitsets);   break;
-    case pulse::message_type::block_template:    msg_received_early = (context.state < round_state::wait_for_block_template);      break;
-    case pulse::message_type::random_value_hash: msg_received_early = (context.state < round_state::wait_for_random_value_hashes); break;
-    case pulse::message_type::random_value:      msg_received_early = (context.state < round_state::wait_for_random_value);        break;
-    case pulse::message_type::signed_block:      msg_received_early = (context.state < round_state::wait_for_signed_blocks);       break;
+    case pulse::message_type::handshake:         msg_received_early = (context.state < round_state::send_and_wait_for_handshakes);          break;
+    case pulse::message_type::handshake_bitset:  msg_received_early = (context.state < round_state::wait_for_handshake_bitsets);            break;
+    case pulse::message_type::block_template:    msg_received_early = (context.state < round_state::wait_for_block_template);               break;
+    case pulse::message_type::random_value_hash: msg_received_early = (context.state < round_state::send_and_wait_for_random_value_hashes); break;
+    case pulse::message_type::random_value:      msg_received_early = (context.state < round_state::send_and_wait_for_random_value);        break;
+    case pulse::message_type::signed_block:      msg_received_early = (context.state < round_state::send_and_wait_for_signed_blocks);       break;
   }
 
   if (msg_received_early) // Enqueue the message until we're ready to process it
@@ -497,13 +503,15 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
   }
 
   uint16_t const validator_bit = (1 << msg.quorum_position);
-  if (context.state > round_state::wait_for_block_template)
+  if (context.state > round_state::wait_for_handshake_bitsets &&
+      msg.type > pulse::message_type::handshake_bitset)
   {
-    // After the block template is received the partcipating validators are
+    // After the validator bitset has been set, the partcipating validators are
     // locked in. Any stray messages from other validators are rejected.
-    if ((validator_bit & context.transient.wait_for_block_template.block.pulse.validator_bitset) == 0)
+    if ((validator_bit & context.transient.wait_for_handshake_bitsets.best_bitset) == 0)
     {
-      MINFO(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Not a locked in participant.");
+      std::bitset<sizeof(validator_bit) * 8> bitset_view = context.transient.wait_for_handshake_bitsets.best_bitset;
+      MINFO(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Not a locked in participant, bitset is " << bitset_view);
       return;
     }
   }
@@ -520,7 +528,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 
     case pulse::message_type::handshake:
     {
-      auto &quorum = context.transient.wait_for_handshakes.data;
+      auto &quorum = context.transient.send_and_wait_for_handshakes.data;
       if (quorum[msg.quorum_position]) return;
       quorum[msg.quorum_position] = true;
 
@@ -565,7 +573,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 
     case pulse::message_type::random_value_hash:
     {
-      auto &quorum            = context.transient.wait_for_random_value_hashes.data;
+      auto &quorum            = context.transient.random_value_hashes.wait.data;
       auto &[value, received] = quorum[msg.quorum_position];
       if (received) return;
       value    = msg.random_value_hash.hash;
@@ -575,11 +583,11 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 
     case pulse::message_type::random_value:
     {
-      auto &quorum            = context.transient.wait_for_random_value.data;
+      auto &quorum            = context.transient.random_value.wait.data;
       auto &[value, received] = quorum[msg.quorum_position];
       if (received) return;
 
-      if (auto const &[hash, hash_received] = context.transient.wait_for_random_value_hashes.data[msg.quorum_position]; hash_received)
+      if (auto const &[hash, hash_received] = context.transient.random_value_hashes.wait.data[msg.quorum_position]; hash_received)
       {
         auto derived = crypto::cn_fast_hash(msg.random_value.value.data, sizeof(msg.random_value.value.data));
         if (derived != hash)
@@ -607,7 +615,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
       }
 
       // Signature already verified in msg_signature_check(...)
-      auto &quorum                = context.transient.wait_for_signed_blocks.data;
+      auto &quorum                = context.transient.signed_block.wait.data;
       auto &[signature, received] = quorum[msg.quorum_position];
       if (received) return;
 
@@ -764,7 +772,7 @@ Yes +-----[Insufficient Bitsets]
     - Validators will each individually collect handshakes and build up a
       bitset of validators perceived to be participating.
 
-    - When all handshakes are received we submit our bitset and progress to
+    - When all handshakes are received we send our bitset and progress to
       'Wait For Handshake Bitsets'
 
   Wait For Handshake Bitset:
@@ -781,27 +789,21 @@ Yes +-----[Insufficient Bitsets]
 
   Submit Block Template:
     - Block producer signs the block template with the validator bitset and
-      pulse round applied to the block and submits it the Validators
+      pulse round applied to the block and sends it the Validators
 
   Wait For Block Template:
     - TODO(loki): TBD
 
 */
 
-enum struct event_loop
-{
-  keep_running,
-  return_to_caller,
-};
 
-event_loop goto_preparing_for_next_round(round_context &context)
+round_state goto_preparing_for_next_round(round_context &context)
 {
-  context.state                                  = round_state::prepare_for_round;
   context.prepare_for_round.queue_for_next_round = true;
-  return event_loop::keep_running;
+  return round_state::prepare_for_round;
 }
 
-event_loop wait_for_next_block(uint64_t hf16_height, round_context &context, cryptonote::Blockchain const &blockchain)
+round_state wait_for_next_block(uint64_t hf16_height, round_context &context, cryptonote::Blockchain const &blockchain)
 {
   //
   // NOTE: If already processing pulse for height, wait for next height
@@ -811,7 +813,7 @@ event_loop wait_for_next_block(uint64_t hf16_height, round_context &context, cry
   {
     for (static uint64_t last_height = 0; last_height != curr_height; last_height = curr_height)
       MINFO(log_prefix(context) << "Network is currently producing block " << curr_height << ", waiting until next block");
-    return event_loop::return_to_caller;
+    return round_state::wait_for_next_block;
   }
 
   uint64_t top_height   = curr_height - 1;
@@ -820,7 +822,7 @@ event_loop wait_for_next_block(uint64_t hf16_height, round_context &context, cry
   {
     for (static uint64_t last_height = 0; last_height != top_height; last_height = top_height)
       MERROR(log_prefix(context) << "Block hash for height " << top_height << " does not exist!");
-    return event_loop::return_to_caller;
+    return round_state::wait_for_next_block;
   }
 
   cryptonote::block top_block = {};
@@ -829,7 +831,7 @@ event_loop wait_for_next_block(uint64_t hf16_height, round_context &context, cry
   {
     for (static uint64_t last_height = 0; last_height != top_height; last_height = top_height)
       MERROR(log_prefix(context) << "Failed to query previous block in blockchain at height " << top_height);
-    return event_loop::return_to_caller;
+    return round_state::wait_for_next_block;
   }
 
   //
@@ -842,7 +844,7 @@ event_loop wait_for_next_block(uint64_t hf16_height, round_context &context, cry
   {
     for (static bool once = true; once; once = !once)
       MINFO(log_prefix(context) << "Failed to query the genesis block for Pulse at height " << hf16_height - 1);
-    return event_loop::return_to_caller;
+    return round_state::wait_for_next_block;
   }
 
   //
@@ -865,14 +867,12 @@ event_loop wait_for_next_block(uint64_t hf16_height, round_context &context, cry
   context.wait_for_next_block.height              = curr_height;
   context.wait_for_next_block.top_hash            = top_hash;
   context.wait_for_next_block.top_block_timestamp = top_block.timestamp;
+  context.prepare_for_round                       = {};
 
-  context.state             = round_state::prepare_for_round;
-  context.prepare_for_round = {};
-
-  return event_loop::keep_running;
+  return round_state::prepare_for_round;
 }
 
-event_loop prepare_for_round(round_context &context, service_nodes::service_node_keys const &key, cryptonote::Blockchain const &blockchain)
+round_state prepare_for_round(round_context &context, service_nodes::service_node_keys const &key, cryptonote::Blockchain const &blockchain)
 {
   context.transient = {};
   if (context.prepare_for_round.queue_for_next_round)
@@ -885,7 +885,7 @@ event_loop prepare_for_round(round_context &context, service_nodes::service_node
     // Also check if the blockchain has changed, in which case we stop and
     // restart Pulse stages.
     if (context.wait_for_next_block.height != blockchain.get_current_blockchain_height(true /*lock*/))
-      context.state = round_state::wait_for_next_block;
+      return round_state::wait_for_next_block;
   }
 
   //
@@ -901,14 +901,16 @@ event_loop prepare_for_round(round_context &context, service_nodes::service_node
       context.prepare_for_round.round = curr_round;
   }
 
-  auto start_time = context.wait_for_next_block.round_0_start_time + (context.prepare_for_round.round * service_nodes::PULSE_ROUND_TIME);
-  context.prepare_for_round.start_time                = start_time;
-  context.transient.wait_for_handshakes.stage.end_time          = context.prepare_for_round.start_time                + service_nodes::PULSE_WAIT_FOR_HANDSHAKES_DURATION;
-  context.transient.wait_for_handshake_bitsets.stage.end_time   = context.transient.wait_for_handshakes.stage.end_time          + service_nodes::PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION;
-  context.transient.wait_for_block_template.stage.end_time      = context.transient.wait_for_handshake_bitsets.stage.end_time   + service_nodes::PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION;
-  context.transient.wait_for_random_value_hashes.stage.end_time = context.transient.wait_for_block_template.stage.end_time      + service_nodes::PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION;
-  context.transient.wait_for_random_value.stage.end_time        = context.transient.wait_for_random_value_hashes.stage.end_time + service_nodes::PULSE_WAIT_FOR_RANDOM_VALUE_DURATION;
-  context.transient.wait_for_signed_blocks.stage.end_time       = context.transient.wait_for_random_value.stage.end_time        + service_nodes::PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION;
+  {
+    using namespace service_nodes;
+    context.prepare_for_round.start_time                          = context.wait_for_next_block.round_0_start_time                + (context.prepare_for_round.round * PULSE_ROUND_TIME);
+    context.transient.send_and_wait_for_handshakes.stage.end_time = context.prepare_for_round.start_time                          + PULSE_WAIT_FOR_HANDSHAKES_DURATION;
+    context.transient.wait_for_handshake_bitsets.stage.end_time   = context.transient.send_and_wait_for_handshakes.stage.end_time + PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION;
+    context.transient.wait_for_block_template.stage.end_time      = context.transient.wait_for_handshake_bitsets.stage.end_time   + PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION;
+    context.transient.random_value_hashes.wait.stage.end_time     = context.transient.wait_for_block_template.stage.end_time      + PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION;
+    context.transient.random_value.wait.stage.end_time            = context.transient.random_value_hashes.wait.stage.end_time     + PULSE_WAIT_FOR_RANDOM_VALUE_DURATION;
+    context.transient.signed_block.wait.stage.end_time            = context.transient.random_value.wait.stage.end_time            + PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION;
+  }
 
   context.prepare_for_round.quorum =
       service_nodes::generate_pulse_quorum(blockchain.nettype(),
@@ -922,8 +924,7 @@ event_loop prepare_for_round(round_context &context, service_nodes::service_node
   if (!service_nodes::verify_pulse_quorum_sizes(context.prepare_for_round.quorum))
   {
     MINFO(log_prefix(context) << "Insufficient Service Nodes to execute Pulse on height " << context.wait_for_next_block.height << ", we require a PoW miner block. Sleeping until next block.");
-    context.state = round_state::wait_for_next_block;
-    return event_loop::keep_running;
+    return round_state::wait_for_next_block;
   }
 
   //
@@ -958,64 +959,64 @@ event_loop prepare_for_round(round_context &context, service_nodes::service_node
     return goto_preparing_for_next_round(context);
   }
 
-  context.state = round_state::wait_for_round;
-  return event_loop::keep_running;
+  return round_state::wait_for_round;
 }
 
-event_loop wait_for_round(round_context &context, cryptonote::Blockchain const &blockchain)
+round_state wait_for_round(round_context &context, cryptonote::Blockchain const &blockchain)
 {
   if (context.wait_for_next_block.height != blockchain.get_current_blockchain_height(true /*lock*/))
   {
     MINFO(log_prefix(context) << "Block height changed whilst waiting for round " << +context.prepare_for_round.round << ", restarting Pulse stages");
-    context.state = round_state::wait_for_next_block;
-    return event_loop::keep_running;
+    return round_state::wait_for_next_block;
   }
 
-  auto start_time = context.wait_for_next_block.round_0_start_time + (context.prepare_for_round.round * service_nodes::PULSE_ROUND_TIME);
+  auto start_time = context.prepare_for_round.start_time;
   if (auto now = pulse::clock::now(); now < start_time)
   {
     for (static uint64_t last_height = 0; last_height != context.wait_for_next_block.height; last_height = context.wait_for_next_block.height)
       MINFO(log_prefix(context) << "Waiting for Pulse round " << +context.prepare_for_round.round << " to start in " << tools::get_human_readable_timespan(start_time - now));
-    return event_loop::return_to_caller;
+    return round_state::wait_for_round;
   }
 
   if (context.prepare_for_round.participant == sn_type::validator)
   {
     MINFO(log_prefix(context) << "We are a pulse validator, sending handshake bit to quorum and collecting other validator handshakes.");
-    context.state = round_state::submit_handshakes;
+    return round_state::send_and_wait_for_handshakes;
   }
   else
   {
     MINFO(log_prefix(context) << "We are the block producer for height " << context.wait_for_next_block.height << " in round " << +context.prepare_for_round.round << ", awaiting validator handshake bitsets.");
-    context.state = round_state::wait_for_handshake_bitsets;
+    return round_state::wait_for_handshake_bitsets;
   }
-
-  return event_loop::keep_running;
 }
 
-event_loop submit_handshakes(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_and_wait_for_handshakes(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
 {
+  //
+  // NOTE: Send
+  //
   assert(context.prepare_for_round.participant == sn_type::validator);
-  try
+  if (!context.transient.send_and_wait_for_handshakes.sent)
   {
-    context.state = round_state::wait_for_handshakes;
-    relay_validator_handshake_bit_or_bitset(context, quorumnet_state, key, false /*sending_bitset*/);
+    context.transient.send_and_wait_for_handshakes.sent = true;
+    try
+    {
+      relay_validator_handshake_bit_or_bitset(context, quorumnet_state, key, false /*sending_bitset*/);
+    }
+    catch (std::exception const &e)
+    {
+      MERROR(log_prefix(context) << "Attempting to invoke and send a Pulse participation handshake unexpectedly failed. " << e.what());
+      return goto_preparing_for_next_round(context);
+    }
   }
-  catch (std::exception const &e)
-  {
-    MERROR(log_prefix(context) << "Attempting to invoke and send a Pulse participation handshake unexpectedly failed. " << e.what());
-    return goto_preparing_for_next_round(context);
-  }
 
-  return event_loop::return_to_caller;
-}
+  //
+  // NOTE: Wait
+  //
+  handle_messages_received_early_for(context.transient.send_and_wait_for_handshakes.stage, quorumnet_state);
+  pulse_wait_stage const &stage = context.transient.send_and_wait_for_handshakes.stage;
 
-event_loop wait_for_handshakes(round_context &context, void *quorumnet_state)
-{
-  handle_messages_received_early_for(context.transient.wait_for_handshakes.stage, quorumnet_state);
-  pulse_wait_stage const &stage = context.transient.wait_for_handshakes.stage;
-
-  auto const &quorum            = context.transient.wait_for_handshakes.data;
+  auto const &quorum            = context.transient.send_and_wait_for_handshakes.data;
   bool const timed_out          = pulse::clock::now() >= stage.end_time;
   bool const all_handshakes     = stage.msgs_received == quorum.size();
 
@@ -1026,31 +1027,29 @@ event_loop wait_for_handshakes(round_context &context, void *quorumnet_state)
   {
     bool missing_handshakes = timed_out && !all_handshakes;
     MINFO(log_prefix(context) << "Collected validator handshakes " << stage.bitset_view() << (missing_handshakes ? ", we timed out and some handshakes were not seen! " : ". ") << "Sending handshake bitset and collecting other validator bitsets.");
-    context.state = round_state::submit_handshake_bitset;
-    return event_loop::keep_running;
+    return round_state::send_handshake_bitsets;
   }
-
-  return event_loop::return_to_caller;
+  else
+  {
+    return round_state::send_and_wait_for_handshakes;
+  }
 }
 
-event_loop submit_handshake_bitset(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_handshake_bitsets(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
 {
-  assert(context.prepare_for_round.participant == sn_type::validator);
   try
   {
-    context.state = round_state::wait_for_handshake_bitsets;
     relay_validator_handshake_bit_or_bitset(context, quorumnet_state, key, true /*sending_bitset*/);
+    return round_state::wait_for_handshake_bitsets;
   }
   catch(std::exception const &e)
   {
     MERROR(log_prefix(context) << "Attempting to invoke and send a Pulse validator bitset unexpectedly failed. " << e.what());
     return goto_preparing_for_next_round(context);
   }
-
-  return event_loop::keep_running;
 }
 
-event_loop wait_for_handshake_bitsets(round_context &context, void *quorumnet_state)
+round_state wait_for_handshake_bitsets(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
 {
   handle_messages_received_early_for(context.transient.wait_for_handshake_bitsets.stage, quorumnet_state);
   pulse_wait_stage const &stage = context.transient.wait_for_handshake_bitsets.stage;
@@ -1101,9 +1100,9 @@ event_loop wait_for_handshake_bitsets(round_context &context, void *quorumnet_st
       return goto_preparing_for_next_round(context);
     }
 
-    std::bitset<8 * sizeof(best_bitset)> bitset    = best_bitset;
-    context.transient.submit_block_template.validator_bitset = best_bitset;
-    context.transient.submit_block_template.validator_count  = count;
+    std::bitset<8 * sizeof(best_bitset)> bitset              = best_bitset;
+    context.transient.wait_for_handshake_bitsets.best_bitset = best_bitset;
+    context.transient.wait_for_handshake_bitsets.best_count  = count;
 
     MINFO(log_prefix(context) << count << "/" << quorum.size()
                               << " validators agreed on the participating nodes in the quorum " << bitset
@@ -1112,17 +1111,15 @@ event_loop wait_for_handshake_bitsets(round_context &context, void *quorumnet_st
                                       : ". Awaiting block template from block producer"));
 
     if (context.prepare_for_round.participant == sn_type::producer)
-      context.state = round_state::submit_block_template;
+      return round_state::send_block_template;
     else
-      context.state = round_state::wait_for_block_template;
-
-    return event_loop::keep_running;
+      return round_state::wait_for_block_template;
   }
 
-  return event_loop::return_to_caller;
+  return round_state::wait_for_handshake_bitsets;
 }
 
-event_loop submit_block_template(round_context &context, service_nodes::service_node_keys const &key, cryptonote::Blockchain &blockchain, void *quorumnet_state)
+round_state send_block_template(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key, cryptonote::Blockchain &blockchain)
 {
   assert(context.prepare_for_round.participant == sn_type::producer);
   std::vector<service_nodes::service_node_pubkey_info> list_state = blockchain.get_service_node_list().get_service_node_list_state({key.pub});
@@ -1151,7 +1148,7 @@ event_loop submit_block_template(round_context &context, service_nodes::service_
     blockchain.create_next_pulse_block_template(block, block_producer_payouts, context.wait_for_next_block.height, expected_reward);
 
     block.pulse.round            = context.prepare_for_round.round;
-    block.pulse.validator_bitset = context.transient.submit_block_template.validator_bitset;
+    block.pulse.validator_bitset = context.transient.wait_for_handshake_bitsets.best_bitset;
   }
 
   // Message
@@ -1163,12 +1160,10 @@ event_loop submit_block_template(round_context &context, service_nodes::service_
   // Send
   MINFO(log_prefix(context) << "Validators are handshaken and ready, sending block template from producer (us) to validators.\n" << cryptonote::obj_to_json_str(block));
   cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, true /*block_producer*/);
-
-  context.state = round_state::wait_for_next_block;
-  return event_loop::keep_running;
+  return goto_preparing_for_next_round(context);
 }
 
-event_loop wait_for_block_template(round_context &context, void *quorumnet_state)
+round_state wait_for_block_template(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key, cryptonote::Blockchain &blockchain)
 {
   handle_messages_received_early_for(context.transient.wait_for_block_template.stage, quorumnet_state);
   pulse_wait_stage const &stage = context.transient.wait_for_block_template.stage;
@@ -1183,100 +1178,107 @@ event_loop wait_for_block_template(round_context &context, void *quorumnet_state
       // behind and still waiting to receive the bitsets from other
       // validators.
       cryptonote::block const &block = context.transient.wait_for_block_template.block;
-      if (block.pulse.validator_bitset == context.transient.submit_block_template.validator_bitset)
+      if (block.pulse.validator_bitset == context.transient.wait_for_handshake_bitsets.best_bitset)
       {
         MINFO(log_prefix(context) << "Valid block received: " << cryptonote::obj_to_json_str(context.transient.wait_for_block_template.block));
+
+        // Generate my random value and its hash
+        crypto::generate_random_bytes_thread_safe(sizeof(context.transient.random_value.send.data), context.transient.random_value.send.data.data);
+        context.transient.random_value_hashes.send.data = crypto::cn_fast_hash(&context.transient.random_value.send.data, sizeof(context.transient.random_value.send.data));
+        return round_state::send_and_wait_for_random_value_hashes;
       }
       else
       {
         auto block_bitset = std::bitset<sizeof(block.pulse.validator_bitset) * 8>(block.pulse.validator_bitset);
-        auto our_bitset   = std::bitset<sizeof(block.pulse.validator_bitset) * 8>(context.transient.submit_block_template.validator_bitset);
+        auto our_bitset   = std::bitset<sizeof(block.pulse.validator_bitset) * 8>(context.transient.wait_for_handshake_bitsets.best_bitset);
         MINFO(log_prefix(context) << "Received pulse block template specifying different validator handshake bitsets " << block_bitset << ", expected " << our_bitset);
+        return goto_preparing_for_next_round(context);
       }
     }
     else
     {
       MINFO(log_prefix(context) << "Timed out, block template was not received");
+      return goto_preparing_for_next_round(context);
     }
-
-    context.state = round_state::submit_random_value_hash;
-    return event_loop::keep_running;
   }
 
-  return event_loop::return_to_caller;
+  return round_state::wait_for_block_template;
 }
 
-event_loop submit_random_value_hash(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_and_wait_for_random_value_hashes(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
 
-  // Random Value
-  crypto::generate_random_bytes_thread_safe(sizeof(context.transient.submit_random_value_hash.value.data), context.transient.submit_random_value_hash.value.data);
+  //
+  // NOTE: Send
+  //
+  if (context.transient.random_value_hashes.send.one_time_only())
+  {
+    // Message
+    pulse::message msg         = msg_init_from_context(context);
+    msg.type                   = pulse::message_type::random_value_hash;
+    msg.random_value_hash.hash = context.transient.random_value_hashes.send.data;
+    crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
-  // Message
-  pulse::message msg         = msg_init_from_context(context);
-  msg.type                   = pulse::message_type::random_value_hash;
-  msg.random_value_hash.hash = crypto::cn_fast_hash(context.transient.submit_random_value_hash.value.data, sizeof(context.transient.submit_random_value_hash.value.data));
-  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
+    // Add Ourselves
+    handle_message(nullptr /*quorumnet_state*/, msg);
 
-  // Add Ourselves
-  handle_message(nullptr /*quorumnet_state*/, msg);
+    // Send
+    cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+  }
 
-  // Send
-  cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
-  context.state = round_state::wait_for_random_value_hashes;
-  return event_loop::return_to_caller;
-}
+  //
+  // NOTE: Wait
+  //
+  handle_messages_received_early_for(context.transient.random_value_hashes.wait.stage, quorumnet_state);
+  pulse_wait_stage const &stage = context.transient.random_value_hashes.wait.stage;
 
-event_loop wait_for_random_value_hashes(round_context &context, void *quorumnet_state)
-{
-  handle_messages_received_early_for(context.transient.wait_for_random_value_hashes.stage, quorumnet_state);
-  pulse_wait_stage const &stage = context.transient.wait_for_random_value_hashes.stage;
-
-  auto const &quorum    = context.transient.wait_for_random_value_hashes.data;
+  auto const &quorum    = context.transient.random_value_hashes.wait.data;
   bool const timed_out  = pulse::clock::now() >= stage.end_time;
-  bool const all_hashes = stage.msgs_received == context.transient.submit_block_template.validator_count;
+  bool const all_hashes = stage.msgs_received == context.transient.wait_for_handshake_bitsets.best_count;
 
   if (timed_out || all_hashes)
   {
     if (!enforce_validator_participation_and_timeouts(context, stage, timed_out, all_hashes))
       return goto_preparing_for_next_round(context);
 
-    context.state         = round_state::submit_random_value;
     MINFO(log_prefix(context) << "Received " << stage.msgs_received << " random value hashes from " << stage.bitset_view() << (timed_out ? ". We timed out and some hashes are missing" : ""));
-    return event_loop::keep_running;
+    return round_state::send_and_wait_for_random_value;
   }
 
-  return event_loop::return_to_caller;
+  return round_state::send_and_wait_for_random_value_hashes;
 }
 
-event_loop submit_random_value(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_and_wait_for_random_value(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
 {
+  //
+  // NOTE: Send
+  //
   assert(context.prepare_for_round.participant == sn_type::validator);
+  if (context.transient.random_value.send.one_time_only())
+  {
+    // Message
+    pulse::message msg     = msg_init_from_context(context);
+    msg.type               = pulse::message_type::random_value;
+    msg.random_value.value = context.transient.random_value.send.data;
+    crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
-  // Message
-  pulse::message msg     = msg_init_from_context(context);
-  msg.type               = pulse::message_type::random_value;
-  msg.random_value.value = context.transient.submit_random_value_hash.value;
-  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
+    // Add Ourselves
+    handle_message(nullptr /*quorumnet_state*/, msg);
 
-  // Add Ourselves
-  handle_message(nullptr /*quorumnet_state*/, msg);
+    // Send
+    cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+  }
 
-  // Send
-  context.state = round_state::wait_for_random_value;
-  cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
-  return event_loop::keep_running;
-}
+  //
+  // NOTE: Wait
+  //
+  handle_messages_received_early_for(context.transient.random_value.wait.stage, quorumnet_state);
+  pulse_wait_stage const &stage = context.transient.random_value.wait.stage;
 
-event_loop wait_for_random_value(round_context &context, void *quorumnet_state)
-{
-  handle_messages_received_early_for(context.transient.wait_for_random_value.stage, quorumnet_state);
-  pulse_wait_stage const &stage = context.transient.wait_for_random_value.stage;
-
-  auto const &quorum    = context.transient.wait_for_random_value.data;
+  auto const &quorum    = context.transient.random_value.wait.data;
   bool const timed_out  = pulse::clock::now() >= stage.end_time;
-  bool const all_values = stage.msgs_received == context.transient.submit_block_template.validator_count;
+  bool const all_values = stage.msgs_received == context.transient.wait_for_handshake_bitsets.best_count;
 
   if (timed_out || all_values)
   {
@@ -1301,40 +1303,44 @@ event_loop wait_for_random_value(round_context &context, void *quorumnet_state)
     std::memcpy(final_random_value.data, final_hash.data, sizeof(final_random_value.data));
 
     MINFO(log_prefix(context) << "Block final random value " << lokimq::to_hex(tools::view_guts(final_random_value.data)) << " generated from validators " << stage.bitset_view());
-    context.transient.submit_signed_block.block = std::move(block);
-    context.state                               = round_state::submit_signed_block;
-    return event_loop::keep_running;
+    context.transient.signed_block.send.data = std::move(block);
+    block                                    = {};
+    return round_state::send_and_wait_for_signed_blocks;
   }
 
-  return event_loop::return_to_caller;
+  return round_state::send_and_wait_for_random_value;
 }
 
-event_loop submit_signed_block(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_and_wait_for_signed_blocks(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key, cryptonote::core &core)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
 
-  // Message
-  pulse::message msg = msg_init_from_context(context);
-  msg.type           = pulse::message_type::signed_block;
-  crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
+  //
+  // NOTE: Send
+  //
+  if (context.transient.signed_block.send.one_time_only())
+  {
+    // Message
+    pulse::message msg = msg_init_from_context(context);
+    msg.type           = pulse::message_type::signed_block;
+    crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
 
-  // Add Ourselves
-  handle_message(nullptr /*quorumnet_state*/, msg);
+    // Add Ourselves
+    handle_message(nullptr /*quorumnet_state*/, msg);
 
-  // Send
-  context.state = round_state::wait_for_signed_blocks;
-  cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
-  return event_loop::keep_running;
-}
+    // Send
+    cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+  }
 
-event_loop wait_for_signed_blocks(round_context &context, void *quorumnet_state, cryptonote::core &core)
-{
-  handle_messages_received_early_for(context.transient.wait_for_signed_blocks.stage, quorumnet_state);
-  pulse_wait_stage const &stage = context.transient.wait_for_signed_blocks.stage;
+  //
+  // NOTE: Wait
+  //
+  handle_messages_received_early_for(context.transient.signed_block.wait.stage, quorumnet_state);
+  pulse_wait_stage const &stage = context.transient.signed_block.wait.stage;
 
-  auto const &quorum   = context.transient.wait_for_signed_blocks.data;
+  auto const &quorum   = context.transient.signed_block.wait.data;
   bool const timed_out = pulse::clock::now() >= stage.end_time;
-  bool const enough    = stage.msgs_received >= context.transient.submit_block_template.validator_count;
+  bool const enough    = stage.msgs_received >= context.transient.wait_for_handshake_bitsets.best_count;
 
   if (timed_out || enough)
   {
@@ -1365,11 +1371,10 @@ event_loop wait_for_signed_blocks(round_context &context, void *quorumnet_state,
     if (!core.handle_block_found(final_block, bvc))
       return goto_preparing_for_next_round(context);
 
-    context.state = round_state::wait_for_next_block;
-    return event_loop::keep_running;
+    return round_state::wait_for_next_block;
   }
 
-  return event_loop::return_to_caller;
+  return round_state::send_and_wait_for_signed_blocks;
 }
 
 void pulse::main(void *quorumnet_state, cryptonote::core &core)
@@ -1395,73 +1400,58 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
     return;
   }
 
-  for (auto loop = event_loop::keep_running; loop == event_loop::keep_running;)
+  for (auto last_state = round_state::null_state;
+       last_state != context.state || last_state == round_state::null_state;
+       last_state = context.state)
   {
-    // TODO(doyle): Combine submit and wait stages. Submit goes straight to wait
-    // stage, so instead of returning, looping in here again and
-    // heading to the next state just execute the next state.
-
-    // With that we can get rid of event_loop
     switch (context.state)
     {
+      case round_state::null_state:
+        context.state = round_state::wait_for_next_block;
+        break;
+
       case round_state::wait_for_next_block:
-        loop = wait_for_next_block(hf16_height, context, blockchain);
+        context.state = wait_for_next_block(hf16_height, context, blockchain);
         break;
 
       case round_state::prepare_for_round:
-        loop = prepare_for_round(context, key, blockchain);
+        context.state = prepare_for_round(context, key, blockchain);
         break;
 
       case round_state::wait_for_round:
-        loop = wait_for_round(context, blockchain);
+        context.state = wait_for_round(context, blockchain);
         break;
 
-      case round_state::submit_handshakes:
-        loop = submit_handshakes(context, quorumnet_state, key);
+      case round_state::send_and_wait_for_handshakes:
+        context.state = send_and_wait_for_handshakes(context, quorumnet_state, key);
         break;
 
-      case round_state::wait_for_handshakes:
-        loop = wait_for_handshakes(context, quorumnet_state);
-        break;
-
-      case round_state::submit_handshake_bitset:
-        loop = submit_handshake_bitset(context, quorumnet_state, key);
+      case round_state::send_handshake_bitsets:
+        context.state = send_handshake_bitsets(context, quorumnet_state, key);
         break;
 
       case round_state::wait_for_handshake_bitsets:
-        loop = wait_for_handshake_bitsets(context, quorumnet_state);
-        break;
-
-      case round_state::submit_block_template:
-        loop = submit_block_template(context, key, blockchain, quorumnet_state);
+        context.state = wait_for_handshake_bitsets(context, quorumnet_state, key);
         break;
 
       case round_state::wait_for_block_template:
-        loop = wait_for_block_template(context, quorumnet_state);
+        context.state = wait_for_block_template(context, quorumnet_state, key, blockchain);
         break;
 
-      case round_state::submit_random_value_hash:
-        loop = submit_random_value_hash(context, quorumnet_state, key);
+      case round_state::send_block_template:
+        context.state = send_block_template(context, quorumnet_state, key, blockchain);
         break;
 
-      case round_state::wait_for_random_value_hashes:
-        loop = wait_for_random_value_hashes(context, quorumnet_state);
+      case round_state::send_and_wait_for_random_value_hashes:
+        context.state = send_and_wait_for_random_value_hashes(context, quorumnet_state, key);
         break;
 
-      case round_state::submit_random_value:
-        loop = submit_random_value(context, quorumnet_state, key);
+      case round_state::send_and_wait_for_random_value:
+        context.state = send_and_wait_for_random_value(context, quorumnet_state, key);
         break;
 
-      case round_state::wait_for_random_value:
-        loop = wait_for_random_value(context, quorumnet_state);
-        break;
-
-      case round_state::submit_signed_block:
-        loop = submit_signed_block(context, quorumnet_state, key);
-        break;
-
-      case round_state::wait_for_signed_blocks:
-        loop = wait_for_signed_blocks(context, quorumnet_state, core);
+      case round_state::send_and_wait_for_signed_blocks:
+        context.state = send_and_wait_for_signed_blocks(context, quorumnet_state, key, core);
         break;
     }
   }
