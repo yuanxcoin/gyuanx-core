@@ -2,6 +2,8 @@
 #include <mutex>
 #include <chrono>
 
+#include "wipeable_string.h"
+#include "memwipe.h"
 #include "misc_log_ex.h"
 #include "common/random.h"
 
@@ -890,7 +892,16 @@ round_state wait_for_next_block(uint64_t hf16_height, round_context &context, cr
 
 round_state prepare_for_round(round_context &context, service_nodes::service_node_keys const &key, cryptonote::Blockchain const &blockchain)
 {
-  context.transient = {};
+
+  // Clear memory
+  {
+    context.transient = {};
+    cryptonote::pulse_random_value &old_random_value = context.transient.random_value.send.data;
+    auto &old_random_values_array                    = context.transient.random_value.wait.data;
+    memwipe(old_random_value.data, sizeof(old_random_value));
+    memwipe(old_random_values_array.data(), old_random_values_array.size() * sizeof(old_random_values_array[0]));
+  }
+
   if (context.prepare_for_round.queue_for_next_round)
   {
     // Set when an intermediate Pulse stage has failed and we wait on the
@@ -1281,7 +1292,17 @@ round_state send_and_wait_for_random_value(round_context &context, void *quorumn
       auto &[random_value, received] = quorum[index];
       if (received)
       {
-        MDEBUG(log_prefix(context) << "Final random value seeding with V[" << index << "] " << lokimq::to_hex(tools::view_guts(random_value.data)));
+        epee::wipeable_string string = lokimq::to_hex(tools::view_guts(random_value.data));
+
+#if defined(NDEBUG)
+        // Mask the random value generated incase someone is snooping logs
+        // trying to derive the Service Node rng seed.
+        for (int i = 2; i < static_cast<int>(string.size()) - 2; i++)
+          string.data()[i] = '.';
+#endif
+
+        MDEBUG(log_prefix(context) << "Final random value seeding with V[" << index << "] " << string.view());
+
         auto buf   = tools::memcpy_le(final_hash.data, random_value.data);
         final_hash = crypto::cn_fast_hash(buf.data(), buf.size());
       }

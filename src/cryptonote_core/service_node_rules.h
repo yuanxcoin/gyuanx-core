@@ -7,7 +7,7 @@
 
 namespace service_nodes {
   constexpr size_t PULSE_QUORUM_ENTROPY_LAG    = 21; // How many blocks back from the tip of the Blockchain to source entropy for the Pulse quorums.
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if 1
   constexpr auto PULSE_ROUND_TIME                                   = 20s;
   constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 3s;
   constexpr auto PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION = 3s;
