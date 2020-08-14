@@ -809,7 +809,7 @@ bool loki_core_test_deregister_preferred::generate(std::vector<test_event_entry>
       uint64_t height;
       uint64_t expected_reward;
       cryptonote::blobdata extra_nonce;
-      c.get_next_block_template(full_blk, miner.get_keys().m_account_address, diffic, height, expected_reward, extra_nonce);
+      c.create_next_miner_block_template(full_blk, miner.get_keys().m_account_address, diffic, height, expected_reward, extra_nonce);
     }
 
     map_hash2tx_t mtx;
@@ -3130,6 +3130,7 @@ bool loki_pulse_non_participating_validator::generate(std::vector<test_event_ent
     // NOTE: First 7 validators are locked in. We received signatures from the
     // first 6 in the quorum, then the 8th validator in the quorum (who is not
     // meant to be participating).
+    static_assert(service_nodes::PULSE_QUORUM_NUM_VALIDATORS > service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
     entry.block.pulse.validator_bitset = 0b0000'000'0111'1111;
     size_t const voter_indexes[]       = {0, 1, 2, 3, 4, 5, 7};
 

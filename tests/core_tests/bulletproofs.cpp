@@ -33,6 +33,7 @@
 #include "chaingen.h"
 #include "bulletproofs.h"
 #include "device/device.hpp"
+#include "common/util.h"
 
 using namespace crypto;
 using namespace cryptonote;
@@ -96,7 +97,7 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
                                            test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
                                            first_hf,
                                            first_hf,
-                                           prev_block->timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+                                           prev_block->timestamp + tools::to_seconds(TARGET_BLOCK_TIME) * 2, // v2 has blocks twice as long
                                            crypto::hash(),
                                            0,
                                            transaction(),
@@ -121,7 +122,7 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
                                              test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
                                              first_hf,
                                              first_hf,
-                                             blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+                                             blk_last.timestamp + tools::to_seconds(TARGET_BLOCK_TIME) * 2, // v2 has blocks twice as long
                                              crypto::hash(),
                                              0,
                                              transaction(),
@@ -150,7 +151,7 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
                                            test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
                                            generator.m_hf_version,
                                            generator.m_hf_version,
-                                           blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+                                           blk_last.timestamp + tools::to_seconds(TARGET_BLOCK_TIME) * 2, // v2 has blocks twice as long
                                            crypto::hash(),
                                            0,
                                            transaction(),
@@ -300,7 +301,7 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
 
   CHECK_AND_ASSERT_MES(generator.construct_block_manually(blk_txes, blk_last, miner_account,
       test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_tx_hashes | test_generator::bf_hf_version,
-      generator.m_hf_version, generator.m_hf_version, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+      generator.m_hf_version, generator.m_hf_version, blk_last.timestamp + tools::to_seconds(TARGET_BLOCK_TIME) * 2, // v2 has blocks twice as long
       crypto::hash(), 0, transaction(), starting_rct_tx_hashes, 0),
       false, "Failed to generate block");
   if (!valid)

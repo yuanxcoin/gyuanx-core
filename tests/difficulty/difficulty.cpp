@@ -37,6 +37,7 @@
 #include <stdexcept>
 
 #include "misc_log_ex.h"
+#include "common/util.h"
 #include "cryptonote_config.h"
 #include "cryptonote_basic/difficulty.h"
 
@@ -66,7 +67,7 @@ int main(int argc, char *argv[]) {
         }
         uint64_t res = cryptonote::next_difficulty_v2(
             std::vector<uint64_t>(timestamps.begin() + begin, timestamps.begin() + end),
-            std::vector<uint64_t>(cumulative_difficulties.begin() + begin, cumulative_difficulties.begin() + end), TARGET_BLOCK_TIME, false/*use_old_lwma2*/, false);
+            std::vector<uint64_t>(cumulative_difficulties.begin() + begin, cumulative_difficulties.begin() + end), tools::to_seconds(TARGET_BLOCK_TIME), false/*use_old_lwma2*/, false);
         if (res != difficulty) {
             std::cerr << "Wrong difficulty for block " << n
                 << "\nExpected: " << difficulty
