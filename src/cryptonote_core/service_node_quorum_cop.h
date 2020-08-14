@@ -57,6 +57,13 @@ namespace service_nodes
     END_SERIALIZE()
   };
 
+  inline std::ostream &operator<<(std::ostream &os, quorum const &q)
+  {
+    for (size_t i = 0; i < q.validators.size(); i++) os << "V[" << i << "] " << q.validators[i] << "\n";
+    for (size_t i = 0; i < q.workers.size(); i++) os    << "W[" << i << "] " << q.workers[i] << "\n";
+    return os;
+  }
+
   struct quorum_manager
   {
     std::shared_ptr<const quorum> obligations;

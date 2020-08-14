@@ -332,7 +332,7 @@ namespace service_nodes
 
       if (!crypto::check_signature(hash, key, quorum_signature.signature))
       {
-        LOG_PRINT_L1("Incorrect signature for vote, failed verification at height: " << height << " for voter: " << epee::string_tools::pod_to_hex(key));
+        LOG_PRINT_L1("Incorrect signature for vote, failed verification at height: " << height << " for voter: " << key << "\n" << quorum);
         return false;
       }
     }
