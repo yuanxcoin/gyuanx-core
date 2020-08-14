@@ -403,8 +403,8 @@ bool enforce_validator_participation_and_timeouts(round_context const &context,
                                                   bool timed_out,
                                                   bool all_received)
 {
-  assert(context.state >= round_state::wait_for_block_template);
-  uint16_t const validator_bitset = context.transient.wait_for_block_template.block.pulse.validator_bitset;
+  assert(context.state > round_state::wait_for_handshake_bitsets);
+  uint16_t const validator_bitset = context.transient.wait_for_handshake_bitsets.best_bitset;
 
   if (timed_out && !all_received)
   {
@@ -565,6 +565,14 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
       {
         MINFO(log_prefix(context) << "Received pulse block template specifying different round " << +block.pulse.round
                                   << ", expected " << +context.prepare_for_round.round);
+        return;
+      }
+
+      if (block.pulse.validator_bitset != context.transient.wait_for_handshake_bitsets.best_bitset)
+      {
+        auto block_bitset = bitset_view16(block.pulse.validator_bitset);
+        auto our_bitset   = bitset_view16(context.transient.wait_for_handshake_bitsets.best_bitset);
+        MINFO(log_prefix(context) << "Received pulse block template specifying different validator handshake bitsets " << block_bitset << ", expected " << our_bitset);
         return;
       }
 
@@ -1173,26 +1181,13 @@ round_state wait_for_block_template(round_context &context, void *quorumnet_stat
   {
     if (context.transient.wait_for_block_template.stage.msgs_received == 1)
     {
-      // Check validator bitset after message is received incase we're abit
-      // behind and still waiting to receive the bitsets from other
-      // validators.
       cryptonote::block const &block = context.transient.wait_for_block_template.block;
-      if (block.pulse.validator_bitset == context.transient.wait_for_handshake_bitsets.best_bitset)
-      {
-        MINFO(log_prefix(context) << "Valid block received: " << cryptonote::obj_to_json_str(context.transient.wait_for_block_template.block));
+      MINFO(log_prefix(context) << "Valid block received: " << cryptonote::obj_to_json_str(context.transient.wait_for_block_template.block));
 
-        // Generate my random value and its hash
-        crypto::generate_random_bytes_thread_safe(sizeof(context.transient.random_value.send.data), context.transient.random_value.send.data.data);
-        context.transient.random_value_hashes.send.data = crypto::cn_fast_hash(&context.transient.random_value.send.data, sizeof(context.transient.random_value.send.data));
-        return round_state::send_and_wait_for_random_value_hashes;
-      }
-      else
-      {
-        auto block_bitset = bitset_view16(block.pulse.validator_bitset);
-        auto our_bitset   = bitset_view16(context.transient.wait_for_handshake_bitsets.best_bitset);
-        MINFO(log_prefix(context) << "Received pulse block template specifying different validator handshake bitsets " << block_bitset << ", expected " << our_bitset);
-        return goto_preparing_for_next_round(context);
-      }
+      // Generate my random value and its hash
+      crypto::generate_random_bytes_thread_safe(sizeof(context.transient.random_value.send.data), context.transient.random_value.send.data.data);
+      context.transient.random_value_hashes.send.data = crypto::cn_fast_hash(&context.transient.random_value.send.data, sizeof(context.transient.random_value.send.data));
+      return round_state::send_and_wait_for_random_value_hashes;
     }
     else
     {
