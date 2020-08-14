@@ -1076,7 +1076,7 @@ round_state wait_for_handshake_bitsets(round_context &context, void *quorumnet_s
 
     std::map<uint16_t, int> most_common_bitset;
     uint16_t best_bitset = 0;
-    int count            = 0;
+    size_t count         = 0;
     for (size_t quorum_index = 0; quorum_index < quorum.size(); quorum_index++)
     {
       auto &[bitset, received] = quorum[quorum_index];
@@ -1090,19 +1090,17 @@ round_state wait_for_handshake_bitsets(round_context &context, void *quorumnet_s
       MINFO(log_prefix(context) << "Collected from V[" << quorum_index << "], handshake bitset " << bitset_view16(bitset));
     }
 
-    int count_threshold = (quorum.size() * 6 / 10);
-    if (count < count_threshold || best_bitset == 0)
+    if (count < service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES || best_bitset == 0)
     {
-      // Less than 60% of the validators can't come to agreement
-      // about which validators are online, we wait until the
-      // next round.
+      // Less than the threshold of the validators can't come to agreement about
+      // which validators are online, we wait until the next round.
       if (best_bitset == 0)
       {
         MINFO(log_prefix(context) << count << "/" << quorum.size() << " validators did not send any handshake bitset or sent an empty handshake bitset");
       }
       else
       {
-        MINFO(log_prefix(context) << "We heard back from less than " << count_threshold << " of the validators ("
+        MINFO(log_prefix(context) << "We heard back from less than " << service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES << " of the validators ("
                                   << count << "/" << quorum.size() << ", waiting for next round.");
       }
 
@@ -1345,8 +1343,18 @@ round_state send_and_wait_for_signed_blocks(round_context &context, void *quorum
     // Then sort just the first N required signatures, so signatures are added
     // to the block in sorted order, but were chosen randomly.
     std::array<size_t, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> indices = {};
-    std::iota(indices.begin(), indices.end(), 0);
-    tools::shuffle_portable(indices.begin(), indices.end(), tools::rng);
+    size_t indices_count = 0;
+
+    // Pull out indices where we've received a signature
+    for (size_t index = 0; index < quorum.size(); index++)
+    {
+      bool received = quorum[index].second;
+      if (received) indices[indices_count++] = index;
+    }
+
+    // Shuffle and sort first 'N' PULSE_BLOCK_REQUIRED_SIGNATURES entries
+    assert(indices_count >= service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
+    tools::shuffle_portable(indices.begin(), indices.begin() + indices_count, tools::rng);
     std::sort(indices.begin(), indices.begin() + service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
 
     // Add Signatures

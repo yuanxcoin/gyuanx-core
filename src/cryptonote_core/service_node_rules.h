@@ -16,8 +16,8 @@ namespace service_nodes {
   constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 3s;
   constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 5s;
 
-  constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 0;
-  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 0;
+  constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 7;
+  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 7;  // A block must have exactly N signatures to be considered properly
 #else
   constexpr auto PULSE_ROUND_TIME                                   = 60s;
   constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 10s;
@@ -27,7 +27,7 @@ namespace service_nodes {
   constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 10s;
   constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 10s;
 
-  constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 7;
+  constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 11;
   constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 7;  // A block must have exactly N signatures to be considered properly
 #endif
 
