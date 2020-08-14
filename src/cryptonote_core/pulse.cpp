@@ -370,12 +370,7 @@ void relay_validator_handshake_bit_or_bitset(round_context const &context, void 
     msg.type = pulse::message_type::handshake;
   }
   crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
-
-  // Add our own handshake/bitset
-  handle_message(nullptr, msg);
-
-  // Send
-  cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+  handle_message(quorumnet_state, msg); // Add our own. We receive our own msg for the first time which also triggers us to relay.
 }
 
 // Check the stage's queue for any messages that we received early and process
@@ -1211,12 +1206,7 @@ round_state send_and_wait_for_random_value_hashes(round_context &context, void *
     msg.type                   = pulse::message_type::random_value_hash;
     msg.random_value_hash.hash = context.transient.random_value_hashes.send.data;
     crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
-
-    // Add Ourselves
-    handle_message(nullptr /*quorumnet_state*/, msg);
-
-    // Send
-    cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+    handle_message(quorumnet_state, msg); // Add our own. We receive our own msg for the first time which also triggers us to relay.
   }
 
   //
@@ -1254,12 +1244,7 @@ round_state send_and_wait_for_random_value(round_context &context, void *quorumn
     msg.type               = pulse::message_type::random_value;
     msg.random_value.value = context.transient.random_value.send.data;
     crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
-
-    // Add Ourselves
-    handle_message(nullptr /*quorumnet_state*/, msg);
-
-    // Send
-    cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+    handle_message(quorumnet_state, msg); // Add our own. We receive our own msg for the first time which also triggers us to relay.
   }
 
   //
@@ -1316,12 +1301,7 @@ round_state send_and_wait_for_signed_blocks(round_context &context, void *quorum
     pulse::message msg = msg_init_from_context(context);
     msg.type           = pulse::message_type::signed_block;
     crypto::generate_signature(msg_signature_hash(context, msg), key.pub, key.key, msg.signature);
-
-    // Add Ourselves
-    handle_message(nullptr /*quorumnet_state*/, msg);
-
-    // Send
-    cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, false /*block_producer*/);
+    handle_message(quorumnet_state, msg); // Add our own. We receive our own msg for the first time which also triggers us to relay.
   }
 
   //
