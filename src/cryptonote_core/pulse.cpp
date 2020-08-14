@@ -87,8 +87,6 @@ struct pulse_wait_stage
   uint16_t          bitset;        // Bitset of validators that we received a message from for this stage
   uint16_t          msgs_received; // Number of unique messages received in the stage
   pulse::time_point end_time;      // Time at which the stage ends
-
-  std::bitset<sizeof(uint16_t) * 8> bitset_view() const { return std::bitset<sizeof(bitset) * 8>(bitset); }
 };
 
 template <typename T>
@@ -205,6 +203,12 @@ std::string log_prefix(round_context const &context)
   if (context.prepare_for_round.node_name.size()) result << context.prepare_for_round.node_name << " ";
   result << "'" << round_state_string(context.state) << "' ";
   return result.str();
+}
+
+std::bitset<sizeof(uint16_t) * 8> bitset_view16(uint16_t val)
+{
+  std::bitset<sizeof(uint16_t) * 8> result = val;
+  return result;
 }
 
 //
@@ -406,7 +410,7 @@ bool enforce_validator_participation_and_timeouts(round_context const &context,
   {
     MDEBUG(log_prefix(context) << "We timed out and there were insufficient hashes, required "
                                << service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES << ", received "
-                               << stage.msgs_received << " from " << stage.bitset_view());
+                               << stage.msgs_received << " from " << bitset_view16(stage.bitset));
     return false;
   }
 
@@ -415,11 +419,10 @@ bool enforce_validator_participation_and_timeouts(round_context const &context,
   bool unexpected_items = (stage.bitset | validator_bitset) != validator_bitset;
   if (stage.msgs_received == 0 || unexpected_items)
   {
-    auto block_bitset = std::bitset<sizeof(validator_bitset) * 8>(validator_bitset);
     if (unexpected_items)
-      MERROR(log_prefix(context) << "Internal error, unexpected block validator bitset is " << block_bitset << ", our bitset was " << stage.bitset_view());
+      MERROR(log_prefix(context) << "Internal error, unexpected block validator bitset is " << bitset_view16(validator_bitset) << ", our bitset was " << bitset_view16(stage.bitset));
     else
-      MERROR(log_prefix(context) << "Internal error, unexpected empty bitset received, we expected " << block_bitset);
+      MERROR(log_prefix(context) << "Internal error, unexpected empty bitset received, we expected " << bitset_view16(validator_bitset));
 
     return false;
   }
@@ -510,7 +513,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     // locked in. Any stray messages from other validators are rejected.
     if ((validator_bit & context.transient.wait_for_handshake_bitsets.best_bitset) == 0)
     {
-      std::bitset<sizeof(validator_bit) * 8> bitset_view = context.transient.wait_for_handshake_bitsets.best_bitset;
+      auto bitset_view = bitset_view16(context.transient.wait_for_handshake_bitsets.best_bitset);
       MINFO(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Not a locked in participant, bitset is " << bitset_view);
       return;
     }
@@ -531,10 +534,8 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
       auto &quorum = context.transient.send_and_wait_for_handshakes.data;
       if (quorum[msg.quorum_position]) return;
       quorum[msg.quorum_position] = true;
-
-      auto const position_bitset = std::bitset<sizeof(validator_bit) * 8>(validator_bit);
       MINFO(log_prefix(context) << "Received handshake with quorum position bit (" << msg.quorum_position << ") "
-                                << position_bitset << " saved to bitset " << stage->bitset_view());
+                                << bitset_view16(validator_bit) << " saved to bitset " << bitset_view16(stage->bitset));
     }
     break;
 
@@ -1026,7 +1027,7 @@ round_state send_and_wait_for_handshakes(round_context &context, void *quorumnet
   if (all_handshakes || timed_out)
   {
     bool missing_handshakes = timed_out && !all_handshakes;
-    MINFO(log_prefix(context) << "Collected validator handshakes " << stage.bitset_view() << (missing_handshakes ? ", we timed out and some handshakes were not seen! " : ". ") << "Sending handshake bitset and collecting other validator bitsets.");
+    MINFO(log_prefix(context) << "Collected validator handshakes " << bitset_view16(stage.bitset) << (missing_handshakes ? ", we timed out and some handshakes were not seen! " : ". ") << "Sending handshake bitset and collecting other validator bitsets.");
     return round_state::send_handshake_bitsets;
   }
   else
@@ -1078,7 +1079,7 @@ round_state wait_for_handshake_bitsets(round_context &context, void *quorumnet_s
         count       = num;
       }
 
-      MINFO(log_prefix(context) << "Collected from V[" << quorum_index << "], handshake bitset " << std::bitset<8 * sizeof(bitset)>(bitset));
+      MINFO(log_prefix(context) << "Collected from V[" << quorum_index << "], handshake bitset " << bitset_view16(bitset));
     }
 
     int count_threshold = (quorum.size() * 6 / 10);
@@ -1100,12 +1101,10 @@ round_state wait_for_handshake_bitsets(round_context &context, void *quorumnet_s
       return goto_preparing_for_next_round(context);
     }
 
-    std::bitset<8 * sizeof(best_bitset)> bitset              = best_bitset;
     context.transient.wait_for_handshake_bitsets.best_bitset = best_bitset;
     context.transient.wait_for_handshake_bitsets.best_count  = count;
-
     MINFO(log_prefix(context) << count << "/" << quorum.size()
-                              << " validators agreed on the participating nodes in the quorum " << bitset
+                              << " validators agreed on the participating nodes in the quorum " << bitset_view16(best_bitset)
                               << (context.prepare_for_round.participant == sn_type::producer
                                       ? ""
                                       : ". Awaiting block template from block producer"));
@@ -1189,8 +1188,8 @@ round_state wait_for_block_template(round_context &context, void *quorumnet_stat
       }
       else
       {
-        auto block_bitset = std::bitset<sizeof(block.pulse.validator_bitset) * 8>(block.pulse.validator_bitset);
-        auto our_bitset   = std::bitset<sizeof(block.pulse.validator_bitset) * 8>(context.transient.wait_for_handshake_bitsets.best_bitset);
+        auto block_bitset = bitset_view16(block.pulse.validator_bitset);
+        auto our_bitset   = bitset_view16(context.transient.wait_for_handshake_bitsets.best_bitset);
         MINFO(log_prefix(context) << "Received pulse block template specifying different validator handshake bitsets " << block_bitset << ", expected " << our_bitset);
         return goto_preparing_for_next_round(context);
       }
@@ -1242,7 +1241,7 @@ round_state send_and_wait_for_random_value_hashes(round_context &context, void *
     if (!enforce_validator_participation_and_timeouts(context, stage, timed_out, all_hashes))
       return goto_preparing_for_next_round(context);
 
-    MINFO(log_prefix(context) << "Received " << stage.msgs_received << " random value hashes from " << stage.bitset_view() << (timed_out ? ". We timed out and some hashes are missing" : ""));
+    MINFO(log_prefix(context) << "Received " << stage.msgs_received << " random value hashes from " << bitset_view16(stage.bitset) << (timed_out ? ". We timed out and some hashes are missing" : ""));
     return round_state::send_and_wait_for_random_value;
   }
 
@@ -1302,7 +1301,7 @@ round_state send_and_wait_for_random_value(round_context &context, void *quorumn
     cryptonote::pulse_random_value &final_random_value = block.pulse.random_value;
     std::memcpy(final_random_value.data, final_hash.data, sizeof(final_random_value.data));
 
-    MINFO(log_prefix(context) << "Block final random value " << lokimq::to_hex(tools::view_guts(final_random_value.data)) << " generated from validators " << stage.bitset_view());
+    MINFO(log_prefix(context) << "Block final random value " << lokimq::to_hex(tools::view_guts(final_random_value.data)) << " generated from validators " << bitset_view16(stage.bitset));
     context.transient.signed_block.send.data = std::move(block);
     block                                    = {};
     return round_state::send_and_wait_for_signed_blocks;
