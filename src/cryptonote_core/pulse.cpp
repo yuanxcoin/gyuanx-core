@@ -1350,7 +1350,7 @@ round_state send_and_wait_for_signed_blocks(round_context &context, void *quorum
     std::sort(indices.begin(), indices.begin() + service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
 
     // Add Signatures
-    cryptonote::block &final_block = context.transient.wait_for_block_template.block;
+    cryptonote::block &final_block = context.transient.signed_block.send.data;
     for (size_t index = 0; index < service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES; index++)
     {
       uint16_t validator_index          = indices[index];
