@@ -37,6 +37,7 @@
 #include <cstring>
 #include <type_traits>
 #include <variant>
+#include "cryptonote_basic/tx_extra.h"
 #include "include_base_utils.h"
 #include "string_tools.h"
 #include "core_rpc_server.h"
@@ -456,6 +457,7 @@ namespace cryptonote { namespace rpc {
     res.status = STATUS_OK;
     return res;
   }
+  namespace {
   //------------------------------------------------------------------------------------------------------------------------------
   class pruned_transaction {
     transaction& tx;
@@ -465,6 +467,7 @@ namespace cryptonote { namespace rpc {
       tx.serialize_base(ar);
     END_SERIALIZE()
   };
+  }
   //------------------------------------------------------------------------------------------------------------------------------
   GET_BLOCKS_FAST::response core_rpc_server::invoke(GET_BLOCKS_FAST::request&& req, rpc_context context)
   {
@@ -680,6 +683,133 @@ namespace cryptonote { namespace rpc {
     LOG_PRINT_L2("GET_TX_GLOBAL_OUTPUTS_INDEXES: [" << res.o_indexes.size() << "]");
     return res;
   }
+
+  namespace {
+    constexpr uint64_t half_microportion = 9223372036855ULL; // half of 1/1'000'000 of a full portion
+    constexpr uint32_t microportion(uint64_t portion) {
+      // Rounding integer division to convert our [0, ..., 2^64-4] portion value into [0, ..., 1000000]:
+      return portion < half_microportion ? 0 : (portion - half_microportion) / (2*half_microportion) + 1;
+    }
+    template <typename T>
+    std::vector<std::string> hexify(const std::vector<T>& v) {
+      std::vector<std::string> hexes;
+      hexes.reserve(v.size());
+      for (auto& x : v)
+        hexes.push_back(tools::type_to_hex(x));
+      return hexes;
+    }
+
+    struct extra_extractor {
+      GET_TRANSACTIONS::extra_entry& entry;
+      const network_type nettype;
+
+      void operator()(const tx_extra_pub_key& x) { entry.pubkey = tools::type_to_hex(x.pub_key); }
+      void operator()(const tx_extra_nonce& x) { entry.extra_nonce = lokimq::to_hex(x.nonce); }
+      void operator()(const tx_extra_merge_mining_tag& x) { entry.mm_depth = x.depth; entry.mm_root = tools::type_to_hex(x.merkle_root); }
+      void operator()(const tx_extra_additional_pub_keys& x) { entry.additional_pubkeys = hexify(x.data); }
+      void operator()(const tx_extra_burn& x) { entry.burn_amount = x.amount; }
+      void operator()(const tx_extra_service_node_winner& x) { entry.sn_winner = tools::type_to_hex(x.m_service_node_key); }
+      void operator()(const tx_extra_service_node_pubkey& x) { entry.sn_pubkey = tools::type_to_hex(x.m_service_node_key); }
+      void operator()(const tx_extra_service_node_register& x) {
+        auto& reg = entry.sn_registration.emplace();
+        reg.fee = microportion(x.m_portions_for_operator);
+        reg.expiry = x.m_expiration_timestamp;
+        for (size_t i = 0; i < x.m_portions.size(); i++) {
+          auto& [wallet, portion] = reg.contributors.emplace_back();
+          wallet = get_account_address_as_str(nettype, false, {x.m_public_spend_keys[i], x.m_public_view_keys[i]});
+          portion = microportion(x.m_portions[i]);
+        }
+      }
+      void operator()(const tx_extra_service_node_contributor& x) {
+        entry.sn_contributor = get_account_address_as_str(nettype, false, {x.m_spend_public_key, x.m_view_public_key});
+      }
+      template <typename T>
+      auto& _state_change(const T& x) {
+        // Common loading code for nearly-identical state_change and deregister_old variables:
+        auto& sc = entry.sn_state_change.emplace();
+        sc.height = x.block_height;
+        sc.index = x.service_node_index;
+        sc.voters.reserve(x.votes.size());
+        for (auto& v : x.votes)
+          sc.voters.push_back(v.validator_index);
+        return sc;
+      }
+      void operator()(const tx_extra_service_node_deregister_old& x) {
+        auto& sc = _state_change(x);
+        sc.old_dereg = true;
+        sc.type = "dereg";
+      }
+      void operator()(const tx_extra_service_node_state_change& x) {
+        auto& sc = _state_change(x);
+        switch (x.state)
+        {
+          case service_nodes::new_state::decommission: sc.type = "decom"; break;
+          case service_nodes::new_state::recommission: sc.type = "recom"; break;
+          case service_nodes::new_state::deregister: sc.type = "dereg"; break;
+          case service_nodes::new_state::ip_change_penalty: sc.type = "ip"; break;
+          case service_nodes::new_state::_count: /*leave blank*/ break;
+        }
+      }
+      void operator()(const tx_extra_tx_secret_key& x) { entry.tx_secret_key = tools::type_to_hex(x.key); }
+      void operator()(const tx_extra_tx_key_image_proofs& x) {
+        entry.locked_key_images.reserve(x.proofs.size());
+        for (auto& proof : x.proofs) entry.locked_key_images.emplace_back(tools::type_to_hex(proof.key_image));
+      }
+      void operator()(const tx_extra_tx_key_image_unlock& x) { entry.key_image_unlock = tools::type_to_hex(x.key_image); }
+      void _load_owner(std::optional<std::string>& entry, const lns::generic_owner& owner) {
+        if (!owner)
+          return;
+        if (owner.type == lns::generic_owner_sig_type::monero)
+          entry = get_account_address_as_str(nettype, owner.wallet.is_subaddress, owner.wallet.address);
+        else if (owner.type == lns::generic_owner_sig_type::ed25519)
+          entry = tools::type_to_hex(owner.ed25519);
+      }
+      void operator()(const tx_extra_loki_name_system& x) {
+        auto& lns = entry.lns.emplace();
+        switch (x.type)
+        {
+          case lns::mapping_type::lokinet_1year:   lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(1); break;
+          case lns::mapping_type::lokinet_2years:  lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(2); break;
+          case lns::mapping_type::lokinet_5years:  lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(5); break;
+          case lns::mapping_type::lokinet_10years: lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(10); break;
+          case lns::mapping_type::session: lns.type = "session"; break;
+          case lns::mapping_type::wallet:  lns.type = "wallet"; break;
+          case lns::mapping_type::update_record_internal:
+          case lns::mapping_type::_count:
+                                           break;
+        }
+        if (x.is_buying())
+          lns.buy = true;
+        else if (lns.blocks.has_value())
+          lns.blocks.reset();
+        if (x.is_updating())
+          lns.update = true;
+        lns.name = x.name_hash;
+        if (x.prev_txid != crypto::null_hash)
+          lns.prev_txid = tools::type_to_hex(x.prev_txid);
+        if (!x.encrypted_value.empty())
+          lns.value = x.encrypted_value;
+        _load_owner(lns.owner, x.owner);
+        _load_owner(lns.backup_owner, x.backup_owner);
+      }
+
+      // Ignore these fields:
+      void operator()(const tx_extra_padding&) {}
+      void operator()(const tx_extra_mysterious_minergate&) {}
+    };
+
+
+    bool load_tx_extra_data(GET_TRANSACTIONS::extra_entry& e, const transaction& tx, network_type nettype)
+    {
+      std::vector<tx_extra_field> extras;
+      if (!parse_tx_extra(tx.extra, extras))
+        return false;
+      extra_extractor visitor{e, nettype};
+      for (const auto& extra : extras)
+        std::visit(visitor, extra);
+      return true;
+    }
+  }
   //------------------------------------------------------------------------------------------------------------------------------
   GET_TRANSACTIONS::response core_rpc_server::invoke(GET_TRANSACTIONS::request&& req, rpc_context context)
   {
@@ -692,18 +822,11 @@ namespace cryptonote { namespace rpc {
     std::vector<crypto::hash> vh;
     for(const auto& tx_hex_str: req.txs_hashes)
     {
-      blobdata b;
-      if(!string_tools::parse_hexstr_to_binbuff(tx_hex_str, b))
+      if (!tools::hex_to_type(tx_hex_str, vh.emplace_back()))
       {
         res.status = "Failed to parse hex representation of transaction hash";
         return res;
       }
-      if(b.size() != sizeof(crypto::hash))
-      {
-        res.status = "Failed, size of data mismatch";
-        return res;
-      }
-      vh.push_back(*reinterpret_cast<const crypto::hash*>(b.data()));
     }
     std::vector<crypto::hash> missed_txs;
     std::vector<std::tuple<crypto::hash, cryptonote::blobdata, crypto::hash, cryptonote::blobdata>> txs;
@@ -749,7 +872,7 @@ namespace cryptonote { namespace rpc {
             ++txs_processed;
             continue;
           }
-          const std::string hash_string = epee::string_tools::pod_to_hex(h);
+          const std::string hash_string = tools::type_to_hex(h);
           auto ptx_it = std::find_if(pool_tx_info.begin(), pool_tx_info.end(),
               [&hash_string](const tx_info &txi) { return hash_string == txi.id_hash; });
           if (ptx_it != pool_tx_info.end())
@@ -780,78 +903,79 @@ namespace cryptonote { namespace rpc {
       LOG_PRINT_L2("Found " << found_in_pool << "/" << vh.size() << " transactions in the pool");
     }
 
+    res.missed_tx.reserve(missed_txs.size());
+    for(const auto& miss_tx: missed_txs)
+      res.missed_tx.push_back(tools::type_to_hex(miss_tx));
+
     uint64_t immutable_height = m_core.get_blockchain_storage().get_immutable_height();
     auto blink_lock = pool.blink_shared_lock(std::defer_lock); // Defer until/unless we actually need it
 
-    std::vector<std::string>::const_iterator txhi = req.txs_hashes.begin();
-    std::vector<crypto::hash>::const_iterator vhi = vh.begin();
-    for(auto& tx: txs)
+    cryptonote::blobdata tx_data;
+    for(const auto& [tx_hash, unprunable_data, prunable_hash, prunable_data]: txs)
     {
-      res.txs.emplace_back();
-      GET_TRANSACTIONS::entry &e = res.txs.back();
+      auto& e = res.txs.emplace_back();
+      e.tx_hash = tools::type_to_hex(tx_hash);
+      e.size = unprunable_data.size() + prunable_data.size();
 
-      crypto::hash tx_hash = *vhi++;
-      e.tx_hash = *txhi++;
-      e.prunable_hash = epee::string_tools::pod_to_hex(std::get<2>(tx));
-      if (req.split || req.prune || std::get<3>(tx).empty())
+      // If the transaction was pruned then the prunable part will be empty but the prunable hash
+      // will be non-null.  (Some txes, like coinbase txes, are non-prunable and will have empty
+      // *and* null prunable hash).
+      bool prunable = prunable_hash != crypto::null_hash;
+      bool pruned = prunable && prunable_data.empty();
+
+      if (pruned || (prunable && (req.split || req.prune)))
+        e.prunable_hash = tools::type_to_hex(prunable_hash);
+
+      if (req.split || req.prune || pruned)
       {
-        // use splitted form with pruned and prunable (filled only when prune=false and the daemon has it), leaving as_hex as empty
-        e.pruned_as_hex = string_tools::buff_to_hex_nodelimer(std::get<1>(tx));
-        if (!req.prune)
-          e.prunable_as_hex = string_tools::buff_to_hex_nodelimer(std::get<3>(tx));
         if (req.decode_as_json)
         {
-          cryptonote::blobdata tx_data;
-          cryptonote::transaction t;
-          if (req.prune || std::get<3>(tx).empty())
-          {
-            // decode pruned tx to JSON
-            tx_data = std::get<1>(tx);
-            if (cryptonote::parse_and_validate_tx_base_from_blob(tx_data, t))
-            {
-              pruned_transaction pruned_tx{t};
-              e.as_json = obj_to_json_str(pruned_tx);
-            }
-            else
-            {
-              res.status = "Failed to parse and validate pruned tx from blob";
-              return res;
-            }
-          }
-          else
-          {
-            // decode full tx to JSON
-            tx_data = std::get<1>(tx) + std::get<3>(tx);
-            if (cryptonote::parse_and_validate_tx_from_blob(tx_data, t))
-            {
-              e.as_json = obj_to_json_str(t);
-            }
-            else
-            {
-              res.status = "Failed to parse and validate tx from blob";
-              return res;
-            }
-          }
+          tx_data = unprunable_data;
+          if (!req.prune)
+            tx_data += prunable_data;
+        }
+        else
+        {
+          e.pruned_as_hex = lokimq::to_hex(unprunable_data);
+          if (!req.prune && prunable && !pruned)
+            e.prunable_as_hex = lokimq::to_hex(prunable_data);
         }
       }
       else
       {
         // use non-splitted form, leaving pruned_as_hex and prunable_as_hex as empty
-        cryptonote::blobdata tx_data = std::get<1>(tx) + std::get<3>(tx);
-        e.as_hex = string_tools::buff_to_hex_nodelimer(tx_data);
-        if (req.decode_as_json)
+        tx_data = unprunable_data;
+        tx_data += prunable_data;
+        if (!req.decode_as_json)
+          e.as_hex = lokimq::to_hex(tx_data);
+      }
+
+      if (req.decode_as_json || req.tx_extra)
+      {
+        cryptonote::transaction t;
+        if (req.prune || pruned)
         {
-          cryptonote::transaction t;
-          if (cryptonote::parse_and_validate_tx_from_blob(tx_data, t))
+          if (!cryptonote::parse_and_validate_tx_base_from_blob(tx_data, t))
           {
-            e.as_json = obj_to_json_str(t);
-          }
-          else
-          {
-            res.status = "Failed to parse and validate tx from blob";
+            res.status = "Failed to parse and validate base tx data";
             return res;
           }
+          if (req.decode_as_json)
+            e.as_json = obj_to_json_str(pruned_transaction{t});
         }
+        else
+        {
+          if (!cryptonote::parse_and_validate_tx_from_blob(tx_data, t))
+          {
+            res.status = "Failed to parse and validate tx data";
+            return res;
+          }
+          if (req.decode_as_json)
+            e.as_json = obj_to_json_str(t);
+        }
+
+        if (req.tx_extra)
+          load_tx_extra_data(e.extra.emplace(), t, nettype());
       }
       auto ptx_it = per_tx_pool_tx_info.find(tx_hash);
       e.in_pool = ptx_it != per_tx_pool_tx_info.end();
@@ -880,11 +1004,6 @@ namespace cryptonote { namespace rpc {
         e.blink = pool.has_blink(tx_hash);
       }
 
-      // fill up old style responses too, in case an old wallet asks
-      res.txs_as_hex.push_back(e.as_hex);
-      if (req.decode_as_json)
-        res.txs_as_json.push_back(e.as_json);
-
       // output indices too if not in pool
       if (!e.in_pool)
       {
@@ -895,11 +1014,6 @@ namespace cryptonote { namespace rpc {
           return res;
         }
       }
-    }
-
-    for(const auto& miss_tx: missed_txs)
-    {
-      res.missed_tx.push_back(string_tools::pod_to_hex(miss_tx));
     }
 
     LOG_PRINT_L2(res.txs.size() << " transactions found, " << res.missed_tx.size() << " not found");
@@ -1650,7 +1764,7 @@ namespace cryptonote { namespace rpc {
     return reward;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  void core_rpc_server::fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash)
+  void core_rpc_server::fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash, bool get_tx_hashes)
   {
     PERF_TIMER(fill_block_header_response);
     response.major_version = blk.major_version;
@@ -1673,6 +1787,12 @@ namespace cryptonote { namespace rpc {
     response.long_term_weight = m_core.get_blockchain_storage().get_db().get_block_long_term_weight(height);
     response.miner_tx_hash = string_tools::pod_to_hex(cryptonote::get_transaction_hash(blk.miner_tx));
     response.service_node_winner = string_tools::pod_to_hex(cryptonote::get_service_node_winner_from_tx_extra(blk.miner_tx.extra));
+    if (get_tx_hashes)
+    {
+      response.tx_hashes.reserve(blk.tx_hashes.size());
+      for (const auto& tx_hash : blk.tx_hashes)
+        response.tx_hashes.push_back(tools::type_to_hex(tx_hash));
+    }
   }
 
   /// All the common (untemplated) code for use_bootstrap_daemon_if_necessary.  Returns a held lock
@@ -1769,7 +1889,7 @@ namespace cryptonote { namespace rpc {
     bool have_last_block = m_core.get_block_by_hash(last_block_hash, last_block);
     if (!have_last_block)
       throw rpc_error{ERROR_INTERNAL, "Internal error: can't get last block."};
-    fill_block_header_response(last_block, false, last_block_height, last_block_hash, res.block_header, req.fill_pow_hash && context.admin);
+    fill_block_header_response(last_block, false, last_block_height, last_block_hash, res.block_header, req.fill_pow_hash && context.admin, req.get_tx_hashes);
     res.status = STATUS_OK;
     return res;
   }
@@ -1782,7 +1902,7 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_BLOCK_HEADER_BY_HASH>(req, res))
       return res;
 
-    auto get = [this](const std::string &hash, bool fill_pow_hash, block_header_response &block_header, bool admin) -> void {
+    auto get = [this, &req, admin=context.admin](const std::string &hash, block_header_response &block_header) {
       crypto::hash block_hash;
       bool hash_parsed = parse_hash256(hash, block_hash);
       if(!hash_parsed)
@@ -1795,18 +1915,15 @@ namespace cryptonote { namespace rpc {
       if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
       uint64_t block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
-      fill_block_header_response(blk, orphan, block_height, block_hash, block_header, fill_pow_hash && admin);
+      fill_block_header_response(blk, orphan, block_height, block_hash, block_header, req.fill_pow_hash && admin, req.get_tx_hashes);
     };
 
     if (!req.hash.empty())
-      get(req.hash, req.fill_pow_hash, res.block_header, context.admin);
+      get(req.hash, res.block_header);
 
     res.block_headers.reserve(req.hashes.size());
     for (const std::string &hash: req.hashes)
-    {
-      res.block_headers.push_back({});
-      get(hash, req.fill_pow_hash, res.block_headers.back(), context.admin);
-    }
+      get(hash, res.block_headers.emplace_back());
 
     res.status = STATUS_OK;
     return res;
@@ -1837,7 +1954,7 @@ namespace cryptonote { namespace rpc {
       if (block_height != h)
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong height"};
       res.headers.push_back(block_header_response());
-      fill_block_header_response(blk, false, block_height, block_hash, res.headers.back(), req.fill_pow_hash && context.admin);
+      fill_block_header_response(blk, false, block_height, block_hash, res.headers.back(), req.fill_pow_hash && context.admin, req.get_tx_hashes);
     }
     res.status = STATUS_OK;
     return res;
@@ -1859,7 +1976,7 @@ namespace cryptonote { namespace rpc {
     bool have_block = m_core.get_block_by_hash(block_hash, blk);
     if (!have_block)
       throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by height. Height = " + std::to_string(req.height) + '.'};
-    fill_block_header_response(blk, false, req.height, block_hash, res.block_header, req.fill_pow_hash && context.admin);
+    fill_block_header_response(blk, false, req.height, block_hash, res.block_header, req.fill_pow_hash && context.admin, req.get_tx_hashes);
     res.status = STATUS_OK;
     return res;
   }
@@ -1893,7 +2010,7 @@ namespace cryptonote { namespace rpc {
     if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
       throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
     uint64_t block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
-    fill_block_header_response(blk, orphan, block_height, block_hash, res.block_header, req.fill_pow_hash && context.admin);
+    fill_block_header_response(blk, orphan, block_height, block_hash, res.block_header, req.fill_pow_hash && context.admin, false /*tx hashes*/);
     for (size_t n = 0; n < blk.tx_hashes.size(); ++n)
     {
       res.tx_hashes.push_back(epee::string_tools::pod_to_hex(blk.tx_hashes[n]));

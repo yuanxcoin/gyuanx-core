@@ -33,6 +33,7 @@
 #include "common/password.h"
 #include "common/scoped_message_writer.h"
 #include "common/pruning.h"
+#include "common/hex.h"
 #include "daemon/rpc_command_executor.h"
 #include "int-util.h"
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -836,99 +837,63 @@ bool rpc_command_executor::print_transaction(const crypto::hash& transaction_has
   GET_TRANSACTIONS::request req{};
   GET_TRANSACTIONS::response res{};
 
-  req.txs_hashes.push_back(epee::string_tools::pod_to_hex(transaction_hash));
-  req.decode_as_json = false;
+  req.txs_hashes.push_back(tools::type_to_hex(transaction_hash));
   req.split = true;
-  req.prune = false;
   if (!invoke<GET_TRANSACTIONS>(std::move(req), res, "Transaction retrieval failed"))
     return false;
 
-  if (1 == res.txs.size() || 1 == res.txs_as_hex.size())
+  if (1 == res.txs.size())
   {
-    if (1 == res.txs.size())
+    auto& tx = res.txs.front();
+    bool pruned = tx.prunable_hash && !tx.prunable_as_hex;
+
+    if (tx.in_pool)
+      tools::success_msg_writer() << "Found in pool";
+    else
+      tools::success_msg_writer() << "Found in blockchain at height " << tx.block_height << (pruned ? " (pruned)" : "");
+
+    const std::string &pruned_as_hex = *tx.pruned_as_hex; // Always included with req.split=true
+
+    std::optional<cryptonote::transaction> t;
+    if (include_metadata || include_json)
     {
-      // only available for new style answers
-      bool pruned = res.txs.front().prunable_as_hex.empty() && res.txs.front().prunable_hash != epee::string_tools::pod_to_hex(crypto::null_hash);
-      if (res.txs.front().in_pool)
-        tools::success_msg_writer() << "Found in pool";
-      else
-        tools::success_msg_writer() << "Found in blockchain at height " << res.txs.front().block_height << (pruned ? " (pruned)" : "");
+      if (lokimq::is_hex(pruned_as_hex) && (!tx.prunable_as_hex || lokimq::is_hex(*tx.prunable_as_hex)))
+      {
+        std::string blob = lokimq::from_hex(pruned_as_hex);
+        if (tx.prunable_as_hex)
+          blob += lokimq::from_hex(*tx.prunable_as_hex);
+
+        bool parsed = pruned
+          ? cryptonote::parse_and_validate_tx_base_from_blob(blob, t.emplace())
+          : cryptonote::parse_and_validate_tx_from_blob(blob, t.emplace());
+        if (!parsed)
+        {
+          tools::fail_msg_writer() << "Failed to parse transaction data";
+          t.reset();
+        }
+      }
     }
 
-    const std::string &as_hex = (1 == res.txs.size()) ? res.txs.front().as_hex : res.txs_as_hex.front();
-    const std::string &pruned_as_hex = (1 == res.txs.size()) ? res.txs.front().pruned_as_hex : "";
-    const std::string &prunable_as_hex = (1 == res.txs.size()) ? res.txs.front().prunable_as_hex : "";
     // Print metadata if requested
     if (include_metadata)
     {
-      if (!res.txs.front().in_pool)
-      {
-        tools::msg_writer() << "Block timestamp: " << res.txs.front().block_timestamp << " (" << tools::get_human_readable_timestamp(res.txs.front().block_timestamp) << ")";
-      }
-      cryptonote::blobdata blob;
-      if (epee::string_tools::parse_hexstr_to_binbuff(pruned_as_hex + prunable_as_hex, blob))
-      {
-        cryptonote::transaction tx;
-        if (cryptonote::parse_and_validate_tx_from_blob(blob, tx))
-        {
-          tools::msg_writer() << "Size: " << blob.size();
-          tools::msg_writer() << "Weight: " << cryptonote::get_transaction_weight(tx);
-        }
-        else
-          tools::fail_msg_writer() << "Error parsing transaction blob";
-      }
-      else
-        tools::fail_msg_writer() << "Error parsing transaction from hex";
+      if (!tx.in_pool)
+        tools::msg_writer() << "Block timestamp: " << tx.block_timestamp << " (" << tools::get_human_readable_timestamp(tx.block_timestamp) << ")";
+      tools::msg_writer() << "Size: " << tx.size;
+      if (t)
+        tools::msg_writer() << "Weight: " << cryptonote::get_transaction_weight(*t);
     }
 
     // Print raw hex if requested
     if (include_hex)
-    {
-      if (!as_hex.empty())
-      {
-        tools::success_msg_writer() << as_hex << std::endl;
-      }
-      else
-      {
-        std::string output = pruned_as_hex + prunable_as_hex;
-        tools::success_msg_writer() << output << std::endl;
-      }
-    }
+      tools::success_msg_writer() << pruned_as_hex << (tx.prunable_as_hex ? *tx.prunable_as_hex : "") << '\n';
 
     // Print json if requested
-    if (include_json)
-    {
-      crypto::hash tx_hash, tx_prefix_hash;
-      cryptonote::transaction tx;
-      cryptonote::blobdata blob;
-      std::string source = as_hex.empty() ? pruned_as_hex + prunable_as_hex : as_hex;
-      bool pruned = !pruned_as_hex.empty() && prunable_as_hex.empty();
-      if (!epee::string_tools::parse_hexstr_to_binbuff(source, blob))
-      {
-        tools::fail_msg_writer() << "Failed to parse tx to get json format";
-      }
-      else
-      {
-        bool ret;
-        if (pruned)
-          ret = cryptonote::parse_and_validate_tx_base_from_blob(blob, tx);
-        else
-          ret = cryptonote::parse_and_validate_tx_from_blob(blob, tx);
-        if (!ret)
-        {
-          tools::fail_msg_writer() << "Failed to parse tx blob to get json format";
-        }
-        else
-        {
-          tools::success_msg_writer() << cryptonote::obj_to_json_str(tx) << std::endl;
-        }
-      }
-    }
+    if (include_json && t)
+      tools::success_msg_writer() << cryptonote::obj_to_json_str(*t) << '\n';
   }
   else
-  {
     tools::fail_msg_writer() << "Transaction wasn't found: " << transaction_hash << std::endl;
-  }
 
   return true;
 }

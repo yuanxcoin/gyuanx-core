@@ -2618,14 +2618,14 @@ bool Blockchain::get_split_transactions_blobs(const std::vector<crypto::hash>& t
       cryptonote::blobdata tx;
       if (m_db->get_pruned_tx_blob(tx_hash, tx))
       {
-        txs.emplace_back(tx_hash, std::move(tx), crypto::null_hash, cryptonote::blobdata());
-        if (!is_v1_tx(std::get<1>(txs.back())) && !m_db->get_prunable_tx_hash(tx_hash, std::get<2>(txs.back())))
+        auto& [hash, pruned, pruned_hash, prunable] = txs.emplace_back(tx_hash, std::move(tx), crypto::null_hash, cryptonote::blobdata());
+        if (!is_v1_tx(pruned) && !m_db->get_prunable_tx_hash(tx_hash, pruned_hash))
         {
           MERROR("Prunable data hash not found for " << tx_hash);
           return false;
         }
-        if (!m_db->get_prunable_tx_blob(tx_hash, std::get<3>(txs.back())))
-          std::get<3>(txs.back()).clear();
+        if (!m_db->get_prunable_tx_blob(tx_hash, prunable))
+          prunable.clear();
       }
       else
         missed_txs.push_back(tx_hash);

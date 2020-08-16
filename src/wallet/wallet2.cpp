@@ -844,9 +844,9 @@ bool get_pruned_tx(const rpc::GET_TRANSACTIONS::entry &entry, cryptonote::transa
   cryptonote::blobdata bd;
 
   // easy case if we have the whole tx
-  if (!entry.as_hex.empty() || (!entry.prunable_as_hex.empty() && !entry.pruned_as_hex.empty()))
+  if (entry.as_hex || (entry.prunable_as_hex && entry.pruned_as_hex))
   {
-    CHECK_AND_ASSERT_MES(epee::string_tools::parse_hexstr_to_binbuff(entry.as_hex.empty() ? entry.pruned_as_hex + entry.prunable_as_hex : entry.as_hex, bd), false, "Failed to parse tx data");
+    CHECK_AND_ASSERT_MES(epee::string_tools::parse_hexstr_to_binbuff(entry.as_hex ? *entry.as_hex : *entry.pruned_as_hex + *entry.prunable_as_hex, bd), false, "Failed to parse tx data");
     CHECK_AND_ASSERT_MES(cryptonote::parse_and_validate_tx_from_blob(bd, tx), false, "Invalid tx data");
     tx_hash = cryptonote::get_transaction_hash(tx);
     // if the hash was given, check it matches
@@ -855,11 +855,11 @@ bool get_pruned_tx(const rpc::GET_TRANSACTIONS::entry &entry, cryptonote::transa
     return true;
   }
   // case of a pruned tx with its prunable data hash
-  if (!entry.pruned_as_hex.empty() && !entry.prunable_hash.empty())
+  if (entry.pruned_as_hex && entry.prunable_hash)
   {
     crypto::hash ph;
-    CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(entry.prunable_hash, ph), false, "Failed to parse prunable hash");
-    CHECK_AND_ASSERT_MES(epee::string_tools::parse_hexstr_to_binbuff(entry.pruned_as_hex, bd), false, "Failed to parse pruned data");
+    CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(*entry.prunable_hash, ph), false, "Failed to parse prunable hash");
+    CHECK_AND_ASSERT_MES(epee::string_tools::parse_hexstr_to_binbuff(*entry.pruned_as_hex, bd), false, "Failed to parse pruned data");
     CHECK_AND_ASSERT_MES(parse_and_validate_tx_base_from_blob(bd, tx), false, "Invalid base tx data");
     // only v2 txes can calculate their txid after pruned
     if (bd[0] > 1)
@@ -11946,7 +11946,8 @@ bool wallet2::get_tx_key(const crypto::hash &txid, crypto::secret_key &tx_key, s
     crypto::hash tx_hash{};
     cryptonote::blobdata tx_data;
     crypto::hash tx_prefix_hash{};
-    bool ok = string_tools::parse_hexstr_to_binbuff(res.txs_as_hex.front(), tx_data);
+    auto res_tx = res.txs.front();
+    bool ok = string_tools::parse_hexstr_to_binbuff(*res_tx.pruned_as_hex + (res_tx.prunable_as_hex ? *res_tx.prunable_as_hex : ""s), tx_data);
     THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to parse transaction from daemon");
     THROW_WALLET_EXCEPTION_IF(!cryptonote::parse_and_validate_tx_from_blob(tx_data, tx, tx_hash, tx_prefix_hash),
                               error::wallet_internal_error, "Failed to validate transaction from daemon");
