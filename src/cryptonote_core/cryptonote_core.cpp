@@ -1769,17 +1769,20 @@ namespace cryptonote
       if (cache_to && cache_to == height)
       {
         std::unique_lock lock{m_coinbase_cache.mutex};
-        m_coinbase_cache.height = height;
-        m_coinbase_cache.emissions = emission_amount;
-        m_coinbase_cache.fees = total_fee_amount;
-        m_coinbase_cache.burnt = burnt_loki;
+        if (m_coinbase_cache.height < height)
+        {
+          m_coinbase_cache.height = height;
+          m_coinbase_cache.emissions = emission_amount;
+          m_coinbase_cache.fees = total_fee_amount;
+          m_coinbase_cache.burnt = burnt_loki;
+        }
         if (m_coinbase_cache.building)
         {
           m_coinbase_cache.building = false;
           MINFO("Finishing cache build for get_coinbase_tx_sum in " <<
               std::chrono::duration<double>{std::chrono::steady_clock::now() - cache_build_started}.count() << "s");
-          cache_to = 0;
         }
+        cache_to = 0;
       }
       return true;
     });
