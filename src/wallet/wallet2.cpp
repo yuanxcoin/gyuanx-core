@@ -11946,9 +11946,9 @@ bool wallet2::get_tx_key(const crypto::hash &txid, crypto::secret_key &tx_key, s
     crypto::hash tx_hash{};
     cryptonote::blobdata tx_data;
     crypto::hash tx_prefix_hash{};
-    auto res_tx = res.txs.front();
-    bool ok = string_tools::parse_hexstr_to_binbuff(*res_tx.pruned_as_hex + (res_tx.prunable_as_hex ? *res_tx.prunable_as_hex : ""s), tx_data);
-    THROW_WALLET_EXCEPTION_IF(!ok, error::wallet_internal_error, "Failed to parse transaction from daemon");
+    const auto& res_tx = res.txs.front();
+    bool valid_hex = string_tools::parse_hexstr_to_binbuff(*res_tx.pruned_as_hex + (res_tx.prunable_as_hex ? *res_tx.prunable_as_hex : ""s), tx_data);
+    THROW_WALLET_EXCEPTION_IF(!valid_hex, error::wallet_internal_error, "Failed to parse transaction from daemon");
     THROW_WALLET_EXCEPTION_IF(!cryptonote::parse_and_validate_tx_from_blob(tx_data, tx, tx_hash, tx_prefix_hash),
                               error::wallet_internal_error, "Failed to validate transaction from daemon");
     THROW_WALLET_EXCEPTION_IF(tx_hash != txid, error::wallet_internal_error,
