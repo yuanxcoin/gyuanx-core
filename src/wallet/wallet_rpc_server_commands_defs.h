@@ -2116,7 +2116,7 @@ namespace tools::wallet_rpc {
       bool valid;                    // States if it is a valid Loki address.
       bool integrated;               // States if it is an integrated address.
       bool subaddress;               // States if it is a subaddress.
-      std::string nettype;           // States if the nettype is mainet, testnet, stagenet.
+      std::string nettype;           // States if the nettype is mainet, testnet, devnet.
       std::string openalias_address;
 
       KV_MAP_SERIALIZABLE

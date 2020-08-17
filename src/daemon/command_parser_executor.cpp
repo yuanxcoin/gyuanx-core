@@ -487,7 +487,7 @@ bool command_parser_executor::start_mining(const std::vector<std::string>& args)
   {
     if(!cryptonote::get_account_address_from_str(info, cryptonote::TESTNET, args.front()))
     {
-      if(!cryptonote::get_account_address_from_str(info, cryptonote::STAGENET, args.front()))
+      if(!cryptonote::get_account_address_from_str(info, cryptonote::DEVNET, args.front()))
       {
         bool dnssec_valid;
         std::string address_str = tools::dns_utils::get_account_address_as_str_from_url(args.front(), dnssec_valid,
@@ -496,14 +496,14 @@ bool command_parser_executor::start_mining(const std::vector<std::string>& args)
         {
           if(!cryptonote::get_account_address_from_str(info, cryptonote::TESTNET, address_str))
           {
-            if(!cryptonote::get_account_address_from_str(info, cryptonote::STAGENET, address_str))
+            if(!cryptonote::get_account_address_from_str(info, cryptonote::DEVNET, address_str))
             {
               std::cout << "target account address has wrong format" << std::endl;
               return true;
             }
             else
             {
-              nettype = cryptonote::STAGENET;
+              nettype = cryptonote::DEVNET;
             }
           }
           else
@@ -514,7 +514,7 @@ bool command_parser_executor::start_mining(const std::vector<std::string>& args)
       }
       else
       {
-        nettype = cryptonote::STAGENET;
+        nettype = cryptonote::DEVNET;
       }
     }
     else
@@ -528,7 +528,7 @@ bool command_parser_executor::start_mining(const std::vector<std::string>& args)
     return true;
   }
   if(nettype != cryptonote::MAINNET)
-    std::cout << "Mining to a " << (nettype == cryptonote::TESTNET ? "testnet" : "stagenet") << " address, make sure this is intentional!" << std::endl;
+    std::cout << "Mining to a " << (nettype == cryptonote::TESTNET ? "testnet" : "devnet") << " address, make sure this is intentional!" << std::endl;
   uint64_t threads_count = 1;
   if(args.size() > 2)
   {

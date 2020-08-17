@@ -335,7 +335,7 @@ namespace tools
   {
     // No detailed data available except for Mainnet: Give back the number of blocks
     // as a very simple and non-varying block sync weight for ranges of Testnet and
-    // Stagenet blocks
+    // Devnet blocks
     return num_blocks;
 
     // TODO(loki):
@@ -357,7 +357,7 @@ namespace tools
     // improve if one would not only take block sizes into account, but also varying
     // verification times i.e. the different CPU effort needed for the different
     // transaction types (pre / post RingCT, pre / post Bulletproofs).
-    // Testnet and Stagenet are neglected here because of their much smaller
+    // Testnet and Devnet are neglected here because of their much smaller
     // importance.
     static const uint32_t average_block_sizes[] =
     {

@@ -392,8 +392,8 @@ namespace cryptonote { namespace rpc {
     cryptonote::network_type nettype = m_core.get_nettype();
     res.mainnet = nettype == MAINNET;
     res.testnet = nettype == TESTNET;
-    res.stagenet = nettype == STAGENET;
-    res.nettype = nettype == MAINNET ? "mainnet" : nettype == TESTNET ? "testnet" : nettype == STAGENET ? "stagenet" : "fakechain";
+    res.devnet = nettype == DEVNET;
+    res.nettype = nettype == MAINNET ? "mainnet" : nettype == TESTNET ? "testnet" : nettype == DEVNET ? "devnet" : "fakechain";
 
     try
     {

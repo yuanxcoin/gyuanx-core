@@ -247,19 +247,19 @@ struct options {
   const command_line::arg_descriptor<std::string> password_file = {"password-file", tools::wallet2::tr("Wallet password file"), "", true};
 
   const command_line::arg_descriptor<bool> testnet = {"testnet", tools::wallet2::tr("For testnet. Daemon must also be launched with --testnet flag"), false};
-  const command_line::arg_descriptor<bool> stagenet = {"stagenet", tools::wallet2::tr("For stagenet. Daemon must also be launched with --stagenet flag"), false};
+  const command_line::arg_descriptor<bool> devnet = {"devnet", tools::wallet2::tr("For devnet. Daemon must also be launched with --devnet flag"), false};
   const command_line::arg_descriptor<bool> regtest = {"regtest", tools::wallet2::tr("For regression testing. Daemon must also be launched with --regtest flag"), false};
   const command_line::arg_descriptor<bool> disable_rpc_long_poll = {"disable-rpc-long-poll", tools::wallet2::tr("Disable TX pool long polling functionality for instantaneous TX detection"), false};
 
   const command_line::arg_descriptor<std::string, false, true, 3> shared_ringdb_dir = {
     "shared-ringdb-dir", tools::wallet2::tr("Set shared ring database path"),
     get_default_ringdb_path(),
-    {{ &testnet, &stagenet, &regtest }},
+    {{ &testnet, &devnet, &regtest }},
     [](std::array<bool, 3> test_stage_fake, bool defaulted, std::string val)->std::string {
       if (test_stage_fake[0])
         return (boost::filesystem::path(val) / "testnet").string();
       else if (test_stage_fake[1])
-        return (boost::filesystem::path(val) / "stagenet").string();
+        return (boost::filesystem::path(val) / "devnet").string();
       else if (test_stage_fake[2])
         return (boost::filesystem::path(val) / "fake").string();
       return val;
@@ -310,11 +310,11 @@ static const std::regex protocol_re{R"(^([a-zA-Z][a-zA-Z0-9+.-]*):)"};
 std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variables_map& vm, bool unattended, const options& opts, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
 {
   const bool testnet = command_line::get_arg(vm, opts.testnet);
-  const bool stagenet = command_line::get_arg(vm, opts.stagenet);
+  const bool devnet = command_line::get_arg(vm, opts.devnet);
   const bool fakenet = command_line::get_arg(vm, opts.regtest);
-  network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : fakenet ? FAKECHAIN : MAINNET;
+  network_type nettype = testnet ? TESTNET : devnet ? DEVNET : fakenet ? FAKECHAIN : MAINNET;
 
-  THROW_WALLET_EXCEPTION_IF(testnet + stagenet + fakenet > 1, tools::error::wallet_internal_error, "At most one of --testnet, --stagenet, or --regtest may be specified");
+  THROW_WALLET_EXCEPTION_IF(testnet + devnet + fakenet > 1, tools::error::wallet_internal_error, "At most one of --testnet, --devnet, or --regtest may be specified");
 
   const uint64_t kdf_rounds = command_line::get_arg(vm, opts.kdf_rounds);
   THROW_WALLET_EXCEPTION_IF(kdf_rounds == 0, tools::error::wallet_internal_error, "KDF rounds must not be 0");
@@ -467,8 +467,8 @@ std::optional<tools::password_container> get_password(const boost::program_optio
 std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_from_json(const std::string& json_file, const boost::program_options::variables_map& vm, bool unattended, const options& opts, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
 {
   const bool testnet = command_line::get_arg(vm, opts.testnet);
-  const bool stagenet = command_line::get_arg(vm, opts.stagenet);
-  const network_type nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+  const bool devnet = command_line::get_arg(vm, opts.devnet);
+  const network_type nettype = testnet ? TESTNET : devnet ? DEVNET : MAINNET;
 
   /* GET_FIELD_FROM_JSON_RETURN_ON_ERROR Is a generic macro that can return
   false. Gcc will coerce this into unique_ptr(nullptr), but clang correctly
@@ -1090,9 +1090,9 @@ bool wallet2::has_disable_rpc_long_poll(const boost::program_options::variables_
   return command_line::get_arg(vm, options().disable_rpc_long_poll);
 }
 
-bool wallet2::has_stagenet_option(const boost::program_options::variables_map& vm)
+bool wallet2::has_devnet_option(const boost::program_options::variables_map& vm)
 {
-  return command_line::get_arg(vm, options().stagenet);
+  return command_line::get_arg(vm, options().devnet);
 }
 
 std::vector<std::string> wallet2::has_deprecated_options(const boost::program_options::variables_map& vm)
@@ -1140,7 +1140,7 @@ void wallet2::init_options(boost::program_options::options_description& desc_par
   command_line::add_arg(desc_params, opts.password);
   command_line::add_arg(desc_params, opts.password_file);
   command_line::add_arg(desc_params, opts.testnet);
-  command_line::add_arg(desc_params, opts.stagenet);
+  command_line::add_arg(desc_params, opts.devnet);
   command_line::add_arg(desc_params, opts.regtest);
   command_line::add_arg(desc_params, opts.shared_ringdb_dir);
   command_line::add_arg(desc_params, opts.kdf_rounds);
@@ -4308,8 +4308,8 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     // The network type given in the program argument is inconsistent with the network type saved in the wallet
     THROW_WALLET_EXCEPTION_IF(static_cast<uint8_t>(m_nettype) != field_nettype, error::wallet_internal_error,
     (boost::format("%s wallet cannot be opened as %s wallet")
-    % (field_nettype == 0 ? "Mainnet" : field_nettype == 1 ? "Testnet" : "Stagenet")
-    % (m_nettype == MAINNET ? "mainnet" : m_nettype == TESTNET ? "testnet" : "stagenet")).str());
+    % (field_nettype == 0 ? "Mainnet" : field_nettype == 1 ? "Testnet" : "Devnet")
+    % (m_nettype == MAINNET ? "mainnet" : m_nettype == TESTNET ? "testnet" : "devnet")).str());
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, segregate_pre_fork_outputs, int, Int, false, true);
     m_segregate_pre_fork_outputs = field_segregate_pre_fork_outputs;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, key_reuse_mitigation2, int, Int, false, true);
@@ -5811,7 +5811,7 @@ void wallet2::trim_hashchain()
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::check_genesis(const crypto::hash& genesis_hash) const {
-  std::string what("Genesis block mismatch. You probably use wallet without testnet (or stagenet) flag with blockchain from test (or stage) network or vice versa");
+  std::string what("Genesis block mismatch. (Perhaps you forgot to use --testnet or --stagenet for a testnet/stagenet wallet?)");
 
   THROW_WALLET_EXCEPTION_IF(genesis_hash != m_blockchain.genesis(), error::wallet_internal_error, what);
 }
@@ -8970,7 +8970,7 @@ bool wallet2::tx_add_fake_output(std::vector<std::vector<tools::wallet2::get_out
     // transactions constructed with an invalid public key and fail this check.
 
     // Technically we should not be mixing them- but in test environments like
-    // stagenet/testnet where there may be extended periods of time where there
+    // devnet/testnet where there may be extended periods of time where there
     // are many payouts to the null service node, then during fake output
     // selection they are considered invalid.
 
@@ -14423,7 +14423,7 @@ uint64_t wallet2::get_segregation_fork_height() const
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::generate_genesis(cryptonote::block& b) const {
-  cryptonote::generate_genesis_block(b, get_config(m_nettype).GENESIS_TX, get_config(m_nettype).GENESIS_NONCE);
+  cryptonote::generate_genesis_block(b, m_nettype);
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::contains_address(const cryptonote::account_public_address& address) const {

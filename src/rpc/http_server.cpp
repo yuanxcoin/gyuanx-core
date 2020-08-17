@@ -20,12 +20,12 @@ namespace cryptonote::rpc {
       "rpc-bind-port"
     , "Port for RPC server"
     , config::RPC_DEFAULT_PORT
-    , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_stagenet_on }}
-    , [](std::array<bool, 2> testnet_stagenet, bool defaulted, uint16_t val) {
-        auto [testnet, stagenet] = testnet_stagenet;
+    , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }}
+    , [](std::array<bool, 2> testnet_devnet, bool defaulted, uint16_t val) {
+        auto [testnet, devnet] = testnet_devnet;
         return
           (defaulted && testnet) ? config::testnet::RPC_DEFAULT_PORT :
-          (defaulted && stagenet) ? config::stagenet::RPC_DEFAULT_PORT :
+          (defaulted && devnet) ? config::devnet::RPC_DEFAULT_PORT :
           val;
       }
     };

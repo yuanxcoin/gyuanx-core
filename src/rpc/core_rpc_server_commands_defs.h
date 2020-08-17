@@ -617,7 +617,7 @@ namespace rpc {
       uint64_t grey_peerlist_size;          // Grey Peerlist Size
       bool mainnet;                         // States if the node is on the mainnet (`true`) or not (`false`).
       bool testnet;                         // States if the node is on the testnet (`true`) or not (`false`).
-      bool stagenet;                        // States if the node is on the stagenet (`true`) or not (`false`).
+      bool devnet;                          // States if the node is on the devnet (`true`) or not (`false`).
       std::string nettype;                  // Nettype value used.
       std::string top_block_hash;           // Hash of the highest block in the chain.
       std::string immutable_block_hash;     // Hash of the highest block in the chain that can not be reorganized.
@@ -2180,8 +2180,8 @@ namespace rpc {
 
   LOKI_RPC_DOC_INTROSPECT
   // Get the required amount of Loki to become a Service Node at the queried height.
-  // For stagenet and testnet values, ensure the daemon is started with the
-  // `--stagenet` or `--testnet` flags respectively.
+  // For devnet and testnet values, ensure the daemon is started with the
+  // `--devnet` or `--testnet` flags respectively.
   struct GET_STAKING_REQUIREMENT : PUBLIC
   {
     static constexpr auto names() { return NAMES("get_staking_requirement"); }

@@ -336,11 +336,11 @@ namespace nodetool
     )
   {
     bool testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
-    bool stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
+    bool devnet = command_line::get_arg(vm, cryptonote::arg_devnet_on);
     bool fakenet = command_line::get_arg(vm, cryptonote::arg_regtest_on);
     m_nettype =
         testnet  ? cryptonote::TESTNET :
-        stagenet ? cryptonote::STAGENET :
+        devnet ? cryptonote::DEVNET :
         fakenet  ? cryptonote::FAKECHAIN :
         cryptonote::MAINNET;
 
@@ -610,9 +610,9 @@ namespace nodetool
     {
       full_addrs.insert("159.69.109.145:38156");
     }
-    else if (nettype == cryptonote::STAGENET)
+    else if (nettype == cryptonote::DEVNET)
     {
-      full_addrs.insert("159.69.109.145:38153");
+      full_addrs.insert("144.76.164.202:38856");
     }
     else if (nettype == cryptonote::FAKECHAIN)
     {
@@ -639,9 +639,9 @@ namespace nodetool
     {
       return get_seed_nodes(cryptonote::TESTNET);
     }
-    if (m_nettype == cryptonote::STAGENET)
+    if (m_nettype == cryptonote::DEVNET)
     {
-      return get_seed_nodes(cryptonote::STAGENET);
+      return get_seed_nodes(cryptonote::DEVNET);
     }
 
     std::set<std::string> full_addrs;
@@ -699,9 +699,9 @@ namespace nodetool
     {
       memcpy(&m_network_id, &::config::testnet::NETWORK_ID, 16);
     }
-    else if (m_nettype == cryptonote::STAGENET)
+    else if (m_nettype == cryptonote::DEVNET)
     {
-      memcpy(&m_network_id, &::config::stagenet::NETWORK_ID, 16);
+      memcpy(&m_network_id, &::config::devnet::NETWORK_ID, 16);
     }
     else
     {
@@ -713,7 +713,7 @@ namespace nodetool
 
     if ((m_nettype == cryptonote::MAINNET && public_zone.m_port != std::to_string(::config::P2P_DEFAULT_PORT))
         || (m_nettype == cryptonote::TESTNET && public_zone.m_port != std::to_string(::config::testnet::P2P_DEFAULT_PORT))
-        || (m_nettype == cryptonote::STAGENET && public_zone.m_port != std::to_string(::config::stagenet::P2P_DEFAULT_PORT))) {
+        || (m_nettype == cryptonote::DEVNET && public_zone.m_port != std::to_string(::config::devnet::P2P_DEFAULT_PORT))) {
       m_config_folder = m_config_folder + "/" + public_zone.m_port;
     }
 

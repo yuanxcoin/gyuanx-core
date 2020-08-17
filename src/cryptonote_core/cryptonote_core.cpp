@@ -91,9 +91,9 @@ namespace cryptonote
   , "Run on testnet. The wallet must be launched with --testnet flag."
   , false
   };
-  const command_line::arg_descriptor<bool, false> arg_stagenet_on  = {
-    "stagenet"
-  , "Run on stagenet. The wallet must be launched with --stagenet flag."
+  const command_line::arg_descriptor<bool, false> arg_devnet_on  = {
+    "devnet"
+  , "Run on devnet. The wallet must be launched with --devnet flag."
   , false
   };
   const command_line::arg_descriptor<bool> arg_regtest_on  = {
@@ -120,12 +120,12 @@ namespace cryptonote
     "data-dir"
   , "Specify data directory"
   , tools::get_default_data_dir()
-  , {{ &arg_testnet_on, &arg_stagenet_on }}
-  , [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val)->std::string {
-      if (testnet_stagenet[0])
+  , {{ &arg_testnet_on, &arg_devnet_on }}
+  , [](std::array<bool, 2> testnet_devnet, bool defaulted, std::string val)->std::string {
+      if (testnet_devnet[0])
         return (boost::filesystem::path(val) / "testnet").string();
-      else if (testnet_stagenet[1])
-        return (boost::filesystem::path(val) / "stagenet").string();
+      else if (testnet_devnet[1])
+        return (boost::filesystem::path(val) / "devnet").string();
       return val;
     }
   };
@@ -202,10 +202,10 @@ namespace cryptonote
     "on the `--service-node-public-ip' address and binds to the p2p IP address."
     " Only applies when running as a service node."
   , config::QNET_DEFAULT_PORT
-  , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_stagenet_on }}
-  , [](std::array<bool, 2> testnet_stagenet, bool defaulted, uint16_t val) -> uint16_t {
-      return defaulted && testnet_stagenet[0] ? config::testnet::QNET_DEFAULT_PORT :
-             defaulted && testnet_stagenet[1] ? config::stagenet::QNET_DEFAULT_PORT :
+  , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }}
+  , [](std::array<bool, 2> testnet_devnet, bool defaulted, uint16_t val) -> uint16_t {
+      return defaulted && testnet_devnet[0] ? config::testnet::QNET_DEFAULT_PORT :
+             defaulted && testnet_devnet[1] ? config::devnet::QNET_DEFAULT_PORT :
              val;
     }
   };
@@ -356,7 +356,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_test_drop_download_height);
 
     command_line::add_arg(desc, arg_testnet_on);
-    command_line::add_arg(desc, arg_stagenet_on);
+    command_line::add_arg(desc, arg_devnet_on);
     command_line::add_arg(desc, arg_regtest_on);
     command_line::add_arg(desc, arg_keep_fakechain);
     command_line::add_arg(desc, arg_fixed_difficulty);
@@ -399,8 +399,8 @@ namespace cryptonote
     if (m_nettype != FAKECHAIN)
     {
       const bool testnet = command_line::get_arg(vm, arg_testnet_on);
-      const bool stagenet = command_line::get_arg(vm, arg_stagenet_on);
-      m_nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
+      const bool devnet = command_line::get_arg(vm, arg_devnet_on);
+      m_nettype = testnet ? TESTNET : devnet ? DEVNET : MAINNET;
     }
 
     m_config_folder = command_line::get_arg(vm, arg_data_dir);
@@ -2208,28 +2208,21 @@ namespace cryptonote
           return;
         }
 
-        if (!check_external_ping(m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, "the storage server"))
+        if (m_nettype != DEVNET)
         {
-          MGINFO_RED(
-              "Failed to submit uptime proof: have not heard from the storage server recently. Make sure that it "
-              "is running! It is required to run alongside the Loki daemon");
-          return;
-        }
-        uint8_t hf_version = get_blockchain_storage().get_current_hard_fork_version();
-        if (!check_external_ping(m_last_lokinet_ping, LOKINET_PING_LIFETIME, "Lokinet"))
-        {
-          if (hf_version >= cryptonote::network_version_14_blink)
+          if (!check_external_ping(m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, "the storage server"))
+          {
+            MGINFO_RED(
+                "Failed to submit uptime proof: have not heard from the storage server recently. Make sure that it "
+                "is running! It is required to run alongside the Loki daemon");
+            return;
+          }
+          if (!check_external_ping(m_last_lokinet_ping, LOKINET_PING_LIFETIME, "Lokinet"))
           {
             MGINFO_RED(
                 "Failed to submit uptime proof: have not heard from lokinet recently. Make sure that it "
                 "is running! It is required to run alongside the Loki daemon");
             return;
-          }
-          else
-          {
-            MGINFO_RED(
-                "Have not heard from lokinet recently. Make sure that it is running! "
-                "It is required to run alongside the Loki daemon after hard fork 14");
           }
         }
 
