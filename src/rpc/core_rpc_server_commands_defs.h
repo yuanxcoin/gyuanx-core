@@ -43,6 +43,7 @@
 #include "rpc/rpc_handler.h"
 #include "common/varint.h"
 #include "common/perf_timer.h"
+#include "common/meta.h"
 #include "checkpoints/checkpoints.h"
 
 #include "cryptonote_core/service_node_quorum_cop.h"
@@ -579,7 +580,6 @@ namespace rpc {
       uint64_t height_without_bootstrap;    // Current length of the local chain of the daemon.
       bool was_bootstrap_ever_used;         // States if a bootstrap node has ever been used since the daemon started.
       uint64_t database_size;               // Current size of Blockchain data.
-      bool update_available;                // States if a update is available ('true') and if one is not available ('false').
       std::string version;                  // Current version of software running.
       std::string status_line;              // A short one-line summary status of the node (requires an admin/unrestricted connection for most details)
 
@@ -831,7 +831,7 @@ namespace rpc {
   LOKI_RPC_DOC_INTROSPECT
   // Full block information can be retrieved by either block height or hash, like with the above block header calls.
   // For full block information, both lookups use the same method, but with different input parameters.
-  struct GET_BLOCK
+  struct GET_BLOCK : RPC_COMMAND
   {
     static constexpr auto names() { return NAMES("get_block", "getblock"); }
 
@@ -1067,6 +1067,8 @@ namespace rpc {
   {
     static constexpr auto names() { return NAMES("get_transaction_pool_hashes.bin"); }
 
+    static constexpr std::chrono::seconds long_poll_timeout{15};
+
     struct request
     {
       bool         long_poll;        // Optional: If true, this call is blocking until timeout OR tx pool has changed since the last query. TX pool change is detected by comparing the hash of all the hashes in the tx pool.  Ignored when using LMQ RPC.
@@ -1111,7 +1113,7 @@ namespace rpc {
 
   LOKI_RPC_DOC_INTROSPECT
   // Get all transaction pool backlog.
-  struct GET_TRANSACTION_POOL_BACKLOG
+  struct GET_TRANSACTION_POOL_BACKLOG : RPC_COMMAND
   {
     static constexpr auto names() { return NAMES("get_txpool_backlog"); }
 
@@ -1586,34 +1588,6 @@ namespace rpc {
     {
       std::string status;             // General RPC error code. "OK" means everything looks good.
       std::vector<chain_info> chains; // Array of Chains.
-
-      KV_MAP_SERIALIZABLE
-    };
-  };
-
-  LOKI_RPC_DOC_INTROSPECT
-  // Update daemon.
-  struct UPDATE : LEGACY
-  {
-    static constexpr auto names() { return NAMES("update"); }
-
-    struct request
-    {
-      std::string command; // Command to use, either check or download.
-      std::string path;    // Optional, path where to download the update.
-
-      KV_MAP_SERIALIZABLE
-    };
-
-    struct response
-    {
-      std::string status;   // General RPC error code. "OK" means everything looks good.
-      bool update;          // States if an update is available to download (`true`) or not (`false`).
-      std::string version;  // Version available for download.
-      std::string user_uri;
-      std::string auto_uri;
-      std::string hash;
-      std::string path;     // Path to download the update.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2322,7 +2296,7 @@ namespace rpc {
 
 
   LOKI_RPC_DOC_INTROSPECT
-  struct REPORT_PEER_SS_STATUS
+  struct REPORT_PEER_SS_STATUS : RPC_COMMAND
   {
     static constexpr auto names() { return NAMES("report_peer_storage_server_status"); }
 
@@ -2452,14 +2426,12 @@ namespace rpc {
     struct response : STATUS { };
   };
 
-  template <typename...> struct type_list {};
-
   /// List of all supported rpc command structs to allow compile-time enumeration of all supported
   /// RPC types.  Every type added above that has an RPC endpoint needs to be added here, and needs
   /// a core_rpc_server::invoke() overload that takes a <TYPE>::request and returns a
   /// <TYPE>::response.  The <TYPE>::request has to be unique (for overload resolution);
   /// <TYPE>::response does not.
-  using core_rpc_types = type_list<
+  using core_rpc_types = tools::type_list<
     GET_HEIGHT,
     GET_BLOCKS_FAST,
     GET_BLOCKS_BY_HEIGHT,
@@ -2514,7 +2486,6 @@ namespace rpc {
     GET_COINBASE_TX_SUM,
     GET_BASE_FEE_ESTIMATE,
     GET_ALTERNATE_CHAINS,
-    UPDATE,
     RELAY_TX,
     SYNC_INFO,
     GET_OUTPUT_DISTRIBUTION,

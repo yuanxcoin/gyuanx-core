@@ -36,7 +36,6 @@
 
 #include <unordered_set>
 #include <iomanip>
-#include <lokimq/hex.h>
 #include <lokimq/base32z.h>
 
 extern "C" {
@@ -51,10 +50,9 @@ extern "C" {
 #include "cryptonote_core.h"
 #include "common/file.h"
 #include "common/sha256sum.h"
-#include "common/updates.h"
-#include "common/download.h"
 #include "common/threadpool.h"
 #include "common/command_line.h"
+#include "common/hex.h"
 #include "warnings.h"
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
@@ -170,11 +168,6 @@ namespace cryptonote
   , "How many blocks to sync at once during chain synchronization (0 = adaptive)."
   , 0
   };
-  static const command_line::arg_descriptor<std::string> arg_check_updates = {
-    "check-updates"
-  , "Check for new versions of loki: [disabled|notify|download|update]"
-  , "notify"
-  };
   static const command_line::arg_descriptor<bool> arg_pad_transactions  = {
     "pad-transactions"
   , "Pad relayed transactions to help defend against traffic volume analysis"
@@ -275,19 +268,27 @@ namespace cryptonote
 
   // Loads stubs that fail if invoked.  The stubs are replaced in the cryptonote_protocol/quorumnet.cpp glue code.
   [[noreturn]] static void need_core_init() {
-      throw std::logic_error("Internal error: quorumnet::init_core_callbacks() should have been called");
+      throw std::logic_error("Internal error: core callback initialization was not performed!");
   }
   void *(*quorumnet_new)(core&);
   void (*quorumnet_delete)(void*&self);
   void (*quorumnet_relay_obligation_votes)(void* self, const std::vector<service_nodes::quorum_vote_t>&);
   std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(core& core, const std::string& tx_blob);
+
+  void (*long_poll_trigger)(tx_memory_pool& pool);
+
   static bool init_core_callback_stubs() {
     quorumnet_new = [](core&) -> void* { need_core_init(); };
     quorumnet_delete = [](void*&) { need_core_init(); };
     quorumnet_relay_obligation_votes = [](void*, const std::vector<service_nodes::quorum_vote_t>&) { need_core_init(); };
     quorumnet_send_blink = [](core&, const std::string&) -> std::future<std::pair<blink_result, std::string>> { need_core_init(); };
+
+    long_poll_trigger = [](tx_memory_pool&) { need_core_init(); };
+
     return false;
   }
+
+  // This variable is only here to let us call the above during static initialization.
   bool init_core_callback_complete = init_core_callback_stubs();
 
   //-----------------------------------------------------------------------------------------------
@@ -305,9 +306,7 @@ namespace cryptonote
   , m_target_blockchain_height(0)
   , m_checkpoints_path("")
   , m_last_json_checkpoints_update(0)
-  , m_update_download(0)
   , m_nettype(UNDEFINED)
-  , m_update_available(false)
   , m_last_storage_server_ping(0)
   , m_last_lokinet_ping(0)
   , m_pad_transactions(false)
@@ -347,15 +346,6 @@ namespace cryptonote
   {
     m_miner.stop();
     m_blockchain_storage.cancel();
-
-    tools::download_async_handle handle;
-    {
-      std::lock_guard lock{m_update_mutex};
-      handle = m_update_download;
-      m_update_download = 0;
-    }
-    if (handle)
-      tools::download_cancel(handle);
   }
   //-----------------------------------------------------------------------------------
   void core::init_options(boost::program_options::options_description& desc)
@@ -375,7 +365,6 @@ namespace cryptonote
     command_line::add_arg(desc, arg_fast_block_sync);
     command_line::add_arg(desc, arg_show_time_stats);
     command_line::add_arg(desc, arg_block_sync_size);
-    command_line::add_arg(desc, arg_check_updates);
     command_line::add_arg(desc, arg_offline);
     command_line::add_arg(desc, arg_block_download_max_size);
     command_line::add_arg(desc, arg_max_txpool_weight);
@@ -645,7 +634,6 @@ namespace cryptonote
     bool db_salvage = command_line::get_arg(vm, cryptonote::arg_db_salvage) != 0;
     bool fast_sync = command_line::get_arg(vm, arg_fast_block_sync) != 0;
     uint64_t blocks_threads = command_line::get_arg(vm, arg_prep_blocks_threads);
-    std::string check_updates_string = command_line::get_arg(vm, arg_check_updates);
     size_t max_txpool_weight = command_line::get_arg(vm, arg_max_txpool_weight);
     bool const prune_blockchain = false; /* command_line::get_arg(vm, arg_prune_blockchain); */
     bool keep_alt_blocks = command_line::get_arg(vm, arg_keep_alt_blocks);
@@ -884,20 +872,6 @@ namespace cryptonote
     MGINFO("Loading checkpoints");
     CHECK_AND_ASSERT_MES(update_checkpoints_from_json_file(), false, "One or more checkpoints loaded from json conflicted with existing checkpoints.");
 
-   // DNS versions checking
-    if (check_updates_string == "disabled")
-      check_updates_level = UPDATES_DISABLED;
-    else if (check_updates_string == "notify")
-      check_updates_level = UPDATES_NOTIFY;
-    else if (check_updates_string == "download")
-      check_updates_level = UPDATES_DOWNLOAD;
-    else if (check_updates_string == "update")
-      check_updates_level = UPDATES_UPDATE;
-    else {
-      MERROR("Invalid argument to --dns-versions-check: " << check_updates_string);
-      return false;
-    }
-
     r = m_miner.init(vm, m_nettype);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize miner instance");
 
@@ -1007,15 +981,15 @@ namespace cryptonote
 
     if (m_service_node) {
       MGINFO_YELLOW("Service node public keys:");
-      MGINFO_YELLOW("- primary: " << lokimq::to_hex(tools::view_guts(keys.pub)));
-      MGINFO_YELLOW("- ed25519: " << lokimq::to_hex(tools::view_guts(keys.pub_ed25519)));
+      MGINFO_YELLOW("- primary: " << tools::type_to_hex(keys.pub));
+      MGINFO_YELLOW("- ed25519: " << tools::type_to_hex(keys.pub_ed25519));
       // .snode address is the ed25519 pubkey, encoded with base32z and with .snode appended:
       MGINFO_YELLOW("- lokinet: " << lokimq::to_base32z(tools::view_guts(keys.pub_ed25519)) << ".snode");
-      MGINFO_YELLOW("-  x25519: " << lokimq::to_hex(tools::view_guts(keys.pub_x25519)));
+      MGINFO_YELLOW("-  x25519: " << tools::type_to_hex(keys.pub_x25519));
     } else {
       // Only print the x25519 version because it's the only thing useful for a non-SN (for
       // encrypted LMQ RPC connections).
-      MGINFO_YELLOW("x25519 public key: " << lokimq::to_hex(tools::view_guts(keys.pub_x25519)));
+      MGINFO_YELLOW("x25519 public key: " << tools::type_to_hex(keys.pub_x25519));
     }
 
     return true;
@@ -1134,7 +1108,6 @@ namespace cryptonote
     if (m_quorumnet_state)
       quorumnet_delete(m_quorumnet_state);
     m_lmq.reset();
-    m_long_poll_wake_up_clients.notify_all();
     m_service_node_list.store();
     m_miner.stop();
     m_mempool.deinit();
@@ -1407,7 +1380,7 @@ namespace cryptonote
       }
     }
 
-    if (tx_pool_changed) m_long_poll_wake_up_clients.notify_all();
+    if (tx_pool_changed) long_poll_trigger(m_mempool);
     return ok;
   }
   //-----------------------------------------------------------------------------------------------
@@ -2209,7 +2182,6 @@ namespace cryptonote
     m_fork_moaner.do_call([this] { return check_fork_time(); });
     m_txpool_auto_relayer.do_call([this] { return relay_txpool_transactions(); });
     m_service_node_vote_relayer.do_call([this] { return relay_service_node_votes(); });
-    // m_check_updates_interval.do_call([this] { return check_updates(); });
     m_check_disk_space_interval.do_call([this] { return check_disk_space(); });
     m_block_rate_interval.do_call([this] { return check_block_rate(); });
     m_sn_proof_cleanup_interval.do_call([&snl=m_service_node_list] { snl.cleanup_proofs(); return true; });
@@ -2276,136 +2248,6 @@ namespace cryptonote
   uint64_t core::get_earliest_ideal_height_for_version(uint8_t version) const
   {
     return get_blockchain_storage().get_earliest_ideal_height_for_version(version);
-  }
-  //-----------------------------------------------------------------------------------------------
-  bool core::check_updates()
-  {
-    static const char software[] = "loki";
-#ifdef BUILD_TAG
-    static const char buildtag[] = BOOST_PP_STRINGIZE(BUILD_TAG);
-    static const char subdir[] = "cli"; // because it can never be simple
-#else
-    static const char buildtag[] = "source";
-    static const char subdir[] = "source"; // because it can never be simple
-#endif
-
-    if (m_offline)
-      return true;
-
-    if (check_updates_level == UPDATES_DISABLED)
-      return true;
-
-    std::string version, hash;
-    MCDEBUG("updates", "Checking for a new " << software << " version for " << buildtag);
-    if (!tools::check_updates(software, buildtag, version, hash))
-      return false;
-
-    if (tools::vercmp(version.c_str(), LOKI_VERSION_STR) <= 0)
-    {
-      m_update_available = false;
-      return true;
-    }
-
-    std::string url = tools::get_update_url(software, subdir, buildtag, version, true);
-    MCLOG_CYAN(el::Level::Info, "global", "Version " << version << " of " << software << " for " << buildtag << " is available: " << url << ", SHA256 hash " << hash);
-    m_update_available = true;
-
-    if (check_updates_level == UPDATES_NOTIFY)
-      return true;
-
-    url = tools::get_update_url(software, subdir, buildtag, version, false);
-    std::string filename;
-    const char *slash = strrchr(url.c_str(), '/');
-    if (slash)
-      filename = slash + 1;
-    else
-      filename = std::string(software) + "-update-" + version;
-    boost::filesystem::path path(epee::string_tools::get_current_module_folder());
-    path /= filename;
-
-    std::unique_lock lock{m_update_mutex};
-
-    if (m_update_download != 0)
-    {
-      MCDEBUG("updates", "Already downloading update");
-      return true;
-    }
-
-    crypto::hash file_hash;
-    if (!tools::sha256sum_file(path.string(), file_hash) || (hash != epee::string_tools::pod_to_hex(file_hash)))
-    {
-      MCDEBUG("updates", "We don't have that file already, downloading");
-      const std::string tmppath = path.string() + ".tmp";
-      if (epee::file_io_utils::is_file_exist(tmppath))
-      {
-        MCDEBUG("updates", "We have part of the file already, resuming download");
-      }
-      m_last_update_length = 0;
-      m_update_download = tools::download_async(tmppath, url, [this, hash, path](const std::string &tmppath, const std::string &uri, bool success) {
-        bool remove = false, good = true;
-        if (success)
-        {
-          crypto::hash file_hash;
-          if (!tools::sha256sum_file(tmppath, file_hash))
-          {
-            MCERROR("updates", "Failed to hash " << tmppath);
-            remove = true;
-            good = false;
-          }
-          else if (hash != epee::string_tools::pod_to_hex(file_hash))
-          {
-            MCERROR("updates", "Download from " << uri << " does not match the expected hash");
-            remove = true;
-            good = false;
-          }
-        }
-        else
-        {
-          MCERROR("updates", "Failed to download " << uri);
-          good = false;
-        }
-        std::unique_lock lock{m_update_mutex};
-        m_update_download = 0;
-        if (success && !remove)
-        {
-          std::error_code e = tools::replace_file(tmppath, path.string());
-          if (e)
-          {
-            MCERROR("updates", "Failed to rename downloaded file");
-            good = false;
-          }
-        }
-        else if (remove)
-        {
-          if (!boost::filesystem::remove(tmppath))
-          {
-            MCERROR("updates", "Failed to remove invalid downloaded file");
-            good = false;
-          }
-        }
-        if (good)
-          MCLOG_CYAN(el::Level::Info, "updates", "New version downloaded to " << path.string());
-      }, [this](const std::string &path, const std::string &uri, size_t length, ssize_t content_length) {
-        if (length >= m_last_update_length + 1024 * 1024 * 10)
-        {
-          m_last_update_length = length;
-          MCDEBUG("updates", "Downloaded " << length << "/" << (content_length ? std::to_string(content_length) : "unknown"));
-        }
-        return true;
-      });
-    }
-    else
-    {
-      MCDEBUG("updates", "We already have " << path << " with expected hash");
-    }
-
-    lock.unlock();
-
-    if (check_updates_level == UPDATES_DOWNLOAD)
-      return true;
-
-    MCERROR("updates", "Download/update not implemented yet");
-    return true;
   }
   //-----------------------------------------------------------------------------------------------
   bool core::check_disk_space()

@@ -41,7 +41,6 @@
 
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
 #include "storages/portable_storage_template_helper.h"
-#include "common/download.h"
 #include "common/command_line.h"
 #include "tx_pool.h"
 #include "blockchain.h"
@@ -92,8 +91,12 @@ namespace cryptonote
   // Sends a blink tx to the current blink quorum, returns a future that can be used to wait for the
   // result.
   extern std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(core& core, const std::string& tx_blob);
-  extern bool init_core_callback_complete;
 
+  // Function pointer that we invoke when the mempool has changed; this gets set during
+  // rpc/http_server.cpp's init_options().
+  extern void (*long_poll_trigger)(tx_memory_pool& pool);
+
+  extern bool init_core_callback_complete;
 
   /************************************************************************/
   /*                                                                      */
@@ -804,16 +807,6 @@ namespace cryptonote
      network_type get_nettype() const { return m_nettype; };
 
      /**
-      * @brief check whether an update is known to be available or not
-      *
-      * This does not actually trigger a check, but returns the result
-      * of the last check
-      *
-      * @return whether an update is known to be available or not
-      */
-     bool is_update_available() const { return m_update_available; }
-
-     /**
       * @brief get whether transaction relay should be padded
       *
       * @return whether transaction relay should be padded
@@ -998,9 +991,6 @@ namespace cryptonote
       * @return true
       */
      bool relay_txpool_transactions();
-
-     std::mutex              m_long_poll_mutex;
-     std::condition_variable m_long_poll_wake_up_clients;
  private:
 
      /**
@@ -1080,13 +1070,6 @@ namespace cryptonote
       * @return true
       */
      bool check_fork_time();
-
-     /**
-      * @brief checks DNS versions
-      *
-      * @return true on success, false otherwise
-      */
-     bool check_updates();
 
      /**
       * @brief checks free disk space
@@ -1179,7 +1162,6 @@ namespace cryptonote
      tools::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
      tools::periodic_task m_fork_moaner{2h}; //!< interval for checking HardFork status
      tools::periodic_task m_txpool_auto_relayer{2min, false}; //!< interval for checking re-relaying txpool transactions
-     tools::periodic_task m_check_updates_interval{12h}; //!< interval for checking for new versions
      tools::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
      tools::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{UPTIME_PROOF_TIMER_SECONDS}}; //!< interval for checking our own uptime proof
      tools::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
@@ -1193,8 +1175,6 @@ namespace cryptonote
      uint64_t m_target_blockchain_height; //!< blockchain height target
 
      network_type m_nettype; //!< which network are we on?
-
-     std::atomic<bool> m_update_available;
 
      std::string m_checkpoints_path; //!< path to json checkpoints file
      time_t m_last_json_checkpoints_update; //!< time when json checkpoints were last updated
@@ -1226,17 +1206,6 @@ namespace cryptonote
 
      std::unordered_set<crypto::hash> bad_semantics_txes[2];
      std::mutex bad_semantics_txes_lock;
-
-     enum {
-       UPDATES_DISABLED,
-       UPDATES_NOTIFY,
-       UPDATES_DOWNLOAD,
-       UPDATES_UPDATE,
-     } check_updates_level;
-
-     tools::download_async_handle m_update_download;
-     size_t m_last_update_length;
-     std::mutex m_update_mutex;
 
      bool m_offline;
      bool m_pad_transactions;

@@ -1,6 +1,6 @@
 #include "core_rpc_server_commands_defs.h"
 
-namespace cryptonote { namespace rpc {
+namespace cryptonote::rpc {
 
 KV_SERIALIZE_MAP_CODE_BEGIN(STATUS)
   KV_SERIALIZE(status)
@@ -276,7 +276,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_INFO::response)
   KV_SERIALIZE(height_without_bootstrap)
   KV_SERIALIZE(was_bootstrap_ever_used)
   KV_SERIALIZE(database_size)
-  KV_SERIALIZE(update_available)
   KV_SERIALIZE(version)
   KV_SERIALIZE(status_line)
 KV_SERIALIZE_MAP_CODE_END()
@@ -794,23 +793,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_ALTERNATE_CHAINS::response)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(UPDATE::request)
-  KV_SERIALIZE(command);
-  KV_SERIALIZE(path);
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(UPDATE::response)
-  KV_SERIALIZE(status)
-  KV_SERIALIZE(update)
-  KV_SERIALIZE(version)
-  KV_SERIALIZE(user_uri)
-  KV_SERIALIZE(auto_uri)
-  KV_SERIALIZE(hash)
-  KV_SERIALIZE(path)
-KV_SERIALIZE_MAP_CODE_END()
-
-
 KV_SERIALIZE_MAP_CODE_BEGIN(RELAY_TX::request)
   KV_SERIALIZE(txids)
 KV_SERIALIZE_MAP_CODE_END()
@@ -1322,4 +1304,4 @@ KV_SERIALIZE_MAP_CODE_BEGIN(FLUSH_CACHE::request)
   KV_SERIALIZE_OPT(bad_blocks, false)
 KV_SERIALIZE_MAP_CODE_END()
 
-}}
+}
