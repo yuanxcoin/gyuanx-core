@@ -131,9 +131,9 @@ HardFork::HardFork(cryptonote::BlockchainDB &db, uint8_t original_version, time_
   current_fork_index(0)
 {
   if (window_size == 0)
-    throw "window_size needs to be strictly positive";
+    throw std::logic_error{"window_size needs to be strictly positive"};
   if (default_threshold_percent > 100)
-    throw "default_threshold_percent needs to be between 0 and 100";
+    throw std::logic_error{"default_threshold_percent needs to be between 0 and 100"};
 }
 
 bool HardFork::add_fork(uint8_t version, uint64_t height, uint8_t threshold, time_t time)

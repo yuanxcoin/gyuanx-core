@@ -315,7 +315,7 @@ private:
     std::optional<std::string> get_random_public_node();
     bool set_bootstrap_daemon(const std::string &address, std::string_view username_password);
     bool set_bootstrap_daemon(const std::string &address, std::string_view username, std::string_view password);
-    void fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash);
+    void fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response, bool fill_pow_hash, bool get_tx_hashes);
     std::unique_lock<std::shared_mutex> should_bootstrap_lock();
 
     template <typename COMMAND_TYPE>
