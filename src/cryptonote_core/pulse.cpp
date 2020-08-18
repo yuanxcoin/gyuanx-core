@@ -1360,10 +1360,10 @@ round_state send_and_wait_for_signed_blocks(round_context &context, void *quorum
       if (quorum[index])
         indices[indices_count++] = index;
 
-    // Shuffle and sort first 'N' PULSE_BLOCK_REQUIRED_SIGNATURES entries
+    // Random select from first 'N' PULSE_BLOCK_REQUIRED_SIGNATURES from indices_count entries.
     assert(indices_count >= service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
-    tools::shuffle_portable(indices.begin(), indices.begin() + indices_count, tools::rng);
-    std::sort(indices.begin(), indices.begin() + service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
+    std::array<size_t, service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES> selected = {};
+    std::sample(indices.begin(), indices.begin() + indices_count, selected.begin(), selected.size(), tools::rng);
 
     // Add Signatures
     cryptonote::block &final_block = context.transient.signed_block.send.data;
@@ -1375,7 +1375,6 @@ round_state send_and_wait_for_signed_blocks(round_context &context, void *quorum
       MDEBUG(log_prefix(context) << "Signature added: " << validator_index << ":" << context.prepare_for_round.quorum.validators[validator_index] << ", " << *signature);
       final_block.signatures.emplace_back(validator_index, *signature);
     }
-
 
     // Propagate Final Block
     MDEBUG(log_prefix(context) << "Final signed block constructed\n" << cryptonote::obj_to_json_str(final_block));
