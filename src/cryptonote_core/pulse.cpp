@@ -77,13 +77,16 @@ enum struct queueing_state
   processed,
 };
 
+template <typename T>
+using quorum_array = std::array<T, service_nodes::PULSE_QUORUM_NUM_VALIDATORS>;
+
 // Stores message for quorumnet per stage. Some validators may reach later
 // stages before we arrive at that stage. To properly validate messages we also
 // need to wait until we arrive at the same stage such that we have received all
 // the necessary information to do so on Quorumnet.
 struct message_queue
 {
-  std::array<std::pair<pulse::message, queueing_state>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> buffer;
+  quorum_array<std::pair<pulse::message, queueing_state>> buffer;
   size_t count;
 };
 
@@ -108,9 +111,6 @@ struct pulse_send_stage
     return true;
   }
 };
-
-template <typename T>
-using quorum_array = std::array<T, service_nodes::PULSE_QUORUM_NUM_VALIDATORS>;
 
 struct round_context
 {
@@ -137,14 +137,14 @@ struct round_context
   {
     struct
     {
-      bool sent;                                                         // When true, handshake sent and waiting for other handshakes
-      std::array<bool, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data; // Received data from messages from Quorumnet
+      bool sent;               // When true, handshake sent and waiting for other handshakes
+      quorum_array<bool> data; // Received data from messages from Quorumnet
       pulse_wait_stage stage;
     } send_and_wait_for_handshakes;
 
     struct
     {
-      std::array<std::pair<uint16_t, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+      quorum_array<std::optional<uint16_t>> data;
       pulse_wait_stage stage;
 
       uint16_t best_bitset; // The most agreed upon validators for participating in rounds. Value is set when all handshake bitsets are received.
@@ -154,7 +154,7 @@ struct round_context
     struct
     {
       cryptonote::block block; // The block template with the best validator bitset and Pulse round applied to it.
-      pulse_wait_stage  stage;
+      pulse_wait_stage stage;
     } wait_for_block_template;
 
     struct
@@ -162,7 +162,7 @@ struct round_context
       pulse_send_stage<crypto::hash> send;
       struct
       {
-        std::array<std::pair<crypto::hash, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        quorum_array<std::optional<crypto::hash>> data;
         pulse_wait_stage stage;
       } wait;
     } random_value_hashes;
@@ -173,7 +173,7 @@ struct round_context
 
       struct
       {
-        std::array<std::pair<cryptonote::pulse_random_value, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        quorum_array<std::optional<cryptonote::pulse_random_value>> data;
         pulse_wait_stage stage;
       } wait;
     } random_value;
@@ -184,7 +184,7 @@ struct round_context
 
       struct
       {
-        std::array<std::pair<crypto::signature, bool /*received*/>, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> data;
+        quorum_array<std::optional<crypto::signature>> data;
         pulse_wait_stage stage;
       } wait;
     } signed_block;
@@ -551,11 +551,10 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 
     case pulse::message_type::handshake_bitset:
     {
-      auto &quorum             = context.transient.wait_for_handshake_bitsets.data;
-      auto &[bitset, received] = quorum[msg.quorum_position];
-      if (received) return;
-      received = true;
-      bitset   = msg.handshakes.validator_bitset;
+      auto &quorum = context.transient.wait_for_handshake_bitsets.data;
+      auto &bitset = quorum[msg.quorum_position];
+      if (bitset) return;
+      bitset = msg.handshakes.validator_bitset;
     }
     break;
 
@@ -592,34 +591,32 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 
     case pulse::message_type::random_value_hash:
     {
-      auto &quorum            = context.transient.random_value_hashes.wait.data;
-      auto &[value, received] = quorum[msg.quorum_position];
-      if (received) return;
-      value    = msg.random_value_hash.hash;
-      received = true;
+      auto &quorum = context.transient.random_value_hashes.wait.data;
+      auto &value  = quorum[msg.quorum_position];
+      if (value) return;
+      value = msg.random_value_hash.hash;
     }
     break;
 
     case pulse::message_type::random_value:
     {
-      auto &quorum            = context.transient.random_value.wait.data;
-      auto &[value, received] = quorum[msg.quorum_position];
-      if (received) return;
+      auto &quorum = context.transient.random_value.wait.data;
+      auto &value  = quorum[msg.quorum_position];
+      if (value) return;
 
-      if (auto const &[hash, hash_received] = context.transient.random_value_hashes.wait.data[msg.quorum_position]; hash_received)
+      if (auto const &hash = context.transient.random_value_hashes.wait.data[msg.quorum_position]; hash)
       {
         auto derived = crypto::cn_fast_hash(msg.random_value.value.data, sizeof(msg.random_value.value.data));
-        if (derived != hash)
+        if (derived != *hash)
         {
           MTRACE(log_prefix(context) << "Dropping " << msg_source_string(context, msg)
                                     << ". Rederived random value hash " << derived << " does not match original hash "
-                                    << hash);
+                                    << *hash);
           return;
         }
       }
 
-      value    = msg.random_value.value;
-      received = true;
+      value = msg.random_value.value;
     }
     break;
 
@@ -634,12 +631,10 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
       }
 
       // Signature already verified in msg_signature_check(...)
-      auto &quorum                = context.transient.signed_block.wait.data;
-      auto &[signature, received] = quorum[msg.quorum_position];
-      if (received) return;
-
+      auto &quorum    = context.transient.signed_block.wait.data;
+      auto &signature = quorum[msg.quorum_position];
+      if (signature) return;
       signature = msg.signature;
-      received  = true;
     }
     break;
   }
@@ -1097,15 +1092,18 @@ round_state wait_for_handshake_bitsets(round_context &context, void *quorumnet_s
     size_t count         = 0;
     for (size_t quorum_index = 0; quorum_index < quorum.size(); quorum_index++)
     {
-      auto &[bitset, received] = quorum[quorum_index];
-      uint16_t num             = ++most_common_bitset[bitset];
-      if (received && num > count)
+      auto &bitset = quorum[quorum_index];
+      if (bitset)
       {
-        best_bitset = bitset;
-        count       = num;
+        uint16_t num = ++most_common_bitset[*bitset];
+        if (num > count)
+        {
+          best_bitset = *bitset;
+          count       = num;
+        }
+        MTRACE(log_prefix(context) << "Collected from V[" << quorum_index << "], handshake bitset " << bitset_view16(*bitset));
       }
 
-      MTRACE(log_prefix(context) << "Collected from V[" << quorum_index << "], handshake bitset " << bitset_view16(bitset));
     }
 
     if (count < service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES || best_bitset == 0)
@@ -1289,10 +1287,9 @@ round_state send_and_wait_for_random_value(round_context &context, void *quorumn
     crypto::hash final_hash = {};
     for (size_t index = 0; index < quorum.size(); index++)
     {
-      auto &[random_value, received] = quorum[index];
-      if (received)
+      if (auto &random_value = quorum[index]; random_value)
       {
-        epee::wipeable_string string = lokimq::to_hex(tools::view_guts(random_value.data));
+        epee::wipeable_string string = lokimq::to_hex(tools::view_guts(random_value->data));
 
 #if defined(NDEBUG)
         // Mask the random value generated incase someone is snooping logs
@@ -1303,7 +1300,7 @@ round_state send_and_wait_for_random_value(round_context &context, void *quorumn
 
         MDEBUG(log_prefix(context) << "Final random value seeding with V[" << index << "] " << string.view());
 
-        auto buf   = tools::memcpy_le(final_hash.data, random_value.data);
+        auto buf   = tools::memcpy_le(final_hash.data, random_value->data);
         final_hash = crypto::cn_fast_hash(buf.data(), buf.size());
       }
     }
@@ -1360,10 +1357,8 @@ round_state send_and_wait_for_signed_blocks(round_context &context, void *quorum
 
     // Pull out indices where we've received a signature
     for (size_t index = 0; index < quorum.size(); index++)
-    {
-      bool received = quorum[index].second;
-      if (received) indices[indices_count++] = index;
-    }
+      if (quorum[index])
+        indices[indices_count++] = index;
 
     // Shuffle and sort first 'N' PULSE_BLOCK_REQUIRED_SIGNATURES entries
     assert(indices_count >= service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
@@ -1374,11 +1369,11 @@ round_state send_and_wait_for_signed_blocks(round_context &context, void *quorum
     cryptonote::block &final_block = context.transient.signed_block.send.data;
     for (size_t index = 0; index < service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES; index++)
     {
-      uint16_t validator_index          = indices[index];
-      auto const &[signature, received] = quorum[validator_index];
-      assert(received);
-      MDEBUG(log_prefix(context) << "Signature added: " << validator_index << ":" << context.prepare_for_round.quorum.validators[validator_index] << ", " << signature);
-      final_block.signatures.emplace_back(validator_index, signature);
+      uint16_t validator_index = indices[index];
+      auto const &signature    = quorum[validator_index];
+      assert(signature);
+      MDEBUG(log_prefix(context) << "Signature added: " << validator_index << ":" << context.prepare_for_round.quorum.validators[validator_index] << ", " << *signature);
+      final_block.signatures.emplace_back(validator_index, *signature);
     }
 
 
