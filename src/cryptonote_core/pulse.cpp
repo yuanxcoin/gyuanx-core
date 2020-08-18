@@ -316,10 +316,10 @@ bool msg_signature_check(pulse::message const &msg, service_nodes::quorum const 
     }
     break;
 
-    case pulse::message_type::handshake: /* FALLTHRU */
-    case pulse::message_type::handshake_bitset: /* FALLTHRU */
-    case pulse::message_type::random_value_hash: /* FALLTHRU */
-    case pulse::message_type::random_value: /* FALLTHRU */
+    case pulse::message_type::handshake: [[fallthrough]];
+    case pulse::message_type::handshake_bitset: [[fallthrough]];
+    case pulse::message_type::random_value_hash: [[fallthrough]];
+    case pulse::message_type::random_value: [[fallthrough]];
     case pulse::message_type::signed_block:
     {
       if (msg.quorum_position >= static_cast<int>(quorum.validators.size()))
