@@ -13,6 +13,11 @@
 #include "service_node_quorum_cop.h"
 #include "service_node_rules.h"
 
+extern "C"
+{
+#include <sodium/crypto_generichash.h>
+};
+
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "pulse"
 
@@ -1285,28 +1290,38 @@ round_state send_and_wait_for_random_value(round_context &context, void *quorumn
 
     // Generate Final Random Value
     crypto::hash final_hash = {};
-    for (size_t index = 0; index < quorum.size(); index++)
     {
-      if (auto &random_value = quorum[index]; random_value)
+      unsigned char constexpr key[crypto_generichash_KEYBYTES] = {};
+      static_assert(sizeof(final_hash) == crypto_generichash_BYTES);
+
+      crypto_generichash_state state = {};
+      crypto_generichash_init(&state, key, sizeof(key), sizeof(final_hash));
+
+      for (size_t index = 0; index < quorum.size(); index++)
       {
-        epee::wipeable_string string = lokimq::to_hex(tools::view_guts(random_value->data));
+        if (auto &random_value = quorum[index]; random_value)
+        {
+          epee::wipeable_string string = lokimq::to_hex(tools::view_guts(random_value->data));
 
 #if defined(NDEBUG)
-        // Mask the random value generated incase someone is snooping logs
-        // trying to derive the Service Node rng seed.
-        for (int i = 2; i < static_cast<int>(string.size()) - 2; i++)
-          string.data()[i] = '.';
+          // Mask the random value generated incase someone is snooping logs
+          // trying to derive the Service Node rng seed.
+          for (int i = 2; i < static_cast<int>(string.size()) - 2; i++)
+            string.data()[i] = '.';
 #endif
 
-        MDEBUG(log_prefix(context) << "Final random value seeding with V[" << index << "] " << string.view());
-
-        auto buf   = tools::memcpy_le(final_hash.data, random_value->data);
-        final_hash = crypto::cn_fast_hash(buf.data(), buf.size());
+          MDEBUG(log_prefix(context) << "Final random value seeding with V[" << index << "] " << string.view());
+          crypto_generichash_update(&state, random_value->data, sizeof(random_value->data));
+        }
       }
+
+      crypto_generichash_final(&state, reinterpret_cast<unsigned char *>(final_hash.data), sizeof(final_hash));
     }
 
     cryptonote::block &block                           = context.transient.wait_for_block_template.block;
     cryptonote::pulse_random_value &final_random_value = block.pulse.random_value;
+
+    static_assert(sizeof(final_hash) >= sizeof(final_random_value.data));
     std::memcpy(final_random_value.data, final_hash.data, sizeof(final_random_value.data));
 
     MINFO(log_prefix(context) << "Block final random value " << lokimq::to_hex(tools::view_guts(final_random_value.data)) << " generated from validators " << bitset_view16(stage.bitset));
