@@ -50,7 +50,7 @@ namespace cryptonote
   struct i_miner_handler
   {
     virtual bool handle_block_found(block& b, block_verification_context &bvc) = 0;
-    virtual bool get_block_template(block& b, const account_public_address& adr, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce) = 0;
+    virtual bool create_next_miner_block_template(block& b, const account_public_address& adr, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce) = 0;
   protected:
     ~i_miner_handler(){};
   };
@@ -83,17 +83,6 @@ namespace cryptonote
     void resume();
     void do_print_hashrate(bool do_hr);
     uint64_t get_block_reward() const { return m_block_reward; }
-
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-    std::atomic<bool> m_debug_mine_singular_block;
-    bool debug_mine_singular_block(const account_public_address& adr)
-    {
-      m_debug_mine_singular_block = true;
-      bool result = start(adr, 1 /*thread_counts*/);
-      while(is_mining()) { }
-      return result;
-    }
-#endif
 
   private:
     bool worker_thread(bool slow_mining = false);

@@ -3,8 +3,64 @@
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
 #include "service_node_voting.h"
+#include <chrono>
 
 namespace service_nodes {
+  constexpr size_t PULSE_QUORUM_ENTROPY_LAG    = 21; // How many blocks back from the tip of the Blockchain to source entropy for the Pulse quorums.
+#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+  constexpr auto PULSE_ROUND_TIME                                   = 20s;
+  constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 3s;
+  constexpr auto PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION = 3s;
+  constexpr auto PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION             = 3s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION          = 3s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 3s;
+  constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 5s;
+
+  constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 7;
+  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 6;  // A block must have exactly N signatures to be considered properly
+#else
+  constexpr auto PULSE_ROUND_TIME                                   = 60s;
+  constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 10s;
+  constexpr auto PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION = 10s;
+  constexpr auto PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION             = 10s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION          = 10s;
+  constexpr auto PULSE_WAIT_FOR_RANDOM_VALUE_DURATION               = 10s;
+  constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 10s;
+
+  constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 11;
+  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 7;  // A block must have exactly N signatures to be considered properly
+#endif
+
+  constexpr auto PULSE_MIN_TARGET_BLOCK_TIME = TARGET_BLOCK_TIME - 15s;
+  constexpr auto PULSE_MAX_TARGET_BLOCK_TIME = TARGET_BLOCK_TIME + 15s;
+  constexpr size_t PULSE_QUORUM_SIZE = PULSE_QUORUM_NUM_VALIDATORS + 1 /*Leader*/;
+
+  static_assert(PULSE_ROUND_TIME >=
+                PULSE_WAIT_FOR_HANDSHAKES_DURATION +
+                PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION +
+                PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION +
+                PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION +
+                PULSE_WAIT_FOR_RANDOM_VALUE_DURATION +
+                PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION);
+
+  static_assert(PULSE_QUORUM_NUM_VALIDATORS >= PULSE_BLOCK_REQUIRED_SIGNATURES);
+  static_assert(PULSE_QUORUM_ENTROPY_LAG >= PULSE_QUORUM_SIZE, "We need to pull atleast PULSE_QUORUM_SIZE number of blocks from the Blockchain, we can't if the amount of blocks to go back from the tip of the Blockchain is less than the blocks we need.");
+  
+  constexpr size_t pulse_min_service_nodes(cryptonote::network_type nettype)
+  {
+    return (nettype == cryptonote::MAINNET) ? 50 : PULSE_QUORUM_SIZE;
+  }
+  static_assert(pulse_min_service_nodes(cryptonote::MAINNET) >= PULSE_QUORUM_SIZE);
+  static_assert(pulse_min_service_nodes(cryptonote::TESTNET) >= PULSE_QUORUM_SIZE);
+
+  constexpr uint16_t pulse_validator_bit_mask()
+  {
+    uint16_t result = 0;
+    for (size_t validator_index = 0; validator_index < PULSE_QUORUM_NUM_VALIDATORS; validator_index++)
+      result |= 1 << validator_index;
+    return result;
+  }
+
   // Service node decommissioning: as service nodes stay up they earn "credits" (measured in blocks)
   // towards a future outage.  A new service node starts out with INITIAL_CREDIT, and then builds up
   // CREDIT_PER_DAY for each day the service node remains active up to a maximum of
@@ -187,7 +243,8 @@ namespace service_nodes {
     return
         hf_version <= cryptonote::network_version_12_checkpointing ? quorum_type::obligations :
         hf_version <  cryptonote::network_version_14_blink         ? quorum_type::checkpointing :
-        quorum_type::blink;
+        hf_version <  cryptonote::network_version_16               ? quorum_type::blink :
+        quorum_type::pulse;
   }
 
   constexpr uint64_t staking_num_lock_blocks(cryptonote::network_type nettype)
@@ -226,7 +283,7 @@ crypto::hash generate_request_stake_unlock_hash(uint32_t nonce);
 uint64_t     get_locked_key_image_unlock_height(cryptonote::network_type nettype, uint64_t node_register_height, uint64_t curr_height);
 
 // Returns lowest x such that (staking_requirement * x/STAKING_PORTIONS) >= amount
-uint64_t get_portions_to_make_amount(uint64_t staking_requirement, uint64_t amount);
+uint64_t get_portions_to_make_amount(uint64_t staking_requirement, uint64_t amount, uint64_t max_portions = STAKING_PORTIONS);
 
 bool get_portions_from_percent_str(std::string cut_str, uint64_t& portions);
 }

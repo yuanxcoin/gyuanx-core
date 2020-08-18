@@ -1,6 +1,7 @@
 // Copyright (c) 2014-2019, The Monero Project
 // Copyright (c)      2019, The Loki Project
 //
+
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without modification, are
@@ -123,7 +124,7 @@ namespace cryptonote
       extra_nonce = m_extra_messages[m_config.current_extra_message_index];
     }
 
-    if(!m_phandler->get_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce))
+    if(!m_phandler->create_next_miner_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce))
     {
       LOG_ERROR("Failed to get_block_template(), stopping mining");
       return false;
@@ -377,6 +378,7 @@ namespace cryptonote
     for (auto& th : m_threads)
       if (th.joinable())
         th.join();
+
     MINFO("Mining has been stopped, " << m_threads.size() << " finished" );
     m_threads.clear();
     m_threads_autodetect.clear();
@@ -444,9 +446,6 @@ namespace cryptonote
     block b;
     rx_slow_hash_allocate_state();
     bool call_stop = false;
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-    call_stop = true;
-#endif
 
     while(!m_stop)
     {
@@ -502,14 +501,6 @@ namespace cryptonote
           if (!m_config_folder_path.empty())
             epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
         }
-
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-        if (m_debug_mine_singular_block)
-        {
-          m_debug_mine_singular_block = false;
-          break;
-        }
-#endif
       }
 
       nonce+=m_threads_total;
