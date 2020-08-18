@@ -1116,12 +1116,13 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
 KV_SERIALIZE_MAP_CODE_END()
 
 
+static constexpr GET_SERVICE_NODES::requested_fields_t all_fields{true};
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::request)
   KV_SERIALIZE(service_node_pubkeys);
   KV_SERIALIZE(include_json);
   KV_SERIALIZE(limit)
   KV_SERIALIZE(active_only)
-  KV_SERIALIZE(fields)
+  KV_SERIALIZE_OPT(fields, all_fields)
   KV_SERIALIZE(poll_block_hash)
 KV_SERIALIZE_MAP_CODE_END()
 
