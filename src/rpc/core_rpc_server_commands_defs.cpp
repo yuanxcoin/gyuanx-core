@@ -1111,20 +1111,18 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
     KV_SERIALIZE(last_uptime_proof)
     KV_SERIALIZE(storage_server_reachable)
     KV_SERIALIZE(storage_server_reachable_timestamp)
-    KV_SERIALIZE(version_major)
-    KV_SERIALIZE(version_minor)
-    KV_SERIALIZE(version_patch)
     KV_SERIALIZE(votes)
   }
 KV_SERIALIZE_MAP_CODE_END()
 
 
+static constexpr GET_SERVICE_NODES::requested_fields_t all_fields{true};
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::request)
   KV_SERIALIZE(service_node_pubkeys);
   KV_SERIALIZE(include_json);
   KV_SERIALIZE(limit)
   KV_SERIALIZE(active_only)
-  KV_SERIALIZE(fields)
+  KV_SERIALIZE_OPT(fields, all_fields)
   KV_SERIALIZE(poll_block_hash)
 KV_SERIALIZE_MAP_CODE_END()
 
@@ -1163,9 +1161,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(last_uptime_proof);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable_timestamp);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_major);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_minor);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_patch);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(votes);
 KV_SERIALIZE_MAP_CODE_END()
 

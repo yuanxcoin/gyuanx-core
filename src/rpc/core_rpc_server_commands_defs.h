@@ -2007,7 +2007,7 @@ namespace rpc {
 
     // Boolean values indicate whether corresponding fields should be included in the response
     struct requested_fields_t {
-      bool all = true; // If set, overrides any individual requested fields
+      bool all = false; // If set, overrides any individual requested fields.  Defaults to *true* if "fields" is entirely omitted
       bool service_node_pubkey;
       bool registration_height;
       bool registration_hf_version;
@@ -2038,9 +2038,6 @@ namespace rpc {
       bool last_uptime_proof;
       bool storage_server_reachable;
       bool storage_server_reachable_timestamp;
-      bool version_major;
-      bool version_minor;
-      bool version_patch;
       bool votes;
 
       bool block_hash;
@@ -2056,7 +2053,7 @@ namespace rpc {
       bool include_json;                             // When set, the response's as_json member is filled out.
       uint32_t limit;                                // If non-zero, select a random sample (in random order) of the given number of service nodes to return from the full list.
       bool active_only;                              // If true, only include results for active (fully staked, not decommissioned) service nodes.
-      requested_fields_t fields;
+      requested_fields_t fields;                     // If omitted return all fields; otherwise return only the specified fields
 
       std::string poll_block_hash;                   // If specified this changes the behaviour to only return service node records if the block hash is *not* equal to the given hash; otherwise it omits the records and instead sets `"unchanged": true` in the response. This is primarily used to poll for new results where the requested results only change with new blocks.
 
@@ -2097,9 +2094,6 @@ namespace rpc {
         uint64_t                                           last_uptime_proof;                   // The last time this Service Node's uptime proof was relayed by at least 1 Service Node other than itself in unix epoch time.
         bool                                               storage_server_reachable;            // Whether the node's storage server has been reported as unreachable for a long time
         uint64_t                                           storage_server_reachable_timestamp;  // The last time this Service Node's storage server was contacted
-        uint16_t                                           version_major;                       // Major version the node is currently running
-        uint16_t                                           version_minor;                       // Minor version the node is currently running
-        uint16_t                                           version_patch;                       // Patch version the node is currently running
         std::vector<service_nodes::checkpoint_vote_record> votes;                               // Of the last N checkpoints the Service Node is in a checkpointing quorum, record whether or not the Service Node voted to checkpoint a block
 
         KV_MAP_SERIALIZABLE
