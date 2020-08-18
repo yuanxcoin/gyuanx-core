@@ -1111,9 +1111,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
     KV_SERIALIZE(last_uptime_proof)
     KV_SERIALIZE(storage_server_reachable)
     KV_SERIALIZE(storage_server_reachable_timestamp)
-    KV_SERIALIZE(version_major)
-    KV_SERIALIZE(version_minor)
-    KV_SERIALIZE(version_patch)
     KV_SERIALIZE(votes)
   }
 KV_SERIALIZE_MAP_CODE_END()
@@ -1163,9 +1160,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(last_uptime_proof);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable_timestamp);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_major);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_minor);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_patch);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(votes);
 KV_SERIALIZE_MAP_CODE_END()
 

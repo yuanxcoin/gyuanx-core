@@ -1537,7 +1537,7 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
   // Print Funding Status
   {
     stream << indent1 << "[" << entry_index << "] " << "Service Node: " << entry.service_node_pubkey << " ";
-    stream << "v" << entry.version_major << "." << entry.version_minor << "." << entry.version_patch << "\n";
+    stream << "v" << tools::join(".", entry.service_node_version) << "\n";
 
     if (detailed_view)
     {

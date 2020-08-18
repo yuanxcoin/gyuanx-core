@@ -2275,9 +2275,6 @@ namespace cryptonote { namespace rpc {
     if (get_service_nodes_res.service_node_states.empty()) // Started in service node but not staked, no information on the blockchain yet
     {
       res.service_node_state.service_node_pubkey  = std::move(get_service_node_key_res.service_node_pubkey);
-      res.service_node_state.version_major        = LOKI_VERSION[0];
-      res.service_node_state.version_minor        = LOKI_VERSION[1];
-      res.service_node_state.version_patch        = LOKI_VERSION[2];
       res.service_node_state.public_ip            = epee::string_tools::get_ip_string_from_int32(m_core.sn_public_ip());
       res.service_node_state.storage_port         = m_core.storage_port();
       res.service_node_state.storage_lmq_port     = m_core.m_storage_lmq_port;
@@ -2845,9 +2842,6 @@ namespace cryptonote { namespace rpc {
         entry.last_uptime_proof                  = proof.timestamp;
         entry.storage_server_reachable           = proof.storage_server_reachable;
         entry.storage_server_reachable_timestamp = proof.storage_server_reachable_timestamp;
-        entry.version_major                      = proof.version[0];
-        entry.version_minor                      = proof.version[1];
-        entry.version_patch                      = proof.version[2];
         entry.votes = std::vector<service_nodes::checkpoint_vote_record>(proof.votes.begin(), proof.votes.end());
     });
 
