@@ -201,6 +201,15 @@ struct round_context
 static round_context context;
 namespace
 {
+
+crypto::hash blake2b_hash(void const *data, size_t size)
+{
+  crypto::hash result = {};
+  static_assert(sizeof(result) == crypto_generichash_BYTES);
+  crypto_generichash(reinterpret_cast<unsigned char *>(result.data), sizeof(result), reinterpret_cast<unsigned char const *>(data), size, nullptr /*key*/, 0 /*key length*/);
+  return result;
+}
+
 std::string log_prefix(round_context const &context)
 {
   std::stringstream result;
@@ -248,32 +257,32 @@ crypto::hash msg_signature_hash(round_context const &context, pulse::message con
     case pulse::message_type::handshake:
     {
       auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round);
-      result   = crypto::cn_fast_hash(buf.data(), buf.size());
+      result   = blake2b_hash(buf.data(), buf.size());
     }
     break;
 
     case pulse::message_type::handshake_bitset:
     {
       auto buf = tools::memcpy_le(msg.handshakes.validator_bitset, context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round);
-      result   = crypto::cn_fast_hash(buf.data(), buf.size());
+      result   = blake2b_hash(buf.data(), buf.size());
     }
     break;
 
     case pulse::message_type::block_template:
-      result = crypto::cn_fast_hash(msg.block_template.blob.data(), msg.block_template.blob.size());
+      result = blake2b_hash(msg.block_template.blob.data(), msg.block_template.blob.size());
     break;
 
     case pulse::message_type::random_value_hash:
     {
       auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round, msg.random_value_hash.hash.data);
-      result   = crypto::cn_fast_hash(buf.data(), buf.size());
+      result   = blake2b_hash(buf.data(), buf.size());
     }
     break;
 
     case pulse::message_type::random_value:
     {
       auto buf = tools::memcpy_le(context.wait_for_next_block.top_hash.data, msg.quorum_position, msg.round, msg.random_value.value.data);
-      result   = crypto::cn_fast_hash(buf.data(), buf.size());
+      result   = blake2b_hash(buf.data(), buf.size());
     }
     break;
 
@@ -611,7 +620,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 
       if (auto const &hash = context.transient.random_value_hashes.wait.data[msg.quorum_position]; hash)
       {
-        auto derived = crypto::cn_fast_hash(msg.random_value.value.data, sizeof(msg.random_value.value.data));
+        auto derived = blake2b_hash(msg.random_value.value.data, sizeof(msg.random_value.value.data));
         if (derived != *hash)
         {
           MTRACE(log_prefix(context) << "Dropping " << msg_source_string(context, msg)
@@ -1205,7 +1214,7 @@ round_state wait_for_block_template(round_context &context, void *quorumnet_stat
 
       // Generate my random value and its hash
       crypto::generate_random_bytes_thread_safe(sizeof(context.transient.random_value.send.data), context.transient.random_value.send.data.data);
-      context.transient.random_value_hashes.send.data = crypto::cn_fast_hash(&context.transient.random_value.send.data, sizeof(context.transient.random_value.send.data));
+      context.transient.random_value_hashes.send.data = blake2b_hash(&context.transient.random_value.send.data, sizeof(context.transient.random_value.send.data));
       return round_state::send_and_wait_for_random_value_hashes;
     }
     else
@@ -1292,8 +1301,6 @@ round_state send_and_wait_for_random_value(round_context &context, void *quorumn
     crypto::hash final_hash = {};
     {
       unsigned char constexpr key[crypto_generichash_KEYBYTES] = {};
-      static_assert(sizeof(final_hash) == crypto_generichash_BYTES);
-
       crypto_generichash_state state = {};
       crypto_generichash_init(&state, key, sizeof(key), sizeof(final_hash));
 
