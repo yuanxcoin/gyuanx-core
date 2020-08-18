@@ -16,13 +16,20 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
   if (m_nettype == cryptonote::TESTNET || m_nettype == cryptonote::FAKECHAIN)
       return COIN * 100;
 
-  // For devnet we use the 10% of mainnet requirement at height (650k + H) so that we follow the
-  // same linear approximation but stay a bit ahead of it (devnet launched at ~600k mainnet height).
+  // For devnet we use the 10% of mainnet requirement at height (650k + H) so that we follow
+  // (proportionally) whatever staking changes happen on mainnet.  (The 650k is because devnet
+  // launched at ~600k mainnet height, so this puts it a little ahead).
   if (m_nettype == cryptonote::DEVNET)
       return get_staking_requirement(cryptonote::MAINNET, 600000 + height, hf_version) / 10;
 
+  if (hf_version >= cryptonote::network_version_16)
+    return 15000'000000000;
+
   if (hf_version >= cryptonote::network_version_13_enforce_checkpoints)
   {
+    // TODO: after HF16 we can remove excess elements here: we need to keep the first one higher
+    // than the HF16 fork height, but can delete everything above that (which probably will mean
+    // removing 688244 and above).
     constexpr int64_t heights[] = {
         385824,
         429024,
@@ -40,19 +47,19 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
     };
 
     constexpr int64_t lsr[] = {
-        20458380815527,
-        19332319724305,
-        18438564443912,
-        17729190407764,
-        17166159862153,
-        16719282221956,
-        16364595203882,
-        16083079931076,
-        15859641110978,
-        15682297601941,
-        15541539965538,
-        15429820555489,
-        15000000000000,
+        20458'380815527,
+        19332'319724305,
+        18438'564443912,
+        17729'190407764,
+        17166'159862153,
+        16719'282221956,
+        16364'595203882,
+        16083'079931076,
+        15859'641110978,
+        15682'297601941,
+        15541'539965538,
+        15429'820555489,
+        15000'000000000,
     };
 
     assert(static_cast<int64_t>(height) >= heights[0]);
