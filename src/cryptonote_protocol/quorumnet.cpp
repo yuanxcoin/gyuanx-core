@@ -1574,10 +1574,10 @@ pulse::message pulse_parse_msg_header_fields(pulse::message_type type, bt_dict_c
 void handle_pulse_participation_bit_or_bitset(Message &m, QnetState& qnet, bool bitset)
 {
   if (m.data.size() != 1)
-      throw std::runtime_error(std::string("Rejecting pulse participation ") + (bitset ? std::string("bitset") : std::string("handshake")) + ": expected one data entry not " + std::to_string(m.data.size()));
+      throw std::runtime_error("Rejecting pulse participation "s + (bitset ? "bitset" : "handshake") + ": expected one data entry not " + std::to_string(m.data.size()));
 
-  std::string_view INVALID_ARG_PREFIX = bitset ? "Invalid pulse validator bitset: missing required field '"sv
-                                               : "Invalid pulse validator bit: missing required field '"sv;
+  std::string_view const INVALID_ARG_PREFIX = bitset ? "Invalid pulse validator bitset: missing required field '"sv
+                                                     : "Invalid pulse validator bit: missing required field '"sv;
   bt_dict_consumer data{m.data[0]};
   auto type          = (bitset) ? pulse::message_type::handshake_bitset : pulse::message_type::handshake;
   pulse::message msg = pulse_parse_msg_header_fields(type, data, INVALID_ARG_PREFIX);
@@ -1596,11 +1596,11 @@ void handle_pulse_participation_bit_or_bitset(Message &m, QnetState& qnet, bool 
 void handle_pulse_block_template(Message &m, QnetState &qnet)
 {
   if (m.data.size() != 1)
-      throw std::runtime_error(std::string("Rejecting pulse block template expected one data entry not ") + std::to_string(m.data.size()));
+      throw std::runtime_error("Rejecting pulse block template expected one data entry not "s + std::to_string(m.data.size()));
 
   bt_dict_consumer data{m.data[0]};
-  std::string_view INVALID_ARG_PREFIX = "Invalid pulse block template: missing required field '"sv;
-  pulse::message msg                  = pulse_parse_msg_header_fields(pulse::message_type::block_template, data, INVALID_ARG_PREFIX);
+  std::string_view constexpr INVALID_ARG_PREFIX = "Invalid pulse block template: missing required field '"sv;
+  pulse::message msg = pulse_parse_msg_header_fields(pulse::message_type::block_template, data, INVALID_ARG_PREFIX);
 
   if (auto const &tag = PULSE_TAG_BLOCK_TEMPLATE; data.skip_until(tag))
     msg.block_template.blob = data.consume_string_view();
@@ -1613,12 +1613,12 @@ void handle_pulse_block_template(Message &m, QnetState &qnet)
 void handle_pulse_random_value_hash(Message &m, QnetState &qnet)
 {
   if (m.data.size() != 1)
-      throw std::runtime_error(std::string("Rejecting pulse random value hash expected one data entry not ") + std::to_string(m.data.size()));
+      throw std::runtime_error("Rejecting pulse random value hash expected one data entry not "s + std::to_string(m.data.size()));
 
   bt_dict_consumer data{m.data[0]};
 
-  std::string_view INVALID_ARG_PREFIX = "Invalid pulse random value hash: missing required field '"sv;
-  pulse::message msg                  = pulse_parse_msg_header_fields(pulse::message_type::random_value_hash, data, INVALID_ARG_PREFIX);
+  std::string_view constexpr INVALID_ARG_PREFIX = "Invalid pulse random value hash: missing required field '"sv;
+  pulse::message msg = pulse_parse_msg_header_fields(pulse::message_type::random_value_hash, data, INVALID_ARG_PREFIX);
 
   if (auto const &tag = PULSE_TAG_RANDOM_VALUE_HASH; data.skip_until(tag)) {
     auto str = data.consume_string_view();
@@ -1636,9 +1636,9 @@ void handle_pulse_random_value_hash(Message &m, QnetState &qnet)
 void handle_pulse_random_value(Message &m, QnetState &qnet)
 {
   if (m.data.size() != 1)
-      throw std::runtime_error(std::string("Rejecting pulse random value expected one data entry not ") + std::to_string(m.data.size()));
+      throw std::runtime_error("Rejecting pulse random value expected one data entry not "s + std::to_string(m.data.size()));
 
-  std::string_view INVALID_ARG_PREFIX = "Invalid pulse random value: missing required field '"sv;
+  std::string_view constexpr INVALID_ARG_PREFIX = "Invalid pulse random value: missing required field '"sv;
   bt_dict_consumer data{m.data[0]};
 
   pulse::message msg = pulse_parse_msg_header_fields(pulse::message_type::random_value, data, INVALID_ARG_PREFIX);
@@ -1657,9 +1657,9 @@ void handle_pulse_random_value(Message &m, QnetState &qnet)
 void handle_pulse_signed_block(Message &m, QnetState &qnet)
 {
   if (m.data.size() != 1)
-      throw std::runtime_error(std::string("Rejecting pulse signed block expected one data entry not ") + std::to_string(m.data.size()));
+      throw std::runtime_error("Rejecting pulse signed block expected one data entry not "s + std::to_string(m.data.size()));
 
-  std::string_view INVALID_ARG_PREFIX = "Invalid pulse signed block: missing required field '"sv;
+  std::string_view constexpr INVALID_ARG_PREFIX = "Invalid pulse signed block: missing required field '"sv;
   bt_dict_consumer data{m.data[0]};
   pulse::message msg = pulse_parse_msg_header_fields(pulse::message_type::signed_block, data, INVALID_ARG_PREFIX);
 
