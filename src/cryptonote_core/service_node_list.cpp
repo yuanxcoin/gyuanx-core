@@ -2134,7 +2134,8 @@ namespace service_nodes
 
         if (block.pulse.validator_bitset != 0)
         {
-          MERROR("Miner block given but unexpectedly set validator bitset " << block.pulse.round <<  " on height " << height);
+          std::bitset<8 * sizeof(block.pulse.validator_bitset)> const bitset = block.pulse.validator_bitset;
+          MERROR("Miner block given but unexpectedly set validator bitset " << bitset <<  " on height " << height);
           return false;
         }
 
