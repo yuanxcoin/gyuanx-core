@@ -53,6 +53,7 @@ extern "C" {
 #include "blockchain.h"
 #include "service_node_quorum_cop.h"
 
+#include "pulse.h"
 #include "service_node_list.h"
 #include "service_node_rules.h"
 #include "service_node_swarm.h"
@@ -2096,21 +2097,51 @@ namespace service_nodes
     crypto::public_key block_producer_key = {};
     if (hf_version >= cryptonote::network_version_16)
     {
+      // TODO(doyle): We need to verify that the block round is within a "range" of acceptable block rounds depending on the clock
       quorum pulse_quorum = generate_pulse_quorum(m_blockchain.nettype(), m_blockchain.get_db(), height + 1, block_leader.key, hf_version, m_state.active_service_nodes_infos(), block.pulse.round);
-      if (block.signatures.size() || pulse_quorum.workers.size())
+
+      if (verify_pulse_quorum_sizes(pulse_quorum))
       {
-        if (pulse_quorum.workers.empty())
+        pulse::timings times = {};
+        if (!pulse::get_round_timings(m_blockchain, height, times))
         {
-          MERROR("The block specified pulse signatures but there is no producer specified in the Pulse Quorum for this height: " << height);
+          MERROR("Failed to query the block data for Pulse timings to validate incoming block at height " << height);
           return false;
         }
 
-        block_producer_key = pulse_quorum.workers[0];
-        mode = (block_producer_key == block_leader.key) ? verify_mode::pulse_block_leader_is_producer : verify_mode::pulse_different_block_producer;
-
-        if (block.pulse.round == 0 && (mode == verify_mode::pulse_different_block_producer))
+        auto r256_timestamp = times.r0_timestamp + (service_nodes::PULSE_ROUND_TIME * 256);
+        if (auto now = pulse::clock::now(); now < r256_timestamp)
         {
-          MERROR("The block producer in pulse round 0 should be the same node as the block leader: " << block_leader.key << ", actual producer: " << block_producer_key);
+          block_producer_key = pulse_quorum.workers[0];
+          mode = (block_producer_key == block_leader.key) ? verify_mode::pulse_block_leader_is_producer : verify_mode::pulse_different_block_producer;
+
+          if (block.pulse.round == 0 && (mode == verify_mode::pulse_different_block_producer))
+          {
+            MERROR("The block producer in pulse round 0 should be the same node as the block leader: " << block_leader.key << ", actual producer: " << block_producer_key);
+            return false;
+          }
+        }
+        // else, timestamp is way past the 255th round, network has stalled. Verify the block in miner mode
+      }
+
+      if (mode == verify_mode::miner)
+      {
+        if (block.pulse.round != 0)
+        {
+          MERROR("Miner block given but unexpectedly set round " << block.pulse.round <<  " on height " << height);
+          return false;
+        }
+
+        if (block.pulse.validator_bitset != 0)
+        {
+          std::bitset<8 * sizeof(block.pulse.validator_bitset)> const bitset = block.pulse.validator_bitset;
+          MERROR("Miner block given but unexpectedly set validator bitset " << bitset <<  " on height " << height);
+          return false;
+        }
+
+        if (block.signatures.size())
+        {
+          MERROR("Miner block given but unexpectedly has " << block.signatures.size() <<  " signatures on height " << height);
           return false;
         }
       }

@@ -123,7 +123,6 @@ struct round_context
   {
     uint64_t          height;              // Current blockchain height that Pulse wants to generate a block for
     crypto::hash      top_hash;            // Latest block hash included in signatures for rejecting out of date nodes
-    uint64_t          top_block_timestamp; // Latest block timestamp for setting the ideal block target time
     pulse::time_point round_0_start_time;  // When round 0 should start and subsequent round timings are derived from.
   } wait_for_next_block;
 
@@ -303,7 +302,7 @@ std::string msg_source_string(round_context const &context, pulse::message const
   if (msg.quorum_position >= context.prepare_for_round.quorum.validators.size()) return "XX";
 
   std::stringstream stream;
-  stream << "'" << message_type_string(msg.type) << "' from " << msg.quorum_position;
+  stream << "'" << message_type_string(msg.type) << "' from " << msg.quorum_position << ", round " << +msg.round;
   if (context.state >= round_state::prepare_for_round)
   {
     if (msg.quorum_position < context.prepare_for_round.quorum.validators.size())
@@ -660,6 +659,39 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, context.prepare_for_round.participant == sn_type::producer);
 }
 
+bool pulse::get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t height, pulse::timings &times)
+{
+  times = {};
+
+  crypto::hash top_hash       = blockchain.get_block_id_by_height(height - 1);
+  cryptonote::block top_block = {};
+  if (bool orphan = false; !blockchain.get_block_by_hash(top_hash, top_block, &orphan) || orphan)
+    return false;
+
+  static uint64_t const hf16_height = cryptonote::HardFork::get_hardcoded_hard_fork_height(blockchain.nettype(), cryptonote::network_version_16);
+  crypto::hash genesis_hash       = blockchain.get_block_id_by_height(hf16_height - 1);
+  cryptonote::block genesis_block = {};
+  if (bool orphaned = false; !blockchain.get_block_by_hash(genesis_hash, genesis_block, &orphaned) || orphaned)
+    return false;
+
+#if 1
+  uint64_t const delta_height = height - cryptonote::get_block_height(genesis_block);
+  times.genesis_timestamp     = pulse::time_point(std::chrono::seconds(genesis_block.timestamp));
+
+  times.prev_hash      = top_hash;
+  times.prev_timestamp = pulse::time_point(std::chrono::seconds(top_block.timestamp));
+
+  times.ideal_timestamp = pulse::time_point(times.genesis_timestamp + (TARGET_BLOCK_TIME * delta_height));
+  times.r0_timestamp    = std::clamp(times.ideal_timestamp,
+                                  times.prev_timestamp + service_nodes::PULSE_MIN_TARGET_BLOCK_TIME,
+                                  times.prev_timestamp + service_nodes::PULSE_MAX_TARGET_BLOCK_TIME);
+#else // NOTE: Debug, make next block start relatively soon
+  times.r0_timestamp = times.prev_timestamp + service_nodes::PULSE_ROUND_TIME;
+#endif
+
+  return true;
+}
+
 /*
   Pulse progresses via a state-machine that is iterated through job submissions
   to 1 dedicated Pulse thread, started by LMQ.
@@ -833,6 +865,7 @@ round_state goto_preparing_for_next_round(round_context &context)
 
 round_state wait_for_next_block(uint64_t hf16_height, round_context &context, cryptonote::Blockchain const &blockchain)
 {
+
   //
   // NOTE: If already processing pulse for height, wait for next height
   //
@@ -844,65 +877,24 @@ round_state wait_for_next_block(uint64_t hf16_height, round_context &context, cr
     return round_state::wait_for_next_block;
   }
 
-  uint64_t top_height   = curr_height - 1;
-  crypto::hash top_hash = blockchain.get_block_id_by_height(top_height);
-  if (top_hash == crypto::null_hash)
-  {
-    for (static uint64_t last_height = 0; last_height != top_height; last_height = top_height)
-      MERROR(log_prefix(context) << "Block hash for height " << top_height << " does not exist!");
-    return round_state::wait_for_next_block;
-  }
-
-  cryptonote::block top_block = {};
-  if (bool orphan = false;
-      !blockchain.get_block_by_hash(top_hash, top_block, &orphan) || orphan)
-  {
-    for (static uint64_t last_height = 0; last_height != top_height; last_height = top_height)
-      MERROR(log_prefix(context) << "Failed to query previous block in blockchain at height " << top_height);
-    return round_state::wait_for_next_block;
-  }
-
-  //
-  // NOTE: Query Pulse Genesis
-  // TODO(loki): After HF16 genesis block is checkpointed, move this out of the loop/hardcode this as it can't change.
-  //
-  crypto::hash genesis_hash       = blockchain.get_block_id_by_height(hf16_height - 1);
-  cryptonote::block genesis_block = {};
-  if (bool orphaned = false; !blockchain.get_block_by_hash(genesis_hash, genesis_block, &orphaned) || orphaned)
+  pulse::timings times = {};
+  if (!get_round_timings(blockchain, curr_height, times))
   {
     for (static bool once = true; once; once = !once)
-      MERROR(log_prefix(context) << "Failed to query the genesis block for Pulse at height " << hf16_height - 1);
+      MERROR(log_prefix(context) << "Failed to query the block data for Pulse timings");
     return round_state::wait_for_next_block;
   }
 
-  //
-  // NOTE: Block Timing
-  //
-  uint64_t const delta_height = context.wait_for_next_block.height - cryptonote::get_block_height(genesis_block);
-#if 1
-  auto genesis_timestamp      = pulse::time_point(std::chrono::seconds(genesis_block.timestamp));
-  pulse::time_point ideal_timestamp = genesis_timestamp + (TARGET_BLOCK_TIME * delta_height);
-  pulse::time_point prev_timestamp  = pulse::time_point(std::chrono::seconds(top_block.timestamp));
-  context.wait_for_next_block.round_0_start_time =
-      std::clamp(ideal_timestamp,
-                 prev_timestamp + service_nodes::PULSE_MIN_TARGET_BLOCK_TIME,
-                 prev_timestamp + service_nodes::PULSE_MAX_TARGET_BLOCK_TIME);
-#else // NOTE: Debug, make next block start relatively soon
-  pulse::time_point prev_timestamp               = pulse::time_point(std::chrono::seconds(top_block.timestamp));
-  context.wait_for_next_block.round_0_start_time = prev_timestamp + service_nodes::PULSE_ROUND_TIME;
-#endif
-
-  context.wait_for_next_block.height              = curr_height;
-  context.wait_for_next_block.top_hash            = top_hash;
-  context.wait_for_next_block.top_block_timestamp = top_block.timestamp;
-  context.prepare_for_round                       = {};
+  context.wait_for_next_block.round_0_start_time = times.r0_timestamp;
+  context.wait_for_next_block.height             = curr_height;
+  context.wait_for_next_block.top_hash           = times.prev_hash;
+  context.prepare_for_round                      = {};
 
   return round_state::prepare_for_round;
 }
 
 round_state prepare_for_round(round_context &context, service_nodes::service_node_keys const &key, cryptonote::Blockchain const &blockchain)
 {
-
   // Clear memory
   {
     context.transient = {};
@@ -910,6 +902,17 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     auto &old_random_values_array                    = context.transient.random_value.wait.data;
     memwipe(old_random_value.data, sizeof(old_random_value));
     memwipe(old_random_values_array.data(), old_random_values_array.size() * sizeof(old_random_values_array[0]));
+
+    // Store values
+    bool queue_for_round = context.prepare_for_round.queue_for_next_round;
+    uint8_t round        = context.prepare_for_round.round;
+
+    // Blanket clear
+    context.prepare_for_round = {};
+
+    // Restore values
+    context.prepare_for_round.round                = round;
+    context.prepare_for_round.queue_for_next_round = queue_for_round;
   }
 
   if (context.prepare_for_round.queue_for_next_round)
@@ -917,7 +920,14 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     // Set when an intermediate Pulse stage has failed and we wait on the
     // next round to occur.
     context.prepare_for_round.queue_for_next_round = false;
-    context.prepare_for_round.round++; //TODO: Overflow check
+
+    if (context.prepare_for_round.round >= 255)
+    {
+      // If the next round overflows, we consider the network stalled. Wait for
+      // the next block and allow PoW to return.
+      return round_state::wait_for_next_block;
+    }
+    context.prepare_for_round.round++;
 
     // Also check if the blockchain has changed, in which case we stop and
     // restart Pulse stages.
@@ -932,8 +942,11 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     auto now                     = pulse::clock::now();
     auto const time_since_block  = now <= context.wait_for_next_block.round_0_start_time ? std::chrono::seconds(0) : (now - context.wait_for_next_block.round_0_start_time);
     size_t round_usize           = time_since_block / service_nodes::PULSE_ROUND_TIME;
-    uint8_t curr_round           = static_cast<uint8_t>(round_usize); // TODO: Overflow check
 
+    if (round_usize > 255) // Network stalled
+      return round_state::wait_for_next_block;
+
+    uint8_t curr_round = static_cast<uint8_t>(round_usize);
     if (curr_round > context.prepare_for_round.round)
       context.prepare_for_round.round = curr_round;
   }
@@ -963,6 +976,8 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     MINFO(log_prefix(context) << "Insufficient Service Nodes to execute Pulse on height " << context.wait_for_next_block.height << ", we require a PoW miner block. Sleeping until next block.");
     return round_state::wait_for_next_block;
   }
+
+  MDEBUG(log_prefix(context) << "Generate Pulse quorum: " << context.prepare_for_round.quorum);
 
   //
   // NOTE: Quorum participation
@@ -1434,9 +1449,10 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
   }
 
   for (auto last_state = round_state::null_state;
-       last_state != context.state || last_state == round_state::null_state;
-       last_state = context.state)
+       last_state != context.state || last_state == round_state::null_state;)
   {
+    last_state = context.state;
+
     switch (context.state)
     {
       case round_state::null_state:
