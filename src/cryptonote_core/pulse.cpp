@@ -921,7 +921,7 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     // next round to occur.
     context.prepare_for_round.queue_for_next_round = false;
 
-    if (static_cast<int>(context.prepare_for_round.round + 1) > 255)
+    if (context.prepare_for_round.round >= 255)
     {
       // If the next round overflows, we consider the network stalled. Wait for
       // the next block and allow PoW to return.
@@ -942,11 +942,11 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     auto now                     = pulse::clock::now();
     auto const time_since_block  = now <= context.wait_for_next_block.round_0_start_time ? std::chrono::seconds(0) : (now - context.wait_for_next_block.round_0_start_time);
     size_t round_usize           = time_since_block / service_nodes::PULSE_ROUND_TIME;
-    uint8_t curr_round           = static_cast<uint8_t>(round_usize);
 
     if (round_usize > 255) // Network stalled
       return round_state::wait_for_next_block;
 
+    uint8_t curr_round = static_cast<uint8_t>(round_usize);
     if (curr_round > context.prepare_for_round.round)
       context.prepare_for_round.round = curr_round;
   }
@@ -959,8 +959,7 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     context.transient.wait_for_block_template.stage.end_time      = context.transient.wait_for_handshake_bitsets.stage.end_time   + PULSE_WAIT_FOR_BLOCK_TEMPLATE_DURATION;
     context.transient.random_value_hashes.wait.stage.end_time     = context.transient.wait_for_block_template.stage.end_time      + PULSE_WAIT_FOR_RANDOM_VALUE_HASH_DURATION;
     context.transient.random_value.wait.stage.end_time            = context.transient.random_value_hashes.wait.stage.end_time     + PULSE_WAIT_FOR_RANDOM_VALUE_DURATION;
-    context.transient.signed_block.wait.stage.end_time =
-        context.transient.random_value.wait.stage.end_time + PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION;
+    context.transient.signed_block.wait.stage.end_time            = context.transient.random_value.wait.stage.end_time            + PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION;
   }
 
   context.prepare_for_round.quorum =
