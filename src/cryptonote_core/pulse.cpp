@@ -1439,9 +1439,10 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
   }
 
   for (auto last_state = round_state::null_state;
-       last_state != context.state || last_state == round_state::null_state;
-       last_state = context.state)
+       last_state != context.state || last_state == round_state::null_state;)
   {
+    last_state = context.state;
+
     switch (context.state)
     {
       case round_state::null_state:
