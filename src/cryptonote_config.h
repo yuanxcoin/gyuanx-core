@@ -318,6 +318,20 @@ namespace cryptonote
     FAKECHAIN,
     UNDEFINED = 255
   };
+
+  inline constexpr std::string_view network_type_str(network_type nettype)
+  {
+    switch(nettype)
+    {
+      case MAINNET: return "Mainnet"sv;
+      case TESTNET: return "Testnet"sv;
+      case DEVNET: return "Devnet"sv;
+      case FAKECHAIN: return "Fakenet"sv;
+      case UNDEFINED: return "Undefined Net"sv;
+    }
+    return "Unhandled Net"sv;
+  }
+
   struct network_config
   {
     network_type NETWORK_TYPE;
