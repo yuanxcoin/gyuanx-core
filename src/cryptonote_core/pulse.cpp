@@ -865,6 +865,7 @@ round_state goto_preparing_for_next_round(round_context &context)
 
 round_state wait_for_next_block(uint64_t hf16_height, round_context &context, cryptonote::Blockchain const &blockchain)
 {
+
   //
   // NOTE: If already processing pulse for height, wait for next height
   //
@@ -894,7 +895,6 @@ round_state wait_for_next_block(uint64_t hf16_height, round_context &context, cr
 
 round_state prepare_for_round(round_context &context, service_nodes::service_node_keys const &key, cryptonote::Blockchain const &blockchain)
 {
-
   // Clear memory
   {
     context.transient = {};
@@ -902,6 +902,17 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     auto &old_random_values_array                    = context.transient.random_value.wait.data;
     memwipe(old_random_value.data, sizeof(old_random_value));
     memwipe(old_random_values_array.data(), old_random_values_array.size() * sizeof(old_random_values_array[0]));
+
+    // Store values
+    bool queue_for_round = context.prepare_for_round.queue_for_next_round;
+    uint8_t round        = context.prepare_for_round.round;
+
+    // Blanket clear
+    context.prepare_for_round = {};
+
+    // Restore values
+    context.prepare_for_round.round                = round;
+    context.prepare_for_round.queue_for_next_round = queue_for_round;
   }
 
   if (context.prepare_for_round.queue_for_next_round)
