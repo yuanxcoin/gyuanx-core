@@ -83,6 +83,10 @@ namespace cryptonote
   // passed into all the other callbacks below so that the callbacks can recast it into whatever it
   // should be.
   extern void* (*quorumnet_new)(core& core);
+  // Initializes quorumnet; unlike `quorumnet_new_proc` this needs to be called for all nodes, not
+  // just service nodes.  The second argument should be the `quorumnet_new` return value if a
+  // service node, nullptr if not.
+  extern void (*quorumnet_init)(core& core, void* self);
   // Destroys the quorumnet state; called on shutdown *after* the LokiMQ object has been destroyed.
   // Should destroy the state object and set the pointer reference to nullptr.
   extern void (*quorumnet_delete)(void*& self);

@@ -108,12 +108,10 @@ crypto::x25519_public_key x25519_from_string(std::string_view pubkey) {
     return x25519_pub;
 }
 
-void setup_endpoints(QnetState& qnet);
+void setup_endpoints(cryptonote::core& core, void* obj);
 
 void *new_qnetstate(cryptonote::core& core) {
-    QnetState* obj = new QnetState(core);
-    setup_endpoints(*obj);
-    return obj;
+    return new QnetState(core);
 }
 
 void delete_qnetstate(void *&obj) {
@@ -1370,30 +1368,36 @@ void handle_blink_success(Message& m) {
 /// cryptonote_protocol).  Called from daemon/daemon.cpp.  Also registers quorum command callbacks.
 void init_core_callbacks() {
     cryptonote::quorumnet_new = new_qnetstate;
+    cryptonote::quorumnet_init = setup_endpoints;
     cryptonote::quorumnet_delete = delete_qnetstate;
     cryptonote::quorumnet_relay_obligation_votes = relay_obligation_votes;
     cryptonote::quorumnet_send_blink = send_blink;
 }
 
 namespace {
-void setup_endpoints(QnetState& qnet) {
-    auto& lmq = qnet.lmq;
+void setup_endpoints(cryptonote::core& core, void* obj) {
+    auto& lmq = core.get_lmq();
 
-    // quorum.*: commands between quorum members, requires that both side of the connection is a SN
-    lmq.add_category("quorum", Access{AuthLevel::none, true /*remote sn*/, true /*local sn*/}, 2 /*reserved threads*/)
-        // Receives an obligation vote
-        .add_command("vote_ob", [&qnet](Message& m) { handle_obligation_vote(m, qnet); })
-        // Receives blink tx signatures or rejections between quorum members (either original or
-        // forwarded).  These are propagated by the receiver if new
-        .add_command("blink_sign", [&qnet](Message& m) { handle_blink_signature(m, qnet); })
-        ;
+    if (core.service_node()) {
+        if (!obj)
+            throw std::logic_error{"qnet initialization failure: quorumnet_new must be called for service node operation"};
+        auto& qnet = QnetState::from(obj);
+        // quorum.*: commands between quorum members, requires that both side of the connection is a SN
+        lmq.add_category("quorum", Access{AuthLevel::none, true /*remote sn*/, true /*local sn*/}, 2 /*reserved threads*/)
+            // Receives an obligation vote
+            .add_command("vote_ob", [&qnet](Message& m) { handle_obligation_vote(m, qnet); })
+            // Receives blink tx signatures or rejections between quorum members (either original or
+            // forwarded).  These are propagated by the receiver if new
+            .add_command("blink_sign", [&qnet](Message& m) { handle_blink_signature(m, qnet); })
+            ;
 
-    // blink.*: commands sent to blink quorum members from anyone (e.g. blink submission)
-    lmq.add_category("blink", Access{AuthLevel::none, false /*remote sn*/, true /*local sn*/}, 1 /*reserved thread*/)
-        // Receives a new blink tx submission from an external node, or forward from other quorum
-        // members who received it from an external node.
-        .add_command("submit", [&qnet](Message& m) { handle_blink(m, qnet); })
-        ;
+        // blink.*: commands sent to blink quorum members from anyone (e.g. blink submission)
+        lmq.add_category("blink", Access{AuthLevel::none, false /*remote sn*/, true /*local sn*/}, 1 /*reserved thread*/)
+            // Receives a new blink tx submission from an external node, or forward from other quorum
+            // members who received it from an external node.
+            .add_command("submit", [&qnet](Message& m) { handle_blink(m, qnet); })
+            ;
+    }
 
     // bl.*: responses to blinks sent from quorum members back to the node who submitted the blink
     lmq.add_category("bl", Access{AuthLevel::none, true /*remote sn*/, false /*local sn*/})

@@ -271,6 +271,7 @@ namespace cryptonote
       throw std::logic_error("Internal error: core callback initialization was not performed!");
   }
   void *(*quorumnet_new)(core&);
+  void (*quorumnet_init)(core&, void*);
   void (*quorumnet_delete)(void*&self);
   void (*quorumnet_relay_obligation_votes)(void* self, const std::vector<service_nodes::quorum_vote_t>&);
   std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(core& core, const std::string& tx_blob);
@@ -279,6 +280,7 @@ namespace cryptonote
 
   static bool init_core_callback_stubs() {
     quorumnet_new = [](core&) -> void* { need_core_init(); };
+    quorumnet_init = [](core&, void*) { need_core_init(); };
     quorumnet_delete = [](void*&) { need_core_init(); };
     quorumnet_relay_obligation_votes = [](void*, const std::vector<service_nodes::quorum_vote_t>&) { need_core_init(); };
     quorumnet_send_blink = [](core&, const std::string&) -> std::future<std::pair<blink_result, std::string>> { need_core_init(); };
@@ -1110,6 +1112,7 @@ namespace cryptonote
       m_quorumnet_state = quorumnet_new(*this);
     }
 
+    quorumnet_init(*this, m_quorumnet_state);
   }
 
   void core::start_lokimq() {
