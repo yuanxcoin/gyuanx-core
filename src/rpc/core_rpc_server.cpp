@@ -41,6 +41,7 @@
 #include <lokimq/base64.h>
 #include "cryptonote_basic/tx_extra.h"
 #include "cryptonote_core/loki_name_system.h"
+#include "cryptonote_core/pulse.h"
 #include "include_base_utils.h"
 #include "loki_economy.h"
 #include "string_tools.h"
@@ -366,9 +367,15 @@ namespace cryptonote { namespace rpc {
 
     crypto::hash top_hash;
     m_core.get_blockchain_top(res.height, top_hash);
+    auto prev_ts = m_core.get_blockchain_storage().get_db().get_block_timestamp(res.height);
     ++res.height; // turn top block height into blockchain height
     res.top_block_hash = string_tools::pod_to_hex(top_hash);
     res.target_height = m_core.get_target_blockchain_height();
+
+    if (pulse::timings t; pulse::get_round_timings(m_core.get_blockchain_storage(), res.height, prev_ts, t)) {
+      res.pulse_ideal_timestamp = tools::to_seconds(t.ideal_timestamp.time_since_epoch());
+      res.pulse_target_timestamp = tools::to_seconds(t.r0_timestamp.time_since_epoch());
+    }
 
     res.immutable_height = 0;
     cryptonote::checkpoint_t checkpoint;
