@@ -977,11 +977,12 @@ namespace cryptonote
     if (m_service_node) {
       if (!epee::file_io_utils::is_file_exist(m_config_folder + "/key")) {
         epee::wipeable_string privkey_signhash;
-        privkey_signhash.resize(64);
+        privkey_signhash.resize(crypto_hash_sha512_BYTES);
         unsigned char* pk_sh_data = reinterpret_cast<unsigned char*>(privkey_signhash.data());
-        crypto_hash_sha512(pk_sh_data, keys.key_ed25519.data, 32);
+        crypto_hash_sha512(pk_sh_data, keys.key_ed25519.data, 32 /* first 32 bytes are the seed to be SHA512 hashed (the last 32 are just the pubkey) */);
+        // Clamp private key (as libsodium does and expects -- see https://www.jcraige.com/an-explainer-on-ed25519-clamping if you want the broader reasons)
         pk_sh_data[0] &= 248;
-        pk_sh_data[31] &= 63;
+        pk_sh_data[31] &= 63; // (some implementations put 127 here, but with the |64 in the next line it is the same thing)
         pk_sh_data[31] |= 64;
         std::memcpy(keys.key.data, pk_sh_data, 32);
         std::memcpy(keys.pub.data, keys.pub_ed25519.data, 32);
