@@ -900,7 +900,7 @@ namespace cryptonote
   ///
   /// get_pubkey - a function taking (privkey &, pubkey &) that sets the pubkey from the privkey;
   ///              returns true for success/false for failure
-  /// generate_pair - a void function taking (privkey &, pubkey &) that sets them to the generated values
+  /// generate_pair - a void function taking (privkey &, pubkey &) that sets them to the generated values; can throw on error.
   template <typename Privkey, typename Pubkey, typename GetPubkey, typename GeneratePair>
   bool init_key(const std::string &keypath, Privkey &privkey, Pubkey &pubkey, GetPubkey get_pubkey, GeneratePair generate_pair) {
     if (epee::file_io_utils::is_file_exist(keypath))
@@ -918,7 +918,12 @@ namespace cryptonote
     }
     else
     {
-      generate_pair(privkey, pubkey);
+      try {
+        generate_pair(privkey, pubkey);
+      } catch (const std::exception& e) {
+        MERROR("failed to generate keypair " << e.what());
+        return false;
+      }
 
       std::string keystr(reinterpret_cast<const char *>(&privkey), sizeof(privkey));
       bool r = epee::file_io_utils::save_string_to_file(keypath, keystr);
@@ -935,24 +940,6 @@ namespace cryptonote
   bool core::init_service_keys()
   {
     auto& keys = m_service_keys;
-    // Primary SN pubkey (curve25519-based cryptography, but not Ed25519 because it doesn't do the
-    // EdDSA part of Ed25519, and thus can't be used with tools that do proper Ed25519
-    // cryptography).  We only use this for SN registrations and proof signatures but the various
-    // external interfaces (lokinet, storage server, lokimq) use a secondary, standard Ed25519 key.
-    if (m_service_node) {
-      if (!init_key(m_config_folder + "/key", keys.key, keys.pub,
-          crypto::secret_key_to_public_key,
-          [](crypto::secret_key &key, crypto::public_key &pubkey) {
-            cryptonote::keypair keypair = keypair::generate(hw::get_device("default"));
-            key = keypair.sec;
-            pubkey = keypair.pub;
-          })
-      )
-        return false;
-    } else {
-      keys.key = crypto::null_skey;
-      keys.pub = crypto::null_pkey;
-    }
 
     static_assert(
         sizeof(crypto::ed25519_public_key) == crypto_sign_ed25519_PUBLICKEYBYTES &&
@@ -962,12 +949,15 @@ namespace cryptonote
         sizeof(crypto::x25519_secret_key) == crypto_scalarmult_curve25519_BYTES,
         "Invalid ed25519/x25519 sizes");
 
-    // Secondary standard ed25519 key, usable in tools wanting standard ed25519 keys
+    // <data>/key_ed25519: Standard ed25519 secret key.  We always have this, and generate one if it
+    // doesn't exist.
     //
-    // TODO(loki) - eventually it would be nice to make this become the only key pair that gets used
-    // for new registrations instead of the above.  We'd still need to keep the above for
-    // compatibility with existing stakes registered before the relevant fork height, but we could
-    // then avoid needing to include this secondary key in uptime proofs for new SN registrations.
+    // As of Loki 8.x, if this exists and `key` doesn't, we use this key for everything.  For
+    // compatibility with earlier versions we also allow `key` to contain a separate monero privkey
+    // for the SN keypair.  (The main difference is that the Monero keypair is unclamped and that it
+    // only contains the private key value but not the secret key value that we need for full
+    // Ed25519 signing).
+    //
     if (!init_key(m_config_folder + "/key_ed25519", keys.key_ed25519, keys.pub_ed25519,
           [](crypto::ed25519_secret_key &sk, crypto::ed25519_public_key &pk) { crypto_sign_ed25519_sk_to_pk(pk.data, sk.data); return true; },
           [](crypto::ed25519_secret_key &sk, crypto::ed25519_public_key &pk) { crypto_sign_ed25519_keypair(pk.data, sk.data); })
@@ -978,6 +968,34 @@ namespace cryptonote
     int rc = crypto_sign_ed25519_pk_to_curve25519(keys.pub_x25519.data, keys.pub_ed25519.data);
     CHECK_AND_ASSERT_MES(rc == 0, false, "failed to convert ed25519 pubkey to x25519");
     crypto_sign_ed25519_sk_to_curve25519(keys.key_x25519.data, keys.key_ed25519.data);
+
+    // Legacy primary SN key file; we only load this if it exists, otherwise we use `key_ed25519`
+    // for the primary SN keypair.  (This key predates the Ed25519 keys and so is needed for
+    // backwards compatibility with existing active service nodes.)  The legacy key consists of
+    // *just* the private point, but not the seed, and so cannot be used for full Ed25519 signatures
+    // (which rely on the seed for signing).
+    if (m_service_node) {
+      if (!epee::file_io_utils::is_file_exist(m_config_folder + "/key")) {
+        epee::wipeable_string privkey_signhash;
+        privkey_signhash.resize(crypto_hash_sha512_BYTES);
+        unsigned char* pk_sh_data = reinterpret_cast<unsigned char*>(privkey_signhash.data());
+        crypto_hash_sha512(pk_sh_data, keys.key_ed25519.data, 32 /* first 32 bytes are the seed to be SHA512 hashed (the last 32 are just the pubkey) */);
+        // Clamp private key (as libsodium does and expects -- see https://www.jcraige.com/an-explainer-on-ed25519-clamping if you want the broader reasons)
+        pk_sh_data[0] &= 248;
+        pk_sh_data[31] &= 63; // (some implementations put 127 here, but with the |64 in the next line it is the same thing)
+        pk_sh_data[31] |= 64;
+        std::memcpy(keys.key.data, pk_sh_data, 32);
+        std::memcpy(keys.pub.data, keys.pub_ed25519.data, 32);
+      } else if (!init_key(m_config_folder + "/key", keys.key, keys.pub,
+          crypto::secret_key_to_public_key,
+          [](crypto::secret_key &key, crypto::public_key &pubkey) {
+            throw std::runtime_error{"Internal error: old-style public keys are no longer generated"};
+          }))
+        return false;
+    } else {
+      keys.key = crypto::null_skey;
+      keys.pub = crypto::null_pkey;
+    }
 
     if (m_service_node) {
       MGINFO_YELLOW("Service node public keys:");
