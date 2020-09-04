@@ -11,6 +11,7 @@ extern "C" {
 #include <list>
 #include <array>
 #include <cstring>
+#include <optional>
 
 std::string_view arg0;
 

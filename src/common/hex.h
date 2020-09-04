@@ -19,7 +19,7 @@ namespace tools {
 
   /// Converts a standard layout, padding-free type into a hex string of its contents.
   template <typename T, typename = std::enable_if_t<
-      std::is_standard_layout_v<T> && std::has_unique_object_representations_v<T>
+      (std::is_standard_layout_v<T> && std::has_unique_object_representations_v<T>)
       || epee::is_byte_spannable<T>
   >>
   std::string type_to_hex(const T& val) {
