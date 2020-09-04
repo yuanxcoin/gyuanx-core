@@ -49,7 +49,6 @@ namespace quorumnet {
 namespace {
 
 using namespace service_nodes;
-using namespace std::literals;
 using namespace lokimq;
 
 using blink_tx = cryptonote::blink_tx;

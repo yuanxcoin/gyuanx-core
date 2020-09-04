@@ -130,8 +130,13 @@ int main(int argc, char* argv[])
 
   po::options_description desc_cmd_only("Command line options");
   po::options_description desc_cmd_sett("Command line options and settings options");
-  const command_line::arg_descriptor<uint32_t> arg_log_level  = {"log-level",  "", log_level};
-  const command_line::arg_descriptor<std::string> arg_input = {"input", "Specify input has a hexadecimal string", ""};
+  const command_line::arg_descriptor<uint32_t> arg_log_level = {"log-level", "", log_level};
+  const command_line::arg_descriptor<std::string> arg_input  = {
+      "input", "Specify a wallet address or hex string of a Cryptonote type for decoding, supporting\n"
+               " - TX Extra\n"
+               " - Block\n"
+               " - Transaction\n"
+              ,""};
 
   command_line::add_arg(desc_cmd_sett, arg_log_level);
   command_line::add_arg(desc_cmd_sett, arg_input);
@@ -162,58 +167,80 @@ int main(int argc, char* argv[])
   input        = command_line::get_arg(vm, arg_input);
   if (input.empty())
   {
-    std::cerr << "--input is mandatory" << std::endl;
+    std::cerr << "Usage: --input <hex|wallet address>" << std::endl;
     return 1;
   }
 
   mlog_configure("", true);
 
   cryptonote::blobdata blob;
-  if (!epee::string_tools::parse_hexstr_to_binbuff(input, blob))
+  if (epee::string_tools::parse_hexstr_to_binbuff(input, blob))
   {
-    std::cerr << "Invalid hex input" << std::endl;
-    return 1;
-  }
-
-  bool full;
-  cryptonote::block block;
-  cryptonote::transaction tx;
-  std::vector<cryptonote::tx_extra_field> fields;
-  if (cryptonote::parse_and_validate_block_from_blob(blob, block))
-  {
-    std::cout << "Parsed block:" << std::endl;
-    std::cout << cryptonote::obj_to_json_str(block) << std::endl;
-  }
-  else if (cryptonote::parse_and_validate_tx_from_blob(blob, tx) || cryptonote::parse_and_validate_tx_base_from_blob(blob, tx))
-  {
-    if (tx.pruned)
-      std::cout << "Parsed pruned transaction:" << std::endl;
-    else
-      std::cout << "Parsed transaction:" << std::endl;
-    std::cout << cryptonote::obj_to_json_str(tx) << std::endl;
-
-    bool parsed = cryptonote::parse_tx_extra(tx.extra, fields);
-    if (!parsed)
-      std::cout << "Failed to parse tx_extra" << std::endl;
-
-    if (!fields.empty())
+    bool full;
+    cryptonote::block block;
+    cryptonote::transaction tx;
+    std::vector<cryptonote::tx_extra_field> fields;
+    if (cryptonote::parse_and_validate_block_from_blob(blob, block))
     {
+      std::cout << "Parsed block:" << std::endl;
+      std::cout << cryptonote::obj_to_json_str(block) << std::endl;
+    }
+    else if (cryptonote::parse_and_validate_tx_from_blob(blob, tx) || cryptonote::parse_and_validate_tx_base_from_blob(blob, tx))
+    {
+      if (tx.pruned)
+        std::cout << "Parsed pruned transaction:" << std::endl;
+      else
+        std::cout << "Parsed transaction:" << std::endl;
+      std::cout << cryptonote::obj_to_json_str(tx) << std::endl;
+
+      bool parsed = cryptonote::parse_tx_extra(tx.extra, fields);
+      if (!parsed)
+        std::cout << "Failed to parse tx_extra" << std::endl;
+
+      if (!fields.empty())
+      {
+        print_extra_fields(fields);
+      }
+      else
+      {
+        std::cout << "No fields were found in tx_extra" << std::endl;
+      }
+    }
+    else if (((full = cryptonote::parse_tx_extra(std::vector<uint8_t>(blob.begin(), blob.end()), fields)) || true) && !fields.empty())
+    {
+      std::cout << "Parsed" << (full ? "" : " partial") << " tx_extra:" << std::endl;
       print_extra_fields(fields);
     }
     else
     {
-      std::cout << "No fields were found in tx_extra" << std::endl;
+      std::cerr << "Not a recognized CN type" << std::endl;
+      return 1;
     }
-  }
-  else if (((full = cryptonote::parse_tx_extra(std::vector<uint8_t>(blob.begin(), blob.end()), fields)) || true) && !fields.empty())
-  {
-    std::cout << "Parsed" << (full ? "" : " partial") << " tx_extra:" << std::endl;
-    print_extra_fields(fields);
   }
   else
   {
-    std::cerr << "Not a recognized CN type" << std::endl;
-    return 1;
+    bool addr_decoded = false;
+    for (uint8_t nettype = MAINNET; nettype < DEVNET + 1;  nettype++)
+    {
+      cryptonote::address_parse_info addr_info = {};
+      if (cryptonote::get_account_address_from_str(addr_info, static_cast<cryptonote::network_type>(nettype), input))
+      {
+        addr_decoded = true;
+        cryptonote::account_public_address const &address = addr_info.address;
+        std::cout << "Network Type: " << cryptonote::network_type_str(static_cast<cryptonote::network_type>(nettype)) << "\n";
+        std::cout << "Address: " << input << "\n";
+        std::cout << "Subaddress: " << (addr_info.is_subaddress ? "Yes" : "No") << "\n";
+        std::cout << "Payment ID: " << (addr_info.has_payment_id ? tools::type_to_hex(addr_info.payment_id) : "(none)") << "\n";
+        std::cout << "Spend Public Key: " << address.m_spend_public_key << "\n";
+        std::cout << "View Public Key: " << address.m_view_public_key << "\n";
+      }
+    }
+
+    if (!addr_decoded)
+    {
+      std::cerr << "Not a recognized CN type" << std::endl;
+      return 1;
+    }
   }
 
 
