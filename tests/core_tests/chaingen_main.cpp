@@ -45,6 +45,7 @@ namespace
   const command_line::arg_descriptor<bool>        arg_test_transactions           = {"test_transactions", ""};
   const command_line::arg_descriptor<std::string> arg_filter                      = { "filter", "Regular expression filter for which tests to run" };
   const command_line::arg_descriptor<bool>        arg_list_tests                  = {"list_tests", ""};
+  const command_line::arg_descriptor<std::string> arg_log_level                   = {"log-level", ""};
 }
 
 int main(int argc, char* argv[])
@@ -55,7 +56,6 @@ int main(int argc, char* argv[])
 
   //set up logging options
   mlog_configure(mlog_get_default_log_path("core_tests.log"), true);
-  mlog_set_log_level(2);
   
   po::options_description desc_options("Allowed options");
   command_line::add_arg(desc_options, command_line::arg_help);
@@ -66,6 +66,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_options, arg_test_transactions);
   command_line::add_arg(desc_options, arg_filter);
   command_line::add_arg(desc_options, arg_list_tests);
+  command_line::add_arg(desc_options, arg_log_level);
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc_options, [&]()
@@ -82,6 +83,11 @@ int main(int argc, char* argv[])
     std::cout << desc_options << std::endl;
     return 0;
   }
+
+  if (!command_line::is_arg_defaulted(vm, arg_log_level))
+    mlog_set_log(command_line::get_arg(vm, arg_log_level).c_str());
+  else
+    mlog_set_log_level(0);
 
   const std::string filter = command_line::get_arg(vm, arg_filter);
 
