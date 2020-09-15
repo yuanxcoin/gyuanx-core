@@ -109,7 +109,7 @@ std::string copy_guts(const T& val) {
   return std::string{view_guts(val)};
 }
 
-std::string lowercase_ascii_string(std::string src);
+std::string lowercase_ascii_string(std::string_view src);
 
 /// Converts a duration into a human friendlier string.
 std::string friendly_duration(std::chrono::nanoseconds dur);

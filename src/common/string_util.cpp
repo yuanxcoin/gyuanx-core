@@ -69,11 +69,13 @@ void trim(std::string_view& s)
   s.remove_suffix(s.size() - (pos + 1));
 }
 
-std::string lowercase_ascii_string(std::string src)
+std::string lowercase_ascii_string(std::string_view src)
 {
-  for (char &ch : src)
-    if (ch >= 'A' && ch <= 'Z') ch = ch + ('a' - 'A');
-  return src;
+  std::string result;
+  result.reserve(src.size());
+  for (char ch : src)
+    result += ch >= 'A' && ch <= 'Z' ? ch + ('a' - 'A') : ch;
+  return result;
 }
 
 std::string friendly_duration(std::chrono::nanoseconds dur) {
