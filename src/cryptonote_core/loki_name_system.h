@@ -32,17 +32,65 @@ constexpr size_t LOKINET_ADDRESS_BINARY_LENGTH    = sizeof(crypto::ed25519_publi
 constexpr size_t SESSION_DISPLAY_NAME_MAX         = 64;
 constexpr size_t SESSION_PUBLIC_KEY_BINARY_LENGTH = 1 + sizeof(crypto::ed25519_public_key); // Session keys at prefixed with 0x05 + ed25519 key
 
+constexpr size_t SODIUM_ENCRYPTION_EXTRA_BYTES = 40; // crypto_aead_xchacha20poly1305_ietf_ABYTES (16) + crypto_aead_xchacha20poly1305_ietf_NPUBBYTES (24), but we don't include sodium here
+
 struct mapping_value
 {
-  static size_t constexpr BUFFER_SIZE = 255;
+  static size_t constexpr BUFFER_SIZE = std::max({WALLET_ACCOUNT_BINARY_LENGTH, LOKINET_ADDRESS_BINARY_LENGTH, SESSION_PUBLIC_KEY_BINARY_LENGTH}) + SODIUM_ENCRYPTION_EXTRA_BYTES;
   std::array<uint8_t, BUFFER_SIZE> buffer;
+  bool encrypted;
   size_t len;
 
   std::string      to_string() const { return std::string{to_view()}; }
   std::string_view to_view()   const { return {reinterpret_cast<const char*>(buffer.data()), len}; }
   std::string      to_readable_value(cryptonote::network_type nettype, mapping_type type) const;
-  bool operator==(mapping_value const &other) const { return other.to_view() == to_view(); }
+  // View the buffer as a encrypted value & nonce pair (the nonce is the last 24 bytes).  For older
+  // session values the nonce will be all 0 bytes *if* the encrypted value is not the proper length
+  // for an including-the-nonce value.  For newer session and all others the nonce is always
+  // present.
+  std::pair<std::basic_string_view<unsigned char>, std::basic_string_view<unsigned char>> value_nonce(mapping_type type) const;
+  bool operator==(mapping_value const &other) const { return encrypted == other.encrypted && other.to_view() == to_view(); }
   bool operator==(std::string_view other)     const { return other == to_view(); }
+
+  // Encrypts the mapping value in-place given the name, suitable for storing into the LNS DB.  Only
+  // basic overflow validation is attempted, values should be pre-validated in the validate*
+  // functions.
+  //
+  // name_hash - pointer to a pre-computed name hash, if available.  If nullptr then the hash is
+  //     computed as needed.
+  // deprecated_heavy - if true use the deprecated argon2 hashing for the encryption key; this
+  //     argument is required for hf15, but shouldn't be used afterwards (except for testing purposes).
+  //
+  // Return true if encryption was successful, after which *this will now contain the encrypted value.
+  //
+  // If the value is *already* encrypted this fails via assert (in debug compilation) or returns
+  // false.
+  bool encrypt(std::string_view name, const crypto::hash* name_hash = nullptr, bool deprecated_heavy = false);
+
+  // Makes a copy of *this, calls encrypt() on it, and returns it.  See encrypt() above.
+  mapping_value make_encrypted(std::string_view name, const crypto::hash* name_hash = nullptr, bool deprecated_heavy = false) const;
+
+  // Decrypts the mapping value given the name and mapping type.  If the name hash is pre-computed
+  // it can be passed in.
+  //
+  // Returns true if decryption was successful, after which *this will now contain the decrypted value.
+  //
+  // If the value is *already* decrypted this fails via assert (in debug compilation) or returns
+  // false.
+  bool decrypt(std::string_view name, mapping_type type, const crypto::hash* name_hash = nullptr);
+
+  // Makes a copy of *this, calls decrypt() on it, and returns it.  See decrypt() above.
+  mapping_value make_decrypted(std::string_view name, const crypto::hash* name_hash = nullptr) const;
+
+  // Validate a human readable mapping value representation in 'value' and write the binary form into 'blob'.
+  // value: if type is session, 66 character hex string of an ed25519 public key (with 05 prefix)
+  //                   lokinet, 52 character base32z string of an ed25519 public key
+  //                   wallet,  the wallet public address string
+  // blob: (optional) if function returns true, validate will load the binary data into blob (ready for encryption via encrypt())
+  static bool validate(cryptonote::network_type nettype, mapping_type type, std::string_view value, mapping_value *blob = nullptr, std::string *reason = nullptr);
+  // blob: (optional) if function returns true then the value will be loaded into the given
+  // mapping_value, ready for decryption via decrypt().
+  static bool validate_encrypted(mapping_type type, std::string_view value, mapping_value *blob = nullptr, std::string *reason = nullptr);
 };
 inline std::ostream &operator<<(std::ostream &os, mapping_value const &v) { return os << lokimq::to_hex(v.to_view()); }
 

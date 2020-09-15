@@ -2294,7 +2294,7 @@ This command is only required if the open wallet is one of the owners of a LNS r
     {
       std::string type;  // The mapping type, currently we only support "session". In future "lokinet" and "blockchain" mappings will be available.
       std::string name;  // The desired name to update via Loki Name Service
-      std::string value;     // (Optional): The new value that the name maps to via Loki Name Service. If not specified or given the empty string "", then the mapping's value remains unchanged.
+      std::string encrypted_value; // (Optional): The new encrypted value that the name maps to via Loki Name Service. If not specified or given the empty string "", then the mapping's value remains unchanged.
       std::string owner;     // (Optional): The new owner of the mapping. If not specified or given the empty string "", then the mapping's owner remains unchanged.
       std::string backup_owner; // (Optional): The new backup owner of the mapping. If not specified or given the empty string "", then the mapping's backup owner remains unchanged.
       uint32_t account_index; // (Optional) Use this wallet's subaddress account for generating the signature
@@ -2333,16 +2333,39 @@ This command is only required if the open wallet is one of the owners of a LNS r
   };
 
   LOKI_RPC_DOC_INTROSPECT
-  // Takes a LNS encrypted value and decrypts the mapping value.
+  // Takes a LNS encrypted value and encrypts the mapping value using the LNS name.
+  struct LNS_ENCRYPT_VALUE : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("lns_encrypt_value"); }
+
+    struct request
+    {
+      std::string name;            // The LNS name with which to encrypt the value.
+      std::string type;            // The mapping type: "session" or "lokinet".
+      std::string value;           // The value to be encrypted.
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response
+    {
+      std::string encrypted_value; // The encrypted value, in hex
+
+      KV_MAP_SERIALIZABLE
+    };
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
+  // Takes a LNS encrypted value and decrypts the mapping value using the LNS name.
   struct LNS_DECRYPT_VALUE : RPC_COMMAND
   {
     static constexpr auto names() { return NAMES("lns_decrypt_value"); }
 
     struct request
     {
-      std::string name;            // The desired name to hash
-      std::string type;            // The mapping type, currently we only support "session". In future "lokinet" and "blockchain" mappings will be available.
-      std::string encrypted_value; // The encrypted value represented in hex
+      std::string name;            // The LNS name of the given encrypted value.
+      std::string type;            // The mapping type: "session" or "lokinet".
+      std::string encrypted_value; // The encrypted value represented in hex.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2453,7 +2476,8 @@ This command is only required if the open wallet is one of the owners of a LNS r
     LNS_UPDATE_MAPPING,
     LNS_MAKE_UPDATE_SIGNATURE,
     LNS_HASH_NAME,
-    LNS_DECRYPT_VALUE
+    LNS_DECRYPT_VALUE,
+    LNS_ENCRYPT_VALUE
   >;
 
 }

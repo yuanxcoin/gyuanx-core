@@ -3176,6 +3176,11 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
                            tr(USAGE_LNS_UPDATE_MAPPING),
                            tr(tools::wallet_rpc::LNS_UPDATE_MAPPING::description));
 
+  m_cmd_binder.set_handler("lns_encrypt",
+                           [this](const auto& x) { return lns_encrypt(x); },
+                           tr(USAGE_LNS_ENCRYPT),
+                           tr("Encrypts a LNS mapping value with a given name; primarily intended for use with external mapping update signing"));
+
   m_cmd_binder.set_handler("lns_print_owners_to_names",
                            [this](const auto& x) { return lns_print_owners_to_names(x); },
                            tr(USAGE_LNS_PRINT_OWNERS_TO_NAMES),
@@ -6605,6 +6610,61 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
     return true;
   }
 
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::lns_encrypt(std::vector<std::string> args)
+{
+  std::string typestr = eat_named_argument(args, LNS_TYPE_PREFIX);
+
+  if (args.size() != 2)
+  {
+    PRINT_USAGE(USAGE_LNS_ENCRYPT);
+    return false;
+  }
+  const auto& name = args[0];
+  const auto& value = args[1];
+
+  lns::mapping_type type;
+  if (auto t = guess_lns_type(*m_wallet, typestr, name, value))
+    type = *t;
+  else return false;
+
+  if (value.size() > lns::mapping_value::BUFFER_SIZE)
+  {
+    fail_msg_writer() << "LNS value '" << value << "' is too long";
+    return false;
+  }
+
+  std::string reason;
+  std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+  if (!hf_version)
+  {
+    tools::fail_msg_writer() << tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+    return false;
+  }
+
+  if (!lns::validate_lns_name(type, name, &reason))
+  {
+    tools::fail_msg_writer() << "Invalid LNS name '" << name << "': " << reason;
+    return false;
+  }
+
+  lns::mapping_value mval;
+  if (!lns::mapping_value::validate(m_wallet->nettype(), type, value, &mval, &reason))
+  {
+    tools::fail_msg_writer() << "Invalid LNS value '" << value << "': " << reason;
+    return false;
+  }
+
+  bool old_argon2 = type == lns::mapping_type::session && *hf_version < cryptonote::network_version_16;
+  if (!mval.encrypt(name, nullptr, old_argon2))
+  {
+    tools::fail_msg_writer() << "Value encryption failed";
+    return false;
+  }
+
+  tools::success_msg_writer() << "encrypted value=" << lokimq::to_hex(mval.to_view());
   return true;
 }
 //----------------------------------------------------------------------------------------------------

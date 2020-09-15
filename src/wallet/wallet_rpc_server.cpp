@@ -3180,16 +3180,45 @@ namespace {
     // Decrypt value
     //
     // ---------------------------------------------------------------------------------------------
-    lns::mapping_value encrypted_value = {};
-    encrypted_value.len                = req.encrypted_value.size() / 2;
-    lokimq::from_hex(req.encrypted_value.begin(), req.encrypted_value.end(), encrypted_value.buffer.begin());
-
     lns::mapping_value value = {};
-    if (!lns::decrypt_mapping_value(req.name, encrypted_value, value))
+    value.len = req.encrypted_value.size() / 2;
+    value.encrypted = true;
+    lokimq::from_hex(req.encrypted_value.begin(), req.encrypted_value.end(), value.buffer.begin());
+
+    if (!value.decrypt(req.name, type))
       throw wallet_rpc_error{error_code::LNS_VALUE_NOT_HEX, "Value decryption failure"};
 
     res.value = value.to_readable_value(m_wallet->nettype(), type);
     return res;
+  }
+
+  LNS_ENCRYPT_VALUE::response wallet_rpc_server::invoke(LNS_ENCRYPT_VALUE::request&& req)
+  {
+    require_open();
+
+    if (req.value.size() > lns::mapping_value::BUFFER_SIZE)
+      throw wallet_rpc_error{error_code::LNS_VALUE_TOO_LONG, "LNS value '" + req.value + "' is too long"};
+
+    std::string reason;
+    std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+    if (!hf_version) throw wallet_rpc_error{error_code::HF_QUERY_FAILED, tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED};
+
+    lns::mapping_type type;
+    if (!lns::validate_mapping_type(req.type, *hf_version, lns::lns_tx_type::lookup, &type, &reason))
+      throw wallet_rpc_error{error_code::WRONG_LNS_TYPE, "Wrong lns type given=" + reason};
+
+    if (!lns::validate_lns_name(type, req.name, &reason))
+      throw wallet_rpc_error{error_code::LNS_BAD_NAME, "Invalid LNS name '" + req.name + "': " + reason};
+
+    lns::mapping_value value;
+    if (!lns::mapping_value::validate(m_wallet->nettype(), type, req.value, &value, &reason))
+      throw wallet_rpc_error{error_code::LNS_BAD_VALUE, "Invalid LNS value '" + req.value + "': " + reason};
+
+    bool old_argon2 = type == lns::mapping_type::session && *hf_version < cryptonote::network_version_16;
+    if (!value.encrypt(req.name, nullptr, old_argon2))
+      throw wallet_rpc_error{error_code::LNS_VALUE_ENCRYPT_FAILED, "Value encryption failure"};
+
+    return {lokimq::to_hex(value.to_view())};
   }
 
   std::unique_ptr<tools::wallet2> wallet_rpc_server::load_wallet()

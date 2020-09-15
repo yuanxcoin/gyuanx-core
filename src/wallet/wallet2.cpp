@@ -8700,7 +8700,7 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
     if (!lns::validate_mapping_value(wallet.nettype(), type, *value, &binary_value, reason))
       return result;
 
-    if (!lns::encrypt_mapping_value(name, binary_value, result.encrypted_value))
+    if (!result.encrypted_value.encrypt(name, &result.name_hash))
     {
       if (reason) *reason = "Fail to encrypt mapping value=" + *value;
       return {};

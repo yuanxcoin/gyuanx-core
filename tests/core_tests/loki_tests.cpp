@@ -29,7 +29,10 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "loki_tests.h"
+#include "cryptonote_config.h"
+#include "cryptonote_core/loki_name_system.h"
 #include "cryptonote_core/service_node_list.h"
+#include "loki_economy.h"
 
 extern "C"
 {
@@ -1049,14 +1052,6 @@ bool loki_core_test_state_change_ip_penalty_disallow_dupes::generate(std::vector
   return true;
 }
 
-static lns::mapping_value helper_encrypt_lns_value(std::string const &name, lns::mapping_value const &value)
-{
-  lns::mapping_value result;
-  bool encrypted = lns::encrypt_mapping_value(name, value, result);
-  assert(encrypted);
-  return result;
-}
-
 static bool verify_lns_mapping_record(char const *perr_context,
                                       lns::mapping_record const &record,
                                       lns::mapping_type type,
@@ -1069,11 +1064,12 @@ static bool verify_lns_mapping_record(char const *perr_context,
                                       lns::generic_owner const &owner,
                                       lns::generic_owner const &backup_owner)
 {
-  lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, value);
   CHECK_EQ(record.loaded,          true);
   CHECK_EQ(record.type,            type);
   CHECK_EQ(record.name_hash,       lns::name_to_base64_hash(name));
-  CHECK_EQ(record.encrypted_value, encrypted_value);
+  lns::mapping_value decrypted{record.encrypted_value};
+  CHECK_EQ(decrypted.decrypt(name, type), true);
+  CHECK_EQ(decrypted, value);
   CHECK_EQ(record.register_height, register_height);
   CHECK_EQ(record.update_height,   update_height);
   CHECK_EQ(record.txid,            txid);
@@ -1558,7 +1554,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     valid_data.fields |= lns::extra_field::buy_no_backup;
     valid_data.owner = miner_key.owner;
     valid_data.type  = lns::mapping_type::wallet;
-    valid_data.encrypted_value = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+    valid_data.encrypted_value = miner_key.wallet_value.make_encrypted(name).to_string();
     valid_data.name_hash       = lns::name_to_hash(name);
 
     if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::wallet))
@@ -1568,14 +1564,14 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
         data.name_hash                             = {};
-        data.encrypted_value                       = helper_encrypt_lns_value("", miner_key.wallet_value).to_string();
+        data.encrypted_value                       = miner_key.wallet_value.make_encrypted("").to_string();
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Blockchain) Empty wallet name in LNS is invalid");
       }
 
       // Blockchain value (wallet address) is invalid, too short
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+        data.encrypted_value                       = miner_key.wallet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() - 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Blockchain) Wallet value in LNS too long");
       }
@@ -1583,7 +1579,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
       // Blockchain value (wallet address) is invalid, too long
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+        data.encrypted_value                       = miner_key.wallet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() + 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Blockchain) Wallet value in LNS too long");
       }
@@ -1596,14 +1592,14 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
         data.name_hash                             = {};
-        data.encrypted_value                       = helper_encrypt_lns_value("", miner_key.lokinet_value).to_string();
+        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted("").to_string();
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Empty domain name in LNS is invalid");
       }
 
       // Lokinet value too short
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.lokinet_value).to_string();
+        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() - 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Domain value in LNS too long");
       }
@@ -1611,7 +1607,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
       // Lokinet value too long
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.lokinet_value).to_string();
+        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() + 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Domain value in LNS too long");
       }
@@ -1624,7 +1620,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     valid_data.name_hash = lns::name_to_hash(name);
     {
       cryptonote::tx_extra_loki_name_system data = valid_data;
-      data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+      data.encrypted_value                       = miner_key.session_value.make_encrypted(name).to_string();
       data.encrypted_value.resize(data.encrypted_value.size() - 1);
       make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Session) User id, value too short");
     }
@@ -1632,7 +1628,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     // Session value too long
     {
       cryptonote::tx_extra_loki_name_system data = valid_data;
-      data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+      data.encrypted_value                       = miner_key.session_value.make_encrypted(name).to_string();
       data.encrypted_value.resize(data.encrypted_value.size() + 1);
       make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Session) User id, value too long");
     }
@@ -1641,7 +1637,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     {
       cryptonote::tx_extra_loki_name_system data = valid_data;
       data.name_hash                             = {};
-      data.encrypted_value                       = helper_encrypt_lns_value("", miner_key.session_value).to_string();
+      data.encrypted_value                       = miner_key.session_value.make_encrypted("").to_string();
       make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Session) Name empty");
     }
   }
@@ -1984,7 +1980,7 @@ bool loki_name_system_name_value_max_lengths::generate(std::vector<test_event_en
     std::string name(lns::WALLET_NAME_MAX, 'A');
     data.type            = lns::mapping_type::wallet;
     data.name_hash       = lns::name_to_hash(name);
-    data.encrypted_value = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+    data.encrypted_value = miner_key.wallet_value.make_encrypted(name).to_string();
     make_lns_tx_with_custom_extra(gen, events, miner, data);
   }
 
@@ -2001,7 +1997,7 @@ bool loki_name_system_name_value_max_lengths::generate(std::vector<test_event_en
 
     data.type            = lns::mapping_type::lokinet_1year;
     data.name_hash       = lns::name_to_hash(name);
-    data.encrypted_value = helper_encrypt_lns_value(name, miner_key.lokinet_value).to_string();
+    data.encrypted_value = miner_key.lokinet_value.make_encrypted(name).to_string();
     make_lns_tx_with_custom_extra(gen, events, miner, data);
   }
 
@@ -2010,7 +2006,7 @@ bool loki_name_system_name_value_max_lengths::generate(std::vector<test_event_en
     std::string name(lns::SESSION_DISPLAY_NAME_MAX, 'A');
     data.type            = lns::mapping_type::session;
     data.name_hash       = lns::name_to_hash(name);
-    data.encrypted_value = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+    data.encrypted_value = miner_key.session_value.make_encrypted(name).to_string();
     make_lns_tx_with_custom_extra(gen, events, miner, data);
   }
 
@@ -2068,9 +2064,11 @@ bool loki_name_system_update_mapping_after_expiry_fails::generate(std::vector<te
   return true;
 }
 
+uint8_t loki_name_system_update_mapping::hf() { return cryptonote::network_version_count - 1; }
+uint8_t loki_name_system_update_mapping_argon2::hf() { return cryptonote::network_version_15_lns; }
 bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &events)
 {
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(hf());
   loki_chain_generator gen(events, hard_forks);
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
@@ -2083,7 +2081,7 @@ bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &ev
   crypto::hash session_tx_hash1;
   std::string session_name1 = "MyName";
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, session_name1, miner_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name1, miner_key.session_value);
     session_tx_hash1 = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
@@ -2103,14 +2101,14 @@ bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &ev
   });
 
   // Test update mapping with same name fails
-  {
-    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, lns::mapping_type::session, session_name1, &miner_key.session_value);
+  if (hf() == cryptonote::network_version_15_lns) {
+    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, session_name1, &miner_key.session_value);
     gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not add a LNS TX that re-updates the underlying value to same value");
   }
 
   crypto::hash session_tx_hash2;
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, session_name1, &bob_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, session_name1, &bob_key.session_value);
     session_tx_hash2 = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
@@ -2174,7 +2172,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner1
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
@@ -2196,7 +2194,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner2
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
@@ -2234,7 +2232,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner1
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
@@ -2256,7 +2254,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner2
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
@@ -2298,7 +2296,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner1
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
@@ -2320,7 +2318,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner2
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
@@ -2362,7 +2360,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
@@ -2385,7 +2383,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
       crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
@@ -2437,6 +2435,7 @@ bool loki_name_system_update_mapping_invalid_signature::generate(std::vector<tes
   gen.create_and_add_next_block({tx1});
 
   lns_keys_t bob_key = make_lns_keys(gen.add_account());
+  lns::mapping_value encrypted_value = bob_key.session_value.make_encrypted(name);
   lns::generic_signature invalid_signature = {};
   cryptonote::transaction tx2 = gen.create_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &bob_key.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &invalid_signature, false /*use_asserts*/);
   gen.add_tx(tx2, false /*can_be_added_to_blockchain*/, "Can not add a updating LNS TX with an invalid signature");
@@ -2567,7 +2566,7 @@ bool loki_name_system_wrong_version::generate(std::vector<test_event_entry> &eve
   data.owner                                 = miner_key.owner;
   data.type                                  = lns::mapping_type::session;
   data.name_hash                             = lns::name_to_hash(name);
-  data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+  data.encrypted_value                       = miner_key.session_value.make_encrypted(name).to_string();
 
   uint64_t new_height       = cryptonote::get_block_height(gen.top().block) + 1;
   uint8_t new_hf_version    = gen.get_hf_version_at(new_height);

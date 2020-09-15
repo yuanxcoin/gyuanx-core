@@ -41,6 +41,7 @@
 #include "console_handler.h"
 #include "common/rules.h"
 
+#include "cryptonote_config.h"
 #include "p2p/net_node.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
@@ -554,8 +555,8 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx(crypton
   if (lns::mapping_record mapping = lns_db_->get_mapping(type, name_base64_hash))
     prev_txid = mapping.txid;
 
-  lns::mapping_value encrypted_value = {};
-  bool encrypted = lns::encrypt_mapping_value(name, value, encrypted_value);
+  lns::mapping_value encrypted_value = value;
+  bool encrypted = encrypted_value.encrypt(name, &name_hash, hf_version <= cryptonote::network_version_15_lns);
   assert(encrypted);
 
   std::vector<uint8_t> extra;
@@ -593,8 +594,13 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx_update(
   lns::mapping_value encrypted_value = {};
   if (value)
   {
-    bool encrypted = lns::encrypt_mapping_value(name, *value, encrypted_value);
-    if (use_asserts) assert(encrypted);
+    encrypted_value = *value;
+    if (!encrypted_value.encrypted)
+    {
+      assert(!signature); // Can't specify a signature with an unencrypted value because encrypting generates a new nonce and would invalidate it
+      bool encrypted = encrypted_value.encrypt(name, &name_hash, hf_version <= cryptonote::network_version_15_lns);
+      if (use_asserts) assert(encrypted);
+    }
   }
 
   lns::generic_signature signature_ = {};

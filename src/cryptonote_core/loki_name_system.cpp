@@ -24,7 +24,9 @@ extern "C"
 #include <sodium/crypto_generichash_blake2b.h>
 #include <sodium/crypto_pwhash.h>
 #include <sodium/crypto_secretbox.h>
+#include <sodium/crypto_aead_xchacha20poly1305.h>
 #include <sodium/crypto_sign.h>
+#include <sodium/randombytes.h>
 }
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
@@ -81,25 +83,25 @@ enum struct mapping_record_column
   owner_id,
   backup_owner_id,
   update_height,
+  expiration_height,
   _count,
 };
 
-static char const *mapping_record_column_string(mapping_record_column col)
+static constexpr unsigned char OLD_ENCRYPTION_NONCE[crypto_secretbox_NONCEBYTES] = {};
+std::pair<std::basic_string_view<unsigned char>, std::basic_string_view<unsigned char>> lns::mapping_value::value_nonce(mapping_type type) const
 {
-  switch (col)
+  std::pair<std::basic_string_view<unsigned char>, std::basic_string_view<unsigned char>> result;
+  auto& [head, tail] = result;
+  head = {buffer.data(), len};
+  if ((type == mapping_type::session && len != SESSION_PUBLIC_KEY_BINARY_LENGTH + crypto_aead_xchacha20poly1305_ietf_ABYTES + crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
+      || len < crypto_aead_xchacha20poly1305_ietf_NPUBBYTES /* shouldn't occur, but just in case */)
+    tail = {OLD_ENCRYPTION_NONCE, sizeof(OLD_ENCRYPTION_NONCE)};
+  else
   {
-    case mapping_record_column::id: return "id";
-    case mapping_record_column::type: return "type";
-    case mapping_record_column::name_hash: return "name_hash";
-    case mapping_record_column::encrypted_value: return "encrypted_value";
-    case mapping_record_column::txid: return "txid";
-    case mapping_record_column::prev_txid: return "prev_txid";
-    case mapping_record_column::register_height: return "register_height";
-    case mapping_record_column::update_height: return "update_height";
-    case mapping_record_column::owner_id: return "owner_id";
-    case mapping_record_column::backup_owner_id: return "backup_owner_id";
-    default: return "xx_invalid";
+    tail = head.substr(len - crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+    head.remove_suffix(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
   }
+  return result;
 }
 
 std::string lns::mapping_value::to_readable_value(cryptonote::network_type nettype, lns::mapping_type type) const
@@ -387,6 +389,7 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
       return result;
     }
     result.encrypted_value.len = value.size();
+    result.encrypted_value.encrypted = true;
     memcpy(&result.encrypted_value.buffer[0], value.data(), value.size());
   }
 
@@ -986,13 +989,23 @@ bool validate_mapping_value(cryptonote::network_type nettype, mapping_type type,
   return true;
 }
 
-bool validate_encrypted_mapping_value(mapping_type type, std::string const &value, std::string *reason)
+static_assert(SODIUM_ENCRYPTION_EXTRA_BYTES == crypto_aead_xchacha20poly1305_ietf_ABYTES + crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+static_assert(SODIUM_ENCRYPTION_EXTRA_BYTES >= crypto_secretbox_MACBYTES);
+bool mapping_value::validate_encrypted(mapping_type type, std::string_view value, mapping_value* blob, std::string *reason)
 {
+  if (blob) *blob = {};
   std::stringstream err_stream;
-  int max_value_len = crypto_secretbox_MACBYTES;
-  if (is_lokinet_type(type)) max_value_len              += LOKINET_ADDRESS_BINARY_LENGTH;
-  else if (type == mapping_type::session) max_value_len += SESSION_PUBLIC_KEY_BINARY_LENGTH;
-  else if (type == mapping_type::wallet)  max_value_len += WALLET_ACCOUNT_BINARY_LENGTH;
+  int value_len = crypto_aead_xchacha20poly1305_ietf_ABYTES + crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+  if (is_lokinet_type(type)) value_len              += LOKINET_ADDRESS_BINARY_LENGTH;
+  else if (type == mapping_type::wallet)  value_len += WALLET_ACCOUNT_BINARY_LENGTH;
+  else if (type == mapping_type::session)
+  {
+    value_len += SESSION_PUBLIC_KEY_BINARY_LENGTH;
+
+    // Allow an HF15 argon2 encrypted value which doesn't contain a nonce:
+    if (value.size() == value_len - crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
+      value_len -= crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+  }
   else
   {
     if (reason)
@@ -1252,59 +1265,178 @@ std::string name_to_base64_hash(std::string const &name)
   return result;
 }
 
-struct alignas(size_t) secretbox_secret_key_ { unsigned char data[crypto_secretbox_KEYBYTES]; };
-using secretbox_secret_key = epee::mlocked<tools::scrubbed<secretbox_secret_key_>>;
+struct alignas(size_t) secretbox_secret_key {
+  unsigned char data[crypto_aead_xchacha20poly1305_ietf_KEYBYTES];
 
-static bool name_to_encryption_key(std::string const &name, secretbox_secret_key &out)
+  secretbox_secret_key& operator=(const crypto::hash& h) {
+    static_assert(sizeof(secretbox_secret_key::data) == crypto_aead_xchacha20poly1305_ietf_KEYBYTES);
+    std::memcpy(data, h.data, sizeof(data));
+    return *this;
+  }
+};
+
+// New (8.x):
+// We encrypt using xchacha20-poly1305; for the encryption key we use the (secret) keyed hash:
+// H(name, key=H(name)).  Note that H(name) is public info but this keyed hash is known only to the
+// resolver.
+//
+// Note that the name must *already* be lower-cased (we do not transform or validate that here).
+//
+// If the name hash is already available then it can be passed by pointer as the second argument,
+// otherwise pass nullptr to calculate the hash when needed.  (Note that name_hash is not used when
+// heavy=true).
+static void name_to_encryption_key(std::string_view name, const crypto::hash* name_hash, secretbox_secret_key &out)
 {
-  static_assert(sizeof(out) >= crypto_secretbox_KEYBYTES, "Encrypting key needs to have sufficient space for running encryption functions via libsodium");
-  static unsigned char constexpr SALT[crypto_pwhash_SALTBYTES] = {};
-  bool result = (crypto_pwhash(out.data, sizeof(out), name.data(), name.size(), SALT, crypto_pwhash_OPSLIMIT_MODERATE, crypto_pwhash_MEMLIMIT_MODERATE, crypto_pwhash_ALG_ARGON2ID13) == 0);
-  return result;
+  static_assert(sizeof(out) == crypto_aead_xchacha20poly1305_ietf_KEYBYTES, "Encrypting key needs to have sufficient space for running encryption functions via libsodium");
+
+  crypto::hash name_hash_;
+  if (!name_hash)
+    name_hash = &(name_hash_ = name_to_hash(name));
+
+  out = name_to_hash(name, *name_hash);
 }
 
-static unsigned char const ENCRYPTION_NONCE[crypto_secretbox_NONCEBYTES] = {}; // NOTE: Not meant to be extremely secure, just use an empty nonce
-bool encrypt_mapping_value(std::string const &name, mapping_value const &value, mapping_value &encrypted_value)
+// Old (7.x) "heavy" encryption:
+//
+// We encrypt using the older xsalsa20-poly1305 encryption scheme, and for encryption key we use an
+// expensive argon2 "moderate" hash of the name (with null salt).
+static constexpr unsigned char OLD_ENC_SALT[crypto_pwhash_SALTBYTES] = {};
+static bool name_to_encryption_key_argon2(std::string_view name, secretbox_secret_key &out)
 {
-  static_assert(mapping_value::BUFFER_SIZE >= SESSION_PUBLIC_KEY_BINARY_LENGTH + crypto_secretbox_MACBYTES, "Value blob assumes the largest size required, all other values should be able to fit into this buffer");
-  static_assert(mapping_value::BUFFER_SIZE >= LOKINET_ADDRESS_BINARY_LENGTH    + crypto_secretbox_MACBYTES, "Value blob assumes the largest size required, all other values should be able to fit into this buffer");
-  static_assert(mapping_value::BUFFER_SIZE >= WALLET_ACCOUNT_BINARY_LENGTH     + crypto_secretbox_MACBYTES, "Value blob assumes the largest size required, all other values should be able to fit into this buffer");
+  static_assert(sizeof(out) == crypto_secretbox_KEYBYTES, "Encrypting key needs to have sufficient space for running encryption functions via libsodium");
+  return 0 == crypto_pwhash(
+      out.data, sizeof(out.data),
+      name.data(), name.size(),
+      OLD_ENC_SALT,
+      crypto_pwhash_OPSLIMIT_MODERATE,
+      crypto_pwhash_MEMLIMIT_MODERATE,
+      crypto_pwhash_ALG_ARGON2ID13);
+}
 
-  bool result                 = false;
-  size_t const encryption_len = value.len + crypto_secretbox_MACBYTES;
-  if (encryption_len > encrypted_value.buffer.size())
+bool mapping_value::encrypt(std::string_view name, const crypto::hash* name_hash, bool deprecated_heavy)
+{
+  assert(!encrypted);
+  if (encrypted) return false;
+
+  size_t const encryption_len = len + (deprecated_heavy
+      ? crypto_secretbox_MACBYTES
+      : crypto_aead_xchacha20poly1305_ietf_ABYTES + crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+  if (encryption_len > buffer.size())
   {
-    MERROR("Encrypted value pre-allocated buffer too small=" << encrypted_value.buffer.size() << ", required=" << encryption_len);
-    return result;
+    MERROR("Encrypted value pre-allocated buffer too small=" << buffer.size() << ", required=" << encryption_len);
+    return false;
   }
 
-  encrypted_value     = {};
-  encrypted_value.len = encryption_len;
-
+  decltype(buffer) enc_buffer;
   secretbox_secret_key skey;
-  if (name_to_encryption_key(name, skey))
-    result = (crypto_secretbox_easy(encrypted_value.buffer.data(), value.buffer.data(), value.len, ENCRYPTION_NONCE, reinterpret_cast<unsigned char *>(&skey)) == 0);
-  return result;
-}
-
-bool decrypt_mapping_value(std::string const &name, mapping_value const &encrypted_value, mapping_value &value)
-{
-  bool result = false;
-  if (encrypted_value.len <= crypto_secretbox_MACBYTES)
+  if (deprecated_heavy)
   {
-    MERROR("Encrypted value is too short=" << encrypted_value.len << ", at least required=" << crypto_secretbox_MACBYTES + 1);
-    return result;
+    if (name_to_encryption_key_argon2(name, skey))
+      encrypted = (crypto_secretbox_easy(
+            enc_buffer.data(),
+            buffer.data(), len,
+            OLD_ENCRYPTION_NONCE,
+            skey.data) == 0);
+  }
+  else
+  {
+    name_to_encryption_key(name, name_hash, skey);
+    unsigned long long actual_length;
+
+    // Create a random nonce:
+    auto* nonce = &enc_buffer[encryption_len - crypto_aead_xchacha20poly1305_ietf_NPUBBYTES];
+    randombytes_buf(nonce, crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+    encrypted = 0 == crypto_aead_xchacha20poly1305_ietf_encrypt(
+        &enc_buffer[0], &actual_length,
+        &buffer[0], len,
+        nullptr, 0, // additional data
+        nullptr, // nsec, always nullptr according to libsodium docs (just here for API compat)
+        nonce,
+        skey.data);
+
+    if (encrypted) assert(actual_length == encryption_len - crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
   }
 
-  value     = {};
-  value.len = encrypted_value.len - crypto_secretbox_MACBYTES;
+  if (encrypted)
+  {
+    len = encryption_len;
+    buffer = enc_buffer;
+  }
+  return encrypted;
+}
 
+bool mapping_value::decrypt(std::string_view name, mapping_type type, const crypto::hash* name_hash)
+{
+  assert(encrypted);
+  if (!encrypted) return false;
+
+  size_t dec_length;
+  decltype(buffer) dec_buffer;
   secretbox_secret_key skey;
-  if (name_to_encryption_key(name, skey))
-    result = crypto_secretbox_open_easy(value.buffer.data(), encrypted_value.buffer.data(), encrypted_value.len, ENCRYPTION_NONCE, reinterpret_cast<unsigned char *>(&skey)) == 0;
+
+  // Check for an old-style, argon2-based encryption, used before HF16.  (After HF16 we use a much
+  // faster blake2b-hashed key, and a random nonce appended to the end.)
+  if (type == mapping_type::session && len == SESSION_PUBLIC_KEY_BINARY_LENGTH + crypto_secretbox_MACBYTES)
+  {
+    dec_length = SESSION_PUBLIC_KEY_BINARY_LENGTH;
+    encrypted = !(name_to_encryption_key_argon2(name, skey) &&
+        0 == crypto_secretbox_open_easy(dec_buffer.data(), buffer.data(), len, OLD_ENCRYPTION_NONCE, skey.data));
+  }
+  else
+  {
+    switch(type) {
+      case mapping_type::session: dec_length = SESSION_PUBLIC_KEY_BINARY_LENGTH; break;
+      case mapping_type::lokinet: dec_length = LOKINET_ADDRESS_BINARY_LENGTH; break;
+      case mapping_type::wallet:  dec_length = WALLET_ACCOUNT_BINARY_LENGTH; break;
+      default: MERROR("Invalid mapping_type passed to mapping_value::decrypt"); return false;
+    }
+
+    auto expected_len = dec_length + crypto_aead_xchacha20poly1305_ietf_ABYTES + crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+    if (len != expected_len)
+    {
+      MERROR("Encrypted value size is invalid=" << len << ", expected=" << expected_len);
+      return false;
+    }
+    const auto& [enc, nonce] = value_nonce(type);
+
+    name_to_encryption_key(name, name_hash, skey);
+    unsigned long long actual_length;
+    encrypted = !(0 == crypto_aead_xchacha20poly1305_ietf_decrypt(
+          dec_buffer.data(), &actual_length,
+          nullptr, // nsec (always null for this algo)
+          enc.data(), enc.size(),
+          nullptr, 0, // additional data
+          nonce.data(),
+          skey.data));
+
+    if (!encrypted) assert(actual_length == dec_length);
+  }
+
+  if (!encrypted) // i.e. decryption success
+  {
+    len = dec_length;
+    buffer = dec_buffer;
+  }
+  return !encrypted;
+}
+
+mapping_value mapping_value::make_encrypted(std::string_view name, const crypto::hash* name_hash, bool deprecated_heavy) const
+{
+  mapping_value result{*this};
+  result.encrypt(name, name_hash, deprecated_heavy);
+  assert(result.encrypted);
   return result;
 }
 
+mapping_value mapping_value::make_decrypted(std::string_view name, const crypto::hash* name_hash) const
+{
+  mapping_value result{*this};
+  result.encrypt(name, name_hash);
+  assert(!result.encrypted);
+  return result;
+}
 
 static bool build_default_tables(sqlite3 *db)
 {
