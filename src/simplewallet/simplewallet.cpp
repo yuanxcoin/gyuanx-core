@@ -35,6 +35,8 @@
  * \brief Source file that defines simple_wallet class.
  */
 
+#include "common/string_util.h"
+#include "loki_economy.h"
 #include <chrono>
 #ifdef _WIN32
  #define __STDC_FORMAT_MACROS // NOTE(loki): Explicitly define the PRIu64 macro on Mingw
@@ -264,13 +266,14 @@ namespace
   const char* USAGE_REQUEST_STAKE_UNLOCK("request_stake_unlock <service_node_pubkey>");
   const char* USAGE_PRINT_LOCKED_STAKES("print_locked_stakes");
 
-  const char* USAGE_LNS_BUY_MAPPING("lns_buy_mapping [index=<N1>[,<N2>,...]] [<priority>] [owner=<value>] [backup_owner=<value>] <name> <value>");
-  const char* USAGE_LNS_UPDATE_MAPPING("lns_update_mapping [index=<N1>[,<N2>,...]] [<priority>] [owner=<value>] [backup_owner=<value>] [value=<lns_value>] [signature=<hex_signature>] <name>");
+  const char* USAGE_LNS_BUY_MAPPING("lns_buy_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|lokinet|lokinet_2y|lokinet_5y|lokinet_10y] [owner=<value>] [backup_owner=<value>] <name> <value>");
+  const char* USAGE_LNS_RENEW_MAPPING("lns_renew_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=lokinet|lokinet_2y|lokinet_5y|lokinet_10y] <name>");
+  const char* USAGE_LNS_UPDATE_MAPPING("lns_update_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|lokinet] [owner=<value>] [backup_owner=<value>] [value=<lns_value>] [signature=<hex_signature>] <name>");
 
-  // TODO(loki): Currently defaults to session, in future allow specifying Lokinet and Wallet when they are enabled
-  const char* USAGE_LNS_MAKE_UPDATE_MAPPING_SIGNATURE("lns_make_update_mapping_signature [owner=<value>] [backup_owner=<value>] [value=<lns_value>] <name>");
-  const char* USAGE_LNS_PRINT_OWNERS_TO_NAMES("lns_print_owners_to_names [<owner>, ...]");
-  const char* USAGE_LNS_PRINT_NAME_TO_OWNERS("lns_print_name_to_owners [type=<N1|all>[,<N2>...]] <name>");
+  const char* USAGE_LNS_ENCRYPT("lns_encrypt [type=session|lokinet] <name> <value>");
+  const char* USAGE_LNS_MAKE_UPDATE_MAPPING_SIGNATURE("lns_make_update_mapping_signature [type=session|lokinet] [owner=<value>] [backup_owner=<value>] [value=<encrypted_lns_value>] <name>");
+  const char* USAGE_LNS_PRINT_OWNERS_TO_NAMES("lns_print_owners_to_names [<owner> ...]");
+  const char* USAGE_LNS_PRINT_NAME_TO_OWNERS("lns_print_name_to_owners [type=session|lokinet] <name> [<name> ...]");
 
 #if defined (LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
   std::string input_line(const std::string &prompt, bool yesno = false)
@@ -3170,6 +3173,11 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
                            [this](const auto& x) { return lns_buy_mapping(x); },
                            tr(USAGE_LNS_BUY_MAPPING),
                            tr(tools::wallet_rpc::LNS_BUY_MAPPING::description));
+
+  m_cmd_binder.set_handler("lns_renew_mapping",
+                           [this](const auto& x) { return lns_renew_mapping(x); },
+                           tr(USAGE_LNS_RENEW_MAPPING),
+                           tr(tools::wallet_rpc::LNS_RENEW_MAPPING::description));
 
   m_cmd_binder.set_handler("lns_update_mapping",
                            [this](const auto& x) { return lns_update_mapping(x); },
@@ -6415,14 +6423,14 @@ bool simple_wallet::print_locked_stakes(const std::vector<std::string>& /*args*/
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-std::string eat_named_argument(std::vector<std::string> &args, char const *prefix, size_t prefix_len)
+std::string eat_named_argument(std::vector<std::string> &args, std::string_view prefix)
 {
   std::string result = {};
   for (auto it = args.begin(); it != args.end(); it++)
   {
-    if (it->size() > prefix_len && memcmp(it->data(), prefix, prefix_len) == 0)
+    if (it->size() > prefix.size() && tools::starts_with(*it, prefix))
     {
-      result = it->substr(prefix_len, it->size() - prefix_len);
+      result = it->substr(prefix.size());
       args.erase(it);
       break;
     }
@@ -6430,37 +6438,78 @@ std::string eat_named_argument(std::vector<std::string> &args, char const *prefi
 
   return result;
 }
-//----------------------------------------------------------------------------------------------------
-constexpr char const LNS_OWNER_PREFIX[]        = "owner=";
-constexpr char const LNS_BACKUP_OWNER_PREFIX[] = "backup_owner=";
-constexpr char const LNS_VALUE_PREFIX[]        = "value=";
-constexpr char const LNS_SIGNATURE_PREFIX[]    = "signature=";
-bool simple_wallet::lns_buy_mapping(const std::vector<std::string>& args)
+template <typename... Prefixes>
+std::array<std::string, sizeof...(Prefixes)> eat_named_arguments(std::vector<std::string> &args, const Prefixes&... prefixes)
 {
-  std::vector<std::string> local_args = args;
+  return { eat_named_argument(args, prefixes)... };
+}
+
+// Parse a user-provided typestring value; if not provided, guess from the provided name and value.
+static std::optional<lns::mapping_type> guess_lns_type(tools::wallet2& wallet, std::string_view typestr, std::string_view name, std::string_view value)
+{
+  if (typestr.empty())
+  {
+    if (tools::ends_with(name, ".loki") && (tools::ends_with(value, ".loki") || value.empty()))
+      return lns::mapping_type::lokinet;
+    if (!tools::ends_with(name, ".loki") && tools::starts_with(value, "05") && value.length() == 2*lns::SESSION_PUBLIC_KEY_BINARY_LENGTH)
+      return lns::mapping_type::session;
+
+    fail_msg_writer() << tr("Could not infer LNS type from name/value; trying using the type= argument or see `help' for more details");
+    return std::nullopt;
+  }
+
+  auto hf_version = wallet.get_hard_fork_version();
+  if (!hf_version)
+  {
+    tools::fail_msg_writer() << tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+    return std::nullopt;
+  }
+
+  std::string reason;
+  if (lns::mapping_type type; lns::validate_mapping_type(typestr, *hf_version, lns::lns_tx_type::buy, &type, &reason))
+    return type;
+
+  fail_msg_writer() << reason;
+  return std::nullopt;
+}
+
+//----------------------------------------------------------------------------------------------------
+static constexpr auto LNS_OWNER_PREFIX        = "owner="sv;
+static constexpr auto LNS_BACKUP_OWNER_PREFIX = "backup_owner="sv;
+static constexpr auto LNS_TYPE_PREFIX         = "type="sv;
+static constexpr auto LNS_VALUE_PREFIX        = "value="sv;
+static constexpr auto LNS_SIGNATURE_PREFIX    = "signature="sv;
+
+static char constexpr NULL_STR[] = "(none)";
+
+bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
+{
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, m_current_subaddress_account)) return false;
+  if (!parse_subaddr_indices_and_priority(*m_wallet, args, subaddr_indices, priority, m_current_subaddress_account)) return false;
 
-  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
-  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, loki::char_count(LNS_BACKUP_OWNER_PREFIX));
+  auto [owner, backup_owner, typestr] = eat_named_arguments(args, LNS_OWNER_PREFIX, LNS_BACKUP_OWNER_PREFIX, LNS_TYPE_PREFIX);
 
-  if (local_args.size() != 2)
+  if (args.size() != 2)
   {
     PRINT_USAGE(USAGE_LNS_BUY_MAPPING);
     return true;
   }
 
-  std::string const &name  = local_args[0];
-  std::string const &value = local_args[1];
+  std::string const &name  = args[0];
+  std::string const &value = args[1];
 
+  lns::mapping_type type;
+  if (auto t = guess_lns_type(*m_wallet, typestr, name, value))
+    type = *t;
+  else return false;
 
   SCOPED_WALLET_UNLOCK();
   std::string reason;
   std::vector<tools::wallet2::pending_tx> ptx_vector;
   try
   {
-    ptx_vector = m_wallet->lns_create_buy_mapping_tx(lns::mapping_type::session,
+    ptx_vector = m_wallet->lns_create_buy_mapping_tx(type,
                                                      owner.size() ? &owner : nullptr,
                                                      backup_owner.size() ? &backup_owner : nullptr,
                                                      name,
@@ -6482,8 +6531,22 @@ bool simple_wallet::lns_buy_mapping(const std::vector<std::string>& args)
     dsts.push_back(info);
 
     std::cout << std::endl << tr("Buying Loki Name System Record") << std::endl << std::endl;
-    std::cout << boost::format(tr("Name:         %s")) % name << std::endl;
-    std::cout << boost::format(tr("Value:        %s")) % value << boost::format(tr(" for %s")) % "Session" << std::endl;
+    if (type == lns::mapping_type::session)
+      std::cout << boost::format(tr("Session Name: %s")) % name << std::endl;
+    else if (lns::is_lokinet_type(type))
+    {
+      std::cout << boost::format(tr("Lokinet Name: %s")) % name << std::endl;
+      int years = 
+          type == lns::mapping_type::lokinet_10years ? 10 :
+          type == lns::mapping_type::lokinet_5years ? 5 :
+          type == lns::mapping_type::lokinet_2years ? 2 :
+          1;
+      int blocks = BLOCKS_EXPECTED_IN_DAYS(years * lns::REGISTRATION_YEAR_DAYS);
+      std::cout << boost::format(tr("Registration: %d years (%d blocks)")) % years % blocks << "\n";
+    }
+    else
+      std::cout << boost::format(tr("Name:         %s")) % name << std::endl;
+    std::cout << boost::format(tr("Value:        %s")) % value << std::endl;
     std::cout << boost::format(tr("Owner:        %s")) % (owner.size() ? owner : m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}) + " (this wallet) ") << std::endl;
     if(backup_owner.size()) {
       std::cout << boost::format(tr("Backup Owner: %s")) % backup_owner << std::endl;
@@ -6509,25 +6572,24 @@ bool simple_wallet::lns_buy_mapping(const std::vector<std::string>& args)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
+bool simple_wallet::lns_renew_mapping(std::vector<std::string> args)
 {
-  std::vector<std::string> local_args = args;
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority, m_current_subaddress_account)) return false;
+  if (!parse_subaddr_indices_and_priority(*m_wallet, args, subaddr_indices, priority, m_current_subaddress_account)) return false;
 
-
-  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
-  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, loki::char_count(LNS_BACKUP_OWNER_PREFIX));
-  std::string value        = eat_named_argument(local_args, LNS_VALUE_PREFIX, loki::char_count(LNS_VALUE_PREFIX));
-  std::string signature    = eat_named_argument(local_args, LNS_SIGNATURE_PREFIX, loki::char_count(LNS_SIGNATURE_PREFIX));
-
-  if (local_args.empty())
+  std::string typestr = eat_named_argument(args, LNS_TYPE_PREFIX);
+  if (args.empty())
   {
-    PRINT_USAGE(USAGE_LNS_UPDATE_MAPPING);
+    PRINT_USAGE(USAGE_LNS_RENEW_MAPPING);
     return false;
   }
-  std::string const &name = local_args[0];
+  std::string const &name = args[0];
+
+  lns::mapping_type type;
+  if (auto t = guess_lns_type(*m_wallet, typestr, name, ""))
+    type = *t;
+  else return false;
 
   SCOPED_WALLET_UNLOCK();
   std::string reason;
@@ -6535,9 +6597,89 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
   std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> response;
   try
   {
+    ptx_vector = m_wallet->lns_create_renewal_tx(
+        type,
+        name,
+        &reason,
+        priority,
+        m_current_subaddress_account,
+        subaddr_indices,
+        &response);
+    if (ptx_vector.empty())
+    {
+      tools::fail_msg_writer() << reason;
+      return true;
+    }
+
+    std::vector<cryptonote::address_parse_info> dsts;
+    cryptonote::address_parse_info info = {};
+    info.address                        = m_wallet->get_subaddress({m_current_subaddress_account, 0});
+    info.is_subaddress                  = m_current_subaddress_account != 0;
+    dsts.push_back(info);
+
+    std::cout << "\n" << tr("Renew Loki Name System Record") << "\n\n";
+    if (lns::is_lokinet_type(type))
+      std::cout << boost::format(tr("Lokinet Name:  %s")) % name << "\n";
+    else
+      std::cout << boost::format(tr("Name:          %s")) % name << "\n";
+
+    int years = 1;
+    if (type == lns::mapping_type::lokinet_2years) years = 2;
+    else if (type == lns::mapping_type::lokinet_5years) years = 5;
+    else if (type == lns::mapping_type::lokinet_10years) years = 10;
+    int blocks = BLOCKS_EXPECTED_IN_DAYS(years * lns::REGISTRATION_YEAR_DAYS);
+    std::cout << boost::format(tr("Renewal years: %d (%d blocks)")) % years % blocks << "\n";
+    std::cout << boost::format(tr("New expiry:    Block %d")) % (*response[0].expiration_height + blocks) << "\n";
+    std::cout << std::flush;
+
+    if (!confirm_and_send_tx(dsts, ptx_vector, false /*blink*/))
+      return false;
+
+  }
+  catch (const std::exception &e)
+  {
+    handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+    return true;
+  }
+  catch (...)
+  {
+    LOG_ERROR("unknown error");
+    fail_msg_writer() << tr("unknown error");
+    return true;
+  }
+
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
+{
+  uint32_t priority = 0;
+  std::set<uint32_t> subaddr_indices  = {};
+  if (!parse_subaddr_indices_and_priority(*m_wallet, args, subaddr_indices, priority, m_current_subaddress_account)) return false;
 
 
-    ptx_vector = m_wallet->lns_create_update_mapping_tx(lns::mapping_type::session,
+  auto [owner, backup_owner, value, signature, typestr] =
+    eat_named_arguments(args, LNS_OWNER_PREFIX, LNS_BACKUP_OWNER_PREFIX, LNS_VALUE_PREFIX, LNS_SIGNATURE_PREFIX, LNS_TYPE_PREFIX);
+
+  if (args.empty())
+  {
+    PRINT_USAGE(USAGE_LNS_UPDATE_MAPPING);
+    return false;
+  }
+  std::string const &name = args[0];
+
+  lns::mapping_type type;
+  if (auto t = guess_lns_type(*m_wallet, typestr, name, value))
+    type = *t;
+  else return false;
+
+  SCOPED_WALLET_UNLOCK();
+  std::string reason;
+  std::vector<tools::wallet2::pending_tx> ptx_vector;
+  std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> response;
+  try
+  {
+    ptx_vector = m_wallet->lns_create_update_mapping_tx(type,
                                                         name,
                                                         value.size() ? &value : nullptr,
                                                         owner.size() ? &owner : nullptr,
@@ -6554,14 +6696,22 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
       return true;
     }
 
-    lns::mapping_value encrypted_value = {};
-    encrypted_value.len                = response[0].encrypted_value.size() / 2;
-    lokimq::from_hex(response[0].encrypted_value.begin(), response[0].encrypted_value.end(), encrypted_value.buffer.begin());
-
-    lns::mapping_value old_value = {};
-    if (!lns::decrypt_mapping_value(tools::lowercase_ascii_string(name), encrypted_value, old_value))
+    auto& enc_hex = response[0].encrypted_value;
+    if (!lokimq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
     {
-      fail_msg_writer() << "Failed to decrypt the mapping value=" << response[0].encrypted_value;
+      LOG_ERROR("invalid LNS data returned from lokid");
+      fail_msg_writer() << tr("invalid LNS data returned from lokid");
+      return true;
+    }
+
+    lns::mapping_value mval{};
+    mval.len = enc_hex.size() / 2;
+    mval.encrypted = true;
+    lokimq::from_hex(enc_hex.begin(), enc_hex.end(), mval.buffer.begin());
+
+    if (!mval.decrypt(tools::lowercase_ascii_string(name), type))
+    {
+      fail_msg_writer() << "Failed to decrypt the mapping value=" << enc_hex;
       return false;
     }
 
@@ -6572,13 +6722,18 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
     dsts.push_back(info);
 
     std::cout << std::endl << tr("Updating Loki Name System Record") << std::endl << std::endl;
-    std::cout << boost::format(tr("Name:             %s")) % name << std::endl;
+    if (type == lns::mapping_type::session)
+      std::cout << boost::format(tr("Session Name:     %s")) % name << std::endl;
+    else if (lns::is_lokinet_type(type))
+      std::cout << boost::format(tr("Lokinet Name:     %s")) % name << std::endl;
+    else
+      std::cout << boost::format(tr("Name:             %s")) % name << std::endl;
 
     if(value.size()) {
-      std::cout << boost::format(tr("Old Value:        %s")) % old_value.to_readable_value(m_wallet->nettype(),static_cast<lns::mapping_type>(response[0].type)) << std::endl;
+      std::cout << boost::format(tr("Old Value:        %s")) % mval.to_readable_value(m_wallet->nettype(), type) << std::endl;
       std::cout << boost::format(tr("New Value:        %s")) % value << std::endl;
     } else {
-      std::cout << boost::format(tr("Value:            %s")) % old_value.to_readable_value(m_wallet->nettype(),static_cast<lns::mapping_type>(response[0].type)) << std::endl;
+      std::cout << boost::format(tr("Value:            %s (unchanged)")) % mval.to_readable_value(m_wallet->nettype(), type) << std::endl;
     }
 
     if(owner.size()) {
@@ -6589,10 +6744,10 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
     }
 
     if(backup_owner.size()) {
-      std::cout << boost::format(tr("Old Backup Owner: %s")) % (response[0].backup_owner.empty() ? "(none)" : response[0].backup_owner) << std::endl;
+      std::cout << boost::format(tr("Old Backup Owner: %s")) % response[0].backup_owner.value_or(NULL_STR) << std::endl;
       std::cout << boost::format(tr("New Backup Owner: %s")) % backup_owner << std::endl;
     } else {
-      std::cout << boost::format(tr("Backup Owner:     %s (unchanged)")) % (response[0].backup_owner.empty() ? "(none)" : response[0].backup_owner) << std::endl;
+      std::cout << boost::format(tr("Backup Owner:     %s (unchanged)")) % response[0].backup_owner.value_or(NULL_STR) << std::endl;
     }
     if (!confirm_and_send_tx(dsts, ptx_vector, false /*blink*/))
       return false;
@@ -6668,23 +6823,21 @@ bool simple_wallet::lns_encrypt(std::vector<std::string> args)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::lns_make_update_mapping_signature(const std::vector<std::string> &args)
+bool simple_wallet::lns_make_update_mapping_signature(std::vector<std::string> args)
 {
   if (!try_connect_to_daemon())
     return true;
 
-  std::vector<std::string> local_args = args;
-  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
-  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, loki::char_count(LNS_BACKUP_OWNER_PREFIX));
-  std::string value        = eat_named_argument(local_args, LNS_VALUE_PREFIX, loki::char_count(LNS_VALUE_PREFIX));
+  auto [owner, backup_owner, value, typestr] =
+    eat_named_arguments(args, LNS_OWNER_PREFIX, LNS_BACKUP_OWNER_PREFIX, LNS_VALUE_PREFIX, LNS_TYPE_PREFIX);
 
-  if (local_args.empty())
+  if (args.empty())
   {
     PRINT_USAGE(USAGE_LNS_MAKE_UPDATE_MAPPING_SIGNATURE);
     return false;
   }
 
-  std::string const &name = local_args[0];
+  std::string const &name = args[0];
   SCOPED_WALLET_UNLOCK();
   lns::generic_signature signature_binary;
   std::string reason;
@@ -6703,8 +6856,7 @@ bool simple_wallet::lns_make_update_mapping_signature(const std::vector<std::str
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-static char constexpr NULL_STR[] = "(none)";
-bool simple_wallet::lns_print_name_to_owners(const std::vector<std::string>& args)
+bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
 {
   if (!try_connect_to_daemon())
     return false;
@@ -6715,46 +6867,56 @@ bool simple_wallet::lns_print_name_to_owners(const std::vector<std::string>& arg
     return true;
   }
 
+  std::string typestr = eat_named_argument(args, LNS_TYPE_PREFIX);
+
   std::vector<uint16_t> requested_types;
-  size_t name_index = 0;
   // Parse LNS Types
-  {
-    std::string const &first = args[0];
-    char const type_prefix[] = "type=";
-
-    if (first.size() >= loki::char_count(type_prefix) && strncmp(first.data(), type_prefix, loki::char_count(type_prefix)) == 0)
+  if (!typestr.empty()) {
+    auto hf_version = m_wallet->get_hard_fork_version();
+    if (!hf_version)
     {
-      name_index = 1;
-      std::string type_substr = first.substr(loki::char_count(type_prefix), first.size() - loki::char_count(type_prefix));
-      std::vector<std::string> split_types;
-      boost::split(split_types, type_substr, boost::is_any_of(","));
+      fail_msg_writer() << tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+      return false;
+    }
 
-      for (std::string const &type : split_types)
+    for (auto type : tools::split(typestr, ","))
+    {
+      lns::mapping_type mapping_type;
+      std::string reason;
+      if (!lns::validate_mapping_type(type, *hf_version, lns::lns_tx_type::lookup, &mapping_type, &reason))
       {
-        lns::mapping_type mapping_type;
-        std::string reason;
-        if (!lns::validate_mapping_type(type, &mapping_type, &reason))
-        {
-          fail_msg_writer() << reason;
-          return false;
-        }
-        requested_types.push_back(static_cast<uint16_t>(mapping_type));
+        fail_msg_writer() << reason;
+        return false;
       }
+      requested_types.push_back(lns::db_mapping_type(mapping_type));
     }
   }
 
-  if (name_index >= args.size())
+  if (requested_types.empty())
+  {
+    auto hf_version = m_wallet->get_hard_fork_version();
+    if (!hf_version)
+    {
+      fail_msg_writer() << tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+      return false;
+    }
+    auto all_types = lns::all_mapping_types(*hf_version);
+    std::transform(all_types.begin(), all_types.end(), std::back_inserter(requested_types), lns::db_mapping_type);
+  }
+
+  if (args.empty())
   {
     PRINT_USAGE(USAGE_LNS_PRINT_NAME_TO_OWNERS);
     return true;
   }
 
-  std::string const &name = tools::lowercase_ascii_string(args[name_index]);
-  rpc::LNS_NAMES_TO_OWNERS::request request = {};
-  request.entries.push_back({lns::name_to_base64_hash(name), std::move(requested_types)});
 
-  rpc::LNS_NAMES_TO_OWNERS::request_entry &entry = request.entries.back();
-  if (entry.types.empty()) entry.types.push_back(static_cast<uint16_t>(lns::mapping_type::session));
+  rpc::LNS_NAMES_TO_OWNERS::request request = {};
+  for (auto& name : args)
+  {
+    name = tools::lowercase_ascii_string(std::move(name));
+    request.entries.push_back({lns::name_to_base64_hash(name), requested_types});
+  }
 
   auto [success, response] = m_wallet->lns_names_to_owners(request);
   if (!success)
@@ -6763,29 +6925,54 @@ bool simple_wallet::lns_print_name_to_owners(const std::vector<std::string>& arg
     return false;
   }
 
+  int last_index = -1;
   for (auto const &mapping : response)
   {
-    lns::mapping_value encrypted_value = {};
-    encrypted_value.len                = mapping.encrypted_value.size() / 2;
-    lokimq::from_hex(mapping.encrypted_value.begin(), mapping.encrypted_value.end(), encrypted_value.buffer.begin());
-
-    lns::mapping_value value = {};
-    if (!lns::decrypt_mapping_value(name, encrypted_value, value))
+    auto& enc_hex = mapping.encrypted_value;
+    if (mapping.entry_index >= args.size() || !lokimq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
     {
-      fail_msg_writer() << "Failed to decrypt the mapping value=" << mapping.encrypted_value;
+      fail_msg_writer() << "Received invalid LNS mapping data from lokid";
       return false;
     }
 
-    tools::msg_writer() << "name_hash=" << request.entries[0].name_hash // NOTE: We only query one name at a time
-                        << ", type=" << static_cast<lns::mapping_type>(mapping.type)
-                        << ", owner=" << mapping.owner
-                        << ", backup_owner=" << (mapping.backup_owner.empty() ? NULL_STR : mapping.backup_owner)
-                        << ", height=" << mapping.register_height
-                        << ", update_height=" << mapping.update_height
-                        << ", encrypted_value=" << mapping.encrypted_value
-                        << ", value=" << value.to_readable_value(m_wallet->nettype(), static_cast<lns::mapping_type>(mapping.type))
-                        << ", prev_txid=" << (mapping.prev_txid.empty() ? NULL_STR : mapping.prev_txid);
+    // Print any skipped (i.e. not registered) results:
+    for (size_t i = last_index + 1; i < mapping.entry_index; i++)
+      fail_msg_writer() << args[i] << " not found\n";
+    last_index = mapping.entry_index;
+
+    const auto& name = args[mapping.entry_index];
+    lns::mapping_value value{};
+    value.len = enc_hex.size() / 2;
+    value.encrypted = true;
+    lokimq::from_hex(enc_hex.begin(), enc_hex.end(), value.buffer.begin());
+
+    if (!value.decrypt(name, mapping.type))
+    {
+      fail_msg_writer() << "Failed to decrypt the mapping value=" << enc_hex;
+      return false;
+    }
+
+    auto writer = tools::msg_writer();
+    writer
+      << "Name: " << name
+      << "\n    Type: " << static_cast<lns::mapping_type>(mapping.type)
+      << "\n    Value: " << value.to_readable_value(m_wallet->nettype(), mapping.type)
+      << "\n    Owner: " << mapping.owner;
+    if (mapping.backup_owner) writer
+      << "\n    Backup owner: " << *mapping.backup_owner;
+    writer
+      << "\n    Registered/last updated height: " << mapping.register_height << "/" << mapping.update_height;
+    if (mapping.expiration_height) writer
+      << "\n    Expiration height: " << *mapping.expiration_height;
+    writer
+      << "\n    Encrypted value: " << enc_hex;
+    if (mapping.prev_txid) writer
+      << "\n    Last update txid: " << *mapping.prev_txid;
+    writer
+      << "\n";
   }
+  for (size_t i = last_index + 1; i < args.size(); i++)
+    fail_msg_writer() << args[i] << " not found\n";
 
   return true;
 }
@@ -6857,14 +7044,21 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         continue;
       }
 
-      tools::msg_writer() << "owner=" << *owner
-                          << ", backup_owner=" << (entry.backup_owner.empty() ? NULL_STR : entry.backup_owner)
-                          << ", type=" << static_cast<lns::mapping_type>(entry.type)
-                          << ", height=" << entry.register_height
-                          << ", update_height=" << entry.update_height
-                          << ", name_hash=" << entry.name_hash
-                          << ", encrypted_value=" << entry.encrypted_value
-                          << ", prev_txid=" << (entry.prev_txid.empty() ? NULL_STR : entry.prev_txid);
+      auto writer = tools::msg_writer();
+      writer
+        << "Name (hashed): " << entry.name_hash
+        << "\n    Type: " << entry.type
+        << "\n    Owner: " << *owner;
+      if (entry.backup_owner) writer
+        << "\n    Backup owner: " << *entry.backup_owner;
+      writer
+        << "\n    Registered/last updated height: " << entry.register_height << "/" << entry.update_height;
+      if (entry.expiration_height) writer
+        << "\n    Expiration height: " << *entry.expiration_height;
+      writer
+        << "\n    Encrypted value: " << entry.encrypted_value;
+      if (entry.prev_txid) writer
+        << "\n    Last update txid: " << *entry.prev_txid;
     }
   }
   return true;

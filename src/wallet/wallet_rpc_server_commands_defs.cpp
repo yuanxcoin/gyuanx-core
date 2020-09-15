@@ -1146,6 +1146,19 @@ KV_SERIALIZE_MAP_CODE_BEGIN(LNS_BUY_MAPPING::response)
 KV_SERIALIZE_MAP_CODE_END()
 
 
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_RENEW_MAPPING::request)
+  KV_SERIALIZE    (type);
+  KV_SERIALIZE    (name);
+  KV_SERIALIZE_OPT(account_index,   (uint32_t)0);
+  KV_SERIALIZE    (subaddr_indices);
+  KV_SERIALIZE_OPT(priority,        (uint32_t)0);
+  KV_SERIALIZE    (get_tx_key)
+  KV_SERIALIZE_OPT(do_not_relay,    false)
+  KV_SERIALIZE_OPT(get_tx_hex,      false)
+  KV_SERIALIZE_OPT(get_tx_metadata, false)
+KV_SERIALIZE_MAP_CODE_END()
+
+
 KV_SERIALIZE_MAP_CODE_BEGIN(LNS_UPDATE_MAPPING::request)
   KV_SERIALIZE    (type);
   KV_SERIALIZE    (name);

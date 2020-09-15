@@ -3060,6 +3060,36 @@ namespace {
     return res;
   }
 
+  LNS_RENEW_MAPPING::response wallet_rpc_server::invoke(LNS_RENEW_MAPPING::request&& req)
+  {
+    require_open();
+    LNS_RENEW_MAPPING::response res{};
+
+    std::string reason;
+    std::vector<wallet2::pending_tx> ptx_vector = m_wallet->lns_create_renewal_tx(
+        req.type, req.name, &reason, req.priority, req.account_index, req.subaddr_indices);
+
+    if (ptx_vector.empty())
+      throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Failed to create LNS transaction: " + reason};
+
+    fill_response(         ptx_vector,
+                           req.get_tx_key,
+                           res.tx_key,
+                           res.amount,
+                           res.fee,
+                           res.multisig_txset,
+                           res.unsigned_txset,
+                           req.do_not_relay,
+                           false /*blink*/,
+                           res.tx_hash,
+                           req.get_tx_hex,
+                           res.tx_blob,
+                           req.get_tx_metadata,
+                           res.tx_metadata);
+
+    return res;
+  }
+
   LNS_UPDATE_MAPPING::response wallet_rpc_server::invoke(LNS_UPDATE_MAPPING::request&& req)
   {
     require_open();
@@ -3106,13 +3136,15 @@ namespace {
 
     std::string reason;
     lns::mapping_type type;
-    if (!lns::validate_mapping_type(req.type, &type, &reason))
+    std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+    if (!hf_version) throw wallet_rpc_error{error_code::HF_QUERY_FAILED, tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED};
+    if (!lns::validate_mapping_type(req.type, *hf_version, lns::lns_tx_type::update, &type, &reason))
       throw wallet_rpc_error{error_code::WRONG_LNS_TYPE, "Wrong lns type given=" + reason};
 
     lns::generic_signature signature;
     if (!m_wallet->lns_make_update_mapping_signature(type,
                                                      req.name,
-                                                     req.value.size() ? &req.value : nullptr,
+                                                     req.encrypted_value.size() ? &req.encrypted_value : nullptr,
                                                      req.owner.size() ? &req.owner : nullptr,
                                                      req.backup_owner.size() ? &req.backup_owner : nullptr,
                                                      signature,
@@ -3131,7 +3163,9 @@ namespace {
 
     std::string reason;
     lns::mapping_type type;
-    if (!lns::validate_mapping_type(req.type, &type, &reason))
+    std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+    if (!hf_version) throw wallet_rpc_error{error_code::HF_QUERY_FAILED, tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED};
+    if (!lns::validate_mapping_type(req.type, *hf_version, lns::lns_tx_type::lookup, &type, &reason))
       throw wallet_rpc_error{error_code::WRONG_LNS_TYPE, "Wrong lns type given=" + reason};
 
     if (!lns::validate_lns_name(type, req.name, &reason))
@@ -3167,12 +3201,15 @@ namespace {
     // ---------------------------------------------------------------------------------------------
     std::string reason;
     lns::mapping_type type = {};
+
+    std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+    if (!hf_version) throw wallet_rpc_error{error_code::HF_QUERY_FAILED, tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED};
     {
-      if (!lns::validate_mapping_type(req.type, &type, &reason))
-        throw wallet_rpc_error{error_code::WRONG_LNS_TYPE, "Wrong lns type given=" + reason};
+      if (!lns::validate_mapping_type(req.type, *hf_version, lns::lns_tx_type::lookup, &type, &reason))
+        throw wallet_rpc_error{error_code::WRONG_LNS_TYPE, "Invalid LNS type: " + reason};
 
       if (!lns::validate_lns_name(type, req.name, &reason))
-        throw wallet_rpc_error{error_code::LNS_VALUE_NOT_HEX, "Value is not hex=" + req.encrypted_value};
+        throw wallet_rpc_error{error_code::LNS_BAD_NAME, "Invalid LNS name '" + req.name + "': " + reason};
     }
 
     // ---------------------------------------------------------------------------------------------

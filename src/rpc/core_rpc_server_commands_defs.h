@@ -303,8 +303,9 @@ namespace rpc {
       {
         std::optional<bool> buy;                 // Provided and true iff this is an LNS buy record
         std::optional<bool> update;              // Provided and true iff this is an LNS record update
+        std::optional<bool> renew;               // Provided and true iff this is an LNS record renewal
         std::string type;                        // The LNS request type.  For registrations: "lokinet", "session", "wallet"; for a record update: "update"
-        std::optional<uint32_t> blocks;          // The registration length in blocks (only applies to lokinet registrations; session/wallet registrations do not expire)
+        std::optional<uint64_t> blocks;          // The registration length in blocks (only applies to lokinet registrations; session/wallet registrations do not expire)
         crypto::hash name;                       // The hashed name of the record being purchased/updated (the actual name is not provided on the blockchain).
         std::optional<std::string> prev_txid;    // For an update, this points at the txid of the previous lns update transaction.
         std::optional<std::string> value;        // The encrypted value of the record; note that this is encrypted using the actual name itself (*not* the hashed name).
@@ -2389,7 +2390,7 @@ namespace rpc {
 
   LOKI_RPC_DOC_INTROSPECT
   // Get the name mapping for a Loki Name Service entry. Loki currently supports mappings
-  // for Session.
+  // for Session and Lokinet.
   struct LNS_NAMES_TO_OWNERS : PUBLIC
   {
     static constexpr auto names() { return NAMES("lns_names_to_owners"); }
@@ -2398,15 +2399,16 @@ namespace rpc {
     static constexpr size_t MAX_TYPE_REQUEST_ENTRIES = 8;
     struct request_entry
     {
-      std::string name_hash; // The name hashed using libsodium's crypto_generichash_blake2b in base64 to resolve to a public key via Loki Name Service
-      std::vector<uint16_t> types; // If empty, query all types. Currently only Session(0). In future updates more mapping types will be available.
+      std::string name_hash; // The 32-byte BLAKE2b hash of the name to resolve to a public key via Loki Name Service. The value must be provided either in hex (64 hex digits) or base64 (44 characters with padding, or 43 characters without).
+      std::vector<uint16_t> types; // If empty, query all types. Currently supported types are 0 (session) and 2 (lokinet). In future updates more mapping types will be available.
 
       KV_MAP_SERIALIZABLE
     };
 
     struct request
     {
-      std::vector<request_entry> entries;
+      std::vector<request_entry> entries; // Entries to look up
+      bool include_expired;               // Optional: if provided and true, include entries in the results even if they are expired
 
       KV_MAP_SERIALIZABLE
     };
@@ -2414,15 +2416,16 @@ namespace rpc {
     struct response_entry
     {
       uint64_t entry_index;     // The index in request_entry's `entries` array that was resolved via Loki Name Service.
-      uint16_t type;            // The type of Loki Name Service entry that the owner owns.
-      std::string name_hash;    // The hash of the name that was queried in base64
+      lns::mapping_type type;   // The type of Loki Name Service entry that the owner owns: currently supported values are 0 (session), 2 (lokinet)
+      std::string name_hash;    // The hash of the name that was queried, in base64
       std::string owner;        // The public key that purchased the Loki Name Service entry.
-      std::string backup_owner; // The backup public key that the owner specified when purchasing the Loki Name Service entry.
-      std::string encrypted_value; // The encrypted value that the name maps to. This value is encrypted using the name (not the hash) as the secret.
+      std::optional<std::string> backup_owner; // The backup public key that the owner specified when purchasing the Loki Name Service entry. Omitted if no backup owner.
+      std::string encrypted_value; // The encrypted value that the name maps to. See the `LNS_RESOLVE` description for information on how this value can be decrypted.
       uint64_t register_height; // The height that this Loki Name Service entry was purchased on the Blockchain.
       uint64_t update_height;   // The last height that this Loki Name Service entry was updated on the Blockchain.
-      std::string txid;         // The txid of who purchased the mapping, null hash if not applicable.
-      std::string prev_txid;    // The previous txid that purchased the mapping, null hash if not applicable.
+      std::optional<uint64_t> expiration_height; // For records that expire, this will be set to the expiration block height.
+      std::string txid;                          // The txid of the mapping's most recent update or purchase.
+      std::optional<std::string> prev_txid;      // The txid of the second-most recent update or purchase; omitted if there is no previous tx.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2454,15 +2457,16 @@ namespace rpc {
     struct response_entry
     {
       uint64_t    request_index;   // (Deprecated) The index in request's `entries` array that was resolved via Loki Name Service.
-      uint16_t    type;            // The category the Loki Name Service entry belongs to, currently only Session whose value is 0.
+      lns::mapping_type type;      // The category the Loki Name Service entry belongs to; currently 0 for Session and 2 for Lokinet.
       std::string name_hash;       // The hash of the name that the owner purchased via Loki Name Service in base64
       std::string owner;           // The backup public key specified by the owner that purchased the Loki Name Service entry.
-      std::string backup_owner;    // The backup public key specified by the owner that purchased the Loki Name Service entry.
-      std::string encrypted_value; // The encrypted value that the name maps to. This value is encrypted using the name (not the hash) as the secret.
+      std::optional<std::string> backup_owner; // The backup public key specified by the owner that purchased the Loki Name Service entry. Omitted if no backup owner.
+      std::string encrypted_value; // The encrypted value that the name maps to, in hex. This value is encrypted using the name (not the hash) as the secret.
       uint64_t    register_height; // The height that this Loki Name Service entry was purchased on the Blockchain.
       uint64_t    update_height;   // The last height that this Loki Name Service entry was updated on the Blockchain.
-      std::string txid;            // The txid of who purchases the mapping.
-      std::string prev_txid;       // The previous txid that purchased the mapping, null hash if not applicable.
+      std::optional<uint64_t> expiration_height; // For records that expire, this will be set to the expiration block height.
+      std::string txid;                     // The txid of the mapping's most recent update or purchase.
+      std::optional<std::string> prev_txid; // The txid of the second-most recent update or purchase; omitted if there is no previous tx.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2471,6 +2475,46 @@ namespace rpc {
     {
       std::vector<response_entry> entries;
       std::string status; // Generic RPC error code. "OK" is the success value.
+
+      KV_MAP_SERIALIZABLE
+    };
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
+  // Performs a simple LNS lookup of a BLAKE2b-hashed name.  This RPC method is meant for simple,
+  // single-value resolutions that do not care about registration details, etc.; if you need more
+  // information use LNS_NAMES_TO_OWNERS instead.
+  //
+  // Technical details: the returned value is encrypted using the name itself so that neither this
+  // lokid responding to the RPC request nor any other blockchain observers can (easily) obtain the
+  // name of registered addresses or the registration details.  Thus, from a client's point of view,
+  // resolving an LNS record involves:
+  //
+  // - Lower-case the name.
+  // - Calculate the name hash as a null-key, 32-byte BLAKE2b hash of the lower-case name.
+  // - Obtain the encrypted value and the nonce from this RPC call (or LNS_NAMES_TO_OWNERS); (encode
+  //   the name hash using either hex or base64.).
+  // - Calculate the decryption key as a 32-byte BLAKE2b keyed hash of the name using the
+  //   (unkeyed) name hash calculated above as the hash key.
+  // - Decrypt (and verify) using XChaCha20-Poly1305 (for example libsodium's
+  //   crypto_aead_xchacha20poly1305_ietf_decrypt) using the above decryption key and using the
+  //   first 24 bytes of the name hash as the public nonce.
+  struct LNS_RESOLVE : PUBLIC
+  {
+    static constexpr auto names() { return NAMES("lns_resolve"); }
+
+    struct request
+    {
+      uint16_t type;         // The LNS type (mandatory); currently supported values are: 0 = session, 2 = lokinet.
+      std::string name_hash; // The 32-byte BLAKE2b hash of the name to look up, encoded as 64 hex digits or 44/43 base64 characters (with/without padding).
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response
+    {
+      std::optional<std::string> encrypted_value; // The encrypted LNS value, in hex.  Will be omitted from the response if the given name_hash is not registered.
+      std::optional<std::string> nonce; // The nonce value used for encryption, in hex.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2576,6 +2620,7 @@ namespace rpc {
     TEST_TRIGGER_P2P_RESYNC,
     LNS_NAMES_TO_OWNERS,
     LNS_OWNERS_TO_NAMES,
+    LNS_RESOLVE,
     FLUSH_CACHE
   >;
 

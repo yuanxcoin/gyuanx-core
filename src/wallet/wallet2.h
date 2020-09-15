@@ -1347,6 +1347,10 @@ private:
     std::vector<pending_tx> lns_create_update_mapping_tx(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
     std::vector<pending_tx> lns_create_update_mapping_tx(std::string const &type, std::string const &name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
 
+    // LNS renewal (for lokinet registrations, not for session/wallet)
+    std::vector<pending_tx> lns_create_renewal_tx(lns::mapping_type type, std::string name, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
+    std::vector<pending_tx> lns_create_renewal_tx(std::string const &type, std::string const &name, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
+
     // Generate just the signature required for putting into lns_update_mapping command in the wallet
     bool lns_make_update_mapping_signature(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, lns::generic_signature &signature, uint32_t account_index = 0, std::string *reason = nullptr);
 

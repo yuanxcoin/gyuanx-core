@@ -467,8 +467,13 @@ namespace cryptonote
     bool field_is_set (lns::extra_field bit) const { return (fields & bit) == bit; }
     bool field_any_set(lns::extra_field bit) const { return (fields & bit) != lns::extra_field::none; }
 
+    // True if this is updating some LNS info: has a signature and 1 or more updating field
     bool is_updating() const { return field_is_set(lns::extra_field::signature) && field_any_set(lns::extra_field::updatable_fields); }
+    // True if this is buying a new LNS record
     bool is_buying()   const { return (fields == lns::extra_field::buy || fields == lns::extra_field::buy_no_backup); }
+    // True if this is renewing an existing LNS: has no fields at all, is a renewal registration (i.e. lokinet),
+    // and has a non-null txid set (which should point to the most recent registration or update).
+    bool is_renewing() const { return fields == lns::extra_field::none && prev_txid && is_lokinet_type(type); }
 
     static tx_extra_loki_name_system make_buy(lns::generic_owner const &owner, lns::generic_owner const *backup_owner, lns::mapping_type type, crypto::hash const &name_hash, std::string const &encrypted_value, crypto::hash const &prev_txid)
     {
@@ -485,6 +490,18 @@ namespace cryptonote
       result.name_hash       = name_hash;
       result.encrypted_value = encrypted_value;
       result.prev_txid       = prev_txid;
+      return result;
+    }
+
+    static tx_extra_loki_name_system make_renew(lns::mapping_type type, crypto::hash const &name_hash, crypto::hash const &prev_txid)
+    {
+      assert(is_lokinet_type(type) && prev_txid);
+
+      tx_extra_loki_name_system result{};
+      result.fields = lns::extra_field::none;
+      result.type = type;
+      result.name_hash = name_hash;
+      result.prev_txid = prev_txid;
       return result;
     }
 

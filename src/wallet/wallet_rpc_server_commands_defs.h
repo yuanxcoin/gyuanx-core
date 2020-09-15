@@ -420,7 +420,7 @@ namespace tools::wallet_rpc {
 
     struct response
     {
-      std::string tx_hash;        // Publically searchable transaction hash.
+      std::string tx_hash;        // Publicly searchable transaction hash.
       std::string tx_key;         // Transaction key if get_tx_key is true, otherwise, blank string.
       uint64_t amount;            // Amount transferred for the transaction.
       uint64_t fee;               // Fee charged for the txn.
@@ -2007,7 +2007,7 @@ namespace tools::wallet_rpc {
 
     struct response
     {
-      std::string tx_hash;        // Publically searchable transaction hash.
+      std::string tx_hash;        // Publicly searchable transaction hash.
       std::string tx_key;         // Transaction key if `get_tx_key` is `true`, otherwise, blank string.
       uint64_t amount;            // Amount transferred for the transaction in atomic units.
       uint64_t fee;               // Value in atomic units of the fee charged for the tx.
@@ -2039,7 +2039,7 @@ namespace tools::wallet_rpc {
 
     struct response
     {
-      std::string tx_hash;        // Publically searchable transaction hash.
+      std::string tx_hash;        // Publicly searchable transaction hash.
       std::string tx_key;         // Transaction key if get_tx_key is true, otherwise, blank string.
       uint64_t amount;            // Amount transferred for the transaction in atomic units.
       uint64_t fee;               // Value in atomic units of the fee charged for the tx.
@@ -2185,18 +2185,21 @@ namespace tools::wallet_rpc {
     static constexpr auto names() { return NAMES("lns_buy_mapping"); }
 
     static constexpr const char *description =
-R"(Buy a Loki Name System mapping. Loki Name System allows multiple owners that are authorised to update the underlying mapping. An owner can be either a ed25519 public key or a wallet address. By default if no owner is specified, the purchasing wallet's active [sub]address is stored as the owner.
-  - For Session, the recommended owner is the ed25519 public key of the user's Session ID set to owner
+R"(Buy a Loki Name System (LNS) mapping that maps a unique name to a Session ID or Lokinet address.
 
-In future, support for mappings on Blockchain wallets and Lokinet addresses will be available. The recommended owner is the wallet's [sub]address.
+Currently supports Session and Lokinet registrations. Lokinet registrations can be for 1, 2, 5, or 10 years by specifying a type value of "lokinet", "lokinet_2y", "lokinet_5y", "lokinet_10y". Session registrations do not expire.
 
-When specifying owners, either a wallet [sub]address or standard ed25519 public key is supported per mapping. Updating the value that a name maps to requires one of the owner's to sign the update transaction. For wallets, this is signed using the subaddress's spend key.
+The owner of the LNS entry (by default, the purchasing wallet) will be permitted to submit LNS update transactions to the Loki blockchain (for example to update a Session pubkey or the target Lokinet address). You may change the primary owner or add a backup owner in the registration and can change them later with update transactions. Owner addresses can be either Loki wallets, or generic ed25519 pubkeys (for advanced uses).
 
-For information on updating & signing, refer to COMMAND_RPC_LNS_UPDATE_MAPPING)";
+For Session, the recommended owner or backup owner is the ed25519 public key of the user's Session ID.
+
+When specifying owners, either a wallet (sub)address or standard ed25519 public key is supported per mapping. Updating the value that a name maps to requires one of the owners to sign the update transaction. For wallets, this is signed using the (sub)address's spend key.
+
+For more information on updating and signing see the LNS_UPDATE_MAPPING documentation.)";
 
     struct request
     {
-      std::string        type;            // The mapping type, currently we only support "session". In future "lokinet" and "blockchain" mappings will be available.
+      std::string        type;            // The mapping type: "session", "lokinet", "lokinet_2y", "lokinet_5y", "lokinet_10y".
       std::string        owner;           // (Optional): The ed25519 public key or wallet address that has authority to update the mapping.
       std::string        backup_owner;    // (Optional): The secondary, backup public key that has authority to update the mapping.
       std::string        name;            // The name to purchase via Loki Name Service
@@ -2215,7 +2218,7 @@ For information on updating & signing, refer to COMMAND_RPC_LNS_UPDATE_MAPPING)"
 
     struct response
     {
-      std::string tx_hash;        // Publically searchable transaction hash.
+      std::string tx_hash;        // Publicly searchable transaction hash.
       std::string tx_key;         // Transaction key if `get_tx_key` is `true`, otherwise, blank string.
       uint64_t amount;            // Amount transferred for the transaction in atomic units.
       uint64_t fee;               // Value in atomic units of the fee charged for the tx.
@@ -2229,26 +2232,55 @@ For information on updating & signing, refer to COMMAND_RPC_LNS_UPDATE_MAPPING)"
   };
 
   LOKI_RPC_DOC_INTROSPECT
+  // Renew an active lokinet LNS registration
+  struct LNS_RENEW_MAPPING : RESTRICTED
+  {
+    static constexpr auto names() { return NAMES("lns_renew_mapping"); }
+
+    static constexpr const char *description =
+R"(Renews a Loki Name System lokinet mapping by adding to the existing expiry time.
+
+The renewal can be for 1, 2, 5, or 10 years by specifying a `type` value of "lokinet_2y", "lokinet_10y", etc.)";
+
+    struct request
+    {
+      std::string        type;      // The mapping type, "lokinet" (1-year), or "lokinet_2y", "lokinet_5y", "lokinet_10y" for multi-year registrations.
+      std::string        name;      // The name to update
+
+      uint32_t           account_index;    // (Optional) Transfer from this account index. (Defaults to 0)
+      std::set<uint32_t> subaddr_indices;  // (Optional) Transfer from this set of subaddresses. (Defaults to 0)
+      uint32_t           priority;         // Set a priority for the transaction. Accepted values are: 0-4 for: default, unimportant, normal, elevated, priority.
+      bool               get_tx_key;       // (Optional) Return the transaction key after sending.
+      bool               do_not_relay;     // (Optional) If true, the newly created transaction will not be relayed to the loki network. (Defaults to false)
+      bool               get_tx_hex;       // Return the transaction as hex string after sending (Defaults to false)
+      bool               get_tx_metadata;  // Return the metadata needed to relay the transaction. (Defaults to false)
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    using response = LNS_BUY_MAPPING::response;
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
   // Update the underlying value in the name->value mapping via Loki Name Service.
   struct LNS_UPDATE_MAPPING : RESTRICTED
   {
     static constexpr auto names() { return NAMES("lns_update_mapping"); }
 
     static constexpr const char *description =
-R"(Update a Loki Name System mapping's underlying value. The pre-existing owner (wallet address/ed25519 public key) of the mapping must be able to validate. At least one field must be specified to update, otherwise the funtion returns an error message.
+R"(Update a Loki Name System mapping to refer to a new address or owner.
 
-The signature is generated from signing a hash generated by using Libsodium's generichash on the {new value (if provided), new owner (if provided), new backup_owner (if provided), prev_txid field (in the current mapping to update)} in binary.
-Depending on the owner associated with the mapping the signature can be generated in 2 ways. If the owner associated with the mapping is-
-  - a wallet [sub]address, the signature is generated by using Monero's crypto::generate_signature on the hash with the [sub]address's spend key.
-  - a ed25519 public key, the signature is generated by using Libsodium's crypto_sign_detached on the hash
+At least one field (value, owner, or backup owner) must be specified in the update.
 
-Providing the signature is an optional field and if not provided, will default to attempting to sign using the wallet's active [sub]address's spend keys.)";
+The existing owner (wallet address or ed25519 public key) of the mapping must be used to sign the update. If no signature is provided then the wallet's active address (or subaddress) will be used to sign the update.
+
+If signing is performed externally then you must first encrypt the `value` (if being updated), then sign a BLAKE2b hash of {encryptedvalue || owner || backup_owner || txid} (where txid is the most recent LNS update or registration transaction of this mapping; each of encrypted/owner/backup are empty strings if not being updated). For a wallet owner this is signed using the owning wallet's spend key; for a Ed25519 key this is a standard Ed25519 signature.)";
 
     struct request
     {
-      std::string        type;      // The mapping type, currently we only support "session". In future "lokinet" and "blockchain" mappings will be available.
+      std::string        type;      // The mapping type, "session" or "lokinet".
       std::string        name;      // The name to update via Loki Name Service
-      std::string        value;     // (Optional): The new value that the name maps to via Loki Name Service. If not specified or given the empty string "", then the mapping's value remains unchanged.
+      std::string        value;     // (Optional): The new value that the name maps to via Loki Name Service. If not specified or given the empty string "", then the mapping's value remains unchanged. If using a `signature` then this value (if non-empty) must be already encrypted.
       std::string        owner;     // (Optional): The new owner of the mapping. If not specified or given the empty string "", then the mapping's owner remains unchanged.
       std::string        backup_owner; // (Optional): The new backup owner of the mapping. If not specified or given the empty string "", then the mapping's backup owner remains unchanged.
       std::string        signature; // (Optional): Signature derived using libsodium generichash on {current txid blob, new value blob} of the mapping to update. By default the hash is signed using the wallet's spend key as an ed25519 keypair, if signature is specified.
@@ -2267,7 +2299,7 @@ Providing the signature is an optional field and if not provided, will default t
 
     struct response
     {
-      std::string tx_hash;        // Publically searchable transaction hash.
+      std::string tx_hash;        // Publicly searchable transaction hash.
       std::string tx_key;         // Transaction key if `get_tx_key` is `true`, otherwise, blank string.
       uint64_t amount;            // Amount transferred for the transaction in atomic units.
       uint64_t fee;               // Value in atomic units of the fee charged for the tx.
@@ -2318,7 +2350,7 @@ This command is only required if the open wallet is one of the owners of a LNS r
 
     struct request
     {
-      std::string type; // The mapping type, currently we only support "session". In future "lokinet" and "blockchain" mappings will be available.
+      std::string type; // The mapping type, "session" or "lokinet".
       std::string name; // The desired name to hash
 
       KV_MAP_SERIALIZABLE

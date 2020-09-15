@@ -58,15 +58,21 @@ namespace lns
 {
 enum struct mapping_type : uint16_t
 {
-  session,
-  wallet,
-  lokinet_1year,
+  session = 0,
+  wallet = 1,
+  lokinet = 2, // the type value stored in the database; counts as 1-year when used in a buy tx.
   lokinet_2years,
   lokinet_5years,
   lokinet_10years,
   _count,
   update_record_internal,
 };
+
+constexpr bool is_lokinet_type(mapping_type t) { return t >= mapping_type::lokinet && t <= mapping_type::lokinet_10years; }
+
+// How many days we add per "year" of LNS lokinet registration.  We slightly extend this to the 368
+// days per registration "year" to allow for some blockchain time drift + leap years.
+constexpr uint64_t REGISTRATION_YEAR_DAYS = 368;
 
 constexpr uint64_t burn_needed(uint8_t /*hf_version*/, mapping_type type)
 {
@@ -77,7 +83,7 @@ constexpr uint64_t burn_needed(uint8_t /*hf_version*/, mapping_type type)
       result = 0;
       break;
 
-    case mapping_type::lokinet_1year: /* FALLTHRU */
+    case mapping_type::lokinet: /* FALLTHRU */
     case mapping_type::session: /* FALLTHRU */
     case mapping_type::wallet: /* FALLTHRU */
     default:

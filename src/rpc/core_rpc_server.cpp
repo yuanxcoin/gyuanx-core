@@ -35,10 +35,14 @@
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <type_traits>
 #include <variant>
+#include <lokimq/base64.h>
 #include "cryptonote_basic/tx_extra.h"
+#include "cryptonote_core/loki_name_system.h"
 #include "include_base_utils.h"
+#include "loki_economy.h"
 #include "string_tools.h"
 #include "core_rpc_server.h"
 #include "common/command_line.h"
@@ -766,24 +770,27 @@ namespace cryptonote { namespace rpc {
       }
       void operator()(const tx_extra_loki_name_system& x) {
         auto& lns = entry.lns.emplace();
+        lns.blocks = lns::expiry_blocks(nettype, x.type);
         switch (x.type)
         {
-          case lns::mapping_type::lokinet_1year:   lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(1); break;
-          case lns::mapping_type::lokinet_2years:  lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(2); break;
-          case lns::mapping_type::lokinet_5years:  lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(5); break;
-          case lns::mapping_type::lokinet_10years: lns.type = "lokinet"; lns.blocks = BLOCKS_EXPECTED_IN_YEARS(10); break;
+          case lns::mapping_type::lokinet: [[fallthrough]];
+          case lns::mapping_type::lokinet_2years: [[fallthrough]];
+          case lns::mapping_type::lokinet_5years: [[fallthrough]];
+          case lns::mapping_type::lokinet_10years: lns.type = "lokinet"; break;
+
           case lns::mapping_type::session: lns.type = "session"; break;
           case lns::mapping_type::wallet:  lns.type = "wallet"; break;
-          case lns::mapping_type::update_record_internal:
+
+          case lns::mapping_type::update_record_internal: [[fallthrough]];
           case lns::mapping_type::_count:
                                            break;
         }
         if (x.is_buying())
           lns.buy = true;
-        else if (lns.blocks.has_value())
-          lns.blocks.reset();
-        if (x.is_updating())
+        else if (x.is_updating())
           lns.update = true;
+        else if (x.is_renewing())
+          lns.renew = true;
         lns.name = x.name_hash;
         if (x.prev_txid != crypto::null_hash)
           lns.prev_txid = tools::type_to_hex(x.prev_txid);
@@ -3294,6 +3301,12 @@ namespace cryptonote { namespace rpc {
     if (!context.admin)
       check_quantity_limit(req.entries.size(), LNS_NAMES_TO_OWNERS::MAX_REQUEST_ENTRIES);
 
+    std::optional<uint64_t> height = m_core.get_current_blockchain_height();
+    uint8_t hf_version = m_core.get_hard_fork_version(*height);
+    if (req.include_expired) height = std::nullopt;
+
+    std::vector<lns::mapping_type> types;
+
     lns::name_system_db &db = m_core.get_blockchain_storage().name_system_db();
     for (size_t request_index = 0; request_index < req.entries.size(); request_index++)
     {
@@ -3301,18 +3314,34 @@ namespace cryptonote { namespace rpc {
       if (!context.admin)
         check_quantity_limit(request.types.size(), LNS_NAMES_TO_OWNERS::MAX_TYPE_REQUEST_ENTRIES, "types");
 
-      std::vector<lns::mapping_record> records = db.get_mappings(request.types, request.name_hash);
+      types.clear();
+      if (types.capacity() < request.types.size())
+        types.reserve(request.types.size());
+      for (auto type : request.types)
+      {
+        types.push_back(static_cast<lns::mapping_type>(type));
+        if (!lns::mapping_type_allowed(hf_version, types.back()))
+          throw rpc_error{ERROR_WRONG_PARAM, "Invalid lokinet type '" + std::to_string(type) + "'"};
+      }
+
+      // This also takes 32 raw bytes, but that is undocumented (because it is painful to pass
+      // through json).
+      auto name_hash = lns::name_hash_input_to_base64(request.name_hash);
+      if (!name_hash)
+        throw rpc_error{ERROR_WRONG_PARAM, "Invalid name_hash: expected hash as 64 hex digits or 43/44 base64 characters"};
+
+      std::vector<lns::mapping_record> records = db.get_mappings(types, *name_hash, height);
       for (auto const &record : records)
       {
-        res.entries.emplace_back();
-        LNS_NAMES_TO_OWNERS::response_entry &entry = res.entries.back();
+        auto& entry = res.entries.emplace_back();
         entry.entry_index                                      = request_index;
-        entry.type                                             = static_cast<uint16_t>(record.type);
+        entry.type                                             = record.type;
         entry.name_hash                                        = record.name_hash;
         entry.owner                                            = record.owner.to_string(nettype());
         if (record.backup_owner) entry.backup_owner            = record.backup_owner.to_string(nettype());
         entry.encrypted_value                                  = lokimq::to_hex(record.encrypted_value.to_view());
         entry.register_height                                  = record.register_height;
+        entry.expiration_height                                = record.expiration_height;
         entry.update_height                                    = record.update_height;
         entry.txid                                             = tools::type_to_hex(record.txid);
         if (record.prev_txid) entry.prev_txid                  = tools::type_to_hex(record.prev_txid);
@@ -3351,11 +3380,11 @@ namespace cryptonote { namespace rpc {
     }
 
     lns::name_system_db &db = m_core.get_blockchain_storage().name_system_db();
-    std::vector<lns::mapping_record> records = db.get_mappings_by_owners(owners);
+    auto height = m_core.get_current_blockchain_height();
+    std::vector<lns::mapping_record> records = db.get_mappings_by_owners(owners, height);
     for (auto &record : records)
     {
-      res.entries.emplace_back();
-      LNS_OWNERS_TO_NAMES::response_entry &entry = res.entries.back();
+      auto& entry = res.entries.emplace_back();
 
       auto it = owner_to_request_index.find(record.owner);
       if (it == owner_to_request_index.end())
@@ -3363,18 +3392,50 @@ namespace cryptonote { namespace rpc {
           ", could not be mapped back a index in the request 'entries' array"};
 
       entry.request_index   = it->second;
-      entry.type            = static_cast<uint16_t>(record.type);
+      entry.type            = record.type;
       entry.name_hash       = std::move(record.name_hash);
       if (record.owner) entry.owner = record.owner.to_string(nettype());
       if (record.backup_owner) entry.backup_owner = record.backup_owner.to_string(nettype());
       entry.encrypted_value = lokimq::to_hex(record.encrypted_value.to_view());
       entry.register_height = record.register_height;
       entry.update_height   = record.update_height;
+      entry.expiration_height = record.expiration_height;
       entry.txid            = tools::type_to_hex(record.txid);
       if (record.prev_txid) entry.prev_txid = tools::type_to_hex(record.prev_txid);
     }
 
     res.status = STATUS_OK;
+    return res;
+  }
+
+  //------------------------------------------------------------------------------------------------------------------------------
+  LNS_RESOLVE::response core_rpc_server::invoke(LNS_RESOLVE::request&& req, rpc_context context)
+  {
+    LNS_RESOLVE::response res{};
+
+    if (req.type >= tools::enum_count<lns::mapping_type>)
+      throw rpc_error{ERROR_WRONG_PARAM, "Unable to resolve LNS address: 'type' parameter not specified"};
+
+    auto name_hash = lns::name_hash_input_to_base64(req.name_hash);
+    if (!name_hash)
+      throw rpc_error{ERROR_WRONG_PARAM, "Unable to resolve LNS address: invalid 'name_hash' value '" + req.name_hash + "'"};
+
+    uint8_t hf_version = m_core.get_hard_fork_version(m_core.get_current_blockchain_height());
+    auto type = static_cast<lns::mapping_type>(req.type);
+    if (!lns::mapping_type_allowed(hf_version, type))
+      throw rpc_error{ERROR_WRONG_PARAM, "Invalid lokinet type '" + std::to_string(req.type) + "'"};
+
+    if (auto mapping = m_core.get_blockchain_storage().name_system_db().resolve(
+        type, *name_hash, m_core.get_current_blockchain_height()))
+    {
+      auto [val, nonce] = mapping->value_nonce(type);
+      res.encrypted_value = lokimq::to_hex(val);
+      MFATAL("val: " << lokimq::to_hex(val));
+      MFATAL("nonce: " << lokimq::to_hex(nonce));
+      MFATAL("all: " << lokimq::to_hex(mapping->to_view()));
+      if (val.size() < mapping->to_view().size())
+        res.nonce = lokimq::to_hex(nonce);
+    }
     return res;
   }
 

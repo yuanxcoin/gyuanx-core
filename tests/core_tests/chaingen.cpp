@@ -72,17 +72,28 @@ loki_generate_sequential_hard_fork_table(uint8_t max_hf_version)
   assert(max_hf_version < cryptonote::network_version_count);
   std::vector<std::pair<uint8_t, uint64_t>> result = {};
   uint64_t version_height = 0;
-  for (uint8_t version = cryptonote::network_version_7; version <= max_hf_version; version++)
+
+  // HF15 reduces and HF16 eliminates miner block rewards, so we need to ensure we have enough
+  // pre-HF15 blocks to generate enough LOKI for tests:
+  constexpr uint64_t pos_delay = 60;
+
+  bool delayed = false;
+  for (uint8_t version = cryptonote::network_version_7; version <= max_hf_version; )
   {
-    if (version == cryptonote::network_version_15_lns)
+    if (version >= cryptonote::network_version_15_lns && !delayed)
     {
-      version_height += 60;
-      result.emplace_back(std::make_pair(version, version_height++));
+      version_height += pos_delay;
+      delayed = true;
     }
+    result.emplace_back(version, version_height++);
+
+    // If we're going to HF16 or above, just skip over the RandomX version (HF12 through 15) so that
+    // we can avoid initializing the RandomX engine (which slows down the test suite quite
+    // substantially).
+    if (max_hf_version >= cryptonote::network_version_16 && version == cryptonote::network_version_11_infinite_staking)
+      version = cryptonote::network_version_16;
     else
-    {
-      result.emplace_back(std::make_pair(version, version_height++));
-    }
+      version++;
   }
   return result;
 }
@@ -283,6 +294,11 @@ void loki_chain_generator::add_mined_money_unlock_blocks()
   add_n_blocks(CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
 }
 
+void loki_chain_generator::add_transfer_unlock_blocks()
+{
+  add_n_blocks(CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE);
+}
+
 void loki_chain_generator::add_tx(cryptonote::transaction const &tx, bool can_be_added_to_blockchain, std::string const &fail_msg, bool kept_by_block)
 {
   loki_transaction tx_entry                       = {tx, kept_by_block};
@@ -292,6 +308,7 @@ void loki_chain_generator::add_tx(cryptonote::transaction const &tx, bool can_be
 
 cryptonote::transaction
 loki_chain_generator::create_and_add_loki_name_system_tx(cryptonote::account_base const &src,
+                                                         uint8_t hf_version,
                                                          lns::mapping_type type,
                                                          std::string const &name,
                                                          lns::mapping_value const &value,
@@ -299,13 +316,14 @@ loki_chain_generator::create_and_add_loki_name_system_tx(cryptonote::account_bas
                                                          lns::generic_owner const *backup_owner,
                                                          bool kept_by_block)
 {
-  cryptonote::transaction t = create_loki_name_system_tx(src, type, name, value, owner, backup_owner);
+  cryptonote::transaction t = create_loki_name_system_tx(src, hf_version, type, name, value, owner, backup_owner);
   add_tx(t, true /*can_be_added_to_blockchain*/, ""/*fail_msg*/, kept_by_block);
   return t;
 }
 
 cryptonote::transaction
 loki_chain_generator::create_and_add_loki_name_system_tx_update(cryptonote::account_base const &src,
+                                                                uint8_t hf_version,
                                                                 lns::mapping_type type,
                                                                 std::string const &name,
                                                                 lns::mapping_value const *value,
@@ -314,10 +332,23 @@ loki_chain_generator::create_and_add_loki_name_system_tx_update(cryptonote::acco
                                                                 lns::generic_signature *signature,
                                                                 bool kept_by_block)
 {
-  cryptonote::transaction t = create_loki_name_system_tx_update(src, type, name, value, owner, backup_owner, signature);
+  cryptonote::transaction t = create_loki_name_system_tx_update(src, hf_version, type, name, value, owner, backup_owner, signature);
   add_tx(t, true /*can_be_added_to_blockchain*/, ""/*fail_msg*/, kept_by_block);
   return t;
 }
+
+cryptonote::transaction
+loki_chain_generator::create_and_add_loki_name_system_tx_renew(cryptonote::account_base const &src,
+                                                               uint8_t hf_version,
+                                                               lns::mapping_type type,
+                                                               std::string const &name,
+                                                               bool kept_by_block)
+{
+  cryptonote::transaction t = create_loki_name_system_tx_renew(src, hf_version, type, name);
+  add_tx(t, true /*can_be_added_to_blockchain*/, ""/*fail_msg*/, kept_by_block);
+  return t;
+}
+
 
 cryptonote::transaction loki_chain_generator::create_and_add_tx(const cryptonote::account_base &src,
                                                                 const cryptonote::account_public_address &dest,
@@ -526,12 +557,13 @@ cryptonote::checkpoint_t loki_chain_generator::create_service_node_checkpoint(ui
 }
 
 cryptonote::transaction loki_chain_generator::create_loki_name_system_tx(cryptonote::account_base const &src,
+                                                                         uint8_t hf_version,
                                                                          lns::mapping_type type,
                                                                          std::string const &name,
                                                                          lns::mapping_value const &value,
                                                                          lns::generic_owner const *owner,
                                                                          lns::generic_owner const *backup_owner,
-                                                                         uint64_t burn) const
+                                                                         std::optional<uint64_t> burn_override) const
 {
   lns::generic_owner generic_owner = {};
   if (owner)
@@ -546,13 +578,12 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx(crypton
   cryptonote::block const &head = top().block;
   uint64_t new_height           = get_block_height(top().block) + 1;
   uint8_t new_hf_version        = get_hf_version_at(new_height);
-  if (burn == LNS_AUTO_BURN)
-    burn = lns::burn_needed(new_hf_version, type);
+  uint64_t burn = burn_override.value_or(lns::burn_needed(new_hf_version, type));
 
   crypto::hash name_hash       = lns::name_to_hash(name);
   std::string name_base64_hash = lns::name_to_base64_hash(name);
   crypto::hash prev_txid = crypto::null_hash;
-  if (lns::mapping_record mapping = lns_db_->get_mapping(type, name_base64_hash))
+  if (lns::mapping_record mapping = lns_db_->get_mapping(type, name_base64_hash, new_height))
     prev_txid = mapping.txid;
 
   lns::mapping_value encrypted_value = value;
@@ -574,6 +605,7 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx(crypton
 }
 
 cryptonote::transaction loki_chain_generator::create_loki_name_system_tx_update(cryptonote::account_base const &src,
+                                                                                uint8_t hf_version,
                                                                                 lns::mapping_type type,
                                                                                 std::string const &name,
                                                                                 lns::mapping_value const *value,
@@ -630,7 +662,7 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx_update(
 }
 
 cryptonote::transaction
-loki_chain_generator::create_loki_name_system_tx_update_w_extra(cryptonote::account_base const &src, cryptonote::tx_extra_loki_name_system const &lns_extra) const
+loki_chain_generator::create_loki_name_system_tx_update_w_extra(cryptonote::account_base const &src, uint8_t hf_version, cryptonote::tx_extra_loki_name_system const &lns_extra) const
 {
   std::vector<uint8_t> extra;
   cryptonote::add_loki_name_system_to_tx_extra(extra, lns_extra);
@@ -645,6 +677,40 @@ loki_chain_generator::create_loki_name_system_tx_update_w_extra(cryptonote::acco
       .with_extra(extra)
       .with_fee(TESTS_DEFAULT_FEE)
       .build();
+  return result;
+}
+
+cryptonote::transaction loki_chain_generator::create_loki_name_system_tx_renew(cryptonote::account_base const &src,
+                                                                               uint8_t hf_version,
+                                                                               lns::mapping_type type,
+                                                                               std::string const &name,
+                                                                               std::optional<uint64_t> burn_override) const
+{
+  crypto::hash name_hash = lns::name_to_hash(name);
+  crypto::hash prev_txid = {};
+  {
+    std::string name_base64_hash = lns::name_to_base64_hash(name);
+    lns::mapping_record mapping  = lns_db_->get_mapping(type, name_base64_hash);
+    prev_txid = mapping.txid;
+  }
+
+  uint8_t new_hf_version = get_hf_version_at(get_block_height(top().block) + 1);
+  uint64_t burn = burn_override.value_or(lns::burn_needed(new_hf_version, type));
+
+  std::vector<uint8_t> extra;
+  cryptonote::tx_extra_loki_name_system data = cryptonote::tx_extra_loki_name_system::make_renew(type, name_hash, prev_txid);
+  cryptonote::add_loki_name_system_to_tx_extra(extra, data);
+  cryptonote::add_burned_amount_to_tx_extra(extra, burn);
+
+  cryptonote::block const &head = top().block;
+
+  cryptonote::transaction result = {};
+  loki_tx_builder(events_, result, head, src /*from*/, src.get_keys().m_account_address, 0 /*amount*/, new_hf_version)
+      .with_tx_type(cryptonote::txtype::loki_name_system)
+      .with_extra(extra)
+      .with_fee(burn + TESTS_DEFAULT_FEE)
+      .build();
+
   return result;
 }
 

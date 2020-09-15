@@ -3479,7 +3479,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     {
       cryptonote::tx_extra_loki_name_system data;
       std::string fail_reason;
-      if (!m_lns_db.validate_lns_tx(hf_version, get_current_blockchain_height(), tx, &data, &fail_reason))
+      if (!m_lns_db.validate_lns_tx(hf_version, get_current_blockchain_height(), tx, data, &fail_reason))
       {
         MERROR_VER("Failed to validate LNS TX reason: " << fail_reason);
         tvc.m_verbose_error = std::move(fail_reason);
