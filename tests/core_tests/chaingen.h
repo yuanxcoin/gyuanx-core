@@ -873,7 +873,8 @@ public:
 private:
   void log_event(const std::string& event_type) const
   {
-    MGINFO_YELLOW("=== EVENT # " << m_ev_index << ": " << event_type);
+    if (LOG_ENABLED(Info))
+      MGINFO_YELLOW("=== EVENT # " << m_ev_index << ": " << event_type);
   }
 };
 //--------------------------------------------------------------------------
