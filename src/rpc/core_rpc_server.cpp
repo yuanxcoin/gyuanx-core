@@ -792,8 +792,6 @@ namespace cryptonote { namespace rpc {
         else if (x.is_renewing())
           lns.renew = true;
         lns.name = x.name_hash;
-        if (x.prev_txid != crypto::null_hash)
-          lns.prev_txid = tools::type_to_hex(x.prev_txid);
         if (!x.encrypted_value.empty())
           lns.value = x.encrypted_value;
         _load_owner(lns.owner, x.owner);
@@ -3340,11 +3338,9 @@ namespace cryptonote { namespace rpc {
         entry.owner                                            = record.owner.to_string(nettype());
         if (record.backup_owner) entry.backup_owner            = record.backup_owner.to_string(nettype());
         entry.encrypted_value                                  = lokimq::to_hex(record.encrypted_value.to_view());
-        entry.register_height                                  = record.register_height;
         entry.expiration_height                                = record.expiration_height;
         entry.update_height                                    = record.update_height;
         entry.txid                                             = tools::type_to_hex(record.txid);
-        if (record.prev_txid) entry.prev_txid                  = tools::type_to_hex(record.prev_txid);
       }
     }
 
@@ -3397,11 +3393,9 @@ namespace cryptonote { namespace rpc {
       if (record.owner) entry.owner = record.owner.to_string(nettype());
       if (record.backup_owner) entry.backup_owner = record.backup_owner.to_string(nettype());
       entry.encrypted_value = lokimq::to_hex(record.encrypted_value.to_view());
-      entry.register_height = record.register_height;
       entry.update_height   = record.update_height;
       entry.expiration_height = record.expiration_height;
       entry.txid            = tools::type_to_hex(record.txid);
-      if (record.prev_txid) entry.prev_txid = tools::type_to_hex(record.prev_txid);
     }
 
     res.status = STATUS_OK;

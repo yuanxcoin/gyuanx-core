@@ -6961,13 +6961,11 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
     if (mapping.backup_owner) writer
       << "\n    Backup owner: " << *mapping.backup_owner;
     writer
-      << "\n    Registered/last updated height: " << mapping.register_height << "/" << mapping.update_height;
+      << "\n    Last updated height: " << mapping.update_height;
     if (mapping.expiration_height) writer
       << "\n    Expiration height: " << *mapping.expiration_height;
     writer
       << "\n    Encrypted value: " << enc_hex;
-    if (mapping.prev_txid) writer
-      << "\n    Last update txid: " << *mapping.prev_txid;
     writer
       << "\n";
   }
@@ -7052,13 +7050,11 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
       if (entry.backup_owner) writer
         << "\n    Backup owner: " << *entry.backup_owner;
       writer
-        << "\n    Registered/last updated height: " << entry.register_height << "/" << entry.update_height;
+        << "\n    Last updated height: " << entry.update_height;
       if (entry.expiration_height) writer
         << "\n    Expiration height: " << *entry.expiration_height;
       writer
         << "\n    Encrypted value: " << entry.encrypted_value;
-      if (entry.prev_txid) writer
-        << "\n    Last update txid: " << *entry.prev_txid;
     }
   }
   return true;

@@ -2421,11 +2421,9 @@ namespace rpc {
       std::string owner;        // The public key that purchased the Loki Name Service entry.
       std::optional<std::string> backup_owner; // The backup public key that the owner specified when purchasing the Loki Name Service entry. Omitted if no backup owner.
       std::string encrypted_value; // The encrypted value that the name maps to. See the `LNS_RESOLVE` description for information on how this value can be decrypted.
-      uint64_t register_height; // The height that this Loki Name Service entry was purchased on the Blockchain.
       uint64_t update_height;   // The last height that this Loki Name Service entry was updated on the Blockchain.
       std::optional<uint64_t> expiration_height; // For records that expire, this will be set to the expiration block height.
       std::string txid;                          // The txid of the mapping's most recent update or purchase.
-      std::optional<std::string> prev_txid;      // The txid of the second-most recent update or purchase; omitted if there is no previous tx.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2462,11 +2460,9 @@ namespace rpc {
       std::string owner;           // The backup public key specified by the owner that purchased the Loki Name Service entry.
       std::optional<std::string> backup_owner; // The backup public key specified by the owner that purchased the Loki Name Service entry. Omitted if no backup owner.
       std::string encrypted_value; // The encrypted value that the name maps to, in hex. This value is encrypted using the name (not the hash) as the secret.
-      uint64_t    register_height; // The height that this Loki Name Service entry was purchased on the Blockchain.
       uint64_t    update_height;   // The last height that this Loki Name Service entry was updated on the Blockchain.
       std::optional<uint64_t> expiration_height; // For records that expire, this will be set to the expiration block height.
       std::string txid;                     // The txid of the mapping's most recent update or purchase.
-      std::optional<std::string> prev_txid; // The txid of the second-most recent update or purchase; omitted if there is no previous tx.
 
       KV_MAP_SERIALIZABLE
     };

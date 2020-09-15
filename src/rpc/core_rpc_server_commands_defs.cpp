@@ -1317,11 +1317,9 @@ KV_SERIALIZE_MAP_CODE_BEGIN(LNS_NAMES_TO_OWNERS::response_entry)
   KV_SERIALIZE(owner)
   KV_SERIALIZE(backup_owner)
   KV_SERIALIZE(encrypted_value)
-  KV_SERIALIZE(register_height)
   KV_SERIALIZE(update_height)
   KV_SERIALIZE(expiration_height)
   KV_SERIALIZE(txid)
-  KV_SERIALIZE(prev_txid)
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -1343,10 +1341,8 @@ KV_SERIALIZE_MAP_CODE_BEGIN(LNS_OWNERS_TO_NAMES::response_entry)
   KV_SERIALIZE(owner)
   KV_SERIALIZE(backup_owner)
   KV_SERIALIZE(encrypted_value)
-  KV_SERIALIZE(register_height)
   KV_SERIALIZE(update_height)
   KV_SERIALIZE(txid)
-  KV_SERIALIZE(prev_txid)
 KV_SERIALIZE_MAP_CODE_END()
 
 

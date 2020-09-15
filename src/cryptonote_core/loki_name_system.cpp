@@ -50,7 +50,6 @@ enum struct lns_sql_type
   get_mappings,
   get_mappings_by_owner,
   get_mappings_by_owners,
-  get_mappings_on_height_and_newer,
   get_owner,
   get_setting,
   get_sentinel_end,
@@ -79,8 +78,6 @@ enum struct mapping_record_column
   name_hash,
   encrypted_value,
   txid,
-  prev_txid,
-  register_height,
   owner_id,
   backup_owner_id,
   update_height,
@@ -385,7 +382,6 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
 
   result.type = static_cast<mapping_type>(type_int);
   get(statement, mapping_record_column::id, result.id);
-  get(statement, mapping_record_column::register_height, result.register_height);
   get(statement, mapping_record_column::update_height, result.update_height);
   get(statement, mapping_record_column::expiration_height, result.expiration_height);
   get(statement, mapping_record_column::owner_id, result.owner_id);
@@ -411,9 +407,6 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
   }
 
   if (!sql_copy_blob(statement, mapping_record_column::txid, result.txid.data, sizeof(result.txid)))
-    return result;
-
-  if (!sql_copy_blob(statement, mapping_record_column::prev_txid, result.prev_txid.data, sizeof(result.prev_txid)))
     return result;
 
   int owner_column = tools::enum_count<mapping_record_column>;
@@ -469,7 +462,6 @@ bool sql_run_statement(lns_sql_type type, sql_compiled_statement& statement, voi
           }
           break;
 
-          case lns_sql_type::get_mappings_on_height_and_newer: /* FALLTHRU */
           case lns_sql_type::get_mappings_by_owners: /* FALLTHRU */
           case lns_sql_type::get_mappings_by_owner: /* FALLTHRU */
           case lns_sql_type::get_mappings: /* FALLTHRU */
@@ -1471,9 +1463,23 @@ mapping_value mapping_value::make_decrypted(std::string_view name, const crypto:
   return result;
 }
 
-static bool build_default_tables(sqlite3 *db)
+namespace {
+
+bool build_default_tables(name_system_db& lns_db)
 {
-  constexpr char BUILD_TABLE_SQL[] = R"(
+  std::string mappings_columns = R"(
+    "id" INTEGER PRIMARY KEY NOT NULL,
+    "type" INTEGER NOT NULL,
+    "name_hash" VARCHAR NOT NULL,
+    "encrypted_value" BLOB NOT NULL,
+    "txid" BLOB NOT NULL,
+    "owner_id" INTEGER NOT NULL REFERENCES "owner" ("id"),
+    "backup_owner_id" INTEGER REFERENCES "owner" ("id"),
+    "update_height" INTEGER NOT NULL,
+    "expiration_height" INTEGER
+)";
+
+  const std::string BUILD_TABLE_SQL = R"(
 CREATE TABLE IF NOT EXISTS "owner"(
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "address" BLOB NOT NULL UNIQUE
@@ -1483,29 +1489,17 @@ CREATE TABLE IF NOT EXISTS "settings" (
     "id" INTEGER PRIMARY KEY NOT NULL,
     "top_height" INTEGER NOT NULL,
     "top_hash" VARCHAR NOT NULL,
-    "version" INTEGER NOT NULL
+    "version" INTEGER NOT NULL,
+    "pruned_height" INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS "mappings" (
-    "id" INTEGER PRIMARY KEY NOT NULL,
-    "type" INTEGER NOT NULL,
-    "name_hash" VARCHAR NOT NULL,
-    "encrypted_value" BLOB NOT NULL,
-    "txid" BLOB NOT NULL,
-    "prev_txid" BLOB NOT NULL,
-    "register_height" INTEGER NOT NULL,
-    "owner_id" INTEGER NOT NULL REFERENCES "owner" ("id"),
-    "backup_owner_id" INTEGER REFERENCES "owner" ("id"),
-    "update_height" INTEGER NOT NULL DEFAULT "register_height",
-    "expiration_height" INTEGER
-);
-CREATE UNIQUE INDEX IF NOT EXISTS "name_hash_type_id" ON mappings("name_hash", "type");
+CREATE TABLE IF NOT EXISTS "mappings" ()" + mappings_columns + R"();
 CREATE INDEX IF NOT EXISTS "owner_id_index" ON mappings("owner_id");
 CREATE INDEX IF NOT EXISTS "backup_owner_id_index" ON mappings("backup_owner_index");
 )";
 
   char *table_err_msg = nullptr;
-  int table_created   = sqlite3_exec(db, BUILD_TABLE_SQL, nullptr /*callback*/, nullptr /*callback context*/, &table_err_msg);
+  int table_created   = sqlite3_exec(lns_db.db, BUILD_TABLE_SQL.c_str(), nullptr /*callback*/, nullptr /*callback context*/, &table_err_msg);
   if (table_created != SQLITE_OK)
   {
     MERROR("Can not generate SQL table for LNS: " << (table_err_msg ? table_err_msg : "??"));
@@ -1513,30 +1507,74 @@ CREATE INDEX IF NOT EXISTS "backup_owner_id_index" ON mappings("backup_owner_ind
     return false;
   }
 
+  // In Loki 8 we dropped some columns that are no longer needed, but SQLite can't do this easily:
+  // instead we have to manually recreate the table, so check it and see if the prev_txid or
+  // register_height columns still exist: if so, we need to recreate.
+  bool need_mappings_migration = false;
+  {
+    sql_compiled_statement mappings_info{lns_db};
+    mappings_info.compile(R"(PRAGMA table_info("mappings"))", false);
+    while (step(mappings_info) == SQLITE_ROW)
+    {
+      auto name = get<std::string_view>(mappings_info, 1);
+      if (name == "prev_txid" || name == "register_height")
+      {
+        need_mappings_migration = true;
+        break;
+      }
+    }
+  }
+
+  if (need_mappings_migration)
+  {
+    // Earlier version migration: we need "update_height" to exist (if this fails it's fine).
+    sqlite3_exec(lns_db.db,
+        R"(ALTER TABLE "mappings" ADD COLUMN "update_height" INTEGER NOT NULL DEFAULT "register_height")",
+        nullptr /*callback*/, nullptr /*callback ctx*/, nullptr /*errstr*/);
+
+    LOG_PRINT_L1("Migrating LNS mappings database to new format");
+    const std::string migrate = R"(
+BEGIN TRANSACTION;
+ALTER TABLE "mappings" RENAME TO "mappings_old";
+CREATE TABLE "mappings" ()" + mappings_columns + R"();
+INSERT INTO "mappings"
+  SELECT "id", "type", "name_hash", "encrypted_value", "txid", "owner_id", "backup_owner_id", "update_height", NULL
+  FROM "mappings_old";
+DROP TABLE "mappings_old";
+CREATE UNIQUE INDEX "name_type_update" ON "mappings" ("name_hash", "type", "update_height" DESC);
+CREATE INDEX "owner_id_index" ON mappings("owner_id");
+CREATE INDEX "backup_owner_id_index" ON mappings("backup_owner_index");
+COMMIT TRANSACTION;
+)";
+
+    int migrated = sqlite3_exec(lns_db.db, BUILD_TABLE_SQL.c_str(), nullptr /*callback*/, nullptr /*callback context*/, &table_err_msg);
+    if (migrated != SQLITE_OK)
+    {
+      MERROR("Can not migrate SQL mappings table for LNS: " << (table_err_msg ? table_err_msg : "??"));
+      sqlite3_free(table_err_msg);
+      return false;
+    }
+  }
+
   // Updates to add columns; we ignore errors on these since they will fail if the column already
   // exists
   for (const auto& upgrade : {
-    R"(ALTER TABLE "mappings" ADD COLUMN "update_height" INTEGER NOT NULL DEFAULT "register_height")",
-    R"(ALTER TABLE "mappings" ADD COLUMN "expiration_height" INTEGER)",
+    R"(ALTER TABLE "settings" ADD COLUMN "pruned_height" INTEGER NOT NULL DEFAULT 0)",
   }) {
-    sqlite3_exec(db, upgrade, nullptr /*callback*/, nullptr /*callback ctx*/, nullptr /*errstr*/);
+    sqlite3_exec(lns_db.db, upgrade, nullptr /*callback*/, nullptr /*callback ctx*/, nullptr /*errstr*/);
   }
+
 
   return true;
 }
 
-static std::string sql_cmd_combine_mappings_and_owner_table(char const *suffix = nullptr)
-{
-  std::stringstream stream;
-  stream <<
-R"(SELECT "mappings".*, "o1"."address", "o2"."address" FROM "mappings"
-JOIN "owner" "o1" ON "mappings"."owner_id" = "o1"."id"
-LEFT JOIN "owner" "o2" ON "mappings"."backup_owner_id" = "o2"."id")" << "\n";
-
-  if (suffix)
-    stream << suffix;
-  return stream.str();
-}
+const std::string sql_select_mappings_and_owners_prefix = R"(
+SELECT "mappings".*, "o1"."address", "o2"."address", MAX("update_height")
+FROM "mappings"
+  JOIN "owner" "o1" ON "mappings"."owner_id" = "o1"."id"
+  LEFT JOIN "owner" "o2" ON "mappings"."backup_owner_id" = "o2"."id"
+)"s;
+const std::string sql_select_mappings_and_owners_suffix = R"( GROUP BY "name_hash", "type")";
 
 struct scoped_db_transaction
 {
@@ -1590,35 +1628,46 @@ scoped_db_transaction::~scoped_db_transaction()
 }
 
 
-enum struct db_version { v0, v1_track_updates };
-auto constexpr DB_VERSION = db_version::v1_track_updates;
+enum struct db_version { v0, v1_track_updates, v2_full_rows };
+auto constexpr DB_VERSION = db_version::v2_full_rows;
+
+constexpr auto EXPIRATION = R"( ("expiration_height" IS NULL OR "expiration_height" >= ?) )"sv;
+
+} // anon. namespace
+
 bool name_system_db::init(cryptonote::Blockchain const *blockchain, cryptonote::network_type nettype, sqlite3 *db)
 {
   if (!db) return false;
   this->db      = db;
   this->nettype = nettype;
 
-  std::string const get_mappings_by_owner_str            = sql_cmd_combine_mappings_and_owner_table(R"(WHERE ? IN ("o1"."address", "o2"."address"))");
-  std::string const get_mappings_on_height_and_newer_str = sql_cmd_combine_mappings_and_owner_table(R"(WHERE "update_height" >= ?)");
-  std::string const get_mapping_str                      = sql_cmd_combine_mappings_and_owner_table(R"(WHERE "type" = ? AND "name_hash" = ?)");
+  std::string const get_mappings_by_owner_str = sql_select_mappings_and_owners_prefix
+    + R"(WHERE ? IN ("o1"."address", "o2"."address"))"
+    + sql_select_mappings_and_owners_suffix;
+  std::string const get_mapping_str           = sql_select_mappings_and_owners_prefix
+    + R"(WHERE "type" = ? AND "name_hash" = ?)"
+    + sql_select_mappings_and_owners_suffix;
 
-  auto constexpr RESOLVE_STR = R"(SELECT "encrypted_value" FROM "mappings" WHERE "type" = ? AND "name_hash" = ? AND ("expiration_height" IS NULL OR "expiration_height" >= ?))";
+  std::string const RESOLVE_STR =
+R"(SELECT "encrypted_value", MAX("update_height")
+FROM "mappings"
+WHERE "type" = ? AND "name_hash" = ? AND)" + std::string{EXPIRATION};
 
-  char constexpr GET_SETTINGS_STR[]     = R"(SELECT * FROM "settings" WHERE "id" = 1)";
-  char constexpr GET_OWNER_BY_ID_STR[]  = R"(SELECT * FROM "owner" WHERE "id" = ?)";
-  char constexpr GET_OWNER_BY_KEY_STR[] = R"(SELECT * FROM "owner" WHERE "address" = ?)";
-  char constexpr PRUNE_MAPPINGS_STR[]   = R"(DELETE FROM "mappings" WHERE "update_height" >= ?)";
+  constexpr auto GET_SETTINGS_STR     = R"(SELECT * FROM "settings" WHERE "id" = 1)"sv;
+  constexpr auto GET_OWNER_BY_ID_STR  = R"(SELECT * FROM "owner" WHERE "id" = ?)"sv;
+  constexpr auto GET_OWNER_BY_KEY_STR = R"(SELECT * FROM "owner" WHERE "address" = ?)"sv;
+  constexpr auto PRUNE_MAPPINGS_STR   = R"(DELETE FROM "mappings" WHERE "update_height" >= ?)"sv;
 
-  char constexpr PRUNE_OWNERS_STR[] =
+  constexpr auto PRUNE_OWNERS_STR =
 R"(DELETE FROM "owner"
 WHERE NOT EXISTS (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."owner_id")
-AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."backup_owner_id"))";
+AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."backup_owner_id"))"sv;
 
-  char constexpr SAVE_MAPPING_STR[]  = R"(INSERT OR REPLACE INTO "mappings" ("type", "name_hash", "encrypted_value", "txid", "prev_txid", "register_height", "owner_id", "backup_owner_id", "update_height", "expiration_height") VALUES (?,?,?,?,?,?,?,?,?,?))";
-  char constexpr SAVE_OWNER_STR[]    = R"(INSERT INTO "owner" ("address") VALUES (?))";
-  char constexpr SAVE_SETTINGS_STR[] = R"(INSERT OR REPLACE INTO "settings" ("id", "top_height", "top_hash", "version") VALUES (1,?,?,?))";
+  constexpr auto SAVE_MAPPING_STR  = R"(INSERT INTO "mappings" ("type", "name_hash", "encrypted_value", "txid", "owner_id", "backup_owner_id", "update_height", "expiration_height") VALUES (?,?,?,?,?,?,?,?))"sv;
+  constexpr auto SAVE_OWNER_STR    = R"(INSERT INTO "owner" ("address") VALUES (?))"sv;
+  constexpr auto SAVE_SETTINGS_STR = R"(INSERT OR REPLACE INTO "settings" ("id", "top_height", "top_hash", "version") VALUES (1,?,?,?))"sv;
 
-  if (!build_default_tables(db))
+  if (!build_default_tables(*this))
     return false;
 
   if (!get_settings_sql.compile(GET_SETTINGS_STR) ||
@@ -1650,15 +1699,16 @@ AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."back
         return false;
       }
 
-      if (settings.version == static_cast<decltype(settings.version)>(db_version::v0))
+      scoped_db_transaction db_transaction(*this);
+      if (!db_transaction) return false;
+
+      if (settings.version < static_cast<decltype(settings.version)>(db_version::v1_track_updates))
       {
-        scoped_db_transaction db_transaction(*this);
-        if (!db_transaction) return false;
 
         std::vector<mapping_record> all_mappings = {};
         {
           sql_compiled_statement st{*this};
-          if (!st.compile(sql_cmd_combine_mappings_and_owner_table()))
+          if (!st.compile(sql_select_mappings_and_owners_prefix + sql_select_mappings_and_owners_suffix))
             return false;
           sql_run_statement(lns_sql_type::get_mappings, st, &all_mappings);
         }
@@ -1668,9 +1718,9 @@ AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."back
         for (mapping_record const &record: all_mappings)
             hashes.push_back(record.txid);
 
-        char constexpr UPDATE_MAPPING_HEIGHT[] = R"(UPDATE "mappings" SET "update_height" = ? WHERE "id" = ?)";
+        constexpr auto UPDATE_MAPPING_HEIGHT = R"(UPDATE "mappings" SET "update_height" = ? WHERE "id" = ?)"sv;
         sql_compiled_statement update_mapping_height{*this};
-        if (!update_mapping_height.compile(UPDATE_MAPPING_HEIGHT))
+        if (!update_mapping_height.compile(UPDATE_MAPPING_HEIGHT, false))
           return false;
 
         std::vector<uint64_t> heights = blockchain->get_transactions_heights(hashes);
@@ -1680,10 +1730,20 @@ AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."back
           bind_and_run(lns_sql_type::internal_cmd, update_mapping_height, nullptr,
               heights[i], all_mappings[i].id);
         }
-
-        save_settings(settings.top_height, settings.top_hash, static_cast<int>(db_version::v1_track_updates));
-        db_transaction.commit = true;
       }
+
+      if (settings.version < static_cast<decltype(settings.version)>(db_version::v2_full_rows))
+      {
+        sql_compiled_statement prune_height{*this};
+        if (!prune_height.compile(R"(UPDATE "settings" SET "pruned_height" = (SELECT MAX("update_height") FROM "mappings"))", false))
+          return false;
+
+        if (step(prune_height) != SQLITE_DONE)
+          return false;
+      }
+
+      save_settings(settings.top_height, settings.top_hash, static_cast<int>(db_version::v2_full_rows));
+      db_transaction.commit = true;
     }
   }
 
@@ -1693,7 +1753,6 @@ AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."back
   //
   // ---------------------------------------------------------------------------
   if (!get_mappings_by_owner_sql.compile(get_mappings_by_owner_str) ||
-      !get_mappings_on_height_and_newer_sql.compile(get_mappings_on_height_and_newer_str) ||
       !get_mapping_sql.compile(get_mapping_str) ||
       !resolve_sql.compile(RESOLVE_STR) ||
       !get_owner_by_id_sql.compile(GET_OWNER_BY_ID_STR) ||
@@ -1747,9 +1806,14 @@ AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."back
     }
     else
     {
+      // Otherwise we've got something unrecoverable: a top_hash + top_height that are different
+      // from what we have in the blockchain, which means the lns db and blockchain are out of sync.
+      // This likely means something external changed the lmdb and/or the lns.db, and we can't
+      // recover from it: so just drop and recreate the tables completely and rescan from scratch.
+
       char constexpr DROP_TABLE_SQL[] = R"(DROP TABLE IF EXISTS "owner"; DROP TABLE IF EXISTS "settings"; DROP TABLE IF EXISTS "mappings")";
       sqlite3_exec(db, DROP_TABLE_SQL, nullptr /*callback*/, nullptr /*callback context*/, nullptr);
-      if (!build_default_tables(db)) return false;
+      if (!build_default_tables(*this)) return false;
     }
   }
 
@@ -1771,7 +1835,9 @@ name_system_db::~name_system_db()
   sqlite3_close_v2(db);
 }
 
-static std::optional<int64_t> add_or_get_owner_id(lns::name_system_db &lns_db, crypto::hash const &tx_hash, cryptonote::tx_extra_loki_name_system const &entry, lns::generic_owner const &key)
+namespace {
+
+std::optional<int64_t> add_or_get_owner_id(lns::name_system_db &lns_db, crypto::hash const &tx_hash, cryptonote::tx_extra_loki_name_system const &entry, lns::generic_owner const &key)
 {
   int64_t result = 0;
   if (owner_record owner = lns_db.get_owner_by_key(key)) result = owner.id;
@@ -1788,7 +1854,86 @@ static std::optional<int64_t> add_or_get_owner_id(lns::name_system_db &lns_db, c
   return result;
 }
 
-static bool add_lns_entry(lns::name_system_db &lns_db, uint64_t height, cryptonote::tx_extra_loki_name_system const &entry, crypto::hash const &tx_hash)
+// Build a query and bind values that will create a new row at the given height by copying the
+// current highest-height row values and/or updating the given update fields.
+using update_variant = std::variant<uint16_t, int64_t, uint64_t, blob_view, std::string>;
+std::pair<std::string, std::vector<update_variant>> update_record_query(name_system_db& lns_db, uint64_t height, const cryptonote::tx_extra_loki_name_system& entry, const crypto::hash& tx_hash)
+{
+  assert(entry.is_updating() || entry.is_renewing());
+
+  std::pair<std::string, std::vector<update_variant>> result;
+  auto& [sql, bind] = result;
+
+  sql.reserve(500);
+  sql += R"(
+INSERT INTO "mappings" ("type", "name_hash", "txid", "update_height", "expiration_height", "owner_id", "backup_owner_id", "encrypted_value")
+SELECT                  "type", "name_hash", ?,      ?)";
+
+  bind.emplace_back(blob_view{tx_hash.data, sizeof(tx_hash)});
+  bind.emplace_back(height);
+
+  constexpr auto suffix = R"(
+FROM "mappings" WHERE "type" = ? AND "name_hash" = ? ORDER BY "update_height" DESC LIMIT 1)"sv;
+
+  if (entry.is_renewing())
+  {
+    sql += R"(, "expiration_height" + ?, "owner_id", "backup_owner_id", "encrypted_value")";
+    bind.emplace_back(expiry_blocks(lns_db.network_type(), entry.type).value_or(0));
+  }
+  else
+  {
+    // Updating
+
+    sql += R"(, "expiration_height")";
+
+    if (entry.field_is_set(lns::extra_field::owner))
+    {
+      auto opt_id = add_or_get_owner_id(lns_db, tx_hash, entry, entry.owner);
+      if (!opt_id)
+      {
+        MERROR("Failed to add or get owner with key=" << entry.owner.to_string(lns_db.network_type()));
+        assert(opt_id);
+        return {};
+      }
+      sql += ", ?";
+      bind.emplace_back(*opt_id);
+    }
+    else
+      sql += R"(, "owner_id")";
+
+    if (entry.field_is_set(lns::extra_field::backup_owner))
+    {
+      auto opt_id = add_or_get_owner_id(lns_db, tx_hash, entry, entry.backup_owner);
+      if (!opt_id)
+      {
+        MERROR("Failed to add or get backup owner with key=" << entry.backup_owner.to_string(lns_db.network_type()));
+        assert(opt_id);
+        return {};
+      }
+
+      sql += ", ?";
+      bind.emplace_back(*opt_id);
+    }
+    else
+      sql += R"(, "backup_owner_id")";
+
+    if (entry.field_is_set(lns::extra_field::encrypted_value))
+    {
+      sql += ", ?";
+      bind.emplace_back(blob_view{entry.encrypted_value});
+    }
+    else
+      sql += R"(, "encrypted_value")";
+  }
+
+  sql += suffix;
+  bind.emplace_back(db_mapping_type(entry.type));
+  bind.emplace_back(hash_to_base64(entry.name_hash));
+
+  return result;
+}
+
+bool add_lns_entry(lns::name_system_db &lns_db, uint64_t height, cryptonote::tx_extra_loki_name_system const &entry, crypto::hash const &tx_hash)
 {
   // -----------------------------------------------------------------------------------------------
   // New Mapping Insert or Completely Replace
@@ -1824,75 +1969,14 @@ static bool add_lns_entry(lns::name_system_db &lns_db, uint64_t height, cryptono
     }
   }
   // -----------------------------------------------------------------------------------------------
-  // Update mapping or renewal: do a SQL command of the type
-  // UPDATE "mappings" SET <field> = entry.<field>, ...  WHERE type = entry.type AND name_hash = name_hash_base64
+  // Update mapping or renewal: create a new row copies and updated from the existing top row
   // -----------------------------------------------------------------------------------------------
   else
   {
-    assert(entry.is_updating() || entry.is_renewing());
+    auto [sql, bind] = update_record_query(lns_db, height, entry, tx_hash);
 
-    // Generate the SQL command
-    std::string sql;
-    sql.reserve(255);
-    int64_t owner_id        = 0;
-    int64_t backup_owner_id = 0;
-
-    using update_variant = std::variant<uint16_t, int64_t, uint64_t, blob_view, std::string>;
-    std::vector<update_variant> bind;
-    {
-      sql += R"(UPDATE "mappings" SET "prev_txid" = ?, "txid" = ?, "update_height" = ?)";
-      bind.emplace_back(blob_view{entry.prev_txid.data, sizeof(entry.prev_txid)});
-      bind.emplace_back(blob_view{tx_hash.data, sizeof(tx_hash)});
-      bind.emplace_back(height);
-
-      if (entry.is_renewing())
-      {
-        auto blocks = expiry_blocks(lns_db.network_type(), entry.type);
-        assert(blocks);
-        sql += R"(, "expiration_height" = "expiration_height" + ?)";
-        bind.emplace_back(blocks.value_or(0));
-      }
-      else
-      {
-        if (entry.field_is_set(lns::extra_field::owner))
-        {
-          auto opt_id = add_or_get_owner_id(lns_db, tx_hash, entry, entry.owner);
-          if (!opt_id)
-          {
-            MERROR("Failed to add or get owner with key=" << entry.owner.to_string(lns_db.network_type()));
-            assert(opt_id);
-            return false;
-          }
-
-          sql += R"(, "owner_id" = ?)";
-          bind.emplace_back(*opt_id);
-        }
-
-        if (entry.field_is_set(lns::extra_field::backup_owner))
-        {
-          auto opt_id = add_or_get_owner_id(lns_db, tx_hash, entry, entry.backup_owner);
-          if (!opt_id)
-          {
-            MERROR("Failed to add or get backup owner with key=" << entry.backup_owner.to_string(lns_db.network_type()));
-            assert(opt_id);
-            return false;
-          }
-
-          sql += R"(, "backup_owner_id" = ?)";
-          bind.emplace_back(*opt_id);
-        }
-
-        if (entry.field_is_set(lns::extra_field::encrypted_value))
-        {
-          sql += R"(, "encrypted_value" = ?)";
-          bind.emplace_back(blob_view{entry.encrypted_value});
-        }
-      }
-
-      sql += R"( WHERE "type" = ? AND "name_hash" = ?)";
-      bind.emplace_back(db_mapping_type(entry.type));
-      bind.emplace_back(hash_to_base64(entry.name_hash));
-    }
+    if (sql.empty())
+      return false; // already MERROR'd
 
     // Compile sql statement
     sql_compiled_statement statement{lns_db};
@@ -1911,6 +1995,8 @@ static bool add_lns_entry(lns::name_system_db &lns_db, uint64_t height, cryptono
 
   return true;
 }
+
+} // anon namespace
 
 bool name_system_db::add_block(const cryptonote::block &block, const std::vector<cryptonote::transaction> &txs)
 {
@@ -1957,17 +2043,6 @@ bool name_system_db::add_block(const cryptonote::block &block, const std::vector
   return true;
 }
 
-static bool get_txid_lns_entry(cryptonote::Blockchain const &blockchain, crypto::hash txid, cryptonote::tx_extra_loki_name_system &extra)
-{
-  if (txid == crypto::null_hash) return false;
-  std::vector<cryptonote::transaction> txs;
-  std::vector<crypto::hash> missed_txs;
-  if (!blockchain.get_transactions({txid}, txs, missed_txs) || txs.empty())
-    return false;
-
-  return cryptonote::get_field_from_tx_extra(txs[0].extra, extra);
-}
-
 struct lns_update_history
 {
   uint64_t value_last_update_height        = static_cast<uint64_t>(-1);
@@ -2003,108 +2078,9 @@ struct replay_lns_tx
   cryptonote::tx_extra_loki_name_system entry;
 };
 
-// Returns LNS txes we need to re-run to restore the proper value, and an optional amount of expiry
-// blocks we need to subtract from the current expiry height.
-static std::pair<std::vector<replay_lns_tx>, std::optional<uint64_t>> find_lns_txs_to_replay(cryptonote::Blockchain const &blockchain, lns::mapping_record const &mapping, uint64_t blockchain_height)
-{
-  /*
-     Detach Logic
-     -----------------------------------------------------------------------------------------------
-     LNS Buy    @ Height 100: LNS Record={field1=a1, field2=b1, field3=c1,expiry=1000}
-     LNS Update @ Height 200: LNS Record={field1=a2                                  }
-     LNS Update @ Height 300: LNS Record={           field2=b2                       }
-     LNS Buy    @ Height 350: LNS Record={                                expiry=2000} // 1000-block renewal
-     LNS Update @ Height 400: LNS Record={                      field3=c2            }
-     LNS Update @ Height 500: LNS Record={field1=a3, field2=b3, field3=c3            }
-     LNS Buy    @ Height 550: LNS Record={                                expiry=3000} // 1000-block renewal
-     LNS Update @ Height 600: LNS Record={                      field3=c4            }
-
-     Blockchain detaches to height 401, the target LNS record now looks like
-                                         {field1=a2, field2=b2, field3=c2,expiry=1000}
-
-     Our current LNS record looks like
-                                         {field1=a3, field2=b3, field3=c4,expiry=2000}
-
-     To get all the fields back, we can't just replay the latest LNS update
-     transactions in reverse chronological order back to the detach height,
-     otherwise we miss the update to field1=a2 and field2=b2.
-
-     To rebuild our LNS record, we need to iterate back until we find all the
-     TX's that updated the LNS field(s) until all fields have been reverted to
-     a state representative of pre-detach height.
-
-     i.e. Go back to the closest LNS record to the detach height, at height 300.
-     Next, iterate back until all LNS fields have been touched at a point in
-     time before the detach height (i.e. height 200 with field=a2). Replay the
-     transactions.
-
-     For renewals (such as the one at height 550) the task is easier: when we
-     find a renewal for x blocks >= the detach height we can simply subtract the
-     renewal size (e.g. 1 year of blocks) from the expiry height but we must
-     take care to *not* subtract the renewal value from height 350 (since that
-     isn't being reversed).
-  */
-
-  std::pair<std::vector<replay_lns_tx>, std::optional<uint64_t>> result;
-  auto& [replay_txs, expiry_subtract] = result;
-  lns_update_history update_history = {};
-  for (crypto::hash curr_txid = mapping.prev_txid;
-       update_history.newest_update_height() >= blockchain_height;
-      )
-  {
-    cryptonote::tx_extra_loki_name_system curr_lns_extra = {};
-    if (!get_txid_lns_entry(blockchain, curr_txid, curr_lns_extra))
-    {
-      if (curr_txid != crypto::null_hash)
-        MERROR("Unexpected error querying TXID=" << curr_txid << ", from DB for LNS");
-      return result;
-    }
-
-    std::vector<uint64_t> curr_heights = blockchain.get_transactions_heights({curr_txid});
-    if (curr_heights.empty())
-    {
-      MERROR("Unexpected error querying TXID=" << curr_txid << ", height from DB for LNS");
-      return result;
-    }
-
-    if (curr_heights[0] < blockchain_height)
-      replay_txs.push_back({curr_heights[0], curr_txid, curr_lns_extra});
-    else if (curr_lns_extra.is_buying() && is_lokinet_type(curr_lns_extra.type) && curr_lns_extra.prev_txid)
-    {
-      // A buy with a prev_txid means it was a renewal, and height >= new_height so we're popping this renewal off
-      auto exp_blocks = expiry_blocks(blockchain.nettype(), curr_lns_extra.type);
-      assert(exp_blocks);
-      if (!expiry_subtract) expiry_subtract = 0;
-      *expiry_subtract += *exp_blocks;
-    }
-
-    update_history.update(curr_heights[0], curr_lns_extra);
-    curr_txid = curr_lns_extra.prev_txid;
-  }
-
-  return result;
-}
-
 void name_system_db::block_detach(cryptonote::Blockchain const &blockchain, uint64_t new_blockchain_height)
 {
-  std::vector<mapping_record> new_mappings = {};
-  bind_and_run(lns_sql_type::get_mappings_on_height_and_newer, get_mappings_on_height_and_newer_sql, &new_mappings,
-      new_blockchain_height);
-
-  std::vector<replay_lns_tx> txs_to_replay;
-  for (auto const &mapping : new_mappings)
-  {
-    auto [replay_txs, subtract_expiry] = find_lns_txs_to_replay(blockchain, mapping, new_blockchain_height);
-    txs_to_replay.insert(txs_to_replay.end(), replay_txs.begin(), replay_txs.end());
-
-  }
-
   prune_db(new_blockchain_height);
-  for (auto it = txs_to_replay.rbegin(); it != txs_to_replay.rend(); it++)
-  {
-    if (!add_lns_entry(*this, it->height, it->entry, it->tx_hash))
-      MERROR("Unexpected failure to add historical LNS into the DB on reorganization from tx=" << it->tx_hash);
-  }
 }
 
 bool name_system_db::save_owner(lns::generic_owner const &owner, int64_t *row_id)
@@ -2128,8 +2104,6 @@ bool name_system_db::save_mapping(crypto::hash const &tx_hash, cryptonote::tx_ex
   bind(statement, mapping_record_column::name_hash, name_hash);
   bind(statement, mapping_record_column::encrypted_value, blob_view{src.encrypted_value});
   bind(statement, mapping_record_column::txid, blob_view{tx_hash.data, sizeof(tx_hash)});
-  bind(statement, mapping_record_column::prev_txid, blob_view{src.prev_txid.data, sizeof(src.prev_txid)});
-  bind(statement, mapping_record_column::register_height, height);
   bind(statement, mapping_record_column::update_height, height);
   bind(statement, mapping_record_column::expiration_height, expiration);
   bind(statement, mapping_record_column::owner_id, owner_id);
@@ -2212,13 +2186,17 @@ std::vector<mapping_record> name_system_db::get_mappings(std::vector<mapping_typ
     return result;
 
   std::string sql_statement;
-  sql_statement.reserve(185 + 3 * types.size());
   std::vector<std::variant<uint16_t, uint64_t, std::string_view>> bind;
+  sql_statement.reserve(sql_select_mappings_and_owners_prefix.size() + EXPIRATION.size() + 70
+      + sql_select_mappings_and_owners_suffix.size());
+  sql_statement += sql_select_mappings_and_owners_prefix;
+  sql_statement += R"(WHERE "name_hash" = ?)";
+  bind.emplace_back(name_base64_hash);
+
   // Generate string statement
   if (types.size())
   {
-    sql_statement += sql_cmd_combine_mappings_and_owner_table(R"(WHERE "name_hash" = ? AND "type" IN ()");
-    bind.emplace_back(name_base64_hash);
+    sql_statement += R"( AND "type" IN ()";
 
     for (size_t i = 0; i < types.size(); i++)
     {
@@ -2227,17 +2205,15 @@ std::vector<mapping_record> name_system_db::get_mappings(std::vector<mapping_typ
     }
     sql_statement += ")";
   }
-  else
-  {
-    sql_statement = R"(SELECT * FROM "mappings" JOIN "owner" ON "mappings"."owner_id" = "owner"."id" WHERE "name_hash" = ?)";
-    bind.emplace_back(name_base64_hash);
-  }
 
   if (blockchain_height)
   {
-    sql_statement += R"( AND ("expiration_height" IS NULL OR "expiration_height" >= ?))";
+    sql_statement += " AND ";
+    sql_statement += EXPIRATION;
     bind.emplace_back(*blockchain_height);
   }
+
+  sql_statement += sql_select_mappings_and_owners_suffix;
 
   // Compile Statement
   sql_compiled_statement statement{*this};
@@ -2257,9 +2233,9 @@ std::vector<mapping_record> name_system_db::get_mappings_by_owners(std::vector<g
   std::vector<std::variant<blob_view, uint64_t>> bind;
   // Generate string statement
   {
-    std::string const sql_prefix_str = sql_cmd_combine_mappings_and_owner_table(R"(WHERE "o1"."address" IN ()");
-    char constexpr SQL_MIDDLE[]  = R"() OR "o2"."address" IN ()";
-    char constexpr SQL_SUFFIX[]  = R"())";
+    constexpr auto SQL_WHERE_OWNER = R"(WHERE "o1"."address" IN ()"sv;
+    constexpr auto SQL_OR_BACKUP_OWNER  = R"() OR "o2"."address" IN ()"sv;
+    constexpr auto SQL_SUFFIX  = ")"sv;
 
     std::string placeholders;
     placeholders.reserve(3*owners.size());
@@ -2268,9 +2244,14 @@ std::vector<mapping_record> name_system_db::get_mappings_by_owners(std::vector<g
     if (owners.size() > 0)
       placeholders.resize(placeholders.size() - 2);
 
-    std::ostringstream stream;
-    stream << sql_prefix_str << placeholders << SQL_MIDDLE << placeholders << SQL_SUFFIX;
-    sql_statement = stream.str();
+    sql_statement.reserve(sql_select_mappings_and_owners_prefix.size() + SQL_WHERE_OWNER.size() + SQL_OR_BACKUP_OWNER.size()
+        + SQL_SUFFIX.size() + 2*placeholders.size() + 5 + EXPIRATION.size() + sql_select_mappings_and_owners_suffix.size());
+    sql_statement += sql_select_mappings_and_owners_prefix;
+    sql_statement += SQL_WHERE_OWNER;
+    sql_statement += placeholders;
+    sql_statement += SQL_OR_BACKUP_OWNER;
+    sql_statement += placeholders;
+    sql_statement += SQL_SUFFIX;
 
     for (int i : {0, 1})
       for (auto const &owner : owners)
@@ -2279,9 +2260,12 @@ std::vector<mapping_record> name_system_db::get_mappings_by_owners(std::vector<g
 
   if (blockchain_height)
   {
-    sql_statement += R"( AND ("expiration_height" IS NULL OR "expiration_height" >= ?))";
+    sql_statement += " AND ";
+    sql_statement += EXPIRATION;
     bind.emplace_back(*blockchain_height);
   }
+
+  sql_statement += sql_select_mappings_and_owners_suffix;
 
   // Compile Statement
   std::vector<mapping_record> result;
@@ -2315,4 +2299,5 @@ settings_record name_system_db::get_settings()
   result.loaded           = sql_run_statement(lns_sql_type::get_setting, get_settings_sql, &result);
   return result;
 }
-}; // namespace service_nodes
+
+} // namespace lns
