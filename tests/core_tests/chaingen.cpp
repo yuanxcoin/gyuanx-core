@@ -38,6 +38,7 @@
 #include <sstream>
 #include <fstream>
 
+#include "common/string_util.h"
 #include "console_handler.h"
 #include "common/rules.h"
 
@@ -580,14 +581,15 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx(crypton
   uint8_t new_hf_version        = get_hf_version_at(new_height);
   uint64_t burn = burn_override.value_or(lns::burn_needed(new_hf_version, type));
 
-  crypto::hash name_hash       = lns::name_to_hash(name);
-  std::string name_base64_hash = lns::name_to_base64_hash(name);
+  auto lcname = tools::lowercase_ascii_string(name);
+  crypto::hash name_hash       = lns::name_to_hash(lcname);
+  std::string name_base64_hash = lns::name_to_base64_hash(lcname);
   crypto::hash prev_txid = crypto::null_hash;
   if (lns::mapping_record mapping = lns_db_->get_mapping(type, name_base64_hash, new_height))
     prev_txid = mapping.txid;
 
   lns::mapping_value encrypted_value = value;
-  bool encrypted = encrypted_value.encrypt(name, &name_hash, hf_version <= cryptonote::network_version_15_lns);
+  bool encrypted = encrypted_value.encrypt(lcname, &name_hash, hf_version <= cryptonote::network_version_15_lns);
   assert(encrypted);
 
   std::vector<uint8_t> extra;
@@ -614,10 +616,11 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx_update(
                                                                                 lns::generic_signature *signature,
                                                                                 bool use_asserts) const
 {
-  crypto::hash name_hash = lns::name_to_hash(name);
+  auto lcname = tools::lowercase_ascii_string(name);
+  crypto::hash name_hash = lns::name_to_hash(lcname);
   crypto::hash prev_txid = {};
   {
-    std::string name_base64_hash = lns::name_to_base64_hash(name);
+    std::string name_base64_hash = lns::name_to_base64_hash(lcname);
     lns::mapping_record mapping  = lns_db_->get_mapping(type, name_base64_hash);
     if (use_asserts) assert(mapping);
     prev_txid = mapping.txid;
@@ -630,7 +633,7 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx_update(
     if (!encrypted_value.encrypted)
     {
       assert(!signature); // Can't specify a signature with an unencrypted value because encrypting generates a new nonce and would invalidate it
-      bool encrypted = encrypted_value.encrypt(name, &name_hash, hf_version <= cryptonote::network_version_15_lns);
+      bool encrypted = encrypted_value.encrypt(lcname, &name_hash, hf_version <= cryptonote::network_version_15_lns);
       if (use_asserts) assert(encrypted);
     }
   }
@@ -686,10 +689,11 @@ cryptonote::transaction loki_chain_generator::create_loki_name_system_tx_renew(c
                                                                                std::string const &name,
                                                                                std::optional<uint64_t> burn_override) const
 {
-  crypto::hash name_hash = lns::name_to_hash(name);
+  auto lcname = tools::lowercase_ascii_string(name);
+  crypto::hash name_hash = lns::name_to_hash(lcname);
   crypto::hash prev_txid = {};
   {
-    std::string name_base64_hash = lns::name_to_base64_hash(name);
+    std::string name_base64_hash = lns::name_to_base64_hash(lcname);
     lns::mapping_record mapping  = lns_db_->get_mapping(type, name_base64_hash);
     prev_txid = mapping.txid;
   }

@@ -29,6 +29,8 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "loki_tests.h"
+#include "common/string_util.h"
+#include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_config.h"
 #include "cryptonote_core/loki_name_system.h"
 #include "cryptonote_core/service_node_list.h"
@@ -1065,9 +1067,10 @@ static bool verify_lns_mapping_record(char const *perr_context,
 {
   CHECK_EQ(record.loaded,          true);
   CHECK_EQ(record.type,            type);
-  CHECK_EQ(record.name_hash,       lns::name_to_base64_hash(name));
+  auto lcname = tools::lowercase_ascii_string(name);
+  CHECK_EQ(record.name_hash,       lns::name_to_base64_hash(lcname));
   lns::mapping_value decrypted{record.encrypted_value};
-  CHECK_EQ(decrypted.decrypt(name, type), true);
+  CHECK_EQ(decrypted.decrypt(lcname, type), true);
   CHECK_EQ(decrypted, value);
   CHECK_EQ(record.update_height,   update_height);
   CHECK_EQ(record.expiration_height.has_value(), expiration_height.has_value());
@@ -1422,7 +1425,7 @@ bool loki_name_system_get_mappings::generate(std::vector<test_event_entry> &even
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_lns_entries");
     lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
-    std::string session_name_hash = lns::name_to_base64_hash(session_name1);
+    std::string session_name_hash = lns::name_to_base64_hash(tools::lowercase_ascii_string(session_name1));
     std::vector<lns::mapping_record> records = lns_db.get_mappings({lns::mapping_type::session}, session_name_hash);
     CHECK_EQ(records.size(), 1);
     CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, bob_key.session_value, session_height, std::nullopt, session_tx_hash, bob_key.owner, {} /*backup_owner*/));
@@ -2006,7 +2009,7 @@ bool loki_name_system_name_value_max_lengths::generate(std::vector<test_event_en
   // Wallet
   if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::wallet))
   {
-    std::string name(lns::WALLET_NAME_MAX, 'A');
+    std::string name(lns::WALLET_NAME_MAX, 'a');
     data.type            = lns::mapping_type::wallet;
     data.name_hash       = lns::name_to_hash(name);
     data.encrypted_value = miner_key.wallet_value.make_encrypted(name).to_string();
@@ -2016,7 +2019,7 @@ bool loki_name_system_name_value_max_lengths::generate(std::vector<test_event_en
   // Lokinet
   if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet))
   {
-    std::string name(lns::LOKINET_DOMAIN_NAME_MAX, 'A');
+    std::string name(lns::LOKINET_DOMAIN_NAME_MAX, 'a');
     name.replace(name.size() - 6, 5, ".loki");
 
     data.type            = lns::mapping_type::lokinet;
@@ -2027,7 +2030,7 @@ bool loki_name_system_name_value_max_lengths::generate(std::vector<test_event_en
 
   // Session
   {
-    std::string name(lns::SESSION_DISPLAY_NAME_MAX, 'A');
+    std::string name(lns::SESSION_DISPLAY_NAME_MAX, 'a');
     data.type            = lns::mapping_type::session;
     data.name_hash       = lns::name_to_hash(name);
     data.encrypted_value = miner_key.session_value.make_encrypted(name).to_string();
@@ -2104,7 +2107,7 @@ bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &ev
   lns_keys_t bob_key                 = make_lns_keys(bob);
 
   crypto::hash session_tx_hash1;
-  std::string session_name1 = "MyName";
+  std::string session_name1 = "myname";
   {
     cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name1, miner_key.session_value);
     session_tx_hash1 = cryptonote::get_transaction_hash(tx1);
@@ -2177,7 +2180,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     owner1.type = lns::generic_owner_sig_type::ed25519;
     owner2.type = lns::generic_owner_sig_type::ed25519;
 
-    std::string name      = "Hello_World";
+    std::string name      = "hello_world";
     std::string name_hash = lns::name_to_base64_hash(name);
     cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
@@ -2243,7 +2246,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     lns::generic_owner owner1         = lns::make_monero_owner(account1.get_keys().m_account_address, false /*subaddress*/);
     lns::generic_owner owner2         = lns::make_monero_owner(account2.get_keys().m_account_address, false /*subaddress*/);
 
-    std::string name            = "Hello_Sailor";
+    std::string name            = "hello_sailor";
     std::string name_hash = lns::name_to_base64_hash(name);
     cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
@@ -2304,7 +2307,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     crypto_sign_ed25519_keypair(owner1.ed25519.data, owner1_key.data);
     owner1.type = lns::generic_owner_sig_type::ed25519;
 
-    std::string name = "Hello_Driver";
+    std::string name = "hello_driver";
     std::string name_hash = lns::name_to_base64_hash(name);
     cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
@@ -2364,7 +2367,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     crypto_sign_ed25519_keypair(owner2.ed25519.data, owner2_key.data);
     owner2.type = lns::generic_owner_sig_type::ed25519;
 
-    std::string name = "Hello_Passenger";
+    std::string name = "hello_passenger";
     std::string name_hash = lns::name_to_base64_hash(name);
     cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
@@ -2427,7 +2430,7 @@ bool loki_name_system_update_mapping_non_existent_name_fails::generate(std::vect
 
   cryptonote::account_base miner = gen.first_miner_;
   lns_keys_t miner_key           = make_lns_keys(miner);
-  std::string name               = "Hello-World";
+  std::string name               = "hello-world";
   cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &miner_key.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, nullptr /*signature*/, false /*use_asserts*/);
   gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not add a updating LNS TX referencing a non-existent LNS entry");
   return true;
@@ -2443,7 +2446,7 @@ bool loki_name_system_update_mapping_invalid_signature::generate(std::vector<tes
   cryptonote::account_base miner = gen.first_miner_;
   lns_keys_t miner_key           = make_lns_keys(miner);
 
-  std::string const name = "Hello-World";
+  std::string const name = "hello-world";
   cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value);
   gen.create_and_add_next_block({tx1});
 
@@ -2467,7 +2470,7 @@ bool loki_name_system_update_mapping_replay::generate(std::vector<test_event_ent
   lns_keys_t bob_key             = make_lns_keys(gen.add_account());
   lns_keys_t alice_key           = make_lns_keys(gen.add_account());
 
-  std::string const name = "Hello-World";
+  std::string const name = "hello-world";
   // Make LNS Mapping
   {
     cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value);
@@ -2534,17 +2537,17 @@ bool loki_name_system_wrong_burn::generate(std::vector<test_event_entry> &events
         if (type == lns::mapping_type::session)
         {
           value = lns_keys.session_value;
-          name  = "My-Friendly-Session-Name";
+          name  = "my-friendly-session-name";
         }
         else if (type == lns::mapping_type::wallet)
         {
           value = lns_keys.wallet_value;
-          name = "My-Friendly-Wallet-Name";
+          name = "my-friendly-wallet-name";
         }
         else if (type == lns::mapping_type::lokinet)
         {
           value = lns_keys.lokinet_value;
-          name  = "MyFriendlyLokinetName.loki";
+          name  = "myfriendlylokinetname.loki";
         }
         else
             assert("Unhandled type enum" == nullptr);

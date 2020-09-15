@@ -61,6 +61,7 @@ struct mapping_value
   // basic overflow validation is attempted, values should be pre-validated in the validate*
   // functions.
   //
+  // name - the lower-case ascii string of the record
   // name_hash - pointer to a pre-computed name hash, if available.  If nullptr then the hash is
   //     computed as needed.
   // deprecated_heavy - if true use the deprecated argon2 hashing for the encryption key; this
@@ -76,7 +77,7 @@ struct mapping_value
   bool encrypt(std::string_view name, const crypto::hash* name_hash = nullptr, bool deprecated_heavy = false);
 
   // Decrypts the mapping value given the name and mapping type.  If the name hash is pre-computed
-  // it can be passed in.
+  // it can be passed in.  As with encrypt(), name must be already lower-case.
   //
   // Returns true if decryption was successful, after which *this will now contain the decrypted value.
   //
@@ -174,6 +175,7 @@ enum struct lns_tx_type { lookup, buy, update, renew };
 // mapping_type: (optional) if function returns true, the uint16_t value of the 'type' will be set
 bool         validate_mapping_type(std::string_view type, uint8_t hf_version, lns_tx_type txtype, mapping_type *mapping_type, std::string *reason);
 
+// Hashes an LNS name.  The name must already be lower-case (but this is only checked in debug builds).
 crypto::hash name_to_hash(std::string_view name, const std::optional<crypto::hash>& key = std::nullopt); // Takes a human readable name and hashes it.  Takes an optional value to use as a key to produce a keyed hash.
 std::string  name_to_base64_hash(std::string_view name); // Takes a human readable name, hashes it and returns a base64 representation of the hash, suitable for storage into the LNS DB.
 

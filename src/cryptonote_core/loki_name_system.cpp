@@ -1272,6 +1272,7 @@ bool validate_mapping_type(std::string_view mapping_type_str, uint8_t hf_version
 
 crypto::hash name_to_hash(std::string_view name, const std::optional<crypto::hash>& key)
 {
+  assert(std::none_of(name.begin(), name.end(), [](char c) { return std::isupper(c); }));
   crypto::hash result = {};
   static_assert(sizeof(result) >= crypto_generichash_BYTES, "Sodium can generate arbitrary length hashes, but recommend the minimum size for a secure hash must be >= crypto_generichash_BYTES");
   crypto_generichash_blake2b(reinterpret_cast<unsigned char *>(result.data),
@@ -1343,6 +1344,8 @@ bool mapping_value::encrypt(std::string_view name, const crypto::hash* name_hash
   assert(!encrypted);
   if (encrypted) return false;
 
+  assert(std::none_of(name.begin(), name.end(), [](char c) { return std::isupper(c); }));
+
   size_t const encryption_len = len + (deprecated_heavy
       ? crypto_secretbox_MACBYTES
       : crypto_aead_xchacha20poly1305_ietf_ABYTES + crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
@@ -1396,6 +1399,8 @@ bool mapping_value::decrypt(std::string_view name, mapping_type type, const cryp
 {
   assert(encrypted);
   if (!encrypted) return false;
+
+  assert(std::none_of(name.begin(), name.end(), [](char c) { return std::isupper(c); }));
 
   size_t dec_length;
   decltype(buffer) dec_buffer;
