@@ -94,12 +94,12 @@ private:
   size_t m_invalid_block_index;
 };
 
-struct gen_bp_tx_valid_1_before_clsag : public gen_bp_tx_validation_base
+struct gen_bp_tx_valid_1_old : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_bp_tx_invalid_1_from_clsag : public gen_bp_tx_validation_base
+struct gen_bp_tx_invalid_1_new : public gen_bp_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };

@@ -222,8 +222,8 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_48_1_no_signers);
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_48_1_23_no_threshold);
 
-    GENERATE_AND_PLAY(gen_bp_tx_valid_1_before_clsag);
-    GENERATE_AND_PLAY(gen_bp_tx_invalid_1_from_clsag);
+    GENERATE_AND_PLAY(gen_bp_tx_valid_1_old);
+    GENERATE_AND_PLAY(gen_bp_tx_invalid_1_new);
     GENERATE_AND_PLAY(gen_bp_tx_invalid_1_1);
     GENERATE_AND_PLAY(gen_bp_tx_valid_2);
     GENERATE_AND_PLAY(gen_bp_tx_valid_3);

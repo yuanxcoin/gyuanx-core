@@ -336,20 +336,24 @@ bool gen_bp_tx_validation_base::check_bp(const cryptonote::transaction &tx, size
 
 //  - 2018/10/29
 
-bool gen_bp_tx_valid_1_before_clsag::generate(std::vector<test_event_entry>& events) const
+bool gen_bp_tx_valid_1_old::generate(std::vector<test_event_entry>& events) const
 {
+  // Before HF_VERSION_MIN_2_OUTPUTS we allow a regular transfer tx with just one output (though the
+  // wallet never produces such a thing):
   const uint64_t amounts_paid[] = {MK_COINS(120), (uint64_t)-1};
   const size_t bp_sizes[] = {1, (size_t)-1};
   const rct::RCTConfig rct_config[] = { { rct::RangeProofPaddedBulletproof, 2 } };
-  return generate_with(events, 1, amounts_paid, true, rct_config, HF_VERSION_CLSAG-1, NULL, [&](const cryptonote::transaction &tx, size_t tx_idx){ return check_bp(tx, tx_idx, bp_sizes, "gen_bp_tx_valid_1_before_clsag"); });
+  return generate_with(events, 1, amounts_paid, true, rct_config, HF_VERSION_MIN_2_OUTPUTS-1, NULL, [&](const cryptonote::transaction &tx, size_t tx_idx){ return check_bp(tx, tx_idx, bp_sizes, "gen_bp_tx_valid_1_before_clsag"); });
 }
 
-bool gen_bp_tx_invalid_1_from_clsag::generate(std::vector<test_event_entry>& events) const
+bool gen_bp_tx_invalid_1_new::generate(std::vector<test_event_entry>& events) const
 {
+  // After HF_VERSION_MIN_2_OUTPUTS we don't allow just one output (except in LNS transactions, but
+  // that is tested elsewhere).
   const uint64_t amounts_paid[] = {10000, (uint64_t)-1};
   const size_t bp_sizes[] = {1, (size_t)-1};
   const rct::RCTConfig rct_config[] = { { rct::RangeProofPaddedBulletproof, 2 } };
-  return generate_with(events, 1, amounts_paid, false, rct_config, HF_VERSION_CLSAG, NULL, [&](const cryptonote::transaction &tx, size_t tx_idx){ return check_bp(tx, tx_idx, bp_sizes, "gen_bp_tx_invalid_1_from_clsag"); });
+  return generate_with(events, 1, amounts_paid, false, rct_config, HF_VERSION_MIN_2_OUTPUTS, NULL, [&](const cryptonote::transaction &tx, size_t tx_idx){ return check_bp(tx, tx_idx, bp_sizes, "gen_bp_tx_invalid_1_from_clsag"); });
 }
 
 bool gen_bp_tx_invalid_1_1::generate(std::vector<test_event_entry>& events) const
