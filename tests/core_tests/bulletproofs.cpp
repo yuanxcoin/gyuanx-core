@@ -43,7 +43,7 @@ using namespace cryptonote;
 bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& events,
     size_t n_txes, const uint64_t *amounts_paid, bool valid, const rct::RCTConfig *rct_config, uint8_t target_hf,
     const std::function<bool(std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations, size_t tx_idx)> &pre_tx,
-    const std::function<bool(transaction &tx, size_t tx_idx)> &post_tx) const
+    const std::function<bool(transaction &tx, size_t tx_idx)> &post_tx, size_t extra_blocks) const
 {
   uint64_t ts_start = 1338224400;
 
@@ -128,12 +128,12 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
     blk_r = blk_last;
   }
 
-  // NOTE(loki): Submit one more block. On the fork height, we allow exactly the
-  // forking block to contain borromean TX's, due to some clients constructing
-  // old style TX's on the fork height. So make sure we create one block so that
-  // the block containing bulletproofs txes, which is 1 block after the fork
-  // height, is tested with BP logic
+  // NOTE(loki): Submit one or more extra block. On the fork height, we allow exactly the forking
+  // block to contain borromean TX's, due to some clients constructing old style TX's on the fork
+  // height, and for CLSAG we allow 10. So make sure we create extra blocks so that the block
+  // containing the new txes is tested with the new mandatory rules.
   generator.m_hf_version = last_hf;
+  for (size_t i = 0; i < extra_blocks; i++)
   {
     block blk;
     CHECK_AND_ASSERT_MES(
@@ -499,7 +499,7 @@ bool gen_bp_tx_invalid_bulletproof2_type::generate(std::vector<test_event_entry>
   const rct::RCTConfig rct_config[] = { { rct::RangeProofPaddedBulletproof, 2 } };
   return generate_with(events, 1, amounts_paid, false, rct_config, 0, NULL, [&](cryptonote::transaction &tx, size_t tx_idx){
     return true;
-  });
+  }, 10 /* extra blocks before MLSAGs aren't accepted */);
 }
 
 bool gen_rct2_tx_clsag_malleability::generate(std::vector<test_event_entry>& events) const
