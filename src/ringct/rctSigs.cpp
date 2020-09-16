@@ -585,7 +585,7 @@ namespace rct {
       hashes.push_back(hash2rct(h));
 
       keyV kv;
-      if (tools::equals_any(rv.type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
+      if (rct::is_rct_bulletproof(rv.type))
       {
         kv.reserve((6*2+9) * rv.p.bulletproofs.size());
         for (const auto &p: rv.p.bulletproofs)
@@ -1332,8 +1332,7 @@ namespace rct {
         {
           CHECK_AND_ASSERT_MES(rvp, false, "rctSig pointer is NULL");
           const rctSig &rv = *rvp;
-          CHECK_AND_ASSERT_MES(tools::equals_any(rv.type, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG),
-              false, "verRctSemanticsSimple called on non simple rctSig");
+          CHECK_AND_ASSERT_MES(rct::is_rct_simple(rv.type), false, "verRctSemanticsSimple called on non simple rctSig");
           const bool bulletproof = is_rct_bulletproof(rv.type);
           if (bulletproof)
           {
@@ -1441,8 +1440,7 @@ namespace rct {
       {
         PERF_TIMER(verRctNonSemanticsSimple);
 
-        CHECK_AND_ASSERT_MES(tools::equals_any(rv.type, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG),
-            false, "verRctNonSemanticsSimple called on non simple rctSig");
+        CHECK_AND_ASSERT_MES(rct::is_rct_simple(rv.type), false, "verRctNonSemanticsSimple called on non simple rctSig");
         const bool bulletproof = is_rct_bulletproof(rv.type);
         // semantics check is early, and mixRing/MGs aren't resolved yet
         if (bulletproof)
@@ -1537,7 +1535,7 @@ namespace rct {
     }
 
     xmr_amount decodeRctSimple(const rctSig & rv, const key & sk, unsigned int i, key &mask, hw::device &hwdev) {
-        CHECK_AND_ASSERT_MES(tools::equals_any(rv.type, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG), false, "decodeRct called on non simple rctSig");
+        CHECK_AND_ASSERT_MES(rct::is_rct_simple(rv.type), false, "decodeRct called on non simple rctSig");
         CHECK_AND_ASSERT_THROW_MES(i < rv.ecdhInfo.size(), "Bad index");
         CHECK_AND_ASSERT_THROW_MES(rv.outPk.size() == rv.ecdhInfo.size(), "Mismatched sizes of rv.outPk and rv.ecdhInfo");
 

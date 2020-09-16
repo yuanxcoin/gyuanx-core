@@ -378,7 +378,7 @@ namespace boost
     a & x.p.MGs;
     if (ver >= 1u)
       a & x.p.CLSAGs;
-    if (tools::equals_any(x.type, rct::RCTTypeBulletproof, rct::RCTTypeBulletproof2, rct::RCTTypeCLSAG))
+    if (rct::is_rct_bulletproof(x.type))
       a & x.p.pseudoOuts;
   }
 

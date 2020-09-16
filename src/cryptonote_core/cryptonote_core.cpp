@@ -1304,7 +1304,7 @@ namespace cryptonote
       {
         if (!tx_info[n].result || tx_info[n].already_have)
           continue;
-        if (!tools::equals_any(tx_info[n].tx.rct_signatures.type, rct::RCTTypeBulletproof, rct::RCTTypeBulletproof2, rct::RCTTypeCLSAG))
+        if (!rct::is_rct_bulletproof(tx_info[n].tx.rct_signatures.type))
           continue;
         if (assumed_bad || !rct::verRctSemanticsSimple(tx_info[n].tx.rct_signatures))
         {

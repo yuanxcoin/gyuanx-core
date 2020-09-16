@@ -264,6 +264,11 @@ namespace rct {
       RCTTypeBulletproof2 = 4,
       RCTTypeCLSAG = 5,
     };
+
+    inline bool is_rct_simple(int type) { return tools::equals_any(type, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG); }
+    inline bool is_rct_bulletproof(int type) { return tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG); }
+    inline bool is_rct_borromean(int type) { return tools::equals_any(type, RCTTypeSimple, RCTTypeFull); }
+
     enum RangeProofType { RangeProofBorromean, RangeProofBulletproof, RangeProofMultiOutputBulletproof, RangeProofPaddedBulletproof };
     struct RCTConfig {
       RangeProofType range_proof_type;
@@ -338,7 +343,7 @@ namespace rct {
             return;
           if (!tools::equals_any(type, RCTTypeFull, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
             throw std::invalid_argument{"invalid ringct type"};
-          if (tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
+          if (rct::is_rct_bulletproof(type))
           {
             uint32_t nbp = bulletproofs.size();
             if (tools::equals_any(type, RCTTypeBulletproof2, RCTTypeCLSAG))
@@ -434,12 +439,12 @@ namespace rct {
 
         keyV& get_pseudo_outs()
         {
-          return tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG) ? p.pseudoOuts : pseudoOuts;
+          return rct::is_rct_bulletproof(type) ? p.pseudoOuts : pseudoOuts;
         }
 
         keyV const& get_pseudo_outs() const
         {
-          return tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG) ? p.pseudoOuts : pseudoOuts;
+          return rct::is_rct_bulletproof(type) ? p.pseudoOuts : pseudoOuts;
         }
     };
 
@@ -543,10 +548,6 @@ namespace rct {
     void b2h(key  & amountdh, bits amountb2);
     //int[64] to uint long long
     xmr_amount b2d(bits amountb);
-
-    bool is_rct_simple(int type);
-    bool is_rct_bulletproof(int type);
-    bool is_rct_borromean(int type);
 
     static inline const rct::key &pk2rct(const crypto::public_key &pk) { return (const rct::key&)pk; }
     static inline const rct::key &sk2rct(const crypto::secret_key &sk) { return (const rct::key&)sk; }
