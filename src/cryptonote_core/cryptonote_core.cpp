@@ -840,7 +840,7 @@ namespace cryptonote
       m_checkpoints_path = checkpoint_json_hashfile_fullpath.string();
     }
 
-    sqlite3 *lns_db = lns::init_loki_name_system(lns_db_file_path.c_str(), db->is_read_only());
+    sqlite3 *lns_db = lns::init_loki_name_system(lns_db_file_path.string().c_str(), db->is_read_only());
     if (!lns_db) return false;
 
     init_lokimq(vm);
