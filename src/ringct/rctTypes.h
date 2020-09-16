@@ -136,9 +136,9 @@ namespace rct {
     };
 
     //containers for representing amounts
-    typedef uint64_t xmr_amount;
-    typedef unsigned int bits[ATOMS];
-    typedef key key64[64];
+    using xmr_amount = uint64_t;
+    using bits = unsigned int[ATOMS];
+    using key64 = key[64];
 
     struct boroSig {
         key64 s0;
@@ -449,12 +449,13 @@ namespace rct {
     };
 
     //other basepoint H = toPoint(cn_fast_hash(G)), G the basepoint
-    static const key H = { {0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94} };
+    constexpr key H = { {0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94} };
 
     //H2 contains 2^i H in each index, i.e. H, 2H, 4H, 8H, ...
     //This is used for the range proofG
     //You can regenerate this by running python2 Test.py HPow2 in the MiniNero repo
-    static const key64 H2 = {{{0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94}},
+    constexpr key64 H2 = {
+    {{0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94}},
     {{0x8f, 0xaa, 0x44, 0x8a, 0xe4, 0xb3, 0xe2, 0xbb, 0x3d, 0x4d, 0x13, 0x09, 0x09, 0xf5, 0x5f, 0xcd, 0x79, 0x71, 0x1c, 0x1c, 0x83, 0xcd, 0xbc, 0xca, 0xdd, 0x42, 0xcb, 0xe1, 0x51, 0x5e, 0x87, 0x12}},
     {{0x12, 0xa7, 0xd6, 0x2c, 0x77, 0x91, 0x65, 0x4a, 0x57, 0xf3, 0xe6, 0x76, 0x94, 0xed, 0x50, 0xb4, 0x9a, 0x7d, 0x9e, 0x3f, 0xc1, 0xe4, 0xc7, 0xa0, 0xbd, 0xe2, 0x9d, 0x18, 0x7e, 0x9c, 0xc7, 0x1d}},
     {{0x78, 0x9a, 0xb9, 0x93, 0x4b, 0x49, 0xc4, 0xf9, 0xe6, 0x78, 0x5c, 0x6d, 0x57, 0xa4, 0x98, 0xb3, 0xea, 0xd4, 0x43, 0xf0, 0x4f, 0x13, 0xdf, 0x11, 0x0c, 0x54, 0x27, 0xb4, 0xf2, 0x14, 0xc7, 0x39}},
@@ -549,24 +550,24 @@ namespace rct {
     //int[64] to uint long long
     xmr_amount b2d(bits amountb);
 
-    static inline const rct::key &pk2rct(const crypto::public_key &pk) { return (const rct::key&)pk; }
-    static inline const rct::key &sk2rct(const crypto::secret_key &sk) { return (const rct::key&)sk; }
-    static inline const rct::key &ki2rct(const crypto::key_image &ki) { return (const rct::key&)ki; }
-    static inline const rct::key &hash2rct(const crypto::hash &h) { return (const rct::key&)h; }
-    static inline const crypto::public_key &rct2pk(const rct::key &k) { return (const crypto::public_key&)k; }
-    static inline const crypto::secret_key &rct2sk(const rct::key &k) { return (const crypto::secret_key&)k; }
-    static inline const crypto::key_image &rct2ki(const rct::key &k) { return (const crypto::key_image&)k; }
-    static inline const crypto::hash &rct2hash(const rct::key &k) { return (const crypto::hash&)k; }
-    static inline bool operator==(const rct::key &k0, const crypto::public_key &k1) { return !crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
-    static inline bool operator!=(const rct::key &k0, const crypto::public_key &k1) { return crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
+    inline const rct::key &pk2rct(const crypto::public_key &pk) { return (const rct::key&)pk; }
+    inline const rct::key &sk2rct(const crypto::secret_key &sk) { return (const rct::key&)sk; }
+    inline const rct::key &ki2rct(const crypto::key_image &ki) { return (const rct::key&)ki; }
+    inline const rct::key &hash2rct(const crypto::hash &h) { return (const rct::key&)h; }
+    inline const crypto::public_key &rct2pk(const rct::key &k) { return (const crypto::public_key&)k; }
+    inline const crypto::secret_key &rct2sk(const rct::key &k) { return (const crypto::secret_key&)k; }
+    inline const crypto::key_image &rct2ki(const rct::key &k) { return (const crypto::key_image&)k; }
+    inline const crypto::hash &rct2hash(const rct::key &k) { return (const crypto::hash&)k; }
+    inline bool operator==(const rct::key &k0, const crypto::public_key &k1) { return !crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
+    inline bool operator!=(const rct::key &k0, const crypto::public_key &k1) { return crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
 }
 
 
 namespace cryptonote {
-    static inline bool operator==(const crypto::public_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
-    static inline bool operator!=(const crypto::public_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
-    static inline bool operator==(const crypto::secret_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
-    static inline bool operator!=(const crypto::secret_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator==(const crypto::public_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator!=(const crypto::public_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator==(const crypto::secret_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator!=(const crypto::secret_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
 }
 
 namespace rct {
