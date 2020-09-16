@@ -524,7 +524,8 @@ bool loki_core_fee_burning::generate(std::vector<test_event_entry>& events)
     block_params.total_fee = send_fee_burn[2][1] - send_fee_burn[2][2] + 2;
 
     loki_blockchain_entry next = {};
-    assert(gen.create_block(next, block_params, txs));
+    bool created = gen.create_block(next, block_params, txs);
+    assert(created);
     gen.add_block(next, false, "Invalid miner reward");
   }
 
