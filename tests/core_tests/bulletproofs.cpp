@@ -57,14 +57,6 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
     int amounts_paid_len = 0;
     for (int i = 0; amounts_paid[i] != (uint64_t)-1; ++i)
       ++amounts_paid_len;
-
-    if (amounts_paid_len == 1) // NOTE: Number of destinations/outputs to generate
-    {
-        // NOTE: If we want 1 output then, in HF_VERSION_MIN_2_OUTPUTS, we enforce
-        // 2 outputs causing the test to fail. For that case, we set the target
-        // hardfork to 1 before.
-        target_hf = HF_VERSION_MIN_2_OUTPUTS - 1;
-    }
   }
 
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = {
