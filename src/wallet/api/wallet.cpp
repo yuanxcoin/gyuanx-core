@@ -1720,6 +1720,7 @@ uint64_t WalletImpl::estimateTransactionFee(const std::vector<std::tuple<std::st
         CRYPTONOTE_DEFAULT_TX_MIXIN /*mixin*/,
         destinations.size() + 1 /*outputs*/,
         extra_size,
+        m_wallet->use_fork_rules(HF_VERSION_CLSAG, 0),
         m_wallet->get_base_fees(),
         m_wallet->get_fee_percent(priority),
         m_wallet->get_fee_quantization_mask());

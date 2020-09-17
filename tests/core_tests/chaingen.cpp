@@ -1307,27 +1307,20 @@ uint64_t get_amount(const cryptonote::account_base& account, const cryptonote::t
   hwdev.derivation_to_scalar(derivation, i, scalar1);
   try
   {
-    switch (tx.rct_signatures.type)
-    {
-    case rct::RCTTypeSimple:
-    case rct::RCTTypeBulletproof:
-    case rct::RCTTypeBulletproof2:
+    if (rct::is_rct_simple(tx.rct_signatures.type))
       money_transferred = rct::decodeRctSimple(tx.rct_signatures, rct::sk2rct(scalar1), i, mask, hwdev);
-      break;
-    case rct::RCTTypeFull:
+    else if (tx.rct_signatures.type == rct::RCTTypeFull)
       money_transferred = rct::decodeRct(tx.rct_signatures, rct::sk2rct(scalar1), i, hwdev);
-      break;
-    case rct::RCTTypeNull:
+    else if (tx.rct_signatures.type == rct::RCTTypeNull)
       money_transferred = tx.vout[i].amount;
-      break;
-    default:
-      LOG_PRINT_L0(__func__ << ": Unsupported rct type: " << tx.rct_signatures.type);
+    else {
+      LOG_PRINT_L0(__func__ << ": Unsupported rct type: " << +tx.rct_signatures.type);
       return 0;
     }
   }
   catch (const std::exception &e)
   {
-    LOG_PRINT_L0("Failed to decode input " << i);
+    LOG_PRINT_L0("Failed to decode input " << i << ": " << e.what());
     return 0;
   }
 
@@ -1541,9 +1534,7 @@ bool fill_tx_sources(std::vector<cryptonote::tx_source_entry>& sources, const st
             crypto::secret_key amount_key;
             crypto::derivation_to_scalar(derivation, oi.out_no, amount_key);
 
-            if (tx.rct_signatures.type == rct::RCTTypeSimple ||
-                tx.rct_signatures.type == rct::RCTTypeBulletproof ||
-                tx.rct_signatures.type == rct::RCTTypeBulletproof2)
+            if (rct::is_rct_simple(tx.rct_signatures.type))
             {
                 rct::decodeRctSimple(tx.rct_signatures, rct::sk2rct(amount_key), oi.out_no, ts.mask, hw::get_device("default"));
             }

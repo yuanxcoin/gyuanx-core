@@ -188,43 +188,6 @@ namespace rct {
         return vali;
     }
 
-    bool is_rct_simple(int type)
-    {
-        switch (type)
-        {
-            case RCTTypeSimple:
-            case RCTTypeBulletproof:
-            case RCTTypeBulletproof2:
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    bool is_rct_bulletproof(int type)
-    {
-        switch (type)
-        {
-            case RCTTypeBulletproof:
-            case RCTTypeBulletproof2:
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    bool is_rct_borromean(int type)
-    {
-        switch (type)
-        {
-            case RCTTypeSimple:
-            case RCTTypeFull:
-                return true;
-            default:
-                return false;
-        }
-    }
-
     size_t n_bulletproof_amounts(const Bulletproof &proof)
     {
         CHECK_AND_ASSERT_MES(proof.L.size() >= 6, 0, "Invalid bulletproof L size");

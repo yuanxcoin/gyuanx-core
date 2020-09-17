@@ -29,8 +29,6 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#ifndef RCT_TYPES_H
-#define RCT_TYPES_H
 
 #include <cstddef>
 #include <vector>
@@ -49,6 +47,7 @@ extern "C" {
 #include "hex.h"
 #include "span.h"
 #include "serialization/variant.h"
+#include "common/util.h"
 
 
 //Define this flag when debugging to get additional info on the console
@@ -110,9 +109,14 @@ namespace rct {
 
     struct multisig_out {
         std::vector<key> c; // for all inputs
+        std::vector<key> mu_p; // for all inputs
+        std::vector<key> c0; // for all inputs
 
         BEGIN_SERIALIZE_OBJECT()
           FIELD(c)
+          FIELD(mu_p)
+          if (!mu_p.empty() && mu_p.size() != c.size())
+            throw std::runtime_error{"Invalid multisig output serialization"};
         END_SERIALIZE()
     };
 
@@ -132,9 +136,9 @@ namespace rct {
     };
 
     //containers for representing amounts
-    typedef uint64_t xmr_amount;
-    typedef unsigned int bits[ATOMS];
-    typedef key key64[64];
+    using xmr_amount = uint64_t;
+    using bits = unsigned int[ATOMS];
+    using key64 = key[64];
 
     struct boroSig {
         key64 s0;
@@ -160,6 +164,23 @@ namespace rct {
             // FIELD(II) - not serialized, it can be reconstructed
         END_SERIALIZE()
     };
+
+    // CLSAG signature
+    struct clsag {
+        keyV s; // scalars
+        key c1;
+
+        key I; // signing key image
+        key D; // commitment key image
+
+        BEGIN_SERIALIZE_OBJECT()
+            FIELD(s)
+            FIELD(c1)
+            // FIELD(I) - not serialized, it can be reconstructed
+            FIELD(D)
+        END_SERIALIZE()
+    };
+
     //contains the data for an Borromean sig
     // also contains the "Ci" values such that
     // \sum Ci = C
@@ -241,7 +262,13 @@ namespace rct {
       RCTTypeSimple = 2,
       RCTTypeBulletproof = 3,
       RCTTypeBulletproof2 = 4,
+      RCTTypeCLSAG = 5,
     };
+
+    inline bool is_rct_simple(int type) { return tools::equals_any(type, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG); }
+    inline bool is_rct_bulletproof(int type) { return tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG); }
+    inline bool is_rct_borromean(int type) { return tools::equals_any(type, RCTTypeSimple, RCTTypeFull); }
+
     enum RangeProofType { RangeProofBorromean, RangeProofBulletproof, RangeProofMultiOutputBulletproof, RangeProofPaddedBulletproof };
     struct RCTConfig {
       RangeProofType range_proof_type;
@@ -263,7 +290,7 @@ namespace rct {
           field(ar, "type", type);
           if (type == RCTTypeNull)
             return;
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2)
+          if (!tools::equals_any(type, RCTTypeFull, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
             throw std::invalid_argument{"invalid ringct type"};
 
           field_varint(ar, "txnFee", txnFee);
@@ -280,7 +307,7 @@ namespace rct {
 
           {
             auto arr = start_array(ar, "ecdhInfo", ecdhInfo, outputs);
-            if (type == RCTTypeBulletproof2)
+            if (tools::equals_any(type, RCTTypeBulletproof2, RCTTypeCLSAG))
             {
               for (auto& e : ecdhInfo) {
                 auto obj = arr.element().begin_object();
@@ -305,6 +332,7 @@ namespace rct {
         std::vector<rangeSig> rangeSigs;
         std::vector<Bulletproof> bulletproofs;
         std::vector<mgSig> MGs; // simple rct has N, full has 1
+        std::vector<clsag> CLSAGs;
         keyV pseudoOuts; //C - for simple rct
 
         // when changing this function, update cryptonote::get_pruned_transaction_weight
@@ -313,12 +341,12 @@ namespace rct {
         {
           if (type == RCTTypeNull)
             return;
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2)
+          if (!tools::equals_any(type, RCTTypeFull, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
             throw std::invalid_argument{"invalid ringct type"};
-          if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2)
+          if (rct::is_rct_bulletproof(type))
           {
             uint32_t nbp = bulletproofs.size();
-            if (type == RCTTypeBulletproof2)
+            if (tools::equals_any(type, RCTTypeBulletproof2, RCTTypeCLSAG))
               field_varint(ar, "nbp", nbp);
             else
               field(ar, "nbp", nbp);
@@ -339,44 +367,65 @@ namespace rct {
               value(arr.element(), s);
           }
 
-          // we keep a byte for size of MGs, because we don't know whether this is
-          // a simple or full rct signature, and it's starting to annoy the hell out of me
-
-          size_t mg_elements = 1, mg_ss2_elements = inputs + 1;
-          if (type == RCTTypeSimple || type == RCTTypeBulletproof || type == RCTTypeBulletproof2) {
-            mg_elements = inputs;
-            mg_ss2_elements = 2;
-          }
-
+          if (type == RCTTypeCLSAG)
           {
-            auto arr = start_array(ar, "MGs", MGs, mg_elements);
-            for (auto& mg : MGs)
+            auto arr = start_array(ar, "CLSAGs", CLSAGs, inputs);
+
+            for (auto& clsag : CLSAGs)
             {
+              // we save the CLSAGs contents directly, because we want it to save its
+              // arrays without the size prefixes, and the load can't know what size
+              // to expect if it's not in the data
               auto obj = arr.element().begin_object();
-
-              // we save the MGs contents directly, because we want it to save its
-              // arrays and matrices without the size prefixes, and the load can't
-              // know what size to expect if it's not in the data
               {
-                auto arr_ss = start_array(ar, "ss", mg.ss, mixin + 1);
-                for (auto& ss : mg.ss)
-                {
-                  auto arr_ss2 = arr_ss.element().begin_array();
-                  if constexpr (Archive::is_deserializer)
-                    ss.resize(mg_ss2_elements);
-                  else if (ss.size() != mg_ss2_elements)
-                    throw std::invalid_argument{"invalid mg_ss2 size: have " + std::to_string(ss.size()) + ", expected " + std::to_string(mg_ss2_elements)};
-
-                  for (auto& x : ss)
-                    value(arr_ss2.element(), x);
-                }
+                auto arr_s = start_array(ar, "s", clsag.s, mixin + 1);
+                for (auto& x : clsag.s)
+                  value(arr_s.element(), x);
               }
-
-              field(ar, "cc", mg.cc);
-              // MGs[i].II not saved, it can be reconstructed
+              field(ar, "c1", clsag.c1);
+              field(ar, "D", clsag.D);
             }
           }
-          if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2)
+          else
+          {
+            // we keep a byte for size of MGs, because we don't know whether this is
+            // a simple or full rct signature, and it's starting to annoy the hell out of me
+
+            size_t mg_elements = 1, mg_ss2_elements = inputs + 1;
+            if (tools::equals_any(type, RCTTypeSimple, RCTTypeBulletproof, RCTTypeBulletproof2)) {
+              mg_elements = inputs;
+              mg_ss2_elements = 2;
+            }
+
+            {
+              auto arr = start_array(ar, "MGs", MGs, mg_elements);
+              for (auto& mg : MGs)
+              {
+                auto obj = arr.element().begin_object();
+
+                // we save the MGs contents directly, because we want it to save its
+                // arrays and matrices without the size prefixes, and the load can't
+                // know what size to expect if it's not in the data
+                {
+                  auto arr_ss = start_array(ar, "ss", mg.ss, mixin + 1);
+                  for (auto& ss : mg.ss)
+                  {
+                    auto arr_ss2 = arr_ss.element().begin_array();
+                    if constexpr (Archive::is_deserializer)
+                      ss.resize(mg_ss2_elements);
+                    else if (ss.size() != mg_ss2_elements)
+                      throw std::invalid_argument{"invalid mg_ss2 size: have " + std::to_string(ss.size()) + ", expected " + std::to_string(mg_ss2_elements)};
+
+                    for (auto& x : ss)
+                      value(arr_ss2.element(), x);
+                  }
+                }
+                field(ar, "cc", mg.cc);
+                // MGs[i].II not saved, it can be reconstructed
+              }
+            }
+          }
+          if (tools::equals_any(type, RCTTypeBulletproof, RCTTypeBulletproof2, RCTTypeCLSAG))
           {
             auto arr = start_array(ar, "pseudoOuts", pseudoOuts, inputs);
             for (auto& o : pseudoOuts)
@@ -390,22 +439,23 @@ namespace rct {
 
         keyV& get_pseudo_outs()
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 ? p.pseudoOuts : pseudoOuts;
+          return rct::is_rct_bulletproof(type) ? p.pseudoOuts : pseudoOuts;
         }
 
         keyV const& get_pseudo_outs() const
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 ? p.pseudoOuts : pseudoOuts;
+          return rct::is_rct_bulletproof(type) ? p.pseudoOuts : pseudoOuts;
         }
     };
 
     //other basepoint H = toPoint(cn_fast_hash(G)), G the basepoint
-    static const key H = { {0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94} };
+    constexpr key H = { {0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94} };
 
     //H2 contains 2^i H in each index, i.e. H, 2H, 4H, 8H, ...
     //This is used for the range proofG
     //You can regenerate this by running python2 Test.py HPow2 in the MiniNero repo
-    static const key64 H2 = {{{0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94}},
+    constexpr key64 H2 = {
+    {{0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1, 0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94}},
     {{0x8f, 0xaa, 0x44, 0x8a, 0xe4, 0xb3, 0xe2, 0xbb, 0x3d, 0x4d, 0x13, 0x09, 0x09, 0xf5, 0x5f, 0xcd, 0x79, 0x71, 0x1c, 0x1c, 0x83, 0xcd, 0xbc, 0xca, 0xdd, 0x42, 0xcb, 0xe1, 0x51, 0x5e, 0x87, 0x12}},
     {{0x12, 0xa7, 0xd6, 0x2c, 0x77, 0x91, 0x65, 0x4a, 0x57, 0xf3, 0xe6, 0x76, 0x94, 0xed, 0x50, 0xb4, 0x9a, 0x7d, 0x9e, 0x3f, 0xc1, 0xe4, 0xc7, 0xa0, 0xbd, 0xe2, 0x9d, 0x18, 0x7e, 0x9c, 0xc7, 0x1d}},
     {{0x78, 0x9a, 0xb9, 0x93, 0x4b, 0x49, 0xc4, 0xf9, 0xe6, 0x78, 0x5c, 0x6d, 0x57, 0xa4, 0x98, 0xb3, 0xea, 0xd4, 0x43, 0xf0, 0x4f, 0x13, 0xdf, 0x11, 0x0c, 0x54, 0x27, 0xb4, 0xf2, 0x14, 0xc7, 0x39}},
@@ -500,28 +550,24 @@ namespace rct {
     //int[64] to uint long long
     xmr_amount b2d(bits amountb);
 
-    bool is_rct_simple(int type);
-    bool is_rct_bulletproof(int type);
-    bool is_rct_borromean(int type);
-
-    static inline const rct::key &pk2rct(const crypto::public_key &pk) { return (const rct::key&)pk; }
-    static inline const rct::key &sk2rct(const crypto::secret_key &sk) { return (const rct::key&)sk; }
-    static inline const rct::key &ki2rct(const crypto::key_image &ki) { return (const rct::key&)ki; }
-    static inline const rct::key &hash2rct(const crypto::hash &h) { return (const rct::key&)h; }
-    static inline const crypto::public_key &rct2pk(const rct::key &k) { return (const crypto::public_key&)k; }
-    static inline const crypto::secret_key &rct2sk(const rct::key &k) { return (const crypto::secret_key&)k; }
-    static inline const crypto::key_image &rct2ki(const rct::key &k) { return (const crypto::key_image&)k; }
-    static inline const crypto::hash &rct2hash(const rct::key &k) { return (const crypto::hash&)k; }
-    static inline bool operator==(const rct::key &k0, const crypto::public_key &k1) { return !crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
-    static inline bool operator!=(const rct::key &k0, const crypto::public_key &k1) { return crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
+    inline const rct::key &pk2rct(const crypto::public_key &pk) { return (const rct::key&)pk; }
+    inline const rct::key &sk2rct(const crypto::secret_key &sk) { return (const rct::key&)sk; }
+    inline const rct::key &ki2rct(const crypto::key_image &ki) { return (const rct::key&)ki; }
+    inline const rct::key &hash2rct(const crypto::hash &h) { return (const rct::key&)h; }
+    inline const crypto::public_key &rct2pk(const rct::key &k) { return (const crypto::public_key&)k; }
+    inline const crypto::secret_key &rct2sk(const rct::key &k) { return (const crypto::secret_key&)k; }
+    inline const crypto::key_image &rct2ki(const rct::key &k) { return (const crypto::key_image&)k; }
+    inline const crypto::hash &rct2hash(const rct::key &k) { return (const crypto::hash&)k; }
+    inline bool operator==(const rct::key &k0, const crypto::public_key &k1) { return !crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
+    inline bool operator!=(const rct::key &k0, const crypto::public_key &k1) { return crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
 }
 
 
 namespace cryptonote {
-    static inline bool operator==(const crypto::public_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
-    static inline bool operator!=(const crypto::public_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
-    static inline bool operator==(const crypto::secret_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
-    static inline bool operator!=(const crypto::secret_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator==(const crypto::public_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator!=(const crypto::public_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator==(const crypto::secret_key &k0, const rct::key &k1) { return !crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
+    inline bool operator!=(const crypto::secret_key &k0, const rct::key &k1) { return crypto_verify_32((const unsigned char*)&k0, k1.bytes); }
 }
 
 namespace rct {
@@ -557,5 +603,4 @@ VARIANT_TAG(rct::rctSig, "rct_rctSig", 0x9b);
 VARIANT_TAG(rct::Bulletproof, "rct_bulletproof", 0x9c);
 VARIANT_TAG(rct::multisig_kLRki, "rct_multisig_kLR", 0x9d);
 VARIANT_TAG(rct::multisig_out, "rct_multisig_out", 0x9e);
-
-#endif  /* RCTTYPES_H */
+VARIANT_TAG(rct::clsag, "rct_clsag", 0x9f);

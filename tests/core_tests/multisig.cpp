@@ -165,7 +165,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   constexpr int block_major = 7;
   constexpr int block_minor = 7;
 
-  // create 8 miner accounts, and have them mine the next 8 blocks
+  // create 48 miner accounts, and have them mine the next 8 blocks
   // they will have a coinbase with a single out that's pseudo rct
   constexpr size_t n_coinbases = 48;
   cryptonote::account_base miner_accounts[n_coinbases];
@@ -367,7 +367,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   auto sources_copy = sources;
   loki_construct_tx_params tx_params;
   tx_params.hf_version = cryptonote::network_version_8;
-  r = construct_tx_and_get_tx_key(miner_account[creator].get_keys(), subaddresses, sources, destinations, std::nullopt, std::vector<uint8_t>(), tx, 0, tx_key, additional_tx_secret_keys, { rct::RangeProofBorromean, 0 }, msoutp, tx_params);
+  r = construct_tx_and_get_tx_key(miner_account[creator].get_keys(), subaddresses, sources, destinations, std::nullopt, std::vector<uint8_t>(), tx, 0, tx_key, additional_tx_secret_keys, { rct::RangeProofPaddedBulletproof, 2 }, msoutp, tx_params);
   CHECK_AND_ASSERT_MES(r, false, "failed to construct transaction");
 
 #ifndef NO_MULTISIG
@@ -457,7 +457,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
       crypto::secret_key scalar1;
       crypto::derivation_to_scalar(derivation, n, scalar1);
       rct::ecdhTuple ecdh_info = tx.rct_signatures.ecdhInfo[n];
-      rct::ecdhDecode(ecdh_info, rct::sk2rct(scalar1), tx.rct_signatures.type == rct::RCTTypeBulletproof2);
+      rct::ecdhDecode(ecdh_info, rct::sk2rct(scalar1), tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG);
       rct::key C = tx.rct_signatures.outPk[n].mask;
       rct::addKeys2(Ctmp, ecdh_info.mask, ecdh_info.amount, rct::H);
       CHECK_AND_ASSERT_MES(rct::equalKeys(C, Ctmp), false, "Failed to decode amount");

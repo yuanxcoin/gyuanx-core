@@ -41,6 +41,7 @@
 #include <boost/program_options.hpp>
 #include <boost/serialization/vector.hpp>
 
+#include "cryptonote_protocol/quorumnet.h"
 #include "include_base_utils.h"
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
@@ -929,6 +930,7 @@ inline bool do_replay_events_get_core(std::vector<test_event_entry>& events, cry
     return false;
 
   auto & c = *core;
+  quorumnet::init_core_callbacks();
 
   // TODO(loki): Deprecate having to specify hardforks in a templated struct. This
   // puts an unecessary level of indirection that makes it hard to follow the
@@ -1329,10 +1331,18 @@ public:
     std::vector<cryptonote::tx_destination_entry> destinations;
     uint64_t change_amount;
 
-    // TODO(loki): Eww we still depend on monero land test code
-    const auto nmix = 9;
-    fill_tx_sources_and_destinations(
-      m_events, m_head, m_from, m_to, m_amount, m_fee, nmix, sources, destinations, &change_amount);
+    constexpr size_t nmix = 9;
+    if (m_tx_params.tx_type == cryptonote::txtype::loki_name_system) // LNS txes only have change
+    {
+      fill_tx_sources_and_multi_destinations(
+          m_events, m_head, m_from, m_to, nullptr /*amounts*/, 0 /*num_amounts*/, m_fee, nmix, sources, destinations, true /*add change*/, &change_amount);
+    }
+    else
+    {
+      // TODO(loki): Eww we still depend on monero land test code
+      fill_tx_sources_and_destinations(
+        m_events, m_head, m_from, m_to, m_amount, m_fee, nmix, sources, destinations, &change_amount);
+    }
 
     cryptonote::tx_destination_entry change_addr{ change_amount, m_from.get_keys().m_account_address, false /*is_subaddr*/ };
     bool result = cryptonote::construct_tx(

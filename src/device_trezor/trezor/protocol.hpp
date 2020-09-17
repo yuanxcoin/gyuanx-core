@@ -300,8 +300,7 @@ namespace tx {
       if (!m_ct.rv){
         throw std::invalid_argument("RV not initialized");
       }
-      auto tp = m_ct.rv->type;
-      return tp == rct::RCTTypeBulletproof || tp == rct::RCTTypeBulletproof2;
+      return rct::is_rct_bulletproof(m_ct.rv->type);
     }
 
     bool is_offloading() const {

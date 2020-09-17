@@ -29,6 +29,7 @@
 add_executable(core_tests
 #  block_reward.cpp
   block_validation.cpp
+  bulletproofs.cpp
   chain_split_1.cpp
   chain_switch_1.cpp
   chaingen.cpp
@@ -36,14 +37,13 @@ add_executable(core_tests
   chaingen_main.cpp
   double_spend.cpp
   integer_overflow.cpp
-  multisig.cpp
-  ring_signature_1.cpp
   loki_tests.cpp
+  multisig.cpp
+  rct.cpp
+  ring_signature_1.cpp
   transaction_tests.cpp
   tx_validation.cpp
   v2_tests.cpp
-  rct.cpp
-  bulletproofs.cpp
   wallet_tools.cpp)
 
 target_link_libraries(core_tests

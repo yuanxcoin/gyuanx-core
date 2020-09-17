@@ -38,6 +38,7 @@
 #include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
+#include "ringct/rctTypes.h"
 #include "tx_pool.h"
 #include "blockchain.h"
 #include "blockchain_db/blockchain_db.h"
@@ -3050,6 +3051,30 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
     }
   }
 
+  // Disallow CLSAGs before the CLSAG hardfork
+  if (hf_version < HF_VERSION_CLSAG) {
+    if (tx.version >= txversion::v4_tx_types && tx.is_transfer()) {
+      if (tx.rct_signatures.type == rct::RCTTypeCLSAG)
+      {
+        MERROR_VER("Ringct type " << (unsigned)rct::RCTTypeCLSAG << " is not allowed before v" << HF_VERSION_CLSAG);
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    }
+  }
+
+  // Require CLSAGs starting 10 blocks after the CLSAG-enabling hard fork (the 10 block buffer is to
+  // allow staggling txes around fork time to still make it into a block).
+  if (hf_version >= HF_VERSION_CLSAG
+      && tx.rct_signatures.type < rct::RCTTypeCLSAG
+      && tx.version >= txversion::v4_tx_types && tx.is_transfer()
+      && (hf_version > HF_VERSION_CLSAG || get_current_blockchain_height() >= 10 + m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_CLSAG)))
+  {
+    MERROR_VER("Ringct type " << (unsigned)tx.rct_signatures.type << " is not allowed from v" << HF_VERSION_CLSAG);
+    tvc.m_invalid_output = true;
+    return false;
+  }
+
   return true;
 }
 //------------------------------------------------------------------
@@ -3090,7 +3115,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       }
     }
   }
-  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2)
+  else if (tools::equals_any(rv.type, rct::RCTTypeSimple, rct::RCTTypeBulletproof, rct::RCTTypeBulletproof2, rct::RCTTypeCLSAG))
   {
     CHECK_AND_ASSERT_MES(!pubkeys.empty() && !pubkeys[0].empty(), false, "empty pubkeys");
     rv.mixRing.resize(pubkeys.size());
@@ -3101,6 +3126,14 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       {
         rv.mixRing[n].push_back(pubkeys[n][m]);
       }
+    }
+  }
+  else if (rv.type == rct::RCTTypeCLSAG)
+  {
+    CHECK_AND_ASSERT_MES(rv.p.CLSAGs.size() == tx.vin.size(), false, "Bad CLSAGs size");
+    for (size_t n = 0; n < tx.vin.size(); ++n)
+    {
+      rv.p.CLSAGs[n].I = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
     }
   }
   else
@@ -3116,13 +3149,24 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
     for (size_t n = 0; n < tx.vin.size(); ++n)
       rv.p.MGs[0].II[n] = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
   }
-  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2)
+  else if (tools::equals_any(rv.type, rct::RCTTypeSimple, rct::RCTTypeBulletproof, rct::RCTTypeBulletproof2))
   {
     CHECK_AND_ASSERT_MES(rv.p.MGs.size() == tx.vin.size(), false, "Bad MGs size");
     for (size_t n = 0; n < tx.vin.size(); ++n)
     {
       rv.p.MGs[n].II.resize(1);
       rv.p.MGs[n].II[0] = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
+    }
+  }
+  else if (rv.type == rct::RCTTypeCLSAG)
+  {
+    if (!tx.pruned)
+    {
+      CHECK_AND_ASSERT_MES(rv.p.CLSAGs.size() == tx.vin.size(), false, "Bad CLSAGs size");
+      for (size_t n = 0; n < tx.vin.size(); ++n)
+      {
+        rv.p.CLSAGs[n].I = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
+      }
     }
   }
   else
@@ -3170,7 +3214,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
   {
     if (tx.type != txtype::loki_name_system && hf_version >= HF_VERSION_MIN_2_OUTPUTS && tx.vout.size() < 2)
     {
-      MERROR_VER("Tx " << get_transaction_hash(tx) << " has fewer than two outputs");
+      MERROR_VER("Tx " << get_transaction_hash(tx) << " has fewer than two outputs, which is not allowed as of hardfork " << +HF_VERSION_MIN_2_OUTPUTS);
       tvc.m_too_few_outputs = true;
       return false;
     }
@@ -3291,6 +3335,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     case rct::RCTTypeSimple:
     case rct::RCTTypeBulletproof:
     case rct::RCTTypeBulletproof2:
+    case rct::RCTTypeCLSAG:
     {
       // check all this, either reconstructed (so should really pass), or not
       {
@@ -3326,14 +3371,20 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         }
       }
 
-      if (rv.p.MGs.size() != tx.vin.size())
+      const size_t n_sigs = rv.type == rct::RCTTypeCLSAG ? rv.p.CLSAGs.size() : rv.p.MGs.size();
+      if (n_sigs != tx.vin.size())
       {
         MERROR_VER("Failed to check ringct signatures: mismatched MGs/vin sizes");
         return false;
       }
       for (size_t n = 0; n < tx.vin.size(); ++n)
       {
-        if (rv.p.MGs[n].II.empty() || memcmp(&std::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.MGs[n].II[0], 32))
+        bool error;
+        if (rv.type == rct::RCTTypeCLSAG)
+          error = memcmp(&std::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.CLSAGs[n].I, 32);
+        else
+          error = rv.p.MGs[n].II.empty() || memcmp(&std::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.MGs[n].II[0], 32);
+        if (error)
         {
           MERROR_VER("Failed to check ringct signatures: mismatched key image");
           return false;
@@ -4300,7 +4351,14 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   }
 
   abort_block.cancel();
-  MINFO("+++++ BLOCK SUCCESSFULLY ADDED" << std::endl << "id:\t" << id << std::endl << "PoW:\t" << proof_of_work << std::endl << "HEIGHT " << new_height-1 << ", difficulty:\t" << current_diffic << std::endl << "block reward: " << print_money(fee_summary + base_reward) << "(" << print_money(base_reward) << " + " << print_money(fee_summary) << "), coinbase_weight: " << coinbase_weight << ", cumulative weight: " << cumulative_block_weight << ", " << block_processing_time << "(" << target_calculating_time << "/" << longhash_calculating_time << ")ms");
+  MINFO("+++++ BLOCK SUCCESSFULLY ADDED"
+      "\n\tid:  " << id <<
+      "\n\tPoW: " << proof_of_work <<
+      "\n\tHEIGHT: " << new_height-1 << ", v" << +bl.major_version << '.' << +bl.minor_version << ", difficulty: " << current_diffic <<
+      "\n\tblock reward: " << print_money(fee_summary + base_reward) << " (" << print_money(base_reward) << " + " << print_money(fee_summary) << ")"
+        ", coinbase_weight: " << coinbase_weight << ", cumulative weight: " << cumulative_block_weight <<
+        ", " << block_processing_time << "(" << target_calculating_time << "/" << longhash_calculating_time << ")ms"
+      );
   if(m_show_time_stats)
   {
     MINFO("Height: " << new_height << " coinbase weight: " << coinbase_weight << " cumm: "

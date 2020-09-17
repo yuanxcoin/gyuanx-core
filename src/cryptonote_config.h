@@ -174,6 +174,7 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define HF_VERSION_REJECT_SIGS_IN_COINBASE      cryptonote::network_version_16
 #define HF_VERSION_ENFORCE_MIN_AGE              cryptonote::network_version_16
 #define HF_VERSION_EFFECTIVE_SHORT_TERM_MEDIAN_IN_PENALTY cryptonote::network_version_16
+#define HF_VERSION_CLSAG                        cryptonote::network_version_16
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
 
@@ -240,6 +241,9 @@ namespace config
   inline constexpr unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
   inline constexpr unsigned char HASH_KEY_MEMORY = 'k';
   inline constexpr std::string_view HASH_KEY_MULTISIG = "Multisig\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_ROUND = "CLSAG_round"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_0 = "CLSAG_agg_0"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_1 = "CLSAG_agg_1"sv;
 
   namespace testnet
   {

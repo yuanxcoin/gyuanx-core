@@ -476,9 +476,12 @@ namespace cryptonote
     uint64_t extra = 32 * (9 + 2 * nrl) + 2;
     weight += extra;
 
-    // calculate deterministic MLSAG data size
+    // calculate deterministic CLSAG/MLSAG data size
     const size_t ring_size = std::get<cryptonote::txin_to_key>(tx.vin[0]).key_offsets.size();
-    extra = tx.vin.size() * (ring_size * (1 + 1) * 32 + 32 /* cc */);
+    if (tx.rct_signatures.type == rct::RCTTypeCLSAG)
+      extra = tx.vin.size() * (ring_size + 2) * 32;
+    else
+      extra = tx.vin.size() * (ring_size * (1 + 1) * 32 + 32 /* cc */);
     weight += extra;
 
     // calculate deterministic pseudoOuts size

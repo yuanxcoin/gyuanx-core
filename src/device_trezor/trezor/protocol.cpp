@@ -547,7 +547,7 @@ namespace tx {
     auto & tx = cur_tx();
     const size_t input_size = tx.sources.size();
 
-    m_ct.tx.version = cryptonote::txversion::v2_ringct;
+    m_ct.tx.version = cryptonote::txversion::v4_tx_types;
     m_ct.tx.unlock_time = tx.unlock_time;
     m_client_version = (m_aux_data->client_version ? *m_aux_data->client_version : 1);
 
@@ -562,11 +562,6 @@ namespace tx {
 
     if (client_version() <= 1){
       assign_to_repeatable(tsx_data.mutable_minor_indices(), tx.subaddr_indices.begin(), tx.subaddr_indices.end());
-    }
-
-    // TODO: use HF_VERSION_CLSAG after CLSAG is merged
-    if (tsx_data.hard_fork() >= 13){
-      throw exc::ProtocolException("CLSAG is not yet implemented");
     }
 
     // Rsig decision
@@ -1018,14 +1013,24 @@ namespace tx {
       }
     }
 
-    // CLSAG support comes here once it is merged to the Monero
-    m_ct.rv->p.MGs.reserve(m_ct.signatures.size());
-    for(size_t i = 0; i < m_ct.signatures.size(); ++i) {
-      rct::mgSig mg;
-      if (!cn_deserialize(m_ct.signatures[i], mg)) {
-        throw exc::ProtocolException("Cannot deserialize mg[i]");
+    if (m_ct.rv->type == rct::RCTTypeCLSAG){
+      m_ct.rv->p.CLSAGs.reserve(m_ct.signatures.size());
+      for (size_t i = 0; i < m_ct.signatures.size(); ++i) {
+        rct::clsag clsag;
+        if (!cn_deserialize(m_ct.signatures[i], clsag)) {
+          throw exc::ProtocolException("Cannot deserialize clsag[i]");
+        }
+        m_ct.rv->p.CLSAGs.push_back(clsag);
       }
-      m_ct.rv->p.MGs.push_back(mg);
+    } else {
+      m_ct.rv->p.MGs.reserve(m_ct.signatures.size());
+      for (size_t i = 0; i < m_ct.signatures.size(); ++i) {
+        rct::mgSig mg;
+        if (!cn_deserialize(m_ct.signatures[i], mg)) {
+          throw exc::ProtocolException("Cannot deserialize mg[i]");
+        }
+        m_ct.rv->p.MGs.push_back(mg);
+      }
     }
 
     m_ct.tx.rct_signatures = *(m_ct.rv);
