@@ -52,6 +52,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
+#include "cryptonote_protocol/quorumnet.h"
 #include "serialization/boost_std_variant.h"
 #include "serialization/boost_std_optional.h"
 #include "misc_language.h"
@@ -929,6 +930,7 @@ inline bool do_replay_events_get_core(std::vector<test_event_entry>& events, cry
     return false;
 
   auto & c = *core;
+  quorumnet::init_core_callbacks();
 
   // TODO(loki): Deprecate having to specify hardforks in a templated struct. This
   // puts an unecessary level of indirection that makes it hard to follow the
