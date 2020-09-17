@@ -53,6 +53,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
+#include "cryptonote_protocol/quorumnet.h"
 #include "serialization/boost_std_variant.h"
 #include "serialization/boost_std_optional.h"
 #include "misc_language.h"

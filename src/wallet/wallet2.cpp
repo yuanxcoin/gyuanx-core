@@ -14228,22 +14228,22 @@ std::string wallet2::make_uri(const std::string &address, const std::string &pay
   cpr::Parameters params;
 
   if (!payment_id.empty())
-    params.AddParameter({"tx_payment_id", payment_id}, curl);
+    params.Add({"tx_payment_id", payment_id});
 
   if (amount > 0) // URI encoded amount is in decimal units, not atomic units
-    params.AddParameter({"tx_amount", cryptonote::print_money(amount)}, curl);
+    params.Add({"tx_amount", cryptonote::print_money(amount)});
 
   if (!recipient_name.empty())
-    params.AddParameter({"recipient_name", recipient_name}, curl);
+    params.Add({"recipient_name", recipient_name});
 
   if (!tx_description.empty())
-    params.AddParameter({"tx_description", tx_description}, curl);
+    params.Add({"tx_description", tx_description});
 
   std::string uri{uri_prefix};
   uri += address;
-  if (!params.content.empty()) {
+  if (auto content = params.GetContent(curl); !content.empty()) {
     uri += '?';
-    uri += params.content;
+    uri += std::move(content);
   }
   return uri;
 }

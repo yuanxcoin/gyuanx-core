@@ -32,6 +32,13 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/version.hpp>
+
+// Workaround for boost::serialization issue #219
+#include <boost/version.hpp>
+#if BOOST_VERSION == 107400
+#include <boost/serialization/library_version_type.hpp>
+#endif
+
 #include <boost/serialization/list.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/global_fun.hpp>
