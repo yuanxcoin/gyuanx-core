@@ -467,9 +467,9 @@ namespace cryptonote
     uint64_t abs_diff = std::abs(diff);
     uint64_t max_block_height = std::max(hshd.current_height, curr_height);
     MCLOG(is_inital ? el::Level::Info : el::Level::Debug, "global", context <<  "Sync data returned a new top block candidate: " << curr_height << " -> " << hshd.current_height
-      << " [Your node is " << abs_diff << " blocks (" << tools::get_human_readable_timespan(std::chrono::seconds(abs_diff / (24h / TARGET_BLOCK_TIME))) << " "
-      << (0 <= diff ? std::string("behind") : std::string("ahead"))
-      << "]\nSYNCHRONIZATION started");
+      << " [Your node is " << abs_diff << " blocks (" << tools::get_human_readable_timespan(abs_diff * TARGET_BLOCK_TIME) << " "
+      << (0 <= diff ? "behind" : "ahead")
+      << ")]\nSYNCHRONIZATION started");
 
       m_period_start_time = m_sync_start_time = std::chrono::steady_clock::now();
       m_sync_start_height = curr_height;
