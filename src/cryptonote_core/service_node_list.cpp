@@ -892,7 +892,7 @@ namespace service_nodes
       return false;
     }
 
-    if (hf_version >= cryptonote::network_version_16)
+    if (hf_version >= cryptonote::network_version_16_pulse)
     {
       // In HF16 we start enforcing three things that were always done but weren't actually enforced:
       // 1. the staked amount in the tx must be a single output.
@@ -977,7 +977,7 @@ namespace service_nodes
     // In HF16 we require that the amount staked in the registration tx be at least the amount
     // reserved for the operator.  Before HF16 it only had to be >= 25%, even if the operator
     // reserved amount was higher (though wallets would never actually do this).
-    if (hf_version >= cryptonote::network_version_16 && stake.transferred < info.contributors[0].reserved)
+    if (hf_version >= cryptonote::network_version_16_pulse && stake.transferred < info.contributors[0].reserved)
     {
       LOG_PRINT_L1("Register TX rejected: TX does not have sufficient operator stake");
       return false;
@@ -1123,7 +1123,7 @@ namespace service_nodes
         other_reservations++;
     }
 
-    if (hf_version >= cryptonote::network_version_16 && stake.locked_contributions.size() != 1)
+    if (hf_version >= cryptonote::network_version_16_pulse && stake.locked_contributions.size() != 1)
     {
       // Nothing has ever created stake txes with multiple stake outputs, but we start enforcing
       // that in HF16.
@@ -1134,7 +1134,7 @@ namespace service_nodes
     // Check node contributor counts
     {
       bool too_many_contributions = false;
-      if (hf_version >= cryptonote::network_version_16)
+      if (hf_version >= cryptonote::network_version_16_pulse)
         // Before HF16 we didn't properly take into account unfilled reservation spots
         too_many_contributions = existing_contributions + other_reservations + 1 > MAX_NUMBER_OF_CONTRIBUTORS;
       else if (hf_version >= cryptonote::network_version_11_infinite_staking)
@@ -1160,7 +1160,7 @@ namespace service_nodes
     { // Follow-up contributions from an existing contributor could be any size before HF11
       min_contribution = 1;
     }
-    else if (hf_version < cryptonote::network_version_16)
+    else if (hf_version < cryptonote::network_version_16_pulse)
     {
       // The implementation before HF16 was a bit broken w.r.t. properly handling reserved amounts
       min_contribution = get_min_node_contribution(hf_version, curinfo.staking_requirement, curinfo.total_reserved, existing_contributions);
@@ -1484,7 +1484,7 @@ namespace service_nodes
     //
     pulse::timings timings = {};
     uint64_t height        = cryptonote::get_block_height(block);
-    if (block.major_version >= cryptonote::network_version_16)
+    if (block.major_version >= cryptonote::network_version_16_pulse)
     {
       uint64_t prev_timestamp = 0;
       if (alt_block)
@@ -1516,7 +1516,7 @@ namespace service_nodes
     //
     std::shared_ptr<const quorum>              pulse_quorum;
     std::vector<std::shared_ptr<const quorum>> alt_pulse_quorums;
-    bool pulse_hf = block.major_version >= cryptonote::network_version_16;
+    bool pulse_hf = block.major_version >= cryptonote::network_version_16_pulse;
 
     if (pulse_hf)
     {
@@ -1582,7 +1582,7 @@ namespace service_nodes
   static std::mt19937_64 quorum_rng(uint8_t hf_version, crypto::hash const &hash, quorum_type type)
   {
     std::mt19937_64 result;
-    if (hf_version >= cryptonote::network_version_16)
+    if (hf_version >= cryptonote::network_version_16_pulse)
     {
       std::array<uint32_t, (sizeof(hash) / sizeof(uint32_t)) + 1> src = {static_cast<uint32_t>(type)};
       std::memcpy(&src[1], &hash, sizeof(hash));
@@ -1651,7 +1651,7 @@ namespace service_nodes
     {
       cryptonote::block const &block = *it;
       crypto::hash hash              = {};
-      if (block.major_version >= cryptonote::network_version_16 &&
+      if (block.major_version >= cryptonote::network_version_16_pulse &&
           cryptonote::block_has_pulse_components(block))
       {
         std::array<uint8_t, 1 + sizeof(block.pulse.random_value)> src = {pulse_round};
@@ -1948,7 +1948,7 @@ namespace service_nodes
     //   i.e. before any deregistrations, registrations, decommissions, recommissions.
     //
     crypto::public_key winner_pubkey = cryptonote::get_service_node_winner_from_tx_extra(block.miner_tx.extra);
-    if (hf_version >= cryptonote::network_version_16)
+    if (hf_version >= cryptonote::network_version_16_pulse)
     {
       std::vector<crypto::hash> entropy = get_pulse_entropy_for_next_block(db, block.prev_id, block.pulse.round);
       quorum pulse_quorum = generate_pulse_quorum(nettype, winner_pubkey, hf_version, active_service_nodes_infos(), entropy, block.pulse.round);
@@ -2426,7 +2426,7 @@ namespace service_nodes
       return false;
     }
 
-    if (hf_version >= cryptonote::network_version_16)
+    if (hf_version >= cryptonote::network_version_16_pulse)
     {
       if (reward_parts.base_miner != 0)
       {

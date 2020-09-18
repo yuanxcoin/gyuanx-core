@@ -127,7 +127,7 @@ namespace cryptonote {
     timestamps.push_back(timestamp);
     difficulties.push_back(cumulative_difficulty);
 
-    static const uint64_t hf16_height = HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_16);
+    static const uint64_t hf16_height = HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_16_pulse);
     bool const before_hf16            = chain_height < hf16_height;
 
     // Trim down arrays

@@ -70,7 +70,7 @@ namespace cryptonote {
     bool bitset        = blk_header.pulse.validator_bitset > 0;
     bool random_value  = !(blk_header.pulse.random_value == empty_random_value);
     uint8_t hf_version = blk_header.major_version;
-    bool result        = hf_version >= cryptonote::network_version_16 && (bitset || random_value);
+    bool result        = hf_version >= cryptonote::network_version_16_pulse && (bitset || random_value);
     return result;
   }
   //-----------------------------------------------------------------------------------------------
@@ -79,7 +79,7 @@ namespace cryptonote {
     bool signatures    = blk.signatures.size();
     uint8_t hf_version = blk.major_version;
     bool result =
-        (hf_version >= cryptonote::network_version_16 && signatures) || block_header_has_pulse_components(blk);
+        (hf_version >= cryptonote::network_version_16_pulse && signatures) || block_header_has_pulse_components(blk);
     return result;
   }
   //-----------------------------------------------------------------------------------------------
@@ -124,7 +124,7 @@ namespace cryptonote {
     static_assert((TARGET_BLOCK_TIME % 1min) == 0s, "difficulty targets must be a multiple of a minute");
 
     uint64_t base_reward =
-      version >= network_version_16 ? BLOCK_REWARD_HF16 :
+      version >= network_version_16_pulse ? BLOCK_REWARD_HF16 :
       version >= network_version_15_lns ? BLOCK_REWARD_HF15 :
       version >= network_version_8  ? block_reward_unpenalized_formula_v8(height) :
         block_reward_unpenalized_formula_v7(already_generated_coins, height);

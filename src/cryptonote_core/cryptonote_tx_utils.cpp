@@ -133,7 +133,7 @@ namespace cryptonote
 
   uint64_t governance_reward_formula(uint64_t base_reward, uint8_t hf_version)
   {
-    return hf_version >= network_version_16     ? FOUNDATION_REWARD_HF16 :
+    return hf_version >= network_version_16_pulse ? FOUNDATION_REWARD_HF16 :
            hf_version >= network_version_15_lns ? FOUNDATION_REWARD_HF15 :
            base_reward / 20;
   }
@@ -197,7 +197,7 @@ namespace cryptonote
   uint64_t service_node_reward_formula(uint64_t base_reward, uint8_t hard_fork_version)
   {
     return
-      hard_fork_version >= network_version_16              ? SN_REWARD_HF16 :
+      hard_fork_version >= network_version_16_pulse        ? SN_REWARD_HF16 :
       hard_fork_version >= network_version_15_lns          ? SN_REWARD_HF15 :
       hard_fork_version >= network_version_9_service_nodes ? base_reward / 2 : // 50% of base reward up until HF15's fixed payout
       0;
@@ -337,7 +337,7 @@ namespace cryptonote
     {
       CHECK_AND_ASSERT_MES(miner_tx_context.pulse_block_producer.payouts.size(), false, "Constructing a reward for block produced by pulse but no payout entries specified");
       CHECK_AND_ASSERT_MES(miner_tx_context.pulse_block_producer.key, false, "Null Key given for Pulse Block Producer");
-      CHECK_AND_ASSERT_MES(hard_fork_version >= cryptonote::network_version_16, false, "Pulse Block Producer is not valid until HF16, current HF" << hard_fork_version);
+      CHECK_AND_ASSERT_MES(hard_fork_version >= cryptonote::network_version_16_pulse, false, "Pulse Block Producer is not valid until HF16, current HF" << hard_fork_version);
 
       uint64_t leader_reward = reward_parts.service_node_paid + reward_parts.base_miner;
       if (miner_tx_context.block_leader.key == miner_tx_context.pulse_block_producer.key)

@@ -967,7 +967,7 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
     // and it will be unlocked only when called from the getinfo RPC
     if (top_hash == m_cache.m_difficulty_for_next_block_top_hash)
     {
-      if (hf_version >= cryptonote::network_version_16 && pulse::clock::now() < m_cache.m_pulse_timings.miner_fallback_timestamp)
+      if (hf_version >= cryptonote::network_version_16_pulse && pulse::clock::now() < m_cache.m_pulse_timings.miner_fallback_timestamp)
         return PULSE_FIXED_DIFFICULTY;
       else
         return m_cache.m_difficulty_for_next_block;
@@ -980,7 +980,7 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
   uint64_t chain_height     = top_block_height + 1;
 
   bool pulse_override_difficulty = false;
-  if (hf_version >= cryptonote::network_version_16)
+  if (hf_version >= cryptonote::network_version_16_pulse)
   {
     pulse::get_round_timings(*this, chain_height, m_db->get_block_timestamp(top_block_height), m_cache.m_pulse_timings);
     pulse_override_difficulty = (pulse::clock::now() < m_cache.m_pulse_timings.miner_fallback_timestamp);
@@ -1204,10 +1204,10 @@ difficulty_type Blockchain::get_difficulty_for_alternative_chain(const std::list
   {
     bool before_hf16 = true;
     if (alt_chain.size())
-      before_hf16 = alt_chain.back().bl.major_version < network_version_16;
+      before_hf16 = alt_chain.back().bl.major_version < network_version_16_pulse;
     else
     {
-      static const uint64_t hf16_height = HardFork::get_hardcoded_hard_fork_height(m_nettype, cryptonote::network_version_16);
+      static const uint64_t hf16_height = HardFork::get_hardcoded_hard_fork_height(m_nettype, cryptonote::network_version_16_pulse);
       before_hf16                       = get_current_blockchain_height() < hf16_height;
     }
 
@@ -2055,7 +2055,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
   bool const alt_chain_has_more_checkpoints  = (num_checkpoints_on_alt_chain > num_checkpoints_on_chain);
   bool const alt_chain_has_equal_checkpoints = (num_checkpoints_on_alt_chain == num_checkpoints_on_chain);
 
-  if (b.major_version >= cryptonote::network_version_16)
+  if (b.major_version >= cryptonote::network_version_16_pulse)
   {
     // In Pulse, we move away from the concept of difficulty to solve ties
     // between chains. We calculate the preferred chain using a simpler system.
@@ -3979,7 +3979,7 @@ Blockchain::block_pow_verified Blockchain::verify_block_pow(cryptonote::block co
   // Hence this hack: starting at that block until the next hard fork, we allow a slight grace
   // (0.2%) on the required difficulty (but we don't *change* the actual difficulty value used for
   // diff calculation).
-  if (cryptonote::get_block_height(blk) >= 526483 && m_hardfork->get_current_version() < network_version_16)
+  if (cryptonote::get_block_height(blk) >= 526483 && m_hardfork->get_current_version() < network_version_16_pulse)
     difficulty = (difficulty * 998) / 1000;
 
   CHECK_AND_ASSERT_MES(difficulty, result, "!!!!!!!!! difficulty overhead !!!!!!!!!");
@@ -4962,7 +4962,7 @@ bool Blockchain::calc_batched_governance_reward(uint64_t height, uint64_t &rewar
   if (hard_fork_version >= network_version_15_lns)
   {
     reward = num_blocks * (
-        hard_fork_version >= network_version_16 ? FOUNDATION_REWARD_HF16 : FOUNDATION_REWARD_HF15);
+        hard_fork_version >= network_version_16_pulse ? FOUNDATION_REWARD_HF16 : FOUNDATION_REWARD_HF15);
     return true;
   }
 

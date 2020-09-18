@@ -465,7 +465,7 @@ namespace cryptonote
       VARINT_FIELD(timestamp)
       FIELD(prev_id)
       FIELD(nonce)
-      if (major_version >= cryptonote::network_version_16)
+      if (major_version >= cryptonote::network_version_16_pulse)
         FIELD(pulse)
     END_SERIALIZE()
   };
@@ -503,7 +503,7 @@ namespace cryptonote
       FIELD(tx_hashes)
       if (tx_hashes.size() > CRYPTONOTE_MAX_TX_PER_BLOCK)
         throw std::invalid_argument{"too many txs in block"};
-      if (major_version >= cryptonote::network_version_16)
+      if (major_version >= cryptonote::network_version_16_pulse)
         FIELD(signatures)
     END_SERIALIZE()
   };

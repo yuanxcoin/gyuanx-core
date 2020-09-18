@@ -4805,7 +4805,7 @@ void BlockchainLMDB::fixup(fixup_context const context)
 
         bool use_next_difficulty_function = true;
         uint8_t hf_version                = get_hard_fork_version(curr_height);
-        if (hf_version >= cryptonote::network_version_16)
+        if (hf_version >= cryptonote::network_version_16_pulse)
         {
           block_header header = get_block_header_from_height(curr_height);
           if (block_header_has_pulse_components(header))
