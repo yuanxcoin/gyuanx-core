@@ -2052,11 +2052,55 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     }
   }
 
-  bool const alt_chain_has_more_checkpoints = (num_checkpoints_on_alt_chain > num_checkpoints_on_chain);
+  bool const alt_chain_has_more_checkpoints  = (num_checkpoints_on_alt_chain > num_checkpoints_on_chain);
+  bool const alt_chain_has_equal_checkpoints = (num_checkpoints_on_alt_chain == num_checkpoints_on_chain);
 
   if (b.major_version >= cryptonote::network_version_16)
   {
-    if (alt_chain_has_more_checkpoints)
+    // In Pulse, we move away from the concept of difficulty to solve ties
+    // between chains. We calculate the preferred chain using a simpler system.
+    uint64_t alt_chain_weight  = 0;
+    uint64_t main_chain_weight = 0;
+    {
+      uint64_t start = alt_chain.front().height;
+      uint64_t end   = std::max(alt_chain.back().height + 1, m_db->height());
+
+      std::vector<block> blocks;
+      if (!get_blocks_only(start, end - start, blocks, nullptr /*txs*/))
+      {
+        MERROR("Unexpected failure to query blocks for alt chain switching calculation from " << start << " to " << (end - 1));
+        return false;
+      }
+
+      // Smallest number divisible by all integers from 1..32.  (This is fairly arbitrary,
+      // but avoids remainders below in most cases, while being small enough that we can
+      // add up a large number of blocks without risk of overflow).
+      constexpr uint64_t PULSE_BASE_WEIGHT = 144403552893600ULL;
+
+      // Minimal value increase for a longer chain so that two chains with the same cumulative
+      // weight calculation below will marginally prefer the longer chain.  Also for mined blocks
+      // we *only* get this longer chain value, effectively making mined blocks only matter
+      // when there is no other chain contention.
+      constexpr uint64_t MIN_WEIGHT_INCREMENT = 1;
+
+      for (auto const &block : alt_chain)
+      {
+        alt_chain_weight += MIN_WEIGHT_INCREMENT;
+        if (cryptonote::block_has_pulse_components(block.bl))
+          alt_chain_weight += PULSE_BASE_WEIGHT / (1 + block.bl.pulse.round); // (0-based pulse_round)
+      }
+
+      for (auto const &block : blocks)
+      {
+        main_chain_weight += MIN_WEIGHT_INCREMENT;
+        if (cryptonote::block_has_pulse_components(block))
+          main_chain_weight += PULSE_BASE_WEIGHT / (1 + block.pulse.round);
+      }
+    }
+
+    bool alt_chain_has_greater_weight = alt_chain_weight > main_chain_weight;
+
+    if (alt_chain_has_more_checkpoints || (alt_chain_has_greater_weight && alt_chain_has_equal_checkpoints))
     {
       bool r = switch_to_alternative_blockchain(alt_chain, false /*keep_alt_chain*/);
       if (r)
@@ -2074,7 +2118,6 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
   else
   {
     difficulty_type const main_chain_cumulative_difficulty = m_db->get_block_cumulative_difficulty(m_db->height() - 1);
-    bool const alt_chain_has_equal_checkpoints = (num_checkpoints_on_alt_chain == num_checkpoints_on_chain);
     bool const alt_chain_has_greater_pow       = alt_data.cumulative_difficulty > main_chain_cumulative_difficulty;
 
     if (b.major_version >= network_version_13_enforce_checkpoints)
