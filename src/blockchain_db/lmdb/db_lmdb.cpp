@@ -394,6 +394,11 @@ struct mdb_block_info_2 : mdb_block_info_1
   uint64_t bi_cum_rct;
 };
 
+struct mdb_block_info_3 : mdb_block_info_2
+{
+  uint8_t bi_pulse;
+};
+
 struct mdb_block_info : mdb_block_info_2
 {
   uint64_t bi_long_term_block_weight;
@@ -2516,6 +2521,61 @@ bool BlockchainLMDB::block_exists(const crypto::hash& h, uint64_t *height) const
   return ret;
 }
 
+template <typename T,
+          std::enable_if_t<std::is_same_v<T, cryptonote::block> ||
+                           std::is_same_v<T, cryptonote::block_header> ||
+                           std::is_same_v<T, cryptonote::blobdata>, int>>
+T BlockchainLMDB::get_and_convert_block_blob_from_height(uint64_t height) const
+{
+  // NOTE: Avoid any intermediary functions like taking a blob, then converting
+  // to block which incurs a copy into blobdata then conversion, and prefer
+  // converting directly from the data initially fetched.
+
+  // Avoid casting block to block_header so we only have to deserialize the
+  // header, not the full-block (of which a good chunk is thrown away because we
+  // only want the header).
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(blocks);
+
+  MDB_val_copy<uint64_t> key(height);
+  MDB_val value;
+  auto get_result = mdb_cursor_get(m_cur_blocks, &key, &value, MDB_SET);
+  if (get_result == MDB_NOTFOUND)
+    throw0(BLOCK_DNE(std::string("Attempt to get block from height ").append(std::to_string(height)).append(" failed -- block not in db").c_str()));
+  else if (get_result)
+    throw0(DB_ERROR("Error attempting to retrieve a block from the db"));
+
+  std::string_view blob{reinterpret_cast<const char *>(value.mv_data), value.mv_size};
+
+  T result;
+  if constexpr (std::is_same_v<T, cryptonote::block>)
+  {
+    if (!parse_and_validate_block_from_blob(blob, result))
+      throw DB_ERROR("Failed to parse block from blob retrieved from the db");
+  }
+  else if constexpr (std::is_same_v<T, cryptonote::block_header>)
+  {
+    serialization::binary_string_unarchiver ba{blob};
+    serialization::value(ba, result);
+  }
+  else if constexpr (std::is_same_v<T, cryptonote::blobdata>)
+  {
+    result = blob;
+  }
+
+  return result;
+}
+
+block BlockchainLMDB::get_block_from_height(uint64_t height) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  block result = get_and_convert_block_blob_from_height<block>(height);
+  return result;
+}
+
 cryptonote::blobdata BlockchainLMDB::get_block_blob(const crypto::hash& h) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
@@ -2544,37 +2604,17 @@ uint64_t BlockchainLMDB::get_block_height(const crypto::hash& h) const
   return ret;
 }
 
-block_header BlockchainLMDB::get_block_header(const crypto::hash& h) const
+block_header BlockchainLMDB::get_block_header_from_height(uint64_t height) const
 {
-  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  check_open();
-
-  // block_header object is automatically cast from block object
-  return get_block(h);
+  block_header result = get_and_convert_block_blob_from_height<cryptonote::block_header>(height);
+  return result;
 }
 
-cryptonote::blobdata BlockchainLMDB::get_block_blob_from_height(const uint64_t& height) const
+cryptonote::blobdata BlockchainLMDB::get_block_blob_from_height(uint64_t height) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  check_open();
-
-  TXN_PREFIX_RDONLY();
-  RCURSOR(blocks);
-
-  MDB_val_copy<uint64_t> key(height);
-  MDB_val result;
-  auto get_result = mdb_cursor_get(m_cur_blocks, &key, &result, MDB_SET);
-  if (get_result == MDB_NOTFOUND)
-  {
-    throw0(BLOCK_DNE(std::string("Attempt to get block from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- block not in db").c_str()));
-  }
-  else if (get_result)
-    throw0(DB_ERROR("Error attempting to retrieve a block from the db"));
-
-  blobdata bd;
-  bd.assign(reinterpret_cast<char*>(result.mv_data), result.mv_size);
-
-  return bd;
+  cryptonote::blobdata result = get_and_convert_block_blob_from_height<blobdata>(height);
+  return result;
 }
 
 uint64_t BlockchainLMDB::get_block_timestamp(const uint64_t& height) const
@@ -3120,7 +3160,8 @@ bool BlockchainLMDB::get_tx_blob(const crypto::hash& h, cryptonote::blobdata &bd
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("DB error attempting to fetch tx from hash", get_result).c_str()));
 
-  bd.assign(reinterpret_cast<char*>(result0.mv_data), result0.mv_size);
+  bd.reserve(result0.mv_size + result1.mv_size);
+  bd.append(reinterpret_cast<char*>(result0.mv_data), result0.mv_size);
   bd.append(reinterpret_cast<char*>(result1.mv_data), result1.mv_size);
 
   return true;
@@ -4624,7 +4665,7 @@ void BlockchainLMDB::add_alt_block(const crypto::hash &blkid, const cryptonote::
   }
 }
 
-bool BlockchainLMDB::get_alt_block(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::blobdata *block, cryptonote::blobdata *checkpoint)
+bool BlockchainLMDB::get_alt_block(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::blobdata *block, cryptonote::blobdata *checkpoint) const
 {
   LOG_PRINT_L3("BlockchainLMDB:: " << __func__);
   check_open();
@@ -4729,121 +4770,97 @@ void BlockchainLMDB::fixup(fixup_context const context)
   if (is_read_only())
     return;
 
-  if (context.type == fixup_type::calculate_difficulty)
+  uint64_t start_height = (context.recalc_diff.start_height == 0) ?  1 : context.recalc_diff.start_height;
+
+  if (start_height >= height())
+   return;
+
+  std::vector<uint64_t> timestamps;
+  std::vector<difficulty_type> difficulties;
+  BlockchainDB::fill_timestamps_and_difficulties_for_pow(context.nettype,
+                                                         timestamps,
+                                                         difficulties,
+                                                         context.recalc_diff.start_height /*chain_height*/,
+                                                         0 /*timestamps_difficulty_height*/);
+
+  try
   {
-    uint64_t start_height = (context.calculate_difficulty_params.start_height == 0) ?
-      1 : context.calculate_difficulty_params.start_height;
-
-    if (start_height >= height())
-     return;
-
-    // The first blocks of v12 get an overridden difficulty, so if the start block is v12 we need to
-    // make sure it isn't in that initial window; if it *is*, check H-60 to see if that is v11; if
-    // it is, recalculate from there instead (so that we detect the v12 barrier).
-    uint8_t v12_initial_blocks_remaining = 0;
-    uint8_t start_version = get_hard_fork_version(start_height);
-    if (start_version < cryptonote::network_version_12_checkpointing) {
-      v12_initial_blocks_remaining = DIFFICULTY_WINDOW;
-    } else if (start_version == cryptonote::network_version_12_checkpointing && start_height > DIFFICULTY_WINDOW) {
-      uint8_t earlier_version = get_hard_fork_version(start_height - DIFFICULTY_WINDOW);
-      if (earlier_version < cryptonote::network_version_12_checkpointing) {
-        start_height -= DIFFICULTY_WINDOW;
-        v12_initial_blocks_remaining = DIFFICULTY_WINDOW;
-        LOG_PRINT_L2("Using earlier recalculation start height " << start_height << " to include v12 fork height");
-      }
-    }
-
-    std::vector<uint64_t> timestamps;
-    std::vector<difficulty_type> difficulties;
+    uint64_t const num_blocks                = height() - start_height;
+    uint64_t prev_cumulative_diff            = get_block_cumulative_difficulty(start_height - 1);
+    uint64_t const BLOCKS_PER_BATCH          = 10000;
+    uint64_t const blocks_in_left_over_batch = num_blocks % BLOCKS_PER_BATCH;
+    uint64_t const num_batches               = (num_blocks + (BLOCKS_PER_BATCH - 1)) / BLOCKS_PER_BATCH;
+    size_t const left_over_batch_index       = num_batches - 1;
+    for (size_t batch_index = 0; batch_index < num_batches; batch_index++)
     {
-      uint64_t offset = start_height - std::min<size_t>(start_height, static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT));
-      if (offset == 0)
-        offset = 1;
+      block_wtxn_start();
+      mdb_txn_cursors *m_cursors = &m_wcursors; // Necessary for macro
+      CURSOR(block_info);
 
-      if (start_height > offset)
+      uint64_t blocks_in_batch = (batch_index == left_over_batch_index ? blocks_in_left_over_batch : BLOCKS_PER_BATCH);
+      for (uint64_t block_index = 0; block_index < blocks_in_batch; block_index++)
       {
-        timestamps.reserve  (start_height - offset);
-        difficulties.reserve(start_height - offset);
-      }
+        uint64_t const curr_height = (start_height + (batch_index * BLOCKS_PER_BATCH) + block_index);
+        difficulty_type diff       = {};
 
-      for (; offset < start_height; offset++)
-      {
-        timestamps.push_back  (get_block_timestamp(offset));
-        difficulties.push_back(get_block_cumulative_difficulty(offset));
-      }
-    }
-
-    try
-    {
-      uint64_t const num_blocks                = height() - start_height;
-      uint64_t prev_cumulative_diff            = get_block_cumulative_difficulty(start_height - 1);
-      uint64_t const BLOCKS_PER_BATCH          = 10000;
-      uint64_t const blocks_in_left_over_batch = num_blocks % BLOCKS_PER_BATCH;
-      uint64_t const num_batches               = (num_blocks + (BLOCKS_PER_BATCH - 1)) / BLOCKS_PER_BATCH;
-      size_t const left_over_batch_index       = num_batches - 1;
-      for (size_t batch_index = 0; batch_index < num_batches; batch_index++)
-      {
-        block_wtxn_start();
-        mdb_txn_cursors *m_cursors = &m_wcursors; // Necessary for macro
-        CURSOR(block_info);
-
-        uint64_t blocks_in_batch = (batch_index == left_over_batch_index ? blocks_in_left_over_batch : BLOCKS_PER_BATCH);
-        for (uint64_t block_index = 0; block_index < blocks_in_batch; block_index++)
+        bool use_next_difficulty_function = true;
+        uint8_t hf_version                = get_hard_fork_version(curr_height);
+        if (hf_version >= cryptonote::network_version_16_pulse)
         {
-          uint64_t const curr_height = (start_height + (batch_index * BLOCKS_PER_BATCH) + block_index);
-          uint8_t version            = get_hard_fork_version(curr_height);
-          bool v12_initial_override = false;
-          if (version == cryptonote::network_version_12_checkpointing && v12_initial_blocks_remaining > 0) {
-            v12_initial_override = true;
-            v12_initial_blocks_remaining--;
-          }
-          difficulty_type diff = next_difficulty_v2(timestamps, difficulties, tools::to_seconds(TARGET_BLOCK_TIME),
-              version <= cryptonote::network_version_9_service_nodes, v12_initial_override);
-
-          MDB_val_set(key, curr_height);
-
-          try
+          block_header header = get_block_header_from_height(curr_height);
+          if (block_header_has_pulse_components(header))
           {
-            if (int result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &key, MDB_GET_BOTH))
-              throw1(BLOCK_DNE(lmdb_error("Failed to get block info in recalculate difficulty: ", result).c_str()));
-
-            mdb_block_info block_info    = *(mdb_block_info *)key.mv_data;
-            uint64_t old_cumulative_diff = block_info.bi_diff;
-            block_info.bi_diff           = prev_cumulative_diff + diff;
-            prev_cumulative_diff         = block_info.bi_diff;
-
-            if (old_cumulative_diff != block_info.bi_diff)
-              LOG_PRINT_L0("Height: " << curr_height << " prev difficulty: " << old_cumulative_diff <<  ", new difficulty: " << block_info.bi_diff);
-            else
-              LOG_PRINT_L2("Height: " << curr_height << " difficulty unchanged (" << old_cumulative_diff << ")");
-
-            MDB_val_set(val, block_info);
-            if (int result = mdb_cursor_put(m_cur_block_info, (MDB_val *)&zerokval, &val, MDB_CURRENT))
-                throw1(BLOCK_DNE(lmdb_error("Failed to put block info: ", result).c_str()));
-
-            timestamps.push_back(block_info.bi_timestamp);
-            difficulties.push_back(block_info.bi_diff);
+            diff                         = PULSE_FIXED_DIFFICULTY;
+            use_next_difficulty_function = false;
           }
-          catch (DB_ERROR const &e)
-          {
-            block_wtxn_abort();
-            LOG_PRINT_L0("Something went wrong recalculating difficulty for block " << curr_height << e.what());
-            return;
-          }
-
-          while (timestamps.size() > DIFFICULTY_BLOCKS_COUNT) timestamps.erase(timestamps.begin());
-          while (difficulties.size() > DIFFICULTY_BLOCKS_COUNT) difficulties.erase(difficulties.begin());
         }
 
-        block_wtxn_stop();
-      }
+        if (use_next_difficulty_function)
+        {
+          diff = next_difficulty_v2(timestamps,
+                                    difficulties,
+                                    tools::to_seconds(TARGET_BLOCK_TIME),
+                                    difficulty_mode(context.nettype, hf_version, curr_height));
+        }
 
+        MDB_val_set(key, curr_height);
+        try
+        {
+          if (int result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &key, MDB_GET_BOTH))
+            throw1(BLOCK_DNE(lmdb_error("Failed to get block info in recalculate difficulty: ", result).c_str()));
+
+          mdb_block_info block_info    = *(mdb_block_info *)key.mv_data;
+          uint64_t old_cumulative_diff = block_info.bi_diff;
+          block_info.bi_diff           = prev_cumulative_diff + diff;
+          prev_cumulative_diff         = block_info.bi_diff;
+
+          if (old_cumulative_diff != block_info.bi_diff)
+            LOG_PRINT_L0("Height: " << curr_height << " prev difficulty: " << old_cumulative_diff <<  ", new difficulty: " << block_info.bi_diff);
+          else
+            LOG_PRINT_L2("Height: " << curr_height << " difficulty unchanged (" << old_cumulative_diff << ")");
+
+          MDB_val_set(val, block_info);
+          if (int result = mdb_cursor_put(m_cur_block_info, (MDB_val *)&zerokval, &val, MDB_CURRENT))
+              throw1(BLOCK_DNE(lmdb_error("Failed to put block info: ", result).c_str()));
+
+          add_timestamp_and_difficulty(
+              context.nettype, curr_height, timestamps, difficulties, block_info.bi_timestamp, block_info.bi_diff);
+        }
+        catch (DB_ERROR const &e)
+        {
+          block_wtxn_abort();
+          LOG_PRINT_L0("Something went wrong recalculating difficulty for block " << curr_height << e.what());
+          return;
+        }
+      }
+      block_wtxn_stop();
     }
-    catch (DB_ERROR const &e)
-    {
-      LOG_PRINT_L0("Something went wrong in the pre-amble of recalculating difficulty for block: " << e.what());
-      return;
-    }
+
+  }
+  catch (DB_ERROR const &e)
+  {
+    LOG_PRINT_L0("Something went wrong in the pre-amble of recalculating difficulty for block: " << e.what());
+    return;
   }
 }
 
@@ -5976,24 +5993,12 @@ void BlockchainLMDB::migrate_4_5(cryptonote::network_type nettype)
   txn.commit();
 
   // NOTE: Rescan chain difficulty to mitigate difficulty problem pre hardfork v12
-  uint64_t hf12_height = 0;
-  for (const auto &record : cryptonote::HardFork::get_hardcoded_hard_forks(nettype))
-  {
-    if (record.version == cryptonote::network_version_12_checkpointing)
-    {
-      hf12_height = record.height;
-      break;
-    }
-  }
-
-  fixup_context context                            = {};
-  context.type                                     = fixup_type::calculate_difficulty;
-  context.calculate_difficulty_params.start_height = hf12_height;
+  fixup_context context            = {};
+  context.nettype                  = nettype;
+  context.recalc_diff.start_height = HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_12_checkpointing);
 
   uint64_t constexpr FUDGE = BLOCKS_EXPECTED_IN_DAYS(1);
-  context.calculate_difficulty_params.start_height = (context.calculate_difficulty_params.start_height < FUDGE)
-                                                         ? 0
-                                                         : context.calculate_difficulty_params.start_height - FUDGE;
+  context.recalc_diff.start_height = (context.recalc_diff.start_height < FUDGE) ? 0 : context.recalc_diff.start_height - FUDGE;
   fixup(context);
 
   if (int result = write_db_version(m_env, m_properties, (uint32_t)lmdb_version::v5))

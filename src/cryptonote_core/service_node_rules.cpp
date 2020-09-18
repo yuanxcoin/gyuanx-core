@@ -150,7 +150,7 @@ static uint64_t get_min_node_contribution_pre_v11(uint64_t staking_requirement, 
 
 uint64_t get_max_node_contribution(uint8_t version, uint64_t staking_requirement, uint64_t total_reserved)
 {
-  if (version >= cryptonote::network_version_16)
+  if (version >= cryptonote::network_version_16_pulse)
     return (staking_requirement - total_reserved) * config::MAXIMUM_ACCEPTABLE_STAKE::num
       / config::MAXIMUM_ACCEPTABLE_STAKE::den;
   return std::numeric_limits<uint64_t>::max();

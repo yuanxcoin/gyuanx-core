@@ -93,8 +93,26 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define DYNAMIC_FEE_REFERENCE_TRANSACTION_WEIGHT_V12    ((uint64_t)240000) // Only v12 (v13 switches back)
 
 constexpr auto TARGET_BLOCK_TIME           = 2min;
-constexpr auto DIFFICULTY_WINDOW           = 60;
-constexpr uint64_t DIFFICULTY_BLOCKS_COUNT = (DIFFICULTY_WINDOW + 1); // added +1 to make N=N
+constexpr uint64_t DIFFICULTY_WINDOW       = 59;
+constexpr uint64_t DIFFICULTY_BLOCKS_COUNT(bool before_hf16)
+{
+  // NOTE: We used to have a different setup here where,
+  // DIFFICULTY_WINDOW       = 60
+  // DIFFICULTY_BLOCKS_COUNT = 61
+  // next_difficulty_v2's  N = DIFFICULTY_WINDOW - 1
+  //
+  // And we resized timestamps/difficulties to (N+1) (chopping off the latest timestamp).
+  //
+  // Now we re-adjust DIFFICULTY_WINDOW to 59. To preserve the old behaviour we
+  // add +2. After HF16 we avoid trimming the top block and just add +1.
+  //
+  // Ideally, we just set DIFFICULTY_BLOCKS_COUNT to DIFFICULTY_WINDOW
+  // + 1 for before and after HF16 (having one unified constant) but this
+  // requires some more investigation to get it working with pre HF16 blocks and
+  // alt chain code without bugs.
+  uint64_t result = (before_hf16) ? DIFFICULTY_WINDOW + 2 : DIFFICULTY_WINDOW + 1;
+  return result;
+}
 
 constexpr uint64_t BLOCKS_EXPECTED_IN_HOURS(int hours) { return (1h / TARGET_BLOCK_TIME) * hours; }
 constexpr uint64_t BLOCKS_EXPECTED_IN_DAYS(int days)   { return BLOCKS_EXPECTED_IN_HOURS(24) * days; }
@@ -170,11 +188,11 @@ constexpr uint64_t BLOCKS_EXPECTED_IN_YEARS(int years) { return BLOCKS_EXPECTED_
 #define HF_VERSION_ED25519_KEY                  cryptonote::network_version_13_enforce_checkpoints
 #define HF_VERSION_FEE_BURNING                  cryptonote::network_version_14_blink
 #define HF_VERSION_BLINK                        cryptonote::network_version_14_blink
-#define HF_VERSION_MIN_2_OUTPUTS                cryptonote::network_version_16
-#define HF_VERSION_REJECT_SIGS_IN_COINBASE      cryptonote::network_version_16
-#define HF_VERSION_ENFORCE_MIN_AGE              cryptonote::network_version_16
-#define HF_VERSION_EFFECTIVE_SHORT_TERM_MEDIAN_IN_PENALTY cryptonote::network_version_16
-#define HF_VERSION_PULSE cryptonote::network_version_16
+#define HF_VERSION_MIN_2_OUTPUTS                cryptonote::network_version_16_pulse
+#define HF_VERSION_REJECT_SIGS_IN_COINBASE      cryptonote::network_version_16_pulse
+#define HF_VERSION_ENFORCE_MIN_AGE              cryptonote::network_version_16_pulse
+#define HF_VERSION_EFFECTIVE_SHORT_TERM_MEDIAN_IN_PENALTY cryptonote::network_version_16_pulse
+#define HF_VERSION_PULSE cryptonote::network_version_16_pulse
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
 
@@ -306,7 +324,7 @@ namespace cryptonote
     network_version_13_enforce_checkpoints,
     network_version_14_blink,
     network_version_15_lns,
-    network_version_16, // future fork
+    network_version_16_pulse,
 
     network_version_count,
   };

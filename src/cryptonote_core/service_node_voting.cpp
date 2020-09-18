@@ -247,13 +247,13 @@ namespace service_nodes
       {
         if (signatures.size() < service_nodes::CHECKPOINT_MIN_VOTES)
         {
-          LOG_PRINT_L1("Checkpoint has insufficient signatures to be considered at height: " << height);
+          MGINFO("Checkpoint has insufficient signatures to be considered at height: " << height);
           return false;
         }
 
         if (signatures.size() > service_nodes::CHECKPOINT_QUORUM_SIZE)
         {
-          LOG_PRINT_L1("Checkpoint has too many signatures to be considered at height: " << height);
+          MGINFO("Checkpoint has too many signatures to be considered at height: " << height);
           return false;
         }
 
@@ -265,15 +265,24 @@ namespace service_nodes
       {
         if (signatures.size() != PULSE_BLOCK_REQUIRED_SIGNATURES)
         {
-          LOG_PRINT_L1("Pulse block has " << signatures.size() << " signatures but requires " << PULSE_BLOCK_REQUIRED_SIGNATURES);
+          MGINFO("Pulse block has " << signatures.size() << " signatures but requires " << PULSE_BLOCK_REQUIRED_SIGNATURES);
           return false;
         }
 
-        auto const &block = reinterpret_cast<cryptonote::block const &>(context);
-        if (block.pulse.validator_bitset >= (1 << PULSE_QUORUM_NUM_VALIDATORS))
+        try
         {
-          auto mask = std::bitset<sizeof(pulse_validator_bit_mask()) * 8>(pulse_validator_bit_mask());
-          LOG_PRINT_L1("Pulse block specifies validator participation bits out of bounds. Expected the bit mask: " << mask);
+          auto const block = std::any_cast<cryptonote::block const &>(context);
+          if (block.pulse.validator_bitset >= (1 << PULSE_QUORUM_NUM_VALIDATORS))
+          {
+            auto mask  = std::bitset<sizeof(pulse_validator_bit_mask()) * 8>(pulse_validator_bit_mask());
+            auto other = std::bitset<sizeof(pulse_validator_bit_mask()) * 8>(block.pulse.validator_bitset);
+            MGINFO("Pulse block specifies validator participation bits out of bounds. Expected the bit mask: " << mask << ", block: " << other);
+            return false;
+          }
+        }
+        catch (const std::bad_any_cast &e)
+        {
+          MGINFO("Internal Error: Wrong type passed in any object, expected block.");
           return false;
         }
       }
@@ -290,7 +299,7 @@ namespace service_nodes
 
         if (curr >= next)
         {
-          LOG_PRINT_L1("Voters in signatures are not given in ascending order, failed verification at height: " << height);
+          MGINFO("Voters in signatures are not given in ascending order, failed verification at height: " << height);
           return false;
         }
       }
@@ -306,13 +315,13 @@ namespace service_nodes
           uint16_t bit     = 1 << quorum_signature.voter_index;
           if ((block.pulse.validator_bitset & bit) == 0)
           {
-            LOG_PRINT_L1("Received pulse signature from validator " << static_cast<int>(quorum_signature.voter_index) << " that is not participating in round " << static_cast<int>(block.pulse.round));
+            MGINFO("Received pulse signature from validator " << static_cast<int>(quorum_signature.voter_index) << " that is not participating in round " << static_cast<int>(block.pulse.round));
             return false;
           }
         }
         catch (const std::bad_any_cast &e)
         {
-          LOG_PRINT_L1("Internal Error: Wrong type passed in any object, expected block.");
+          MGINFO("Internal Error: Wrong type passed in any object, expected block.");
           return false;
         }
       }
@@ -320,19 +329,19 @@ namespace service_nodes
       crypto::public_key const &key = quorum.validators[quorum_signature.voter_index];
       if (quorum_signature.voter_index >= unique_vote_set.size())
       {
-        MERROR("Internal Error: Voter Index indexes out of bounds of the vote set, index: " << quorum_signature.voter_index << "vote set size: " << unique_vote_set.size());
+        MGINFO("Internal Error: Voter Index indexes out of bounds of the vote set, index: " << quorum_signature.voter_index << "vote set size: " << unique_vote_set.size());
         return false;
       }
 
       if (unique_vote_set[quorum_signature.voter_index]++)
       {
-        LOG_PRINT_L1("Voter: " << epee::string_tools::pod_to_hex(key) << ", quorum index is duplicated: " << quorum_signature.voter_index << ", failed verification at height: " << height);
+        MGINFO("Voter: " << epee::string_tools::pod_to_hex(key) << ", quorum index is duplicated: " << quorum_signature.voter_index << ", failed verification at height: " << height);
         return false;
       }
 
       if (!crypto::check_signature(hash, key, quorum_signature.signature))
       {
-        LOG_PRINT_L1("Incorrect signature for vote, failed verification at height: " << height << " for voter: " << key << "\n" << quorum);
+        MGINFO("Incorrect signature for vote, failed verification at height: " << height << " for voter: " << key << "\n" << quorum);
         return false;
       }
     }

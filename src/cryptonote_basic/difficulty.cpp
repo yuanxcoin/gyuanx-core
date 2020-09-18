@@ -34,8 +34,8 @@
 #include "common/loki.h"
 #include "int-util.h"
 #include "crypto/hash.h"
-#include "cryptonote_config.h"
 #include "difficulty.h"
+#include "hardfork.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "difficulty"
@@ -117,6 +117,29 @@ namespace cryptonote {
     return !carry;
   }
 
+  void add_timestamp_and_difficulty(cryptonote::network_type nettype,
+                                    uint64_t chain_height,
+                                    std::vector<uint64_t> &timestamps,
+                                    std::vector<difficulty_type> &difficulties,
+                                    uint64_t timestamp,
+                                    uint64_t cumulative_difficulty)
+  {
+    timestamps.push_back(timestamp);
+    difficulties.push_back(cumulative_difficulty);
+
+    static const uint64_t hf16_height = HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_16_pulse);
+    bool const before_hf16            = chain_height < hf16_height;
+
+    // Trim down arrays
+    while (timestamps.size() > DIFFICULTY_BLOCKS_COUNT(before_hf16))
+      timestamps.erase(timestamps.begin());
+
+    while (difficulties.size() > DIFFICULTY_BLOCKS_COUNT(before_hf16))
+      difficulties.erase(difficulties.begin());
+  }
+
+  //---------------------------------------------------------------
+
   // LWMA difficulty algorithm
   // Background:  https://github.com/zawy12/difficulty-algorithms/issues/3
   // Copyright (c) 2017-2018 Zawy (pseudocode)
@@ -140,12 +163,33 @@ namespace cryptonote {
   // be reduced from 60*60*2 to 500 seconds to prevent timestamp manipulation from miner's with 
   //  > 50% hash power.  If this is too small, it can be increased to 1000 at a cost in protection.
 
-  difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds,
-      bool use_old_lwma, bool v12_initial_override) {
+  difficulty_calc_mode difficulty_mode(cryptonote::network_type nettype, uint8_t hf_version, uint64_t height)
+  {
+    static const uint64_t hf12_height = cryptonote::HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_12_checkpointing);
+    auto result = difficulty_calc_mode::normal;
 
+    if (hf_version <= cryptonote::network_version_9_service_nodes)
+    {
+      result = difficulty_calc_mode::use_old_lwma;
+    }
+    // HF12 switches to RandomX with a likely drastically reduced hashrate versus Turtle, so override
+    // difficulty for the first difficulty window blocks:
+    else if (hf_version >= cryptonote::network_version_12_checkpointing &&
+             height < hf12_height + (DIFFICULTY_WINDOW + 1))
+    {
+      result = difficulty_calc_mode::hf12_override;
+    }
+
+    return result;
+  }
+
+  difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps,
+                                     std::vector<difficulty_type> cumulative_difficulties,
+                                     size_t target_seconds,
+                                     difficulty_calc_mode mode)
+  {
     const int64_t T = static_cast<int64_t>(target_seconds);
-
-    size_t N = DIFFICULTY_WINDOW - 1;
+    size_t N        = DIFFICULTY_WINDOW;
 
     // Return a difficulty of 1 for first 4 blocks if it's the start of the chain.
     if (timestamps.size() < 4) {
@@ -155,13 +199,13 @@ namespace cryptonote {
     else if ( timestamps.size()-1 < N ) {
       N = timestamps.size() - 1;
     }
-    // Otherwise make sure timestamps and cumulative_difficulties are correct size.
-    else {
-      // TODO: put asserts here, so that the difficulty algorithm is never called with an oversized window
-      //       OR make this use the last N+1 timestamps and cum_diff, not the first.
+    else
+    {
+      // Otherwise make sure timestamps and cumulative_difficulties are correct size.
       timestamps.resize(N+1);
       cumulative_difficulties.resize(N+1);
     }
+
     // To get an average solvetime to within +/- ~0.1%, use an adjustment factor.
     // adjust=0.999 for 80 < N < 120(?)
     const double adjust = 0.998;
@@ -176,7 +220,7 @@ namespace cryptonote {
     for (int64_t i = 1; i <= (int64_t)N; i++) {
       solveTime = static_cast<int64_t>(timestamps[i]) - static_cast<int64_t>(timestamps[i - 1]);
 
-      if (use_old_lwma) solveTime = std::max<int64_t>(solveTime, (-7 * T));
+      if (mode == difficulty_calc_mode::use_old_lwma) solveTime = std::max<int64_t>(solveTime, (-7 * T));
       solveTime = std::min<int64_t>(solveTime, (T * 7));
 
       difficulty = cumulative_difficulties[i] - cumulative_difficulties[i - 1];
@@ -202,8 +246,8 @@ namespace cryptonote {
     // Rough estimate based on comparable coins, pre-merge-mining hashrate, and hashrate changes is
     // that 30MH/s seems more or less right, so we cap it there for the first WINDOW blocks to
     // prevent too-long blocks right after the fork.
-    if (v12_initial_override)
-      return std::min(next_difficulty, 30000000 * uint64_t(target_seconds));
+    if (mode == difficulty_calc_mode::hf12_override)
+      return std::min(next_difficulty, 30'000'000 * uint64_t(target_seconds));
 
     return next_difficulty;
   }

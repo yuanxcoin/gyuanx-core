@@ -57,11 +57,11 @@ struct message
   message_type type;
   uint16_t quorum_position;
   uint8_t  round;
-  crypto::signature signature;
+  crypto::signature signature; // Signs the contents of the message, proving it came from the node at quorum_position
 
   struct
   {
-    uint16_t validator_bitset;   // Set if type is handshake_bitset, otherwise 0.
+    uint16_t validator_bitset; // Set if type is handshake_bitset, otherwise 0.
   } handshakes;
 
   struct
@@ -78,6 +78,11 @@ struct message
   {
     cryptonote::pulse_random_value value;
   } random_value;
+
+  struct
+  {
+    crypto::signature signature_of_final_block_hash;
+  } signed_block;
 };
 
 void main(void *quorumnet_state, cryptonote::core &core);
@@ -86,14 +91,13 @@ void handle_message(void *quorumnet_state, pulse::message const &msg);
 struct timings
 {
   pulse::time_point genesis_timestamp;
-
-  crypto::hash      prev_hash;
   pulse::time_point prev_timestamp;
 
   pulse::time_point ideal_timestamp;
   pulse::time_point r0_timestamp;
+  pulse::time_point miner_fallback_timestamp;
 };
 
-bool get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t height, timings &times);
+bool get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t height, uint64_t prev_timestamp, pulse::timings &times);
 
 } // namespace pulse

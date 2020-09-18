@@ -246,18 +246,6 @@ namespace cryptonote
   , false
   };
 
-  const command_line::arg_descriptor<uint64_t> arg_recalculate_difficulty = {
-    "recalculate-difficulty",
-    "Recalculate per-block difficulty starting from the height specified",
-    // This is now enabled by default because the network broke at 526483 because of divergent
-    // difficulty values (and the chain that kept going violated the correct difficulty, and got
-    // checkpointed multiple times because enough of the network followed it).
-    //
-    // TODO: We can disable this post-pulse (since diff won't matter anymore), but until then there
-    // is a subtle bug somewhere in difficulty calculations that can cause divergence; this seems
-    // important enough to just rescan at every startup (and only takes a few seconds).
-    1};
-
   static const command_line::arg_descriptor<uint64_t> arg_store_quorum_history = {
     "store-quorum-history",
     "Store the service node quorum history for the last N blocks to allow historic quorum lookups "
@@ -266,17 +254,17 @@ namespace cryptonote
     0};
 
   // Loads stubs that fail if invoked.  The stubs are replaced in the cryptonote_protocol/quorumnet.cpp glue code.
-  [[noreturn]] static void need_core_init() {
-      throw std::logic_error("Internal error: core callback initialization was not performed!");
+  [[noreturn]] static void need_core_init(std::string_view stub_name) {
+      throw std::logic_error("Internal error: core callback initialization was not performed for "s + std::string(stub_name));
   }
 
-  void (*long_poll_trigger)(tx_memory_pool& pool) = [](tx_memory_pool&) { need_core_init(); };
-  quorumnet_new_proc *quorumnet_new = [](core&) -> void* { need_core_init(); };
-  quorumnet_init_proc *quorumnet_init = [](core&, void*) { need_core_init(); };
-  quorumnet_delete_proc *quorumnet_delete = [](void*&) { need_core_init(); };
-  quorumnet_relay_obligation_votes_proc *quorumnet_relay_obligation_votes = [](void*, const std::vector<service_nodes::quorum_vote_t>&) { need_core_init(); };
-  quorumnet_send_blink_proc *quorumnet_send_blink = [](core&, const std::string&) -> std::future<std::pair<blink_result, std::string>> { need_core_init(); };
-  quorumnet_pulse_relay_message_to_quorum_proc *quorumnet_pulse_relay_message_to_quorum = [](void *, pulse::message const &, service_nodes::quorum const &, bool) -> void { need_core_init(); };
+  void (*long_poll_trigger)(tx_memory_pool& pool) = [](tx_memory_pool&) { need_core_init("long_poll_trigger"sv); };
+  quorumnet_new_proc *quorumnet_new = [](core&) -> void* { need_core_init("quorumnet_new"sv); };
+  quorumnet_init_proc *quorumnet_init = [](core&, void*) { need_core_init("quorumnet_init"sv); };
+  quorumnet_delete_proc *quorumnet_delete = [](void*&) { need_core_init("quorumnet_delete"sv); };
+  quorumnet_relay_obligation_votes_proc *quorumnet_relay_obligation_votes = [](void*, const std::vector<service_nodes::quorum_vote_t>&) { need_core_init("quorumnet_relay_obligation_votes"sv); };
+  quorumnet_send_blink_proc *quorumnet_send_blink = [](core&, const std::string&) -> std::future<std::pair<blink_result, std::string>> { need_core_init("quorumnet_send_blink"sv); };
+  quorumnet_pulse_relay_message_to_quorum_proc *quorumnet_pulse_relay_message_to_quorum = [](void *, pulse::message const &, service_nodes::quorum const &, bool) -> void { need_core_init("quorumnet_pulse_relay_message_to_quorum"sv); };
 
   //-----------------------------------------------------------------------------------------------
   core::core()
@@ -369,7 +357,6 @@ namespace cryptonote
     command_line::add_arg(desc, arg_block_rate_notify);
     command_line::add_arg(desc, arg_keep_alt_blocks);
 
-    command_line::add_arg(desc, arg_recalculate_difficulty);
     command_line::add_arg(desc, arg_store_quorum_history);
 #if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
     command_line::add_arg(desc, integration_test::arg_hardforks_override);
@@ -480,12 +467,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::get_blocks(uint64_t start_offset, size_t count, std::vector<block>& blocks) const
   {
-    std::vector<std::pair<cryptonote::blobdata, cryptonote::block>> bs;
-    if (!m_blockchain_storage.get_blocks(start_offset, count, bs))
-      return false;
-    for (const auto &b: bs)
-      blocks.push_back(b.second);
-    return true;
+    return m_blockchain_storage.get_blocks_only(start_offset, count, blocks);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_transactions(const std::vector<crypto::hash>& txs_ids, std::vector<cryptonote::blobdata>& txs, std::vector<crypto::hash>& missed_txs) const
@@ -832,15 +814,6 @@ namespace cryptonote
     const difficulty_type fixed_difficulty = command_line::get_arg(vm, arg_fixed_difficulty);
     r = m_blockchain_storage.init(db.release(), lns_db, m_nettype, m_offline, regtest ? &regtest_test_options : test_options, fixed_difficulty, get_checkpoints);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
-
-    uint64_t recalc_diff_from_block = command_line::get_arg(vm, arg_recalculate_difficulty);
-    if (recalc_diff_from_block > 0)
-    {
-      cryptonote::BlockchainDB::fixup_context context  = {};
-      context.type                                     = cryptonote::BlockchainDB::fixup_type::calculate_difficulty;
-      context.calculate_difficulty_params.start_height = recalc_diff_from_block;
-      m_blockchain_storage.get_db().fixup(context);
-    }
 
     r = m_mempool.init(max_txpool_weight);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize memory pool");

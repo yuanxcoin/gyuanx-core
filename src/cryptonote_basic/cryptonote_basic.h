@@ -432,7 +432,11 @@ namespace cryptonote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  struct pulse_random_value { unsigned char data[16]; };
+  struct pulse_random_value
+  {
+    unsigned char data[16];
+    bool operator==(pulse_random_value const &other) const { return std::memcmp(data, other.data, sizeof(data)) == 0; }
+  };
 
   struct pulse_header
   {
@@ -461,7 +465,7 @@ namespace cryptonote
       VARINT_FIELD(timestamp)
       FIELD(prev_id)
       FIELD(nonce)
-      if (major_version >= cryptonote::network_version_16)
+      if (major_version >= cryptonote::network_version_16_pulse)
         FIELD(pulse)
     END_SERIALIZE()
   };
@@ -499,7 +503,7 @@ namespace cryptonote
       FIELD(tx_hashes)
       if (tx_hashes.size() > CRYPTONOTE_MAX_TX_PER_BLOCK)
         throw std::invalid_argument{"too many txs in block"};
-      if (major_version >= cryptonote::network_version_16)
+      if (major_version >= cryptonote::network_version_16_pulse)
         FIELD(signatures)
     END_SERIALIZE()
   };

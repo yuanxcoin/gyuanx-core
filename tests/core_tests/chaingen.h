@@ -52,6 +52,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
+#include "cryptonote_protocol/quorumnet.h"
 #include "serialization/boost_std_variant.h"
 #include "serialization/boost_std_optional.h"
 #include "misc_language.h"
@@ -333,7 +334,7 @@ public:
     const cryptonote::account_base& miner_acc, int actual_params = bf_none, uint8_t major_ver = 0,
     uint8_t minor_ver = 0, uint64_t timestamp = 0, const crypto::hash& prev_id = crypto::hash(),
     const cryptonote::difficulty_type& diffic = 1, const cryptonote::transaction& miner_tx = cryptonote::transaction(),
-    const std::vector<crypto::hash>& tx_hashes = std::vector<crypto::hash>(), size_t txs_sizes = 0);
+    const std::vector<crypto::hash>& tx_hashes = std::vector<crypto::hash>(), size_t txs_sizes = 0, size_t txn_fee = 0);
   bool construct_block_manually_tx(cryptonote::block& blk, const cryptonote::block& prev_block,
     const cryptonote::account_base& miner_acc, const std::vector<crypto::hash>& tx_hashes, size_t txs_size);
 
@@ -926,6 +927,7 @@ inline bool do_replay_events_get_core(std::vector<test_event_entry>& events, cry
     return false;
 
   auto & c = *core;
+  quorumnet::init_core_callbacks();
 
   // TODO(loki): Deprecate having to specify hardforks in a templated struct. This
   // puts an unecessary level of indirection that makes it hard to follow the
@@ -1366,7 +1368,9 @@ struct loki_chain_generator_db : public cryptonote::BaseTestDB
   std::unordered_map<crypto::hash, cryptonote::transaction> tx_table;
   std::unordered_map<crypto::hash, loki_blockchain_entry>   block_table;
 
-  cryptonote::block                     get_block_from_height(const uint64_t &height) const override;
+  uint64_t                              get_block_height(crypto::hash const &hash) const override;
+  cryptonote::block_header              get_block_header_from_height(uint64_t height) const override;
+  cryptonote::block                     get_block_from_height(uint64_t height) const override;
   bool                                  get_tx(const crypto::hash& h, cryptonote::transaction &tx) const override;
   std::vector<cryptonote::checkpoint_t> get_checkpoints_range(uint64_t start, uint64_t end, size_t num_desired_checkpoints) const override;
   std::vector<cryptonote::block>        get_blocks_range(const uint64_t& h1, const uint64_t& h2) const override;
@@ -1433,7 +1437,7 @@ struct loki_chain_generator
   loki_blockchain_entry                               &add_block(loki_blockchain_entry const &entry, bool can_be_added_to_blockchain = true, std::string const &fail_msg = {});
   void                                                 add_blocks_until_version(uint8_t hf_version);
   void                                                 add_n_blocks(int n);
-  void                                                 add_blocks_until_next_checkpointable_height();
+  bool                                                 add_blocks_until_next_checkpointable_height();
   void                                                 add_service_node_checkpoint(uint64_t block_height, size_t num_votes);
   void                                                 add_mined_money_unlock_blocks(); // NOTE: Unlock all Loki generated from mining prior to this call i.e. CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW
 

@@ -31,8 +31,8 @@ namespace service_nodes {
   constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 7;  // A block must have exactly N signatures to be considered properly
 #endif
 
-  constexpr auto PULSE_MIN_TARGET_BLOCK_TIME = TARGET_BLOCK_TIME - 15s;
-  constexpr auto PULSE_MAX_TARGET_BLOCK_TIME = TARGET_BLOCK_TIME + 15s;
+  constexpr auto PULSE_MIN_TARGET_BLOCK_TIME = TARGET_BLOCK_TIME - 30s;
+  constexpr auto PULSE_MAX_TARGET_BLOCK_TIME = TARGET_BLOCK_TIME + 30s;
   constexpr size_t PULSE_QUORUM_SIZE = PULSE_QUORUM_NUM_VALIDATORS + 1 /*Leader*/;
 
   static_assert(PULSE_ROUND_TIME >=
@@ -132,9 +132,10 @@ namespace service_nodes {
   constexpr uint64_t  CHECKPOINT_STORE_PERSISTENTLY_INTERVAL        = 60; // Persistently store the checkpoints at these intervals
   constexpr uint64_t  CHECKPOINT_VOTE_LIFETIME                      = CHECKPOINT_STORE_PERSISTENTLY_INTERVAL; // Keep the last 60 blocks worth of votes
 
-  constexpr int16_t CHECKPOINT_NUM_QUORUMS_TO_PARTICIPATE_IN = 8;
-  constexpr int16_t CHECKPOINT_MAX_MISSABLE_VOTES            = 4;
-  static_assert(CHECKPOINT_MAX_MISSABLE_VOTES < CHECKPOINT_NUM_QUORUMS_TO_PARTICIPATE_IN,
+  constexpr int16_t QUORUM_VOTE_CHECK_COUNT       = 8;
+  constexpr int16_t PULSE_MAX_MISSABLE_VOTES      = 4;
+  constexpr int16_t CHECKPOINT_MAX_MISSABLE_VOTES = 4;
+  static_assert(CHECKPOINT_MAX_MISSABLE_VOTES < QUORUM_VOTE_CHECK_COUNT,
                 "The maximum number of votes a service node can miss cannot be greater than the amount of checkpoint "
                 "quorums they must participate in before we check if they should be deregistered or not.");
 
@@ -243,7 +244,7 @@ namespace service_nodes {
     return
         hf_version <= cryptonote::network_version_12_checkpointing ? quorum_type::obligations :
         hf_version <  cryptonote::network_version_14_blink         ? quorum_type::checkpointing :
-        hf_version <  cryptonote::network_version_16               ? quorum_type::blink :
+        hf_version <  cryptonote::network_version_16_pulse         ? quorum_type::blink :
         quorum_type::pulse;
   }
 
