@@ -6556,8 +6556,9 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
     if (!confirm_and_send_tx(dsts, ptx_vector, priority == tools::tx_priority_blink))
       return false;
 
-    crypto::hash name_hash = lns::name_to_hash(name);
-    std::string name_hash_str =  epee::string_encoding::base64_encode(reinterpret_cast<unsigned char const *>(name_hash.data), sizeof(name_hash));
+
+    //Save the LNS record to the wallet cache
+    std::string name_hash_str = lns::name_to_base64_hash(name);
     tools::wallet2::lns_detail detail = {
       lns::mapping_type::session,
       name,
@@ -6762,9 +6763,9 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     if (!confirm_and_send_tx(dsts, ptx_vector, false /*blink*/))
       return false;
 
-    m_wallet->delete_lns_cache_record(name);
-    crypto::hash name_hash = lns::name_to_hash(name);
-    std::string name_hash_str =  epee::string_encoding::base64_encode(reinterpret_cast<unsigned char const *>(name_hash.data), sizeof(name_hash));
+    // Save the updated LNS record to the wallet cache
+    std::string name_hash_str = lns::name_to_base64_hash(name);
+    m_wallet->delete_lns_cache_record(name_hash_str);
     tools::wallet2::lns_detail detail = {
       lns::mapping_type::session,
       name,
@@ -7013,7 +7014,10 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
 
   std::vector<std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry>> rpc_results;
   std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::request> requests(1);
-  std::vector<tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
+
+  //TODO(sean): make friendly with unordered map
+  //std::vector<tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
+  std::unordered_map<std::string, tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
 
   if (args.size() == 0)
   {
@@ -7078,12 +7082,12 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
 
       std::string name = "";
       std::string value = "";
-      for (size_t j = 0; j < cache.size(); j++)
+      std::unordered_map<std::string,tools::wallet2::lns_detail>::const_iterator got = cache.find (entry.name_hash);
+
+      if ( got != cache.end() )
       {
-        if (cache[j].hashed_name == entry.name_hash) {
-          name = cache[j].name;
-          value = cache[j].value;
-        }
+        name = got->second.name;
+        value = got->second.value;
       }
 
       auto writer = tools::msg_writer();

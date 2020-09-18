@@ -12994,29 +12994,15 @@ uint64_t wallet2::get_approximate_blockchain_height() const
 
 void wallet2::set_lns_cache_record(const wallet2::lns_detail& detail)
 {
-  bool exists = false;
-  for (size_t j = 0; j < lns_records_cache.size(); j++)
-  {
-    if (lns_records_cache[j].hashed_name == detail.hashed_name) {
-      exists = true;
-    }
-  }
-  if (!exists) {
-    lns_records_cache.push_back(detail);
-  }
+  lns_records_cache[detail.hashed_name] = detail;
 }
 
-void wallet2::delete_lns_cache_record(std::string name)
+void wallet2::delete_lns_cache_record(std::string hashed_name)
 {
-  for (size_t j = 0; j < lns_records_cache.size(); j++)
-  {
-    if (lns_records_cache[j].name == name) {
-      lns_records_cache.erase (lns_records_cache.begin()+j);
-    }
-  }
+  lns_records_cache.erase(hashed_name);
 }
 
-std::vector<wallet2::lns_detail> wallet2::get_lns_cache()
+std::unordered_map<std::string, wallet2::lns_detail> wallet2::get_lns_cache()
 {
   return lns_records_cache;
 }

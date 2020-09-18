@@ -806,13 +806,16 @@ private:
       std::string owner;
       std::string backup_owner;
     };
-    std::vector<lns_detail> lns_records_cache;
+    //std::vector<lns_detail> lns_records_cache;
+    //TODO: (sean): make this unordered map
+    std::unordered_map<std::string, lns_detail> lns_records_cache;
 
     void set_lns_cache_record(const wallet2::lns_detail& detail);
 
     void delete_lns_cache_record(std::string name);
 
-    std::vector<lns_detail> get_lns_cache();
+    std::unordered_map<std::string, lns_detail> get_lns_cache();
+    //std::vector<lns_detail> get_lns_cache();
 
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
@@ -846,7 +849,6 @@ private:
       a & m_transfers;
       a & m_account_public_address;
       a & m_key_images;
-      a & lns_records_cache;
       if(ver < 6)
         return;
       a & m_unconfirmed_txs;
@@ -941,6 +943,9 @@ private:
       if(ver < 29)
         return;
       a & m_immutable_height;
+      if(ver < 30)
+        return;
+      a & lns_records_cache;
     }
 
     /*!
@@ -1675,7 +1680,7 @@ private:
   bool parse_priority          (const std::string& arg, uint32_t& priority);
 
 }
-BOOST_CLASS_VERSION(tools::wallet2, 29)
+BOOST_CLASS_VERSION(tools::wallet2, 30)
 BOOST_CLASS_VERSION(tools::wallet2::payment_details, 6)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
 BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 9)
