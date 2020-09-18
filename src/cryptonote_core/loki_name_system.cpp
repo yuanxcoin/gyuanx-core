@@ -1552,7 +1552,7 @@ CREATE INDEX "backup_owner_id_index" ON mappings("backup_owner_index");
 COMMIT TRANSACTION;
 )";
 
-    int migrated = sqlite3_exec(lns_db.db, BUILD_TABLE_SQL.c_str(), nullptr /*callback*/, nullptr /*callback context*/, &table_err_msg);
+    int migrated = sqlite3_exec(lns_db.db, migrate.c_str(), nullptr /*callback*/, nullptr /*callback context*/, &table_err_msg);
     if (migrated != SQLITE_OK)
     {
       MERROR("Can not migrate SQL mappings table for LNS: " << (table_err_msg ? table_err_msg : "??"));
