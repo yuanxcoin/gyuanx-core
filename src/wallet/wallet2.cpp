@@ -38,8 +38,10 @@
 #include <openssl/pem.h>
 #include <type_traits>
 #include <cpr/parameters.h>
+#include <lokimq/base64.h>
 #include "common/password.h"
 #include "common/string_util.h"
+#include "cryptonote_core/loki_name_system.h"
 #include "include_base_utils.h"
 #include "common/rules.h"
 #include "cryptonote_config.h"
@@ -8673,11 +8675,12 @@ static bool try_generate_lns_signature(wallet2 const &wallet, std::string const 
 static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const &wallet,
                                                                   lns::mapping_type type,
                                                                   uint32_t priority,
-                                                                  std::string &name,
+                                                                  std::string name,
                                                                   std::string const *value,
                                                                   std::string const *owner,
                                                                   std::string const *backup_owner,
                                                                   bool make_signature,
+                                                                  lns::lns_tx_type txtype,
                                                                   uint32_t account_index,
                                                                   std::string *reason,
                                                                   std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response)
@@ -8686,21 +8689,20 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
   if (priority == tools::tx_priority_blink)
   {
     if (reason) *reason = "Can not request a blink TX for Loki Name Service transactions";
-    return result;
+    return {};
   }
 
   name = tools::lowercase_ascii_string(name);
   if (!lns::validate_lns_name(type, name, reason))
-    return result;
+    return {};
 
   result.name_hash = lns::name_to_hash(name);
   if (value)
   {
-    lns::mapping_value binary_value = {};
-    if (!lns::validate_mapping_value(wallet.nettype(), type, *value, &binary_value, reason))
-      return result;
+    if (!lns::mapping_value::validate(wallet.nettype(), type, *value, &result.encrypted_value, reason))
+      return {};
 
-    if (!lns::encrypt_mapping_value(name, binary_value, result.encrypted_value))
+    if (!result.encrypted_value.encrypt(name, &result.name_hash))
     {
       if (reason) *reason = "Fail to encrypt mapping value=" + *value;
       return {};
@@ -8716,10 +8718,9 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
   {
     cryptonote::rpc::LNS_NAMES_TO_OWNERS::request request = {};
     {
-      request.entries.emplace_back();
-      auto &request_entry = request.entries.back();
-      request_entry.name_hash = epee::string_encoding::base64_encode(reinterpret_cast<unsigned char const *>(result.name_hash.data), sizeof(result.name_hash));
-      request_entry.types.push_back(static_cast<uint16_t>(type));
+      auto &request_entry = request.entries.emplace_back();
+      request_entry.name_hash = lokimq::to_base64(tools::view_guts(result.name_hash));
+      request_entry.types.push_back(lns::db_mapping_type(type));
     }
 
     auto [success, response_] = wallet.lns_names_to_owners(request);
@@ -8742,7 +8743,7 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
       }
     }
 
-    if (make_signature)
+    if (txtype == lns::lns_tx_type::update && make_signature)
     {
       if (response->empty())
       {
@@ -8752,19 +8753,29 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
 
       cryptonote::address_parse_info curr_owner_parsed        = {};
       cryptonote::address_parse_info curr_backup_owner_parsed = {};
-      bool curr_owner        = cryptonote::get_account_address_from_str(curr_owner_parsed, wallet.nettype(), (*response)[0].owner);
-      bool curr_backup_owner = cryptonote::get_account_address_from_str(curr_backup_owner_parsed, wallet.nettype(), (*response)[0].backup_owner);
-      if (!try_generate_lns_signature(wallet, (*response)[0].owner, owner, backup_owner, result))
+      auto& rowner = response->front().owner;
+      auto& rbackup_owner = response->front().backup_owner;
+      bool curr_owner        = cryptonote::get_account_address_from_str(curr_owner_parsed, wallet.nettype(), rowner);
+      bool curr_backup_owner = rbackup_owner && cryptonote::get_account_address_from_str(curr_backup_owner_parsed, wallet.nettype(), *rbackup_owner);
+      if (!try_generate_lns_signature(wallet, rowner, owner, backup_owner, result))
       {
-        if (!try_generate_lns_signature(wallet, (*response)[0].backup_owner, owner, backup_owner, result))
+        if (!rbackup_owner || !try_generate_lns_signature(wallet, *rbackup_owner, owner, backup_owner, result))
         {
           if (reason)
           {
-            *reason = "Signature requested when preparing LNS TX, but this wallet is not the owner of the record owner=" + (*response)[0].owner;
-            if ((*response)[0].backup_owner.size()) *reason += ", backup_owner=" + (*response)[0].backup_owner;
+            *reason = "Signature requested when preparing LNS TX, but this wallet is not the owner of the record owner=" + rowner;
+            if (rbackup_owner) *reason += ", backup_owner=" + *rbackup_owner;
           }
           return result;
         }
+      }
+    }
+    else if (txtype == lns::lns_tx_type::renew)
+    {
+      if (response->empty())
+      {
+        if (reason) *reason = "Renewal requested but record to renew does not exist or has expired";
+        return result;
       }
     }
   }
@@ -8784,7 +8795,8 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_buy_mapping_tx(lns::mapping
                                                                     std::set<uint32_t> subaddr_indices)
 {
   std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> response;
-  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, &value, owner, backup_owner, false /*make_signature*/, account_index, reason, &response);
+  constexpr bool make_signature = false;
+  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, &value, owner, backup_owner, make_signature, lns::lns_tx_type::buy, account_index, reason, &response);
   if (!owner)
     prepared_args.owner = lns::make_monero_owner(get_subaddress({account_index, 0}), account_index != 0);
 
@@ -8830,13 +8842,85 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_buy_mapping_tx(std::string 
                                                                     uint32_t account_index,
                                                                     std::set<uint32_t> subaddr_indices)
 {
-  lns::mapping_type mapping_type = lns::mapping_type::session;
-  if (!lns::validate_mapping_type(type, &mapping_type, reason))
+  std::optional<uint8_t> hf_version = get_hard_fork_version();
+  if (!hf_version)
+  {
+    if (reason) *reason = ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+    return {};
+  }
+  lns::mapping_type mapping_type;
+  if (!lns::validate_mapping_type(type, *hf_version, lns::lns_tx_type::buy, &mapping_type, reason))
     return {};
 
   std::vector<wallet2::pending_tx> result = lns_create_buy_mapping_tx(mapping_type, owner, backup_owner, name, value, reason, priority, account_index, subaddr_indices);
   return result;
 }
+
+std::vector<wallet2::pending_tx> wallet2::lns_create_renewal_tx(
+    lns::mapping_type type,
+    std::string name,
+    std::string *reason,
+    uint32_t priority,
+    uint32_t account_index,
+    std::set<uint32_t> subaddr_indices,
+    std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response
+    )
+{
+  constexpr bool make_signature = false;
+  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, nullptr, nullptr, nullptr, make_signature, lns::lns_tx_type::renew, account_index, reason, response);
+
+  if (!prepared_args)
+    return {};
+
+  std::vector<uint8_t> extra;
+  auto entry = cryptonote::tx_extra_loki_name_system::make_renew(
+      type,
+      prepared_args.name_hash,
+      prepared_args.prev_txid);
+  add_loki_name_system_to_tx_extra(extra, entry);
+
+  std::optional<uint8_t> hf_version = get_hard_fork_version();
+  if (!hf_version)
+  {
+    if (reason) *reason = ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+    return {};
+  }
+
+  loki_construct_tx_params tx_params = wallet2::construct_params(*hf_version, txtype::loki_name_system, priority, type);
+  auto result = create_transactions_2({} /*dests*/,
+                                      CRYPTONOTE_DEFAULT_TX_MIXIN,
+                                      0 /*unlock_at_block*/,
+                                      priority,
+                                      extra,
+                                      account_index,
+                                      subaddr_indices,
+                                      tx_params);
+  return result;
+}
+
+std::vector<wallet2::pending_tx> wallet2::lns_create_renewal_tx(
+    std::string const &type,
+    std::string const &name,
+    std::string *reason,
+    uint32_t priority,
+    uint32_t account_index,
+    std::set<uint32_t> subaddr_indices,
+    std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response
+    )
+{
+  lns::mapping_type mapping_type = lns::mapping_type::session;
+  std::optional<uint8_t> hf_version = get_hard_fork_version();
+  if (!hf_version)
+  {
+    if (reason) *reason = ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+    return {};
+  }
+  if (!lns::validate_mapping_type(type, *hf_version, lns::lns_tx_type::renew, &mapping_type, reason))
+    return {};
+
+  return lns_create_renewal_tx(mapping_type, name, reason, priority, account_index, subaddr_indices, response);
+}
+
 
 std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(lns::mapping_type type,
                                                                        std::string name,
@@ -8857,7 +8941,7 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(lns::mapp
   }
 
   bool make_signature = signature == nullptr;
-  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, value, owner, backup_owner, make_signature, account_index, reason, response);
+  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, priority, name, value, owner, backup_owner, make_signature, lns::lns_tx_type::update, account_index, reason, response);
   if (!prepared_args) return {};
 
   if (!make_signature)
@@ -8910,7 +8994,13 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(std::stri
                                                                        std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response)
 {
   lns::mapping_type mapping_type = lns::mapping_type::session;
-  if (!lns::validate_mapping_type(type, &mapping_type, reason))
+  std::optional<uint8_t> hf_version = get_hard_fork_version();
+  if (!hf_version)
+  {
+    if (reason) *reason = ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
+    return {};
+  }
+  if (!lns::validate_mapping_type(type, *hf_version, lns::lns_tx_type::update, &mapping_type, reason))
     return {};
 
   std::vector<wallet2::pending_tx> result = lns_create_update_mapping_tx(mapping_type, name, value, owner, backup_owner, signature, reason, priority, account_index, subaddr_indices, response);
@@ -8953,7 +9043,8 @@ bool wallet2::lns_make_update_mapping_signature(lns::mapping_type type,
                                                 std::string *reason)
 {
   std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> response;
-  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, tx_priority_unimportant, name, value, owner, backup_owner, true /*make_signature*/, account_index, reason, &response);
+  constexpr bool make_signature = true;
+  lns_prepared_args prepared_args = prepare_tx_extra_loki_name_system_values(*this, type, tx_priority_unimportant, name, value, owner, backup_owner, make_signature, lns::lns_tx_type::update, account_index, reason, &response);
   if (!prepared_args) return false;
 
   if (prepared_args.prev_txid == crypto::null_hash)

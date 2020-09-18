@@ -88,5 +88,7 @@ constexpr int16_t LNS_VALUE_TOO_LONG     = -1004;
 constexpr int16_t LNS_VALUE_NOT_HEX      = -1005;
 constexpr int16_t LNS_VALUE_LENGTH_NOT_EVEN = -1006;
 constexpr int16_t LNS_VALUE_DECRYPT_FAILED = -1007;
+constexpr int16_t LNS_VALUE_ENCRYPT_FAILED = -1008;
+constexpr int16_t LNS_BAD_VALUE          = -1009;
 
 }

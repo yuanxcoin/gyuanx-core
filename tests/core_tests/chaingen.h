@@ -873,7 +873,8 @@ public:
 private:
   void log_event(const std::string& event_type) const
   {
-    MGINFO_YELLOW("=== EVENT # " << m_ev_index << ": " << event_type);
+    if (LOG_ENABLED(Info))
+      MGINFO_YELLOW("=== EVENT # " << m_ev_index << ": " << event_type);
   }
 };
 //--------------------------------------------------------------------------
@@ -1420,6 +1421,7 @@ struct loki_chain_generator
   void                                                 add_blocks_until_next_checkpointable_height();
   void                                                 add_service_node_checkpoint(uint64_t block_height, size_t num_votes);
   void                                                 add_mined_money_unlock_blocks(); // NOTE: Unlock all Loki generated from mining prior to this call i.e. CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW
+  void                                                 add_transfer_unlock_blocks(); // Unlock funds from (standard) transfers prior to this call, i.e. CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE
 
   // NOTE: Add an event that is just a user specified message to signify progress in the test
   void                                                 add_event_msg(std::string const &msg) { events_.push_back(msg); }
@@ -1427,8 +1429,9 @@ struct loki_chain_generator
 
   // NOTE: Add constructed TX to events_ and assume that it is valid to add to the blockchain. If the TX is meant to be unaddable to the blockchain use the individual create + add functions to
   // be able to mark the add TX event as something that should trigger a failure.
-  cryptonote::transaction                              create_and_add_loki_name_system_tx(cryptonote::account_base const &src, lns::mapping_type type, std::string const &name, lns::mapping_value const &value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, bool kept_by_block = false);
-  cryptonote::transaction                              create_and_add_loki_name_system_tx_update(cryptonote::account_base const &src, lns::mapping_type type, std::string const &name, lns::mapping_value const *value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, lns::generic_signature *signature = nullptr, bool kept_by_block = false);
+  cryptonote::transaction                              create_and_add_loki_name_system_tx(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, lns::mapping_value const &value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, bool kept_by_block = false);
+  cryptonote::transaction                              create_and_add_loki_name_system_tx_update(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, lns::mapping_value const *value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, lns::generic_signature *signature = nullptr, bool kept_by_block = false);
+  cryptonote::transaction                              create_and_add_loki_name_system_tx_renew(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, bool kept_by_block = false);
   cryptonote::transaction                              create_and_add_tx                 (const cryptonote::account_base& src, const cryptonote::account_public_address& dest, uint64_t amount, uint64_t fee = TESTS_DEFAULT_FEE, bool kept_by_block = false);
   cryptonote::transaction                              create_and_add_state_change_tx(service_nodes::new_state state, const crypto::public_key& pub_key, uint64_t height = -1, const std::vector<uint64_t>& voters = {}, uint64_t fee = 0, bool kept_by_block = false);
   cryptonote::transaction                              create_and_add_registration_tx(const cryptonote::account_base& src, const cryptonote::keypair& sn_keys = cryptonote::keypair::generate(hw::get_device("default")), bool kept_by_block = false);
@@ -1449,9 +1452,10 @@ struct loki_chain_generator
 
   // value: Takes the binary value NOT the human readable version, of the name->value mapping
   static const uint64_t LNS_AUTO_BURN = static_cast<uint64_t>(-1);
-  cryptonote::transaction                              create_loki_name_system_tx(cryptonote::account_base const &src, lns::mapping_type type, std::string const &name, lns::mapping_value const &value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, uint64_t burn = LNS_AUTO_BURN) const;
-  cryptonote::transaction                              create_loki_name_system_tx_update(cryptonote::account_base const &src, lns::mapping_type type, std::string const &name, lns::mapping_value const *value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, lns::generic_signature *signature = nullptr, bool use_asserts = false) const;
-  cryptonote::transaction                              create_loki_name_system_tx_update_w_extra(cryptonote::account_base const &src, cryptonote::tx_extra_loki_name_system const &lns_extra) const;
+  cryptonote::transaction                              create_loki_name_system_tx(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, lns::mapping_value const &value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, std::optional<uint64_t> burn_override = std::nullopt) const;
+  cryptonote::transaction                              create_loki_name_system_tx_update(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, lns::mapping_value const *value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, lns::generic_signature *signature = nullptr, bool use_asserts = false) const;
+  cryptonote::transaction                              create_loki_name_system_tx_update_w_extra(cryptonote::account_base const &src, uint8_t hf_version, cryptonote::tx_extra_loki_name_system const &lns_extra) const;
+  cryptonote::transaction                              create_loki_name_system_tx_renew(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, std::optional<uint64_t> burn_override = std::nullopt) const;
 
   loki_blockchain_entry                                create_genesis_block(const cryptonote::account_base &miner, uint64_t timestamp);
   loki_blockchain_entry                                create_next_block(const std::vector<cryptonote::transaction>& txs = {}, cryptonote::checkpoint_t const *checkpoint = nullptr, uint64_t total_fee = 0);

@@ -64,7 +64,8 @@ struct loki_name_system_large_reorg                                             
 struct loki_name_system_name_renewal                                                 : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_name_system_name_value_max_lengths                                       : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_name_system_update_mapping_after_expiry_fails                            : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct loki_name_system_update_mapping                                               : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct loki_name_system_update_mapping                                               : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); virtual uint8_t hf(); };
+struct loki_name_system_update_mapping_argon2                                        : public loki_name_system_update_mapping { uint8_t hf() override; };
 struct loki_name_system_update_mapping_multiple_owners                               : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_name_system_update_mapping_non_existent_name_fails                       : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_name_system_update_mapping_invalid_signature                             : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };

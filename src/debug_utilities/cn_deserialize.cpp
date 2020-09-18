@@ -81,7 +81,7 @@ struct extra_printer {
     std::cout << "LNS " << (x.is_buying() ? "registration" : x.is_updating() ? "update" : "(unknown)");
     switch (x.type)
     {
-      case lns::mapping_type::lokinet_1year: std::cout << " - Lokinet (1y)"; break;
+      case lns::mapping_type::lokinet: std::cout << " - Lokinet (1y)"; break;
       case lns::mapping_type::lokinet_2years: std::cout << " - Lokinet (2y)"; break;
       case lns::mapping_type::lokinet_5years: std::cout << " - Lokinet (5y)"; break;
       case lns::mapping_type::lokinet_10years: std::cout << " - Lokinet (10y)"; break;
