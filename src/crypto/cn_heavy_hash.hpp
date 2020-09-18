@@ -95,34 +95,19 @@ public:
 		spad.set(boost::alignment::aligned_alloc(4096, 4096));
 	}
 
-	cn_heavy_hash (cn_heavy_hash&& other) noexcept : lpad(other.lpad.as_byte()), spad(other.spad.as_byte()), borrowed_pad(other.borrowed_pad)
-	{
-		other.lpad.set(nullptr);
-		other.spad.set(nullptr);
-	}
-
 	// Factory function enabling to temporaliy turn v2 object into v1
 	// It is caller's responsibility to ensure that v2 object is not hashing at the same time!!
 	static cn_heavy_hash_v1 make_borrowed(cn_heavy_hash_v2& t)
 	{
-		return cn_heavy_hash_v1(t.lpad.as_void(), t.spad.as_void());
+		return {t.lpad.as_void(), t.spad.as_void()};
 	}
 
-	cn_heavy_hash& operator= (cn_heavy_hash&& other) noexcept
-    {
-		if(this == &other)
-			return *this;
-
-		free_mem();
-		lpad.set(other.lpad.as_void());
-		spad.set(other.spad.as_void());
-		borrowed_pad = other.borrowed_pad;
-		return *this;
-	}
-
-	// Copying is going to be really inefficient
+	// Disable copy/move ctors; copying, in particular, is going to be really inefficient and we
+	// don't need to move it anywhere in LOKI code anyway.
 	cn_heavy_hash(const cn_heavy_hash& other) = delete;
+	cn_heavy_hash(cn_heavy_hash&& other) = delete;
 	cn_heavy_hash& operator= (const cn_heavy_hash& other) = delete;
+	cn_heavy_hash& operator= (cn_heavy_hash&& other) = delete;
 
 	~cn_heavy_hash()
 	{
