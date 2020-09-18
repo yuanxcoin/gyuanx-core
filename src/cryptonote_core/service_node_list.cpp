@@ -2440,19 +2440,12 @@ namespace service_nodes
     {
       case verify_mode::miner:
       {
-        size_t vout_index           = 0;
-        uint64_t const miner_reward = reward_parts.base_miner + reward_parts.base_miner_fee;
-        if (miner_reward > 0)
-        {
-          cryptonote::tx_out const &output = miner_tx.vout[vout_index];
-          if (output.amount != miner_reward)
-          {
-            MGINFO_RED("Miner reward amount incorrect. Should be " << cryptonote::print_money(miner_reward) << ", is: " << cryptonote::print_money(output.amount));
-            return false;
-          }
+        size_t vout_index = 0 + (reward_parts.base_miner + reward_parts.base_miner_fee > 0);
 
-          vout_index++;
-        }
+        // We don't verify the miner reward amount because it is already implied by the overall
+        // sum of outputs check and because when there are truncation errors on other outputs the
+        // miner reward ends up with the difference (and so actual miner output amount can be a few
+        // atoms larger than base_miner+base_miner_fee).
 
         for (size_t i = 0; i < block_leader.payouts.size(); i++)
         {
