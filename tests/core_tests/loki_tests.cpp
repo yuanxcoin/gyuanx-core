@@ -3139,25 +3139,11 @@ bool loki_pulse_chain_split::generate(std::vector<test_event_entry> &events)
   add_service_nodes(gen, std::max(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN), service_nodes::CHECKPOINT_QUORUM_SIZE));
 
   gen.create_and_add_next_block();
-  gen.add_event_msg("Deregister 1 node, we now have insufficient nodes for Pulse and enter PoW");
-  {
-    const auto deregister_pub_key_1 = gen.top_quorum().obligations->workers[0];
-    cryptonote::transaction tx =
-        gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key_1);
-    gen.create_and_add_next_block({tx});
-  }
 
   gen.add_event_msg("Diverge the two chains");
   loki_chain_generator fork = gen;
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
-
-  gen.create_and_add_next_block();
-  fork.add_event_msg("Alt chain re-register a node, allowing us to re-enter Pulse");
-  {
-    cryptonote::transaction registration_txs = fork.create_and_add_registration_tx(fork.first_miner());
-    fork.create_and_add_next_block({registration_txs});
-  }
 
   gen.add_event_msg(
       "On both chains add equivalent blocks in tandem (to avoid one chain attaining greater chain weight before the "
@@ -3170,6 +3156,8 @@ bool loki_pulse_chain_split::generate(std::vector<test_event_entry> &events)
     if (fork_quorum && fork_quorum->validators.size()) break;
   }
   fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.create_and_add_next_block();
+  fork.create_and_add_next_block();
 
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
   loki_register_callback(events, "check_reorganized_to_pulse_chain_with_checkpoints", [fork_top_hash](cryptonote::core &c, size_t ev_index)
@@ -3196,24 +3184,11 @@ bool loki_pulse_chain_split_with_no_checkpoints::generate(std::vector<test_event
   add_service_nodes(gen, std::max(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN), service_nodes::CHECKPOINT_QUORUM_SIZE));
 
   gen.create_and_add_next_block();
-  gen.add_event_msg("Deregister 1 node, we now have insufficient nodes for Pulse and enter PoW");
-  {
-    const auto deregister_pub_key_1 = gen.top_quorum().obligations->workers[0];
-    cryptonote::transaction tx =
-        gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key_1);
-    gen.create_and_add_next_block({tx});
-  }
 
   gen.add_event_msg("Diverge the two chains");
   loki_chain_generator fork = gen;
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
-
-  fork.add_event_msg("Alt chain re-register a node, allowing us to re-enter Pulse");
-  {
-    cryptonote::transaction registration_txs = fork.create_and_add_registration_tx(fork.first_miner());
-    fork.create_and_add_next_block({registration_txs});
-  }
 
   fork.create_and_add_next_block();
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
