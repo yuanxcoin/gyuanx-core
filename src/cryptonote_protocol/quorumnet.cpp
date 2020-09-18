@@ -1661,7 +1661,7 @@ void handle_pulse_signed_block(Message &m, QnetState &qnet)
   if (m.data.size() != 1)
       throw std::runtime_error("Rejecting pulse signed block expected one data entry not "s + std::to_string(m.data.size()));
 
-  std::string_view constexpr INVALID_ARG_PREFIX = "Invalid pulse signed blocr: missing required field '"sv;
+  std::string_view constexpr INVALID_ARG_PREFIX = "Invalid pulse signed block: missing required field '"sv;
   bt_dict_consumer data{m.data[0]};
   pulse::message msg = pulse_parse_msg_header_fields(pulse::message_type::signed_block, data, INVALID_ARG_PREFIX);
 
