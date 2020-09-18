@@ -34,7 +34,11 @@ for prog in jq curl gpg lsb_release; do
     if ! which $prog &>/dev/null; then
         die "Could not find '$prog' which we require for this script.
 
-Try installing it with 'sudo apt install ${pkgnames[$prog]:-$prog}'"
+Try installing it using:
+
+    sudo apt install ${pkgnames[$prog]:-$prog}
+
+and then run this script again."
     fi
 done
 
