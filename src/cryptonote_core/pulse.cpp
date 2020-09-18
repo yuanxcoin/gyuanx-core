@@ -21,6 +21,9 @@ extern "C"
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "pulse"
 
+// Deliberately makes pulse communications flakey for testing purposes:
+//#define PULSE_TEST_CODE
+
 enum struct round_state
 {
   null_state,
@@ -990,8 +993,6 @@ Yes +-----[Block can not be added to blockchain]
       P2P-ed.
 */
 
-#define PULSE_TEST_CODE 1
-
 round_state goto_preparing_for_next_round(round_context &context)
 {
   context.prepare_for_round.queue_for_next_round = true;
@@ -1231,7 +1232,7 @@ round_state wait_for_round(round_context &context, cryptonote::Blockchain const 
     return round_state::wait_for_round;
   }
 
-#if PULSE_TEST_CODE
+#ifdef PULSE_TEST_CODE
   // For testing purposes: we apply possible random non-response and random delays to half of all
   // blocks; we go in batches of 10: 10 maybe-faulty blocks followed by 10 well-behaved blocks.
   // (Faulty blocks have an odd second-last height digit).
