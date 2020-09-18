@@ -114,4 +114,13 @@ std::string lowercase_ascii_string(std::string_view src);
 /// Converts a duration into a human friendlier string.
 std::string friendly_duration(std::chrono::nanoseconds dur);
 
+/// Given an array of string arguments, look for strings of the format <prefix><value> and return <value>
+/// Returns empty string view if not found.
+template <typename It>
+std::string_view find_prefixed_value(It begin, It end, std::string_view prefix)
+{
+  auto it = std::find_if(begin, end, [&](const auto& s) { return starts_with(s, prefix); });
+  if (it == end) return {};
+  return std::string_view{*it}.substr(prefix.size());
+}
 }

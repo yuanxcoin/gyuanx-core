@@ -57,7 +57,7 @@ namespace cryptonote {
   class ValidateMinerTxHook
   {
   public:
-    virtual bool validate_miner_tx(const crypto::hash& prev_id, const cryptonote::transaction& miner_tx, uint64_t height, int hard_fork_version, struct block_reward_parts const &reward_parts) const = 0;
+    virtual bool validate_miner_tx(cryptonote::block const &block, struct block_reward_parts const &reward_parts) const = 0;
   };
 
   class AltBlockAddedHook
@@ -114,6 +114,8 @@ namespace cryptonote {
   /************************************************************************/
   /* Cryptonote helper functions                                          */
   /************************************************************************/
+  bool block_header_has_pulse_components(block_header const &blk_header);
+  bool block_has_pulse_components(block const &blk);
   size_t get_min_block_weight(uint8_t version);
   size_t get_max_tx_size();
   uint64_t block_reward_unpenalized_formula_v7(uint64_t already_generated_coins, uint64_t height);

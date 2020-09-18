@@ -36,8 +36,6 @@ extern "C"
 namespace lns
 {
 
-using namespace std::literals;
-
 enum struct lns_sql_type
 {
   save_owner,
@@ -615,7 +613,7 @@ std::vector<mapping_type> all_mapping_types(uint8_t hf_version) {
   result.reserve(2);
   if (hf_version >= cryptonote::network_version_15_lns)
     result.push_back(mapping_type::session);
-  if (hf_version >= cryptonote::network_version_16)
+  if (hf_version >= cryptonote::network_version_16_pulse)
     result.push_back(mapping_type::lokinet);
   return result;
 }
@@ -1239,7 +1237,7 @@ bool validate_mapping_type(std::string_view mapping_type_str, uint8_t hf_version
   std::optional<lns::mapping_type> mapping_type_;
   if (txtype != lns_tx_type::renew && tools::string_iequal(mapping, "session"))
     mapping_type_ = lns::mapping_type::session;
-  else if (hf_version >= cryptonote::network_version_16)
+  else if (hf_version >= cryptonote::network_version_16_pulse)
   {
     if (tools::string_iequal(mapping, "lokinet"))
       mapping_type_ = lns::mapping_type::lokinet;

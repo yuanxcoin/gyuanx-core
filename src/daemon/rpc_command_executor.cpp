@@ -612,10 +612,6 @@ bool rpc_command_executor::mining_status() {
   return true;
 }
 
-// Converts a duration to integer seconds, truncating sub-second amounts.
-template <typename Duration>
-static auto count_seconds(const Duration &d) { return std::chrono::duration_cast<std::chrono::seconds>(d).count(); }
-
 bool rpc_command_executor::print_connections() {
   GET_CONNECTIONS::response res{};
 
@@ -646,9 +642,9 @@ bool rpc_command_executor::print_connections() {
      << std::setw(8) << (get_address_type_name((epee::net_utils::address_type)info.address_type))
      << std::setw(20) << info.peer_id
      << std::setw(20) << info.support_flags
-     << std::setw(30) << std::to_string(info.recv_count) + "("  + std::to_string(count_seconds(info.recv_idle_time)) + ")/" + std::to_string(info.send_count) + "(" + std::to_string(count_seconds(info.send_idle_time)) + ")"
+     << std::setw(30) << std::to_string(info.recv_count) + "("  + std::to_string(tools::to_seconds(info.recv_idle_time)) + ")/" + std::to_string(info.send_count) + "(" + std::to_string(tools::to_seconds(info.send_idle_time)) + ")"
      << std::setw(25) << info.state
-     << std::setw(20) << std::to_string(count_seconds(info.live_time))
+     << std::setw(20) << std::to_string(tools::to_seconds(info.live_time))
      << std::setw(12) << info.avg_download
      << std::setw(14) << info.current_download
      << std::setw(10) << info.avg_upload
@@ -1028,7 +1024,7 @@ bool rpc_command_executor::print_transaction_pool_stats() {
   else
   {
     uint64_t backlog = (res.pool_stats.bytes_total + full_reward_zone - 1) / full_reward_zone;
-    backlog_message = (boost::format("estimated %u block (%u minutes) backlog") % backlog % (backlog * DIFFICULTY_TARGET_V2 / 60)).str();
+    backlog_message = (boost::format("estimated %u block (%u minutes) backlog") % backlog % (backlog * TARGET_BLOCK_TIME / 1min)).str();
   }
 
   tools::msg_writer() << n_transactions << " tx(es), " << res.pool_stats.bytes_total << " bytes total (min " << res.pool_stats.bytes_min << ", max " << res.pool_stats.bytes_max << ", avg " << avg_bytes << ", median " << res.pool_stats.bytes_med << ")" << std::endl
@@ -1066,16 +1062,23 @@ bool rpc_command_executor::print_transaction_pool_stats() {
   return true;
 }
 
-bool rpc_command_executor::start_mining(const cryptonote::account_public_address& address, uint64_t num_threads, cryptonote::network_type nettype) {
+bool rpc_command_executor::start_mining(const cryptonote::account_public_address& address, uint64_t num_threads, uint32_t num_blocks, cryptonote::network_type nettype) {
   START_MINING::request req{};
   START_MINING::response res{};
+  req.num_blocks    = num_blocks;
   req.miner_address = cryptonote::get_account_address_as_str(nettype, false, address);
   req.threads_count = num_threads;
 
   if (!invoke<START_MINING>(std::move(req), res, "Unable to start mining"))
     return false;
 
-  tools::success_msg_writer() << "Mining started";
+  std::stringstream stream;
+  stream << "Mining started";
+  if (num_threads) stream << " with " << num_threads << " thread(s).";
+  else             stream << ", auto detecting the number of threads to use.";
+
+  if (num_blocks) stream << " Mining for " << num_blocks << " blocks before stopping or until manually stopped.";
+  tools::success_msg_writer() << stream.str();
   return true;
 }
 
@@ -1379,7 +1382,7 @@ bool rpc_command_executor::alt_chain_info(const std::string &tip, size_t above, 
         tools::msg_writer() << "Time span: " << tools::get_human_readable_timespan(std::chrono::seconds(dt));
         cryptonote::difficulty_type start_difficulty = bhres.block_headers.back().difficulty;
         if (start_difficulty > 0)
-          tools::msg_writer() << "Approximated " << 100.f * DIFFICULTY_TARGET_V2 * chain.length / dt << "% of network hash rate";
+          tools::msg_writer() << "Approximated " << 100.f * tools::to_seconds(TARGET_BLOCK_TIME) * chain.length / dt << "% of network hash rate";
         else
           tools::fail_msg_writer() << "Bad cmumulative difficulty reported by dameon";
       }
@@ -1525,6 +1528,36 @@ static std::string to_string_rounded(double d, int precision) {
   return ss.str();
 }
 
+static void print_vote_history(std::ostringstream &stream, std::vector<service_nodes::participation_entry> const &votes)
+{
+  if (votes.empty())
+    stream << "(Awaiting votes from service node)";
+
+  // NOTE: Votes were stored in a ring buffer and copied naiively into the vote
+  // array so they may be out of order. Find the smallest entry (by height) and
+  // print starting from that entry.
+  auto it       = std::min_element(votes.begin(), votes.end(), [](const auto &a, const auto &b) { return a.height < b.height; });
+  size_t offset = std::distance(votes.begin(), it);
+
+  for (size_t i = 0; i < votes.size(); i++)
+  {
+    service_nodes::participation_entry const &entry = votes[(offset + i) % votes.size()];
+    if (entry.is_pulse)
+    {
+      stream << "[" << entry.height << ", ";
+      stream << +entry.pulse.round << ", ";
+      stream << (entry.pulse.block_producer ? "Block Producer" : "Validator") << ", ";
+      stream << (entry.voted ? "Yes" : "No") << "]";
+    }
+    else
+    {
+      stream << "[" << entry.height << ", " << (entry.voted ? "Yes" : "No") << "]";
+    }
+    if (i < (votes.size() - 1)) stream << ",";
+    stream << " ";
+  }
+}
+
 static void append_printable_service_node_list_entry(cryptonote::network_type nettype, bool detailed_view, uint64_t blockchain_height, uint64_t entry_index, GET_SERVICE_NODES::response::entry const &entry, std::string &buffer)
 {
   const char indent1[] = "    ";
@@ -1572,7 +1605,7 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
     else
     {
       uint64_t delta_height      = (blockchain_height >= expiry_height) ? 0 : expiry_height - blockchain_height;
-      uint64_t expiry_epoch_time = now + (delta_height * DIFFICULTY_TARGET_V2);
+      uint64_t expiry_epoch_time = now + (delta_height * tools::to_seconds(TARGET_BLOCK_TIME));
       stream << expiry_height << " (in " << delta_height << ") blocks\n";
       stream << indent2 << "Expiry Date (estimated): " << get_date_time(expiry_epoch_time) << " (" << get_human_time_ago(expiry_epoch_time, now) << ")\n";
     }
@@ -1603,6 +1636,9 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
       stream << "Last Uptime Proof Received: " << get_human_time_ago(entry.last_uptime_proof, time(nullptr));
     }
 
+    //
+    // NOTE: Node Identification
+    //
     stream << "\n";
     stream << indent2 << "IP Address & Ports: ";
     if (entry.public_ip == "0.0.0.0")
@@ -1617,6 +1653,9 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
              << indent3 << (entry.pubkey_ed25519.empty() ? "(not yet received)" : entry.pubkey_ed25519) << " (Ed25519)\n"
              << indent3 << (entry.pubkey_x25519.empty()  ? "(not yet received)" : entry.pubkey_x25519)  << " (X25519)\n";
 
+    //
+    // NOTE: Storage Server Test
+    //
     stream << indent2 << "Storage Server Reachable: " << (entry.storage_server_reachable ? "Yes" : "No") << " (";
     if (entry.storage_server_reachable_timestamp == 0)
       stream << "Awaiting first test";
@@ -1624,26 +1663,9 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
       stream << "Last checked: " << get_human_time_ago(entry.storage_server_reachable_timestamp, now);
     stream << ")\n";
 
-    stream << indent2 <<  "Checkpoint Participation [Height: Voted]: ";
-    // Checkpoints heights are a rotating queue, so find the smallest one and print starting from there
-    auto it = std::min_element(entry.votes.begin(), entry.votes.end(), [](const auto &a, const auto &b) { return a.height < b.height; });
-    size_t offset = std::distance(entry.votes.begin(), it);
-    for (size_t i = 0; i < entry.votes.size(); i++)
-    {
-      service_nodes::checkpoint_vote_record const &record = entry.votes[(offset + i) % entry.votes.size()];
-      if (record.height == service_nodes::INVALID_HEIGHT)
-      {
-        stream << "[N/A: N/A]";
-      }
-      else
-      {
-        stream << "[" << record.height << ": " << (record.voted ? "Yes" : "No") << "]";
-      }
-      if (i < (entry.votes.size() - 1)) stream << ",";
-      stream << " ";
-    }
-
-    stream << "\n";
+    //
+    // NOTE: Node Credits
+    //
     stream << indent2;
     if (entry.active) {
       stream << "Downtime Credits: " << entry.earned_downtime_blocks << " blocks";
@@ -1654,6 +1676,16 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
       stream << "Current Status: DECOMMISSIONED\n";
       stream << indent2 << "Remaining Decommission Time Until DEREGISTRATION: " << entry.earned_downtime_blocks << " blocks";
     }
+    stream << "\n";
+
+    //
+    // NOTE: Print Voting History
+    //
+    stream << indent2 <<  "Checkpoint Participation [Height, Voted]\n" << indent3;
+    print_vote_history(stream, entry.checkpoint_participation);
+
+    stream << "\n\n" << indent2 << "Pulse Participation [Height, Round, (Block Producer|Validator), Voted]\n" << indent3;
+    print_vote_history(stream, entry.pulse_participation);
   }
 
   stream << "\n";
@@ -2441,6 +2473,13 @@ bool rpc_command_executor::version()
         return false;
     tools::success_msg_writer() << response.version;
     return true;
+}
+
+bool rpc_command_executor::test_trigger_uptime_proof()
+{
+  TEST_TRIGGER_UPTIME_PROOF::request req{};
+  TEST_TRIGGER_UPTIME_PROOF::response res{};
+  return invoke<TEST_TRIGGER_UPTIME_PROOF>(std::move(req), res, "Failed to trigger uptime proof");
 }
 
 }// namespace daemonize

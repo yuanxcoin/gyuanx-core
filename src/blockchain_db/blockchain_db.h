@@ -875,7 +875,7 @@ public:
    *
    * @return the block requested
    */
-  virtual block get_block(const crypto::hash& h) const;
+  block get_block(const crypto::hash& h) const;
 
   /**
    * @brief gets the height of the block with a given hash
@@ -902,7 +902,21 @@ public:
    *
    * @return the block header
    */
-  virtual block_header get_block_header(const crypto::hash& h) const = 0;
+  block_header get_block_header(const crypto::hash& h) const;
+
+  /**
+   * @brief fetch a block header with height
+   *
+   * The subclass should return the block header from the block with
+   * the given hash.
+   *
+   * If the block does not exist, the subclass should throw BLOCK_DNE
+   *
+   * @param h the height to look for
+   *
+   * @return the block header
+   */
+  virtual block_header get_block_header_from_height(uint64_t height) const = 0;
 
   /**
    * @brief fetch a block blob by height
@@ -916,7 +930,7 @@ public:
    *
    * @return the block blob
    */
-  virtual cryptonote::blobdata get_block_blob_from_height(const uint64_t& height) const = 0;
+  virtual cryptonote::blobdata get_block_blob_from_height(uint64_t height) const = 0;
 
   /**
    * @brief fetch a block by height
@@ -928,7 +942,7 @@ public:
    *
    * @return the block
    */
-  virtual block get_block_from_height(const uint64_t& height) const;
+  virtual block get_block_from_height(uint64_t height) const = 0;
 
   /**
    * @brief fetch a block's timestamp
@@ -1626,7 +1640,19 @@ public:
    *
    * @return true if the block was found in the alternative blocks list, false otherwise
    */
-  virtual bool get_alt_block(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::blobdata *blob, cryptonote::blobdata *checkpoint) = 0;
+  virtual bool get_alt_block(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::blobdata *blob, cryptonote::blobdata *checkpoint) const = 0;
+
+  /**
+   * @brief get the block header from the alternative block db
+   *
+   * @param: blkid: the block hash
+   * @param: data: the metadata for the block
+   * @param: header: the alt block's header
+   * @param: checkpoint: the Service Nodee checkpoint associated with the block
+   *
+   * @return true if the block was found in the alternative blocks list, false otherwise
+   */
+  bool get_alt_block_header(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::block_header *header, cryptonote::blobdata *checkpoint) const;
 
   /**
    * @brief remove an alternative block
@@ -1812,29 +1838,18 @@ public:
    */
   virtual uint64_t get_database_size() const = 0;
 
-  // TODO: this should perhaps be (or call) a series of functions which
-  // progressively update through version updates
   /**
    * @brief fix up anything that may be wrong due to past bugs
    */
-  enum struct fixup_type
-  {
-    standard,
-    calculate_difficulty,
-  };
-
   struct fixup_context
   {
-    fixup_type type;
-    union
+    cryptonote::network_type nettype;
+    struct
     {
-      struct
-      {
-        uint64_t start_height;
-      } calculate_difficulty_params;
-    };
+      uint64_t start_height;
+    } recalc_diff;
   };
-  virtual void fixup(fixup_context const context = {});
+  virtual void fixup(fixup_context const context);
 
   virtual void get_output_blacklist(std::vector<uint64_t> &blacklist) const   = 0;
   virtual void add_output_blacklist(std::vector<uint64_t> const &blacklist)   = 0;
@@ -1855,6 +1870,33 @@ public:
   /// Removes stored serialized proof sn data associated with the given pubkey.  Returns true if
   /// found, false if not found.
   virtual bool remove_service_node_proof(const crypto::public_key &pubkey) = 0;
+
+  // This function accepts an empty timestamps/difficulties array to fill, or
+  // a prior timestamps/difficulties array that was filled by a previous call to
+  // this same function in which case it will optimally insert and remove the
+  // new data instead of reconstructing the entrie array.
+  //
+  // timestamps: On return, timestamps of the last loaded
+  // 'DIFFICULTY_WINDOW' blocks starting from top_block_height stored in
+  // ascending block height order.
+  //
+  // difficulties: On return, cumulative difficulties of the last loaded
+  // DIFFICULTY_WINDOW blocks starting from 'top_block_height' stored in
+  // ascending block height order
+  //
+  // chain_height: The blockchain height, (next height a block will be added
+  // at). The input arrays will be filled with the prior `timestamps` and
+  // `difficulties` DIFFICULTY_WINDOW worth of values.
+  //
+  // timestamps_difficulty_height: The last 'chain_height' that this function
+  // was invoked and loaded historical timestamp/difficulties into (allowing
+  // this function to be called iteratively on the same input arrays over time).
+  // This should be set to 0 on the initial call.
+  void fill_timestamps_and_difficulties_for_pow(cryptonote::network_type nettype,
+                                                std::vector<uint64_t> &timestamps,
+                                                std::vector<uint64_t> &difficulties,
+                                                uint64_t chain_height,
+                                                uint64_t timestamps_difficulty_height) const;
 
   /**
    * @brief set whether or not to automatically remove logs

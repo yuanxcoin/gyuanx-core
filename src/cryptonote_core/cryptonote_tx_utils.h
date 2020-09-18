@@ -50,12 +50,39 @@ namespace cryptonote
   uint64_t get_portion_of_reward                (uint64_t portions, uint64_t total_service_node_reward);
   uint64_t service_node_reward_formula          (uint64_t base_reward, uint8_t hard_fork_version);
 
-  struct loki_miner_tx_context // NOTE(loki): All the custom fields required by Loki to use construct_miner_tx
+  struct loki_miner_tx_context
   {
-    loki_miner_tx_context(network_type type = MAINNET, service_nodes::block_winner const &block_winner = service_nodes::null_block_winner) : nettype(type), block_winner(std::move(block_winner)) { }
-    network_type                nettype;
-    service_nodes::block_winner block_winner;
-    uint64_t                    batched_governance = 0; // NOTE: 0 until hardfork v10, then use blockchain::calc_batched_governance_reward
+    static loki_miner_tx_context miner_block(network_type nettype,
+                                             cryptonote::account_public_address const &block_producer,
+                                             service_nodes::payout const &block_leader = service_nodes::null_payout)
+    {
+        loki_miner_tx_context result = {};
+        result.nettype               = nettype;
+        result.miner_block_producer  = block_producer;
+        result.block_leader          = block_leader;
+        return result;
+    }
+
+    static loki_miner_tx_context pulse_block(network_type nettype,
+                                             service_nodes::payout const &block_producer,
+                                             service_nodes::payout const &block_leader = service_nodes::null_payout)
+    {
+      loki_miner_tx_context result = {};
+      result.pulse                 = true;
+      result.nettype               = nettype;
+      result.pulse_block_producer  = block_producer;
+      result.block_leader          = block_leader;
+      return result;
+    }
+
+    network_type           nettype = MAINNET;
+
+    bool                   pulse;                // If true, pulse_.* varables are set, otherwise miner_block_producer is set, determining who should get the coinbase reward.
+    service_nodes::payout  pulse_block_producer; // Can be different from the leader in Pulse if the original leader fails to complete the round, the block producer changes.
+
+    account_public_address miner_block_producer;
+    service_nodes::payout  block_leader;         // Winner from the Service Node queuing in the Service Node List.
+    uint64_t               batched_governance;   // NOTE: 0 until hardfork v10, then use blockchain::calc_batched_governance_reward
   };
 
   bool construct_miner_tx(
@@ -64,11 +91,10 @@ namespace cryptonote
       uint64_t already_generated_coins,
       size_t current_block_weight,
       uint64_t fee,
-      const account_public_address &miner_address,
       transaction& tx,
+      const loki_miner_tx_context &miner_context,
       const blobdata& extra_nonce = blobdata(),
-      uint8_t hard_fork_version = 1,
-      const loki_miner_tx_context &miner_context = {});
+      uint8_t hard_fork_version = 1);
 
   struct block_reward_parts
   {
@@ -85,17 +111,15 @@ namespace cryptonote
     /// calculated.  Before HF 13 this was (mistakenly) reduced by the block size penalty for
     /// exceeding the median block size; starting in HF 13 the miner pays the full penalty.
     uint64_t original_base_reward;
-
-    uint64_t miner_reward() { return base_miner + base_miner_fee; }
   };
 
   struct loki_block_reward_context
   {
     using portions = uint64_t;
-    uint64_t                                 height;
-    uint64_t                                 fee;
-    uint64_t                                 batched_governance;   // Optional: 0 hardfork v10, then must be calculated using blockchain::calc_batched_governance_reward
-    std::vector<service_nodes::payout_entry> service_node_payouts = service_nodes::null_winner;
+    uint64_t              height;
+    uint64_t              fee;
+    uint64_t              batched_governance;   // Optional: 0 hardfork v10, then must be calculated using blockchain::calc_batched_governance_reward
+    std::vector<service_nodes::payout_entry> block_leader_payouts = {service_nodes::null_payout_entry};
   };
 
   // NOTE(loki): I would combine this into get_base_block_reward, but
@@ -227,9 +251,9 @@ namespace cryptonote
   };
 
   class Blockchain;
-  crypto::hash get_block_longhash(randomx_longhash_context const &randomx_context, const block& b, uint64_t height, int miners);
-  crypto::hash get_altblock_longhash(randomx_longhash_context const &randomx_context, const block& b, uint64_t height);
-  crypto::hash get_block_longhash_w_blockchain(const Blockchain *pb, const block& b, uint64_t height, int miners);
+  crypto::hash get_block_longhash(cryptonote::network_type nettype, randomx_longhash_context const &randomx_context, const block& b, uint64_t height, int miners);
+  crypto::hash get_altblock_longhash(cryptonote::network_type nettype, randomx_longhash_context const &randomx_context, const block& b, uint64_t height);
+  crypto::hash get_block_longhash_w_blockchain(cryptonote::network_type nettype, const Blockchain *pb, const block& b, uint64_t height, int miners);
   void get_block_longhash_reorg(const uint64_t split_height);
 
 }

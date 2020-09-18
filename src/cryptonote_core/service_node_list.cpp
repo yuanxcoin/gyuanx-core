@@ -54,6 +54,7 @@ extern "C" {
 #include "blockchain.h"
 #include "service_node_quorum_cop.h"
 
+#include "pulse.h"
 #include "service_node_list.h"
 #include "service_node_rules.h"
 #include "service_node_swarm.h"
@@ -78,13 +79,6 @@ namespace service_nodes
     uint64_t result =
         (block_height < DEFAULT_SHORT_TERM_STATE_HISTORY) ? 0 : block_height - DEFAULT_SHORT_TERM_STATE_HISTORY;
     return result;
-  }
-
-  static constexpr service_node_info::version_t get_min_service_node_info_version_for_hf(uint8_t hf_version)
-  {
-    return hf_version < cryptonote::network_version_14_blink
-      ? service_node_info::version_t::v2_ed25519
-      : service_node_info::version_t::v3_quorumnet;
   }
 
   service_node_list::service_node_list(cryptonote::Blockchain &blockchain)
@@ -130,7 +124,7 @@ namespace service_nodes
   }
 
   std::vector<pubkey_and_sninfo> service_node_list::state_t::active_service_nodes_infos() const {
-    return sort_and_filter(service_nodes_infos, [](const service_node_info &info) { return info.is_active(); });
+    return sort_and_filter(service_nodes_infos, [](const service_node_info &info) { return info.is_active(); }, /*reserve=*/ true);
   }
 
   std::vector<pubkey_and_sninfo> service_node_list::state_t::decommissioned_service_nodes_infos() const {
@@ -169,9 +163,6 @@ namespace service_nodes
         quorums = &it->quorums;
     }
 
-    if (!quorums)
-      return nullptr;
-
     if (alt_quorums)
     {
       for (const auto& [hash, alt_state] : m_transient.alt_state)
@@ -183,6 +174,9 @@ namespace service_nodes
         }
       }
     }
+
+    if (!quorums)
+      return nullptr;
 
     std::shared_ptr<const quorum> result = quorums->get(type);
     return result;
@@ -767,7 +761,8 @@ namespace service_nodes
         {
           auto &proof = sn_list->proofs[key];
           proof.effective_timestamp = block.timestamp;
-          proof.votes.fill({});
+          proof.checkpoint_participation.reset();
+          proof.pulse_participation.reset();
         }
         return true;
       }
@@ -899,7 +894,7 @@ namespace service_nodes
       return false;
     }
 
-    if (hf_version >= cryptonote::network_version_16)
+    if (hf_version >= cryptonote::network_version_16_pulse)
     {
       // In HF16 we start enforcing three things that were always done but weren't actually enforced:
       // 1. the staked amount in the tx must be a single output.
@@ -959,7 +954,6 @@ namespace service_nodes
     info.last_reward_transaction_index = index;
     info.swarm_id                      = UNASSIGNED_SWARM_ID;
     info.last_ip_change_height         = block_height;
-    info.version                       = get_min_service_node_info_version_for_hf(hf_version);
 
     for (size_t i = 0; i < contributor_args.addresses.size(); i++)
     {
@@ -985,7 +979,7 @@ namespace service_nodes
     // In HF16 we require that the amount staked in the registration tx be at least the amount
     // reserved for the operator.  Before HF16 it only had to be >= 25%, even if the operator
     // reserved amount was higher (though wallets would never actually do this).
-    if (hf_version >= cryptonote::network_version_16 && stake.transferred < info.contributors[0].reserved)
+    if (hf_version >= cryptonote::network_version_16_pulse && stake.transferred < info.contributors[0].reserved)
     {
       LOG_PRINT_L1("Register TX rejected: TX does not have sufficient operator stake");
       return false;
@@ -1131,7 +1125,7 @@ namespace service_nodes
         other_reservations++;
     }
 
-    if (hf_version >= cryptonote::network_version_16 && stake.locked_contributions.size() != 1)
+    if (hf_version >= cryptonote::network_version_16_pulse && stake.locked_contributions.size() != 1)
     {
       // Nothing has ever created stake txes with multiple stake outputs, but we start enforcing
       // that in HF16.
@@ -1142,7 +1136,7 @@ namespace service_nodes
     // Check node contributor counts
     {
       bool too_many_contributions = false;
-      if (hf_version >= cryptonote::network_version_16)
+      if (hf_version >= cryptonote::network_version_16_pulse)
         // Before HF16 we didn't properly take into account unfilled reservation spots
         too_many_contributions = existing_contributions + other_reservations + 1 > MAX_NUMBER_OF_CONTRIBUTORS;
       else if (hf_version >= cryptonote::network_version_11_infinite_staking)
@@ -1168,7 +1162,7 @@ namespace service_nodes
     { // Follow-up contributions from an existing contributor could be any size before HF11
       min_contribution = 1;
     }
-    else if (hf_version < cryptonote::network_version_16)
+    else if (hf_version < cryptonote::network_version_16_pulse)
     {
       // The implementation before HF16 was a bit broken w.r.t. properly handling reserved amounts
       min_contribution = get_min_node_contribution(hf_version, curinfo.staking_requirement, curinfo.total_reserved, existing_contributions);
@@ -1241,6 +1235,342 @@ namespace service_nodes
     return false;
   }
 
+  static std::string dump_pulse_block_data(cryptonote::block const &block, service_nodes::quorum const *quorum)
+  {
+    std::stringstream stream;
+    std::bitset<8 * sizeof(block.pulse.validator_bitset)> const validator_bitset = block.pulse.validator_bitset;
+    stream << "Block(" << cryptonote::get_block_height(block) << "): " << cryptonote::get_block_hash(block) << "\n";
+    stream << "Leader: ";
+    if (quorum) stream << (quorum->workers.empty() ? "(invalid leader)" : lokimq::to_hex(tools::view_guts(quorum->workers[0]))) << "\n";
+    else        stream << "(invalid quorum)\n";
+    stream << "Round: " << +block.pulse.round << "\n";
+    stream << "Validator Bitset: " << validator_bitset << "\n";
+
+    stream << "Signatures: ";
+    if (block.signatures.empty()) stream << "(none)";
+
+    for (service_nodes::quorum_signature const &entry : block.signatures)
+    {
+      stream << "\n";
+      stream << "  [" << +entry.voter_index << "] validator: ";
+      if (quorum)
+      {
+        stream << ((entry.voter_index >= quorum->validators.size()) ? "(invalid quorum index)" : lokimq::to_hex(tools::view_guts(quorum->validators[entry.voter_index])));
+        stream << ", signature: " << lokimq::to_hex(tools::view_guts(entry.signature));
+      }
+      else stream << "(invalid quorum)";
+    }
+
+    return stream.str();
+  }
+
+  static bool verify_block_components(cryptonote::network_type nettype,
+                                      cryptonote::block const &block,
+                                      bool miner_block,
+                                      bool alt_block,
+                                      bool log_errors,
+                                      pulse::timings &timings,
+                                      std::shared_ptr<const quorum> pulse_quorum,
+                                      std::vector<std::shared_ptr<const quorum>> &alt_pulse_quorums)
+  {
+    std::string_view block_type = alt_block ? "alt block "sv : "block "sv;
+    uint64_t height             = cryptonote::get_block_height(block);
+    crypto::hash hash           = cryptonote::get_block_hash(block);
+
+    if (miner_block)
+    {
+      if (cryptonote::block_has_pulse_components(block))
+      {
+        if (log_errors) MGINFO("Pulse " << block_type << "received but only miner blocks are permitted\n" << dump_pulse_block_data(block, pulse_quorum.get()));
+        return false;
+      }
+
+      if (block.pulse.round != 0)
+      {
+        if (log_errors) MGINFO("Miner " << block_type << "given but unexpectedly set round " << block.pulse.round <<  " on height " << height);
+        return false;
+      }
+
+      if (block.pulse.validator_bitset != 0)
+      {
+        std::bitset<8 * sizeof(block.pulse.validator_bitset)> const bitset = block.pulse.validator_bitset;
+        if (log_errors) MGINFO("Miner " << block_type << "block given but unexpectedly set validator bitset " << bitset <<  " on height " << height);
+        return false;
+      }
+
+      if (block.signatures.size())
+      {
+        if (log_errors) MGINFO("Miner " << block_type << "block given but unexpectedly has " << block.signatures.size() <<  " signatures on height " << height);
+        return false;
+      }
+
+      return true;
+    }
+    else
+    {
+      if (!cryptonote::block_has_pulse_components(block))
+      {
+        if (log_errors) MGINFO("Miner " << block_type << "received but only pulse blocks are permitted\n" << dump_pulse_block_data(block, pulse_quorum.get()));
+        return false;
+      }
+
+      // TODO(doyle): Core tests need to generate coherent timestamps with
+      // Pulse. So we relax the rules here for now.
+      if (nettype != cryptonote::FAKECHAIN)
+      {
+        auto round_begin_timestamp = timings.r0_timestamp + (block.pulse.round * PULSE_ROUND_TIME);
+        auto round_end_timestamp   = round_begin_timestamp + PULSE_ROUND_TIME;
+
+        uint64_t begin_time = tools::to_seconds(round_begin_timestamp.time_since_epoch());
+        uint64_t end_time   = tools::to_seconds(round_end_timestamp.time_since_epoch());
+        if (!(block.timestamp >= begin_time && block.timestamp <= end_time))
+        {
+          std::string time  = tools::get_human_readable_timestamp(block.timestamp);
+          std::string begin = tools::get_human_readable_timestamp(begin_time);
+          std::string end   = tools::get_human_readable_timestamp(end_time);
+          if (log_errors) MGINFO("Pulse " << block_type << "with round " << +block.pulse.round << " specifies timestamp " << time << " is not within an acceptable range of time [" << begin << ", " << end << "]");
+          return false;
+        }
+      }
+
+      if (block.nonce != 0)
+      {
+        if (log_errors) MGINFO("Pulse " << block_type << "specified a nonce when quorum block generation is available, nonce: " << block.nonce);
+        return false;
+      }
+
+      bool quorum_verified = false;
+      if (alt_block)
+      {
+        // NOTE: Check main pulse quorum. It might not necessarily exist because
+        // the alt-block's chain could be in any arbitrary state.
+        bool failed_quorum_verify = true;
+        if (pulse_quorum)
+        {
+          failed_quorum_verify = service_nodes::verify_quorum_signatures(*pulse_quorum,
+                                                                         quorum_type::pulse,
+                                                                         block.major_version,
+                                                                         height,
+                                                                         hash,
+                                                                         block.signatures,
+                                                                         block) == false;
+        }
+
+        // NOTE: Check alt pulse quorums
+        if (failed_quorum_verify)
+        {
+          for (auto const &alt_quorum : alt_pulse_quorums)
+          {
+            if (service_nodes::verify_quorum_signatures(*alt_quorum,
+                                                        quorum_type::pulse,
+                                                        block.major_version,
+                                                        height,
+                                                        hash,
+                                                        block.signatures,
+                                                        block))
+            {
+              failed_quorum_verify = false;
+              break;
+            }
+          }
+        }
+
+        quorum_verified = !failed_quorum_verify;
+      }
+      else
+      {
+        // NOTE: We only accept insufficient node for Pulse if we're on an alt
+        // block (that chain would be in any arbitrary state, we could be
+        // completely isolated from the correct network for example).
+        bool insufficient_nodes_for_pulse = pulse_quorum == nullptr;
+        if (insufficient_nodes_for_pulse)
+        {
+          if (log_errors) MGINFO("Pulse " << block_type << "specified but no quorum available " << dump_pulse_block_data(block, pulse_quorum.get()));
+          return false;
+        }
+
+        quorum_verified = service_nodes::verify_quorum_signatures(*pulse_quorum,
+                                                                  quorum_type::pulse,
+                                                                  block.major_version,
+                                                                  cryptonote::get_block_height(block),
+                                                                  cryptonote::get_block_hash(block),
+                                                                  block.signatures,
+                                                                  block);
+      }
+
+      if (quorum_verified)
+      {
+        // NOTE: These invariants are already checked in verify_quorum_signatures
+        assert(block.pulse.validator_bitset != 0);
+        assert(block.pulse.validator_bitset < (1 << PULSE_QUORUM_NUM_VALIDATORS));
+        assert(block.signatures.size() == service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
+      }
+      else
+      {
+        if (log_errors)
+          MGINFO("Pulse " << block_type << "failed quorum verification\n" << dump_pulse_block_data(block, pulse_quorum.get()));
+      }
+
+      return quorum_verified;
+    }
+  }
+
+  static bool find_block_in_db(cryptonote::BlockchainDB const &db, crypto::hash const &hash, cryptonote::block &block)
+  {
+    try
+    {
+      block = db.get_block(hash);
+    }
+    catch(std::exception const &e)
+    {
+      // ignore not found block, try alt db
+      cryptonote::alt_block_data_t alt_data;
+      cryptonote::blobdata blob;
+      if (!db.get_alt_block(hash, &alt_data, &blob, nullptr))
+      {
+        MERROR("Failed to find block " << hash);
+        return false;
+      }
+
+      if (!cryptonote::parse_and_validate_block_from_blob(blob, block, nullptr))
+        return false;
+    }
+
+    return true;
+  }
+
+
+  bool service_node_list::verify_block(const cryptonote::block &block, bool alt_block, cryptonote::checkpoint_t const *checkpoint)
+  {
+    if (block.major_version < cryptonote::network_version_9_service_nodes)
+      return true;
+
+    std::string_view block_type = alt_block ? "alt block "sv : "block "sv;
+
+    //
+    // NOTE: Verify the checkpoint given on this height that locks in a block in the past.
+    //
+    if (block.major_version >= cryptonote::network_version_13_enforce_checkpoints && checkpoint)
+    {
+      std::vector<std::shared_ptr<const service_nodes::quorum>> alt_quorums;
+      std::shared_ptr<const quorum> quorum = get_quorum(quorum_type::checkpointing, checkpoint->height, false, alt_block ? &alt_quorums : nullptr);
+
+      if (!quorum)
+      {
+        MGINFO("Failed to get testing quorum checkpoint for " << block_type << cryptonote::get_block_hash(block));
+        return false;
+      }
+
+      bool failed_checkpoint_verify = !service_nodes::verify_checkpoint(block.major_version, *checkpoint, *quorum);
+      if (alt_block && failed_checkpoint_verify)
+      {
+        for (std::shared_ptr<const service_nodes::quorum> alt_quorum : alt_quorums)
+        {
+          if (service_nodes::verify_checkpoint(block.major_version, *checkpoint, *alt_quorum))
+          {
+            failed_checkpoint_verify = false;
+            break;
+          }
+        }
+      }
+
+      if (failed_checkpoint_verify)
+      {
+        MGINFO("Service node checkpoint failed verification for " << block_type << cryptonote::get_block_hash(block));
+        return false;
+      }
+    }
+
+    //
+    // NOTE: Get Pulse Block Timing Information
+    //
+    pulse::timings timings = {};
+    uint64_t height        = cryptonote::get_block_height(block);
+    if (block.major_version >= cryptonote::network_version_16_pulse)
+    {
+      uint64_t prev_timestamp = 0;
+      if (alt_block)
+      {
+        cryptonote::block prev_block;
+        if (!find_block_in_db(m_blockchain.get_db(), block.prev_id, prev_block))
+        {
+          MGINFO("Alt block " << cryptonote::get_block_hash(block) << " references previous block " << block.prev_id << " not available in DB.");
+          return false;
+        }
+
+        prev_timestamp = prev_block.timestamp;
+      }
+      else
+      {
+        uint64_t prev_height = height - 1;
+        prev_timestamp       = m_blockchain.get_db().get_block_timestamp(prev_height);
+      }
+
+      if (!pulse::get_round_timings(m_blockchain, height, prev_timestamp, timings))
+      {
+        MGINFO("Failed to query the block data for Pulse timings to validate incoming " << block_type << "at height " << height);
+        return false;
+      }
+    }
+
+    //
+    // NOTE: Load Pulse Quorums
+    //
+    std::shared_ptr<const quorum>              pulse_quorum;
+    std::vector<std::shared_ptr<const quorum>> alt_pulse_quorums;
+    bool pulse_hf = block.major_version >= cryptonote::network_version_16_pulse;
+
+    if (pulse_hf)
+    {
+      pulse_quorum = get_quorum(quorum_type::pulse,
+                                height,
+                                false /*include historical quorums*/,
+                                alt_block ? &alt_pulse_quorums : nullptr);
+    }
+
+    if (m_blockchain.nettype() != cryptonote::FAKECHAIN)
+    {
+      // TODO(doyle): Core tests don't generate proper timestamps for detecting
+      // timeout yet. So we don't do a timeout check and assume all blocks
+      // incoming from Pulse are valid if they have the correct signatures
+      // (despite timestamp being potentially wrong).
+      if (pulse::time_point(std::chrono::seconds(block.timestamp)) >= timings.miner_fallback_timestamp)
+        pulse_quorum = nullptr;
+    }
+
+    //
+    // NOTE: Verify Block
+    //
+    bool result = false;
+    if (alt_block)
+    {
+      // NOTE: Verify as a pulse block first if possible, then as a miner block.
+      // This alt block could belong to a chain that is in an arbitrary state.
+      if (pulse_hf)
+        result = verify_block_components(m_blockchain.nettype(), block, false /*miner_block*/, true /*alt_block*/, false /*log_errors*/, timings, pulse_quorum, alt_pulse_quorums);
+
+      if (!result)
+        result = verify_block_components(m_blockchain.nettype(), block, true /*miner_block*/, true /*alt_block*/, false /*log_errors*/, timings, pulse_quorum, alt_pulse_quorums);
+    }
+    else
+    {
+      // NOTE: No pulse quorums are generated when the network has insufficient nodes to generate quorums
+      //       Or, block specifies time after all the rounds have timed out
+      bool miner_block = !pulse_hf || !pulse_quorum;
+
+      result = verify_block_components(m_blockchain.nettype(),
+                                       block,
+                                       miner_block,
+                                       false /*alt_block*/,
+                                       true /*log_errors*/,
+                                       timings,
+                                       pulse_quorum,
+                                       alt_pulse_quorums);
+    }
+
+    return result;
+  }
+
   bool service_node_list::block_added(const cryptonote::block& block, const std::vector<cryptonote::transaction>& txs, cryptonote::checkpoint_t const *checkpoint)
   {
     if (block.major_version < cryptonote::network_version_9_service_nodes)
@@ -1248,27 +1578,34 @@ namespace service_nodes
 
     std::lock_guard lock(m_sn_mutex);
     process_block(block, txs);
+    return verify_block(block, false /*alt_block*/, checkpoint);
+  }
 
-    if (block.major_version >= cryptonote::network_version_13_enforce_checkpoints && checkpoint)
+  static std::mt19937_64 quorum_rng(uint8_t hf_version, crypto::hash const &hash, quorum_type type)
+  {
+    std::mt19937_64 result;
+    if (hf_version >= cryptonote::network_version_16_pulse)
     {
-      std::shared_ptr<const quorum> quorum = get_quorum(quorum_type::checkpointing, checkpoint->height);
-      if (!quorum)
-      {
-        LOG_PRINT_L1("Failed to get testing quorum checkpoint for block: " << cryptonote::get_block_hash(block));
-        return false;
-      }
-
-      if (!service_nodes::verify_checkpoint(block.major_version, *checkpoint, *quorum))
-      {
-        LOG_PRINT_L1("Service node checkpoint failed verification for block: " << cryptonote::get_block_hash(block));
-        return false;
-      }
+      std::array<uint32_t, (sizeof(hash) / sizeof(uint32_t)) + 1> src = {static_cast<uint32_t>(type)};
+      std::memcpy(&src[1], &hash, sizeof(hash));
+      for (uint32_t &val : src) boost::endian::little_to_native_inplace(val);
+      std::seed_seq sequence(src.begin(), src.end());
+      result.seed(sequence);
+    }
+    else
+    {
+      uint64_t seed = 0;
+      std::memcpy(&seed, hash.data, sizeof(seed));
+      boost::endian::little_to_native_inplace(seed);
+      seed += static_cast<uint64_t>(type);
+      result.seed(seed);
     }
 
-    return true;
+    return result;
   }
 
   static std::vector<size_t> generate_shuffled_service_node_index_list(
+      uint8_t hf_version,
       size_t list_size,
       crypto::hash const &block_hash,
       quorum_type type,
@@ -1277,12 +1614,7 @@ namespace service_nodes
   {
     std::vector<size_t> result(list_size);
     std::iota(result.begin(), result.end(), 0);
-
-    uint64_t seed = 0;
-    std::memcpy(&seed, block_hash.data, std::min(sizeof(seed), sizeof(block_hash.data)));
-    boost::endian::little_to_native_inplace(seed);
-
-    seed += static_cast<uint64_t>(type);
+    std::mt19937_64 rng = quorum_rng(hf_version, block_hash, type);
 
     //       Shuffle 2
     //       |=================================|
@@ -1301,99 +1633,277 @@ namespace service_nodes
     // reuse the same seed for both partial shuffles, but again, that isn't an issue.
     if ((0 < sublist_size && sublist_size < list_size) && (0 < sublist_up_to && sublist_up_to < list_size)) {
       assert(sublist_size <= sublist_up_to); // Can't select N random items from M items when M < N
-      tools::shuffle_portable(result.begin(), result.begin() + sublist_up_to, seed);
-      tools::shuffle_portable(result.begin() + sublist_size, result.end(), seed);
+      auto rng_copy = rng;
+      tools::shuffle_portable(result.begin(), result.begin() + sublist_up_to, rng);
+      tools::shuffle_portable(result.begin() + sublist_size, result.end(), rng_copy);
     }
     else {
-      tools::shuffle_portable(result.begin(), result.end(), seed);
+      tools::shuffle_portable(result.begin(), result.end(), rng);
     }
     return result;
   }
 
-  static quorum_manager generate_quorums(cryptonote::network_type nettype, uint8_t hf_version, service_node_list::state_t const &state)
+  template <typename It>
+  static std::vector<crypto::hash> make_pulse_entropy_from_blocks(It begin, It end, uint8_t pulse_round)
   {
-    quorum_manager result = {};
+    std::vector<crypto::hash> result;
+    result.reserve(std::distance(begin, end));
+
+    for (auto it = begin; it != end; it++)
+    {
+      cryptonote::block const &block = *it;
+      crypto::hash hash              = {};
+      if (block.major_version >= cryptonote::network_version_16_pulse &&
+          cryptonote::block_has_pulse_components(block))
+      {
+        std::array<uint8_t, 1 + sizeof(block.pulse.random_value)> src = {pulse_round};
+        std::copy(std::begin(block.pulse.random_value.data), std::end(block.pulse.random_value.data), src.begin() + 1);
+        crypto::cn_fast_hash(src.data(), src.size(), hash.data);
+      }
+      else
+      {
+        crypto::hash block_hash = cryptonote::get_block_hash(block);
+        std::array<uint8_t, 1 + sizeof(hash)> src = {pulse_round};
+        std::copy(std::begin(block_hash.data), std::end(block_hash.data), src.begin() + 1);
+        crypto::cn_fast_hash(src.data(), src.size(), hash.data);
+      }
+
+      assert(hash != crypto::null_hash);
+      result.push_back(hash);
+    }
+
+    return result;
+  }
+
+  std::vector<crypto::hash> get_pulse_entropy_for_next_block(cryptonote::BlockchainDB const &db,
+                                                             cryptonote::block const &top_block,
+                                                             uint8_t pulse_round)
+  {
+    uint64_t const top_height = cryptonote::get_block_height(top_block);
+    if (top_height < PULSE_QUORUM_ENTROPY_LAG)
+    {
+      MERROR("Insufficient blocks to get quorum entropy for Pulse, height is " << top_height << ", we need " << PULSE_QUORUM_ENTROPY_LAG << " blocks.");
+      return {};
+    }
+
+    uint64_t const start_height = top_height - PULSE_QUORUM_ENTROPY_LAG;
+    uint64_t const end_height   = start_height + PULSE_QUORUM_SIZE;
+
+    std::vector<cryptonote::block> blocks;
+    blocks.reserve(PULSE_QUORUM_SIZE);
+
+    // NOTE: Go backwards from the block and retrieve the blocks for entropy.
+    // We search by block so that this function handles alternatives blocks as
+    // well as mainchain blocks.
+    crypto::hash prev_hash = top_block.prev_id;
+    uint64_t prev_height   = top_height;
+    while (prev_height > start_height)
+    {
+      cryptonote::block block;
+      if (!find_block_in_db(db, prev_hash, block))
+      {
+        MERROR("Failed to get quorum entropy for Pulse, block at " << prev_height << prev_hash);
+        return {};
+      }
+
+      prev_hash = block.prev_id;
+      if (prev_height >= start_height && prev_height <= end_height)
+        blocks.push_back(block);
+
+      prev_height--;
+    }
+
+    return make_pulse_entropy_from_blocks(blocks.rbegin(), blocks.rend(), pulse_round);
+  }
+
+  std::vector<crypto::hash> get_pulse_entropy_for_next_block(cryptonote::BlockchainDB const &db,
+                                                             crypto::hash const &top_hash,
+                                                             uint8_t pulse_round)
+  {
+    cryptonote::block top_block;
+    if (!find_block_in_db(db, top_hash, top_block))
+    {
+      MERROR("Failed to get quorum entropy for Pulse, next block parent " << top_hash);
+      return {};
+    }
+
+    return get_pulse_entropy_for_next_block(db, top_block, pulse_round);
+  }
+
+  service_nodes::quorum generate_pulse_quorum(cryptonote::network_type nettype,
+                                              crypto::public_key const &block_leader,
+                                              uint8_t hf_version,
+                                              std::vector<pubkey_and_sninfo> const &active_snode_list,
+                                              std::vector<crypto::hash> const &pulse_entropy,
+                                              uint8_t pulse_round)
+  {
+    service_nodes::quorum result = {};
+    if (active_snode_list.size() < pulse_min_service_nodes(nettype))
+    {
+      LOG_PRINT_L2("Insufficient active Service Nodes for Pulse: " << active_snode_list.size());
+      return result;
+    }
+
+    if (pulse_entropy.size() != PULSE_QUORUM_SIZE)
+    {
+      LOG_PRINT_L2("Blockchain has insufficient blocks to generate Pulse data");
+      return result;
+    }
+
+    std::vector<pubkey_and_sninfo const *> pulse_candidates;
+    pulse_candidates.reserve(active_snode_list.size());
+    for (auto &node : active_snode_list)
+    {
+      if (node.first != block_leader || pulse_round > 0)
+        pulse_candidates.push_back(&node);
+    }
+
+    // NOTE: Sort ascending in height i.e. sort preferring the longest time since the validator was in a Pulse quorum.
+    std::sort(
+        pulse_candidates.begin(), pulse_candidates.end(), [](pubkey_and_sninfo const *a, pubkey_and_sninfo const *b) {
+          if (a->second->pulse_sorter == b->second->pulse_sorter)
+            return memcmp(reinterpret_cast<const void *>(&a->first), reinterpret_cast<const void *>(&b->first), sizeof(a->first)) < 0;
+          return a->second->pulse_sorter < b->second->pulse_sorter;
+        });
+
+    crypto::public_key block_producer;
+    if (pulse_round == 0)
+    {
+      block_producer = block_leader;
+    }
+    else
+    {
+      std::mt19937_64 rng   = quorum_rng(hf_version, pulse_entropy[0], quorum_type::pulse);
+      size_t producer_index = tools::uniform_distribution_portable(rng, pulse_candidates.size());
+      block_producer        = pulse_candidates[producer_index]->first;
+      pulse_candidates.erase(pulse_candidates.begin() + producer_index);
+    }
+
+    // NOTE: Order the candidates so the first half nodes in the list is the validators for this round.
+    // - Divide the list in half, select validators from the first half of the list.
+    // - Swap the chosen validator into the moving first half of the list.
+    auto running_it              = pulse_candidates.begin();
+    size_t const partition_index = (pulse_candidates.size() - 1) / 2;
+    if (partition_index == 0)
+    {
+      running_it += service_nodes::PULSE_QUORUM_NUM_VALIDATORS;
+    }
+    else
+    {
+      for (size_t i = 0; i < service_nodes::PULSE_QUORUM_NUM_VALIDATORS; i++)
+      {
+        crypto::hash const &entropy = pulse_entropy[i + 1];
+        std::mt19937_64 rng         = quorum_rng(hf_version, entropy, quorum_type::pulse);
+        size_t validators_available = std::distance(running_it, pulse_candidates.end());
+        size_t swap_index = tools::uniform_distribution_portable(rng, std::min(partition_index, validators_available));
+        std::swap(*running_it, *(running_it + swap_index));
+        running_it++;
+      }
+    }
+
+    result.workers.push_back(block_producer);
+    result.validators.reserve(PULSE_QUORUM_NUM_VALIDATORS);
+    for (auto it = pulse_candidates.begin(); it != running_it; it++)
+    {
+      crypto::public_key const &node_key = (*it)->first;
+      result.validators.push_back(node_key);
+    }
+    return result;
+  }
+
+  static void generate_other_quorums(service_node_list::state_t &state, std::vector<pubkey_and_sninfo> const &active_snode_list, cryptonote::network_type nettype, uint8_t hf_version)
+  {
     assert(state.block_hash != crypto::null_hash);
 
     // The two quorums here have different selection criteria: the entire checkpoint quorum and the
     // state change *validators* want only active service nodes, but the state change *workers*
     // (i.e. the nodes to be tested) also include decommissioned service nodes.  (Prior to v12 there
     // are no decommissioned nodes, so this distinction is irrelevant for network concensus).
-    auto active_snode_list = state.active_service_nodes_infos();
-    decltype(active_snode_list) decomm_snode_list;
+    std::vector<pubkey_and_sninfo> decomm_snode_list;
     if (hf_version >= cryptonote::network_version_12_checkpointing)
       decomm_snode_list = state.decommissioned_service_nodes_infos();
 
     quorum_type const max_quorum_type = max_quorum_type_for_hf(hf_version);
     for (int type_int = 0; type_int <= (int)max_quorum_type; type_int++)
     {
-      auto type             = static_cast<quorum_type>(type_int);
-      size_t num_validators = 0, num_workers = 0;
-      auto quorum           = std::make_shared<service_nodes::quorum>();
+      auto type   = static_cast<quorum_type>(type_int);
+      auto quorum = std::make_shared<service_nodes::quorum>();
       std::vector<size_t> pub_keys_indexes;
 
-      if (type == quorum_type::obligations)
+      size_t num_validators = 0;
+      size_t num_workers    = 0;
+      switch(type)
       {
-        size_t total_nodes         = active_snode_list.size() + decomm_snode_list.size();
-        num_validators             = std::min(active_snode_list.size(), STATE_CHANGE_QUORUM_SIZE);
-        pub_keys_indexes           = generate_shuffled_service_node_index_list(total_nodes, state.block_hash, type, num_validators, active_snode_list.size());
-        result.obligations         = quorum;
-        size_t num_remaining_nodes = total_nodes - num_validators;
-        num_workers                = std::min(num_remaining_nodes, std::max(STATE_CHANGE_MIN_NODES_TO_TEST, num_remaining_nodes/STATE_CHANGE_NTH_OF_THE_NETWORK_TO_TEST));
-      }
-      else if (type == quorum_type::checkpointing)
-      {
-        // Checkpoint quorums only exist every CHECKPOINT_INTERVAL blocks, but the height that gets
-        // used to generate the quorum (i.e. the `height` variable here) is actually `H -
-        // REORG_SAFETY_BUFFER_BLOCKS_POST_HF12`, where H is divisible by CHECKPOINT_INTERVAL, but
-        // REORG_SAFETY_BUFFER_BLOCKS_POST_HF12 is not (it equals 11).  Hence the addition here to
-        // "undo" the lag before checking to see if we're on an interval multiple:
-        if ((state.height + REORG_SAFETY_BUFFER_BLOCKS_POST_HF12) % CHECKPOINT_INTERVAL != 0)
-          continue; // Not on an interval multiple: no checkpointing quorum is defined.
-
-        size_t total_nodes = active_snode_list.size();
-
-        // TODO(loki): Soft fork, remove when testnet gets reset
-        if (nettype == cryptonote::TESTNET && state.height < 85357)
-          total_nodes = active_snode_list.size() + decomm_snode_list.size();
-
-        if (total_nodes >= CHECKPOINT_QUORUM_SIZE)
+        case quorum_type::obligations:
         {
-          pub_keys_indexes = generate_shuffled_service_node_index_list(total_nodes, state.block_hash, type);
-          num_validators   = std::min(pub_keys_indexes.size(), CHECKPOINT_QUORUM_SIZE);
+          size_t total_nodes         = active_snode_list.size() + decomm_snode_list.size();
+          num_validators             = std::min(active_snode_list.size(), STATE_CHANGE_QUORUM_SIZE);
+          pub_keys_indexes           = generate_shuffled_service_node_index_list(hf_version, total_nodes, state.block_hash, type, num_validators, active_snode_list.size());
+          state.quorums.obligations  = quorum;
+          size_t num_remaining_nodes = total_nodes - num_validators;
+          num_workers                = std::min(num_remaining_nodes, std::max(STATE_CHANGE_MIN_NODES_TO_TEST, num_remaining_nodes/STATE_CHANGE_NTH_OF_THE_NETWORK_TO_TEST));
         }
-        result.checkpointing = quorum;
-      }
-      else if (type == quorum_type::blink)
-      {
-        if (state.height % BLINK_QUORUM_INTERVAL != 0)
-          continue;
+        break;
 
-        // Further filter the active SN list for the blink quorum to only include SNs that are not
-        // scheduled to finish unlocking between the quorum height and a few blocks after the
-        // associated blink height.
-        active_snode_list.erase(std::remove_if(active_snode_list.begin(), active_snode_list.end(),
-            [active_until = state.height + BLINK_EXPIRY_BUFFER](auto &info) {
-              auto ruh = info.second->requested_unlock_height;
-              return ruh != KEY_IMAGE_AWAITING_UNLOCK_HEIGHT && ruh <= active_until;
-            }),
-            active_snode_list.end()
-        );
-        size_t total_nodes = active_snode_list.size();
-
-        if (total_nodes >= BLINK_MIN_VOTES)
+        case quorum_type::checkpointing:
         {
-          pub_keys_indexes = generate_shuffled_service_node_index_list(total_nodes, state.block_hash, type);
-          num_validators = std::min<size_t>(pub_keys_indexes.size(), BLINK_SUBQUORUM_SIZE);
+          // Checkpoint quorums only exist every CHECKPOINT_INTERVAL blocks, but the height that gets
+          // used to generate the quorum (i.e. the `height` variable here) is actually `H -
+          // REORG_SAFETY_BUFFER_BLOCKS_POST_HF12`, where H is divisible by CHECKPOINT_INTERVAL, but
+          // REORG_SAFETY_BUFFER_BLOCKS_POST_HF12 is not (it equals 11).  Hence the addition here to
+          // "undo" the lag before checking to see if we're on an interval multiple:
+          if ((state.height + REORG_SAFETY_BUFFER_BLOCKS_POST_HF12) % CHECKPOINT_INTERVAL != 0)
+            continue; // Not on an interval multiple: no checkpointing quorum is defined.
+
+          size_t total_nodes = active_snode_list.size();
+
+          // TODO(loki): Soft fork, remove when testnet gets reset
+          if (nettype == cryptonote::TESTNET && state.height < 85357)
+            total_nodes = active_snode_list.size() + decomm_snode_list.size();
+
+          if (total_nodes >= CHECKPOINT_QUORUM_SIZE)
+          {
+            pub_keys_indexes = generate_shuffled_service_node_index_list(hf_version, total_nodes, state.block_hash, type);
+            num_validators   = std::min(pub_keys_indexes.size(), CHECKPOINT_QUORUM_SIZE);
+          }
+          state.quorums.checkpointing = quorum;
         }
-        // Otherwise leave empty to signal that there aren't enough SNs to form a usable quorum (to
-        // distinguish it from an invalid height, which gets left as a nullptr)
-        result.blink = quorum;
-      }
-      else
-      {
-        MERROR("Unhandled quorum type enum with value: " << type_int);
-        continue;
+        break;
+
+        case quorum_type::blink:
+        {
+          if (state.height % BLINK_QUORUM_INTERVAL != 0)
+            continue;
+
+          // Further filter the active SN list for the blink quorum to only include SNs that are not
+          // scheduled to finish unlocking between the quorum height and a few blocks after the
+          // associated blink height.
+          pub_keys_indexes.reserve(active_snode_list.size());
+          uint64_t const active_until = state.height + BLINK_EXPIRY_BUFFER;
+          for (size_t index = 0; index < active_snode_list.size(); index++)
+          {
+            pubkey_and_sninfo const &entry = active_snode_list[index];
+            uint64_t requested_unlock_height = entry.second->requested_unlock_height;
+            if (requested_unlock_height == KEY_IMAGE_AWAITING_UNLOCK_HEIGHT || requested_unlock_height > active_until)
+              pub_keys_indexes.push_back(index);
+          }
+
+          if (pub_keys_indexes.size() >= BLINK_MIN_VOTES)
+          {
+            std::mt19937_64 rng = quorum_rng(hf_version, state.block_hash, type);
+            tools::shuffle_portable(pub_keys_indexes.begin(), pub_keys_indexes.end(), rng);
+            num_validators = std::min<size_t>(pub_keys_indexes.size(), BLINK_SUBQUORUM_SIZE);
+          }
+          // Otherwise leave empty to signal that there aren't enough SNs to form a usable quorum (to
+          // distinguish it from an invalid height, which gets left as a nullptr)
+          state.quorums.blink = quorum;
+
+        }
+        break;
+
+        // NOTE: NOP. Pulse quorums are generated pre-Service Node List changes for the block
+        case quorum_type::pulse: continue;
+        default: MERROR("Unhandled quorum type enum with value: " << type_int); continue;
       }
 
       quorum->validators.reserve(num_validators);
@@ -1414,8 +1924,6 @@ namespace service_nodes
           quorum->workers.push_back(decomm_snode_list[j - active_snode_list.size()].first);
       }
     }
-
-    return result;
   }
 
   void service_node_list::state_t::update_from_block(cryptonote::BlockchainDB const &db,
@@ -1434,6 +1942,33 @@ namespace service_nodes
     quorums                  = {};
     block_hash               = cryptonote::get_block_hash(block);
     uint8_t const hf_version = block.major_version;
+
+    //
+    // Generate Pulse Quorum before any SN changes are applied to the list because,
+    // the Leader and Validators for this block generated Pulse Data before any
+    // TX's included in the block were applied
+    //   i.e. before any deregistrations, registrations, decommissions, recommissions.
+    //
+    crypto::public_key winner_pubkey = cryptonote::get_service_node_winner_from_tx_extra(block.miner_tx.extra);
+    if (hf_version >= cryptonote::network_version_16_pulse)
+    {
+      std::vector<crypto::hash> entropy = get_pulse_entropy_for_next_block(db, block.prev_id, block.pulse.round);
+      quorum pulse_quorum = generate_pulse_quorum(nettype, winner_pubkey, hf_version, active_service_nodes_infos(), entropy, block.pulse.round);
+      if (verify_pulse_quorum_sizes(pulse_quorum))
+      {
+        // NOTE: Send candidate to the back of the list
+        for (size_t quorum_index = 0 ; quorum_index < pulse_quorum.validators.size(); quorum_index++)
+        {
+          crypto::public_key const &key                          = pulse_quorum.validators[quorum_index];
+          auto &info_ptr                                         = service_nodes_infos[key];
+          service_node_info &new_info                            = duplicate_info(info_ptr);
+          new_info.pulse_sorter.last_height_validating_in_quorum = height;
+          new_info.pulse_sorter.quorum_index                     = quorum_index;
+        }
+
+        quorums.pulse = std::make_shared<service_nodes::quorum>(std::move(pulse_quorum));
+      }
+    }
 
     //
     // Remove expired blacklisted key images
@@ -1469,7 +2004,6 @@ namespace service_nodes
     // Advance the list to the next candidate for a reward
     //
     {
-      crypto::public_key winner_pubkey = cryptonote::get_service_node_winner_from_tx_extra(block.miner_tx.extra);
       auto it = service_nodes_infos.find(winner_pubkey);
       if (it != service_nodes_infos.end())
       {
@@ -1503,6 +2037,9 @@ namespace service_nodes
       }
     }
 
+    // Filtered pubkey-sorted vector of service nodes that are active (fully funded and *not* decommissioned).
+    std::vector<pubkey_and_sninfo> active_snode_list = sort_and_filter(service_nodes_infos, [](const service_node_info &info) { return info.is_active(); });
+
     if (need_swarm_update)
     {
       crypto::hash const block_hash = cryptonote::get_block_hash(block);
@@ -1511,7 +2048,7 @@ namespace service_nodes
 
       /// Gather existing swarms from infos
       swarm_snode_map_t existing_swarms;
-      for (const auto &key_info : active_service_nodes_infos())
+      for (const auto &key_info : active_snode_list)
         existing_swarms[key_info.second->swarm_id].push_back(key_info.first);
 
       calc_swarm_changes(existing_swarms, seed);
@@ -1526,7 +2063,7 @@ namespace service_nodes
       }
     }
 
-    quorums = generate_quorums(nettype, hf_version, *this);
+    generate_other_quorums(*this, active_snode_list, nettype, hf_version);
   }
 
   void service_node_list::process_block(const cryptonote::block& block, const std::vector<cryptonote::transaction>& txs)
@@ -1534,7 +2071,7 @@ namespace service_nodes
     uint64_t block_height = cryptonote::get_block_height(block);
     uint8_t hf_version    = block.major_version;
 
-    if (hf_version < 9)
+    if (hf_version < cryptonote::network_version_9_service_nodes)
       return;
 
     // Cull old history
@@ -1699,9 +2236,9 @@ namespace service_nodes
     return expired_nodes;
   }
 
-  block_winner service_node_list::state_t::get_block_winner() const
+  service_nodes::payout service_node_list::state_t::get_block_leader() const
   {
-    block_winner result           = {};
+    crypto::public_key key = crypto::null_pkey;
     service_node_info const *info = nullptr;
     {
       auto oldest_waiting = std::make_tuple(std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint32_t>::max(), crypto::null_pkey);
@@ -1718,29 +2255,12 @@ namespace service_nodes
           }
         }
       }
-      result.key = std::get<2>(oldest_waiting);
+      key = std::get<2>(oldest_waiting);
     }
 
-    if (result.key == crypto::null_pkey)
-    {
-      result = service_nodes::null_block_winner;
-      return result;
-    }
-
-    // Add contributors and their portions to winners.
-    result.payouts.reserve(info->contributors.size());
-    const uint64_t remaining_portions = STAKING_PORTIONS - info->portions_for_operator;
-    for (const auto& contributor : info->contributors)
-    {
-      uint64_t hi, lo, resulthi, resultlo;
-      lo = mul128(contributor.amount, remaining_portions, &hi);
-      div128_64(hi, lo, info->staking_requirement, &resulthi, &resultlo);
-
-      if (contributor.address == info->operator_address)
-        resultlo += info->portions_for_operator;
-      result.payouts.push_back({contributor.address, resultlo});
-    }
-    return result;
+    if (key == crypto::null_pkey)
+      return service_nodes::null_payout;
+    return service_node_info_to_payout(key, *info);
   }
 
   template <typename T>
@@ -1748,72 +2268,250 @@ namespace service_nodes
       return (a > b ? a - b : b - a) <= T{1};
   }
 
-  bool service_node_list::validate_miner_tx(const crypto::hash& prev_id, const cryptonote::transaction& miner_tx, uint64_t height, int hf_version, cryptonote::block_reward_parts const &reward_parts) const
+  // NOTE: Verify queued service node coinbase or pulse block producer rewards
+  static bool verify_coinbase_tx_output(cryptonote::transaction const &miner_tx,
+                                        uint64_t height,
+                                        size_t output_index,
+                                        cryptonote::account_public_address const &receiver,
+                                        uint64_t reward)
   {
-    std::lock_guard lock(m_sn_mutex);
-    if (hf_version < 9)
+    if (output_index >= miner_tx.vout.size())
+    {
+      MGINFO_RED("Output Index: " << output_index << ", indexes out of bounds in vout array with size: " << miner_tx.vout.size());
+      return false;
+    }
+
+    cryptonote::tx_out const &output = miner_tx.vout[output_index];
+
+    // Because FP math is involved in reward calculations (and compounded by CPUs, compilers,
+    // expression contraction, and RandomX fiddling with the rounding modes) we can end up with a
+    // 1 ULP difference in the reward calculations.
+    // TODO(loki): eliminate all FP math from reward calculations
+    if (!within_one(output.amount, reward))
+    {
+      MGINFO_RED("Service node reward amount incorrect. Should be " << cryptonote::print_money(reward) << ", is: " << cryptonote::print_money(output.amount));
+      return false;
+    }
+
+    if (!std::holds_alternative<cryptonote::txout_to_key>(output.target))
+    {
+      MGINFO_RED("Service node output target type should be txout_to_key");
+      return false;
+    }
+
+    // NOTE: Loki uses the governance key in the one-time ephemeral key
+    // derivation for both Pulse Block Producer/Queued Service Node Winner rewards
+    crypto::key_derivation derivation{};
+    crypto::public_key out_eph_public_key{};
+    cryptonote::keypair gov_key = cryptonote::get_deterministic_keypair_from_height(height);
+
+    bool r = crypto::generate_key_derivation(receiver.m_view_public_key, gov_key.sec, derivation);
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << receiver.m_view_public_key << ", " << gov_key.sec << ")");
+    r = crypto::derive_public_key(derivation, output_index, receiver.m_spend_public_key, out_eph_public_key);
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << output_index << ", "<< receiver.m_spend_public_key << ")");
+
+    if (std::get<cryptonote::txout_to_key>(output.target).key != out_eph_public_key)
+    {
+      MGINFO_RED("Invalid service node reward at output: " << output_index << ", output key, specifies wrong key");
+      return false;
+    }
+
+    return true;
+  }
+
+  bool service_node_list::validate_miner_tx(cryptonote::block const &block, cryptonote::block_reward_parts const &reward_parts) const
+  {
+    uint8_t const hf_version = block.major_version;
+    if (hf_version < cryptonote::network_version_9_service_nodes)
       return true;
 
+    std::lock_guard lock(m_sn_mutex);
+    uint64_t const height                   = cryptonote::get_block_height(block);
+    cryptonote::transaction const &miner_tx = block.miner_tx;
+
+    // NOTE: Basic queued service node list winner checks
     // NOTE(loki): Service node reward distribution is calculated from the
     // original amount, i.e. 50% of the original base reward goes to service
     // nodes not 50% of the reward after removing the governance component (the
     // adjusted base reward post hardfork 10).
-    uint64_t base_reward = reward_parts.original_base_reward;
-    uint64_t total_service_node_reward = cryptonote::service_node_reward_formula(base_reward, hf_version);
-
-    block_winner winner                    = m_state.get_block_winner();
-    crypto::public_key check_winner_pubkey = cryptonote::get_service_node_winner_from_tx_extra(miner_tx.extra);
-    if (winner.key != check_winner_pubkey)
+    payout const block_leader                = m_state.get_block_leader();
+    uint64_t const base_reward               = reward_parts.original_base_reward;
+    uint64_t const total_service_node_reward = cryptonote::service_node_reward_formula(base_reward, hf_version);
     {
-      MERROR("Service node reward winner is incorrect! Expected " << winner.key << ", block has " << check_winner_pubkey);
+      auto const check_block_leader_pubkey = cryptonote::get_service_node_winner_from_tx_extra(miner_tx.extra);
+      if (block_leader.key != check_block_leader_pubkey)
+      {
+        MGINFO_RED("Service node reward winner is incorrect! Expected " << block_leader.key << ", block has " << check_block_leader_pubkey);
+        return false;
+      }
+    }
+
+    enum struct verify_mode
+    {
+      miner,
+      pulse_block_leader_is_producer,
+      pulse_different_block_producer,
+    };
+
+    verify_mode mode                      = verify_mode::miner;
+    crypto::public_key block_producer_key = {};
+
+    //
+    // NOTE: Determine if block leader/producer are different or the same.
+    //
+    if (cryptonote::block_has_pulse_components(block))
+    {
+      std::vector<crypto::hash> entropy = get_pulse_entropy_for_next_block(m_blockchain.get_db(), block.prev_id, block.pulse.round);
+      quorum pulse_quorum = generate_pulse_quorum(m_blockchain.nettype(), block_leader.key, hf_version, m_state.active_service_nodes_infos(), entropy, block.pulse.round);
+      if (!verify_pulse_quorum_sizes(pulse_quorum))
+      {
+        MGINFO_RED("Pulse block received but Pulse has insufficient nodes for quorum, block hash " << cryptonote::get_block_hash(block) << ", height " << height);
+        return false;
+      }
+
+      block_producer_key = pulse_quorum.workers[0];
+      mode               = (block_producer_key == block_leader.key) ? verify_mode::pulse_block_leader_is_producer
+                                                                    : verify_mode::pulse_different_block_producer;
+
+      if (block.pulse.round == 0 && (mode == verify_mode::pulse_different_block_producer))
+      {
+        MGINFO_RED("The block producer in pulse round 0 should be the same node as the block leader: " << block_leader.key << ", actual producer: " << block_producer_key);
+        return false;
+      }
+    }
+
+    // NOTE: Verify miner tx vout composition
+    //
+    // Miner Block
+    // 1       | Miner
+    // Up To 4 | Queued Service Node
+    // Up To 1 | Governance
+    //
+    // Pulse Block
+    // Up to 4 | Block Producer (0-3 for Pooled Service Node)
+    // Up To 4 | Queued Service Node
+    // Up To 1 | Governance
+    //
+    // NOTE: See cryptonote_tx_utils.cpp construct_miner_tx(...) for payment details.
+    //
+
+    std::shared_ptr<const service_node_info> block_producer = nullptr;
+    size_t expected_vouts_size                        = 0;
+    if (mode == verify_mode::pulse_block_leader_is_producer || mode == verify_mode::pulse_different_block_producer)
+    {
+      auto info_it = m_state.service_nodes_infos.find(block_producer_key);
+      if (info_it == m_state.service_nodes_infos.end())
+      {
+        MGINFO_RED("The pulse block producer for round: " << +block.pulse.round << " is not currently a Service Node: " << block_producer_key);
+        return false;
+      }
+
+      block_producer = info_it->second;
+      if (mode == verify_mode::pulse_different_block_producer && reward_parts.base_miner_fee > 0)
+        expected_vouts_size += block_producer->contributors.size();
+    }
+    else
+    {
+      if ((reward_parts.base_miner + reward_parts.base_miner_fee) > 0) // (HF >= 16) this can be zero, no miner coinbase.
+        expected_vouts_size += 1; /*miner*/
+    }
+
+    expected_vouts_size += block_leader.payouts.size();
+    expected_vouts_size += static_cast<size_t>(cryptonote::height_has_governance_output(m_blockchain.nettype(), hf_version, height));
+
+    if (miner_tx.vout.size() != expected_vouts_size)
+    {
+      char const *type = mode == verify_mode::miner
+                             ? "miner"
+                             : mode == verify_mode::pulse_block_leader_is_producer ? "pulse" : "pulse alt round";
+      MGINFO_RED("Expected " << type << " block, the miner TX specifies a different amount of outputs vs the expected: " << expected_vouts_size << ", miner tx outputs: " << miner_tx.vout.size());
       return false;
     }
 
-    if (winner == null_block_winner)
-      return true;
-
-    if ((miner_tx.vout.size() - 1) < winner.payouts.size())
+    if (hf_version >= cryptonote::network_version_16_pulse)
     {
-      MERROR("Service node reward specifies more winners than available outputs: " << (miner_tx.vout.size() - 1) << ", winners: " << winner.payouts.size());
-      return false;
+      if (reward_parts.base_miner != 0)
+      {
+        MGINFO_RED("Miner reward is incorrect expected 0 reward, block specified " << cryptonote::print_money(reward_parts.base_miner));
+        return false;
+      }
     }
 
-    for (size_t i = 0; i < winner.payouts.size(); i++)
+    // NOTE: Verify Coinbase Amounts
+    switch(mode)
     {
-      size_t vout_index          = i + 1;
-      payout_entry const &payout = winner.payouts[i];
-      uint64_t reward            = cryptonote::get_portion_of_reward(payout.portions, total_service_node_reward);
-
-      // Because FP math is involved in reward calculations (and compounded by CPUs, compilers,
-      // expression contraction, and RandomX fiddling with the rounding modes) we can end up with a
-      // 1 ULP difference in the reward calculations.
-      // TODO(loki): eliminate all FP math from reward calculations
-      if (!within_one(miner_tx.vout[vout_index].amount, reward))
+      case verify_mode::miner:
       {
-        MERROR("Service node reward amount incorrect. Should be " << cryptonote::print_money(reward) << ", is: " << cryptonote::print_money(miner_tx.vout[vout_index].amount));
-        return false;
-      }
+        size_t vout_index = 0 + (reward_parts.base_miner + reward_parts.base_miner_fee > 0);
 
-      if (!std::holds_alternative<cryptonote::txout_to_key>(miner_tx.vout[vout_index].target))
+        // We don't verify the miner reward amount because it is already implied by the overall
+        // sum of outputs check and because when there are truncation errors on other outputs the
+        // miner reward ends up with the difference (and so actual miner output amount can be a few
+        // atoms larger than base_miner+base_miner_fee).
+
+        for (size_t i = 0; i < block_leader.payouts.size(); i++)
+        {
+          payout_entry const &payout = block_leader.payouts[i];
+          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, total_service_node_reward);
+          if (reward)
+          {
+            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
+              return false;
+            vout_index++;
+          }
+        }
+      }
+      break;
+
+      case verify_mode::pulse_block_leader_is_producer:
       {
-        MERROR("Service node output target type should be txout_to_key");
-        return false;
+        uint64_t total_reward = total_service_node_reward + reward_parts.base_miner_fee;
+        assert(total_reward > 0);
+        for (size_t vout_index = 0; vout_index < block_leader.payouts.size(); vout_index++)
+        {
+          payout_entry const &payout = block_leader.payouts[vout_index];
+          if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, total_reward))
+            return false;
+        }
       }
+      break;
 
-      crypto::key_derivation derivation{};
-      crypto::public_key out_eph_public_key{};
-      cryptonote::keypair gov_key = cryptonote::get_deterministic_keypair_from_height(height);
-
-      bool r = crypto::generate_key_derivation(payout.address.m_view_public_key, gov_key.sec, derivation);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << payout.address.m_view_public_key << ", " << gov_key.sec << ")");
-      r = crypto::derive_public_key(derivation, vout_index, payout.address.m_spend_public_key, out_eph_public_key);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << vout_index << ", "<< payout.address.m_spend_public_key << ")");
-
-      if (std::get<cryptonote::txout_to_key>(miner_tx.vout[vout_index].target).key != out_eph_public_key)
+      case verify_mode::pulse_different_block_producer:
       {
-        MERROR("Invalid service node reward output");
-        return false;
+        const uint64_t max_portions = STAKING_PORTIONS - block_producer->portions_for_operator;
+        size_t vout_index           = 0;
+        for (size_t i = 0; i < block_producer->contributors.size(); i++)
+        {
+          auto const &contributor = block_producer->contributors[i];
+
+          uint64_t portions = get_portions_to_make_amount(block_producer->staking_requirement, contributor.amount, max_portions);
+          if (contributor.address == block_producer->operator_address)
+            portions += block_producer->portions_for_operator;
+
+          uint64_t const reward = cryptonote::get_portion_of_reward(portions, reward_parts.base_miner_fee);
+          if (reward)
+          {
+            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, contributor.address, reward))
+              return false;
+
+            vout_index++;
+          }
+        }
+
+        for (size_t i = 0; i < block_leader.payouts.size(); i++)
+        {
+          payout_entry const &payout = block_leader.payouts[i];
+          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, reward_parts.base_miner + total_service_node_reward);
+          if (reward)
+          {
+            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
+              return false;
+
+            vout_index++;
+          }
+        }
       }
+      break;
     }
 
     return true;
@@ -1821,6 +2519,15 @@ namespace service_nodes
 
   bool service_node_list::alt_block_added(cryptonote::block const &block, std::vector<cryptonote::transaction> const &txs, cryptonote::checkpoint_t const *checkpoint)
   {
+    // NOTE: The premise is to search the main list and the alternative list for
+    // the parent of the block we just received, generate the new Service Node
+    // state with this alt-block and verify that the block passes all
+    // the necessary checks.
+
+    // On success, this function returns true, signifying the block is valid to
+    // store into the alt-chain until it gathers enough blocks to cause
+    // a reorganization (more checkpoints/PoW than the main chain).
+
     if (block.major_version < cryptonote::network_version_9_service_nodes)
       return true;
 
@@ -1859,6 +2566,7 @@ namespace service_nodes
       return false;
     }
 
+    // NOTE: Generate the next Service Node list state from this Alt block.
     state_t alt_state = *starting_state;
     alt_state.update_from_block(m_blockchain.get_db(), m_blockchain.nettype(), m_transient.state_history, m_transient.state_archive, m_transient.alt_state, block, txs, m_service_node_keys);
     auto alt_it = m_transient.alt_state.find(block_hash);
@@ -1867,31 +2575,7 @@ namespace service_nodes
     else
       m_transient.alt_state.emplace(block_hash, std::move(alt_state));
 
-    if (checkpoint)
-    {
-      std::vector<std::shared_ptr<const service_nodes::quorum>> alt_quorums;
-      std::shared_ptr<const quorum> quorum = get_quorum(quorum_type::checkpointing, checkpoint->height, false, &alt_quorums);
-      if (!quorum)
-        return false;
-
-      if (!service_nodes::verify_checkpoint(block.major_version, *checkpoint, *quorum))
-      {
-        bool verified_on_alt_quorum = false;
-        for (std::shared_ptr<const service_nodes::quorum> alt_quorum : alt_quorums)
-        {
-          if (service_nodes::verify_checkpoint(block.major_version, *checkpoint, *alt_quorum))
-          {
-            verified_on_alt_quorum = true;
-            break;
-          }
-        }
-
-        if (!verified_on_alt_quorum)
-            return false;
-      }
-    }
-
-    return true;
+    return verify_block(block, true /*alt_block*/, checkpoint);
   }
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2127,7 +2811,7 @@ namespace service_nodes
 
 #define REJECT_PROOF(log) do { LOG_PRINT_L2("Rejecting uptime proof from " << proof.pubkey << ": " log); return false; } while (0)
 
-  bool service_node_list::handle_uptime_proof(cryptonote::NOTIFY_UPTIME_PROOF::request const &proof, bool &my_uptime_proof_confirmation)
+  bool service_node_list::handle_uptime_proof(cryptonote::NOTIFY_UPTIME_PROOF::request const &proof, bool &my_uptime_proof_confirmation, crypto::x25519_public_key &x25519_pkey)
   {
     uint8_t const hf_version = m_blockchain.get_current_hard_fork_version();
     uint64_t const now       = time(nullptr);
@@ -2206,6 +2890,9 @@ namespace service_nodes
 
     if (derived_x25519_pubkey)
       x25519_to_pub[derived_x25519_pubkey] = {proof.pubkey, now};
+
+    if (derived_x25519_pubkey && (old_x25519 != derived_x25519_pubkey))
+      x25519_pkey = derived_x25519_pubkey;
 
     return true;
   }
@@ -2289,16 +2976,35 @@ namespace service_nodes
     return "tcp://" + epee::string_tools::get_ip_string_from_int32(ip) + ":" + std::to_string(port);
   }
 
-  void service_node_list::record_checkpoint_vote(crypto::public_key const &pubkey, uint64_t height, bool voted)
+  void service_node_list::record_checkpoint_participation(crypto::public_key const &pubkey, uint64_t height, bool participated)
   {
     std::lock_guard lock(m_sn_mutex);
     if (!m_state.service_nodes_infos.count(pubkey))
       return;
 
+    participation_entry entry  = {};
+    entry.height               = height;
+    entry.voted                = participated;
+
     auto &info = proofs[pubkey];
-    info.votes[info.vote_index].height = height;
-    info.votes[info.vote_index].voted  = voted;
-    info.vote_index                    = (info.vote_index + 1) % info.votes.size();
+    info.checkpoint_participation.add(entry);
+  }
+
+  void service_node_list::record_pulse_participation(crypto::public_key const &pubkey, uint64_t height, uint8_t round, bool participated, bool block_producer)
+  {
+    std::lock_guard lock(m_sn_mutex);
+    if (!m_state.service_nodes_infos.count(pubkey))
+      return;
+
+    participation_entry entry  = {};
+    entry.is_pulse             = true;
+    entry.height               = height;
+    entry.voted                = participated;
+    entry.pulse.block_producer = block_producer;
+    entry.pulse.round          = round;
+
+    auto &info = proofs[pubkey];
+    info.pulse_participation.add(entry);
   }
 
   bool service_node_list::set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value)
@@ -2359,7 +3065,7 @@ namespace service_nodes
         // Nothing to do here (the missing data will be generated in the new proofs db via uptime proofs).
         info.version = version_t::v4_noproofs;
       }
-      if (info.version < version_t::v5_recomm_credit)
+      if (info.version < version_t::v5_pulse_recomm_credit)
       {
         // If it's an old record then assume it's from before loki 8, in which case there were only
         // two valid values here: initial for a node that has never been recommissioned, or 0 for a recommission.
@@ -2369,7 +3075,9 @@ namespace service_nodes
           info.recommission_credit = DECOMMISSION_INITIAL_CREDIT;
         else
           info.recommission_credit = 0;
-        info.version = version_t::v5_recomm_credit;
+
+        info.pulse_sorter.last_height_validating_in_quorum = info.last_reward_block_height;
+        info.version = version_t::v5_pulse_recomm_credit;
       }
       // Make sure we handled any future state version upgrades:
       assert(info.version == tools::enum_top<decltype(info.version)>);
@@ -2878,5 +3586,26 @@ namespace service_nodes
     }
   }
 
+  payout service_node_info_to_payout(crypto::public_key const &key, service_node_info const &info)
+  {
+    service_nodes::payout result = {};
+    result.key                   = key;
+
+    // Add contributors and their portions to winners.
+    result.payouts.reserve(info.contributors.size());
+    const uint64_t remaining_portions = STAKING_PORTIONS - info.portions_for_operator;
+    for (const auto& contributor : info.contributors)
+    {
+      uint64_t hi, lo, resulthi, resultlo;
+      lo = mul128(contributor.amount, remaining_portions, &hi);
+      div128_64(hi, lo, info.staking_requirement, &resulthi, &resultlo);
+
+      if (contributor.address == info.operator_address)
+        resultlo += info.portions_for_operator;
+      result.payouts.push_back({contributor.address, resultlo});
+    }
+
+    return result;
+  }
 }
 

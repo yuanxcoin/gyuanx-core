@@ -45,13 +45,32 @@
 #include "ringct/rctTypes.h"
 #include "device/device.hpp"
 
+namespace service_nodes
+{
+  struct quorum_signature
+  {
+    uint16_t voter_index;
+    char padding[6];
+    crypto::signature signature;
+
+    quorum_signature() = default;
+    quorum_signature(uint16_t voter_index, crypto::signature const &signature)
+    : voter_index(voter_index)
+    , signature(signature)
+    {
+      std::memset(padding, 0, sizeof(padding));
+    }
+
+    BEGIN_SERIALIZE_OBJECT()
+      FIELD(voter_index)
+      FIELD(signature)
+    END_SERIALIZE()
+  };
+};
+
 namespace cryptonote
 {
-  typedef std::vector<crypto::signature> ring_signature;
-
-
   /* outputs */
-
   struct txout_to_script
   {
     std::vector<crypto::public_key> keys;
@@ -410,11 +429,27 @@ namespace cryptonote
     return 0;
   }
 
-
-
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
+  struct pulse_random_value
+  {
+    unsigned char data[16];
+    bool operator==(pulse_random_value const &other) const { return std::memcmp(data, other.data, sizeof(data)) == 0; }
+  };
+
+  struct pulse_header
+  {
+    pulse_random_value random_value;
+    uint8_t            round;
+    uint16_t           validator_bitset;
+    BEGIN_SERIALIZE()
+      FIELD(random_value);
+      FIELD(round);
+      FIELD(validator_bitset);
+    END_SERIALIZE();
+  };
+
   struct block_header
   {
     uint8_t major_version = cryptonote::network_version_7;
@@ -422,6 +457,7 @@ namespace cryptonote
     uint64_t timestamp;
     crypto::hash  prev_id;
     uint32_t nonce;
+    pulse_header pulse = {};
 
     BEGIN_SERIALIZE()
       VARINT_FIELD(major_version)
@@ -429,6 +465,8 @@ namespace cryptonote
       VARINT_FIELD(timestamp)
       FIELD(prev_id)
       FIELD(nonce)
+      if (major_version >= cryptonote::network_version_16_pulse)
+        FIELD(pulse)
     END_SERIALIZE()
   };
 
@@ -441,10 +479,10 @@ namespace cryptonote
 
   public:
     block() = default;
-    block(const block &b): block_header(b), miner_tx{b.miner_tx}, tx_hashes{b.tx_hashes} { copy_hash(b); }
-    block &operator=(const block &b) { block_header::operator=(b); miner_tx = b.miner_tx; tx_hashes = b.tx_hashes; copy_hash(b); return *this; }
-    block(block &&b) : block_header(std::move(b)), miner_tx{std::move(b.miner_tx)}, tx_hashes{std::move(b.tx_hashes)} { copy_hash(b); }
-    block &operator=(block &&b) { block_header::operator=(std::move(b)); miner_tx = std::move(b.miner_tx); tx_hashes = std::move(b.tx_hashes); copy_hash(b); return *this; }
+    block(const block &b): block_header(b), miner_tx{b.miner_tx}, tx_hashes{b.tx_hashes}, signatures{b.signatures} { copy_hash(b); }
+    block &operator=(const block &b) { block_header::operator=(b); miner_tx = b.miner_tx; tx_hashes = b.tx_hashes; signatures = b.signatures; copy_hash(b); return *this; }
+    block(block &&b) : block_header(std::move(b)), miner_tx{std::move(b.miner_tx)}, tx_hashes{std::move(b.tx_hashes)}, signatures{std::move(b.signatures)} { copy_hash(b); }
+    block &operator=(block &&b) { block_header::operator=(std::move(b)); miner_tx = std::move(b.miner_tx); tx_hashes = std::move(b.tx_hashes); signatures = std::move(b.signatures); copy_hash(b); return *this; }
     void invalidate_hashes() { set_hash_valid(false); }
     bool is_hash_valid() const { return hash_valid.load(std::memory_order_acquire); }
     void set_hash_valid(bool v) const { hash_valid.store(v,std::memory_order_release); }
@@ -454,6 +492,7 @@ namespace cryptonote
 
     // hash cash
     mutable crypto::hash hash;
+    std::vector<service_nodes::quorum_signature> signatures;
 
     BEGIN_SERIALIZE_OBJECT()
       if (Archive::is_deserializer)
@@ -464,6 +503,8 @@ namespace cryptonote
       FIELD(tx_hashes)
       if (tx_hashes.size() > CRYPTONOTE_MAX_TX_PER_BLOCK)
         throw std::invalid_argument{"too many txs in block"};
+      if (major_version >= cryptonote::network_version_16_pulse)
+        FIELD(signatures)
     END_SERIALIZE()
   };
 
@@ -594,6 +635,7 @@ namespace std {
 
 BLOB_SERIALIZER(cryptonote::txout_to_key);
 BLOB_SERIALIZER(cryptonote::txout_to_scripthash);
+BLOB_SERIALIZER(cryptonote::pulse_random_value);
 
 VARIANT_TAG(cryptonote::txin_gen, "gen", 0xff);
 VARIANT_TAG(cryptonote::txin_to_script, "script", 0x0);

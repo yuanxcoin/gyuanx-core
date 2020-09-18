@@ -1118,7 +1118,8 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
     KV_SERIALIZE(last_uptime_proof)
     KV_SERIALIZE(storage_server_reachable)
     KV_SERIALIZE(storage_server_reachable_timestamp)
-    KV_SERIALIZE(votes)
+    KV_SERIALIZE(checkpoint_participation)
+    KV_SERIALIZE(pulse_participation)
   }
 KV_SERIALIZE_MAP_CODE_END()
 
@@ -1168,7 +1169,8 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(last_uptime_proof);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable_timestamp);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(votes);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(checkpoint_participation);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(pulse_participation);
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -1250,7 +1252,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_CHECKPOINTS::request)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_CHECKPOINTS::voter_to_signature_serialized)
+KV_SERIALIZE_MAP_CODE_BEGIN(GET_CHECKPOINTS::quorum_signature_serialized)
   KV_SERIALIZE(voter_index);
   KV_SERIALIZE(signature);
 KV_SERIALIZE_MAP_CODE_END()

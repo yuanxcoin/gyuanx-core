@@ -269,23 +269,15 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
   remove_transaction_data(tx_hash, tx);
 }
 
-block BlockchainDB::get_block_from_height(const uint64_t& height) const
+block_header BlockchainDB::get_block_header(const crypto::hash& h) const
 {
-  blobdata bd = get_block_blob_from_height(height);
-  block b;
-  if (!parse_and_validate_block_from_blob(bd, b))
-    throw DB_ERROR("Failed to parse block from blob retrieved from the db");
-
+  block_header b = get_block_header_from_height(get_block_height(h));
   return b;
 }
 
 block BlockchainDB::get_block(const crypto::hash& h) const
 {
-  blobdata bd = get_block_blob(h);
-  block b;
-  if (!parse_and_validate_block_from_blob(bd, b))
-    throw DB_ERROR("Failed to parse block from blob retrieved from the db");
-
+  block b = get_block_from_height(get_block_height(h));
   return b;
 }
 
@@ -414,5 +406,76 @@ uint64_t BlockchainDB::get_tx_block_height(const crypto::hash &h) const
   }
   return result;
 }
+
+bool BlockchainDB::get_alt_block_header(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::block_header *header, cryptonote::blobdata *checkpoint) const
+{
+  cryptonote::blobdata blob;
+  if (!get_alt_block(blkid, data, &blob, checkpoint))
+  {
+    throw BLOCK_DNE("Alt-block with hash "s.append(epee::string_tools::pod_to_hex(blkid)).append(" not found in db").c_str());
+    return false;
+  }
+
+  try
+  {
+    serialization::binary_string_unarchiver ba{blob};
+    serialization::value(ba, *header);
+  }
+  catch(std::exception &e)
+  {
+    return false;
+  }
+
+  return true;
+}
+
+void BlockchainDB::fill_timestamps_and_difficulties_for_pow(cryptonote::network_type nettype,
+                                                            std::vector<uint64_t> &timestamps,
+                                                            std::vector<uint64_t> &difficulties,
+                                                            uint64_t chain_height,
+                                                            uint64_t timestamps_difficulty_height) const
+{
+  constexpr uint64_t MIN_HEIGHT = 1;
+  if (chain_height <= MIN_HEIGHT)
+    return;
+
+  uint64_t const top_block_height   = chain_height - 1;
+  static const uint64_t hf16_height = HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_16_pulse);
+  bool const before_hf16            = chain_height < hf16_height;
+  uint64_t const block_count        = DIFFICULTY_BLOCKS_COUNT(before_hf16);
+
+  timestamps.reserve(block_count);
+  difficulties.reserve(block_count);
+
+  if (timestamps_difficulty_height == 0 ||
+      (chain_height - timestamps_difficulty_height) != 1 ||
+      timestamps.size()   > block_count ||
+      difficulties.size() > block_count)
+  {
+    // Cache invalidated.
+    timestamps.clear();
+    difficulties.clear();
+
+    // Fill missing timestamps/difficulties, up to one before the latest (latest is added below).
+    uint64_t start_height = chain_height - std::min<size_t>(chain_height, block_count);
+    start_height          = std::max<uint64_t>(start_height, 1);
+
+    for (uint64_t block_height = start_height; block_height < (chain_height - MIN_HEIGHT); block_height++)
+    {
+      timestamps.push_back(get_block_timestamp(block_height));
+      difficulties.push_back(get_block_cumulative_difficulty(block_height));
+    }
+  }
+
+  // Add latest timestamp/difficulty
+  add_timestamp_and_difficulty(nettype,
+                               chain_height,
+                               timestamps,
+                               difficulties,
+                               get_block_timestamp(top_block_height),
+                               get_block_cumulative_difficulty(top_block_height));
+
+}
+
 
 }  // namespace cryptonote

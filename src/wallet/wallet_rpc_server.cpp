@@ -3251,7 +3251,7 @@ namespace {
     if (!lns::mapping_value::validate(m_wallet->nettype(), type, req.value, &value, &reason))
       throw wallet_rpc_error{error_code::LNS_BAD_VALUE, "Invalid LNS value '" + req.value + "': " + reason};
 
-    bool old_argon2 = type == lns::mapping_type::session && *hf_version < cryptonote::network_version_16;
+    bool old_argon2 = type == lns::mapping_type::session && *hf_version < cryptonote::network_version_16_pulse;
     if (!value.encrypt(req.name, nullptr, old_argon2))
       throw wallet_rpc_error{error_code::LNS_VALUE_ENCRYPT_FAILED, "Value encryption failure"};
 

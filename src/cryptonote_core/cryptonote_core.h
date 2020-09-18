@@ -47,18 +47,18 @@
 #include "service_node_voting.h"
 #include "service_node_list.h"
 #include "service_node_quorum_cop.h"
+#include "pulse.h"
 #include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
 #include "warnings.h"
 #include "crypto/hash.h"
+#include "cryptonote_protocol/quorumnet.h"
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
 
 #include "common/loki_integration_test_hooks.h"
 namespace cryptonote
 {
-  using namespace std::literals;
-
    struct test_options {
      std::vector<std::pair<uint8_t, uint64_t>> hard_forks;
      size_t long_term_block_weight_window;
@@ -72,7 +72,6 @@ namespace cryptonote
   extern const command_line::arg_descriptor<bool> arg_dev_allow_local;
   extern const command_line::arg_descriptor<bool> arg_offline;
   extern const command_line::arg_descriptor<size_t> arg_block_download_max_size;
-  extern const command_line::arg_descriptor<uint64_t> arg_recalculate_difficulty;
 
   // Function pointers that are set to throwing stubs and get replaced by the actual functions in
   // cryptonote_protocol/quorumnet.cpp's quorumnet::init_core_callbacks().  This indirection is here
@@ -82,25 +81,34 @@ namespace cryptonote
   // has been set up but before it starts listening.  Return an opaque pointer (void *) that gets
   // passed into all the other callbacks below so that the callbacks can recast it into whatever it
   // should be.
-  extern void* (*quorumnet_new)(core& core);
+  using quorumnet_new_proc = void *(core &core);
   // Initializes quorumnet; unlike `quorumnet_new_proc` this needs to be called for all nodes, not
   // just service nodes.  The second argument should be the `quorumnet_new` return value if a
   // service node, nullptr if not.
-  extern void (*quorumnet_init)(core& core, void* self);
+  using quorumnet_init_proc = void (core &core, void *self);
   // Destroys the quorumnet state; called on shutdown *after* the LokiMQ object has been destroyed.
   // Should destroy the state object and set the pointer reference to nullptr.
-  extern void (*quorumnet_delete)(void*& self);
+  using quorumnet_delete_proc = void (void *&self);
   // Relays votes via quorumnet.
-  extern void (*quorumnet_relay_obligation_votes)(void *self, const std::vector<service_nodes::quorum_vote_t> &votes);
+  using quorumnet_relay_obligation_votes_proc = void (void *self, const std::vector<service_nodes::quorum_vote_t> &votes);
   // Sends a blink tx to the current blink quorum, returns a future that can be used to wait for the
   // result.
-  extern std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(core& core, const std::string& tx_blob);
+  using quorumnet_send_blink_proc = std::future<std::pair<blink_result, std::string>> (core& core, const std::string& tx_blob);
+
+  // Relay a Pulse message to members specified in the quorum excluding the originating message owner.
+  using quorumnet_pulse_relay_message_to_quorum_proc = void (void *, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer);
 
   // Function pointer that we invoke when the mempool has changed; this gets set during
   // rpc/http_server.cpp's init_options().
   extern void (*long_poll_trigger)(tx_memory_pool& pool);
 
-  extern bool init_core_callback_complete;
+  extern quorumnet_new_proc *quorumnet_new;
+  extern quorumnet_init_proc *quorumnet_init;
+  extern quorumnet_delete_proc *quorumnet_delete;
+  extern quorumnet_relay_obligation_votes_proc *quorumnet_relay_obligation_votes;
+  extern quorumnet_send_blink_proc *quorumnet_send_blink;
+
+  extern quorumnet_pulse_relay_message_to_quorum_proc *quorumnet_pulse_relay_message_to_quorum;
 
   /************************************************************************/
   /*                                                                      */
@@ -363,8 +371,8 @@ namespace cryptonote
       *
       * @note see Blockchain::create_block_template
       */
-     virtual bool get_block_template(block& b, const account_public_address& adr, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
-     virtual bool get_block_template(block& b, const crypto::hash *prev_block, const account_public_address& adr, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
+     virtual bool create_next_miner_block_template(block& b, const account_public_address& adr, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
+     virtual bool create_miner_block_template(block& b, const crypto::hash *prev_block, const account_public_address& adr, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
 
      /**
       * @brief called when a transaction is relayed; return the hash of the parsed tx, or null_hash
@@ -983,11 +991,6 @@ namespace cryptonote
      void flush_invalid_blocks();
 
      /**
-      * @brief Record if the service node has checkpointed at this point in time
-      */
-     void record_checkpoint_vote(crypto::public_key const &pubkey, uint64_t height, bool voted) { m_service_node_list.record_checkpoint_vote(pubkey, height, voted); }
-
-     /**
       * @brief Record the reachability status of node's storage server
       */
      bool set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value);
@@ -1138,6 +1141,7 @@ namespace cryptonote
       * internal use only.
       */
      std::unordered_map<crypto::x25519_public_key, lokimq::AuthLevel>& _lmq_auth_level_map() { return m_lmq_auth; }
+     lokimq::TaggedThreadID const &pulse_thread_id() const { return *m_pulse_thread_id; }
 
  private:
 
@@ -1232,6 +1236,8 @@ namespace cryptonote
        bool building = false;
        uint64_t height = 0, emissions = 0, fees = 0, burnt = 0;
      } m_coinbase_cache;
+
+     std::optional<lokimq::TaggedThreadID> m_pulse_thread_id;
    };
 }
 

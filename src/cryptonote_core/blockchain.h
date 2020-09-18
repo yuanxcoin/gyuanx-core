@@ -64,6 +64,7 @@
 #include "cryptonote_basic/hardfork.h"
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_core/loki_name_system.h"
+#include "pulse.h"
 
 struct sqlite3;
 namespace service_nodes { class service_node_list; };
@@ -171,6 +172,7 @@ namespace cryptonote
      */
     bool deinit();
 
+    bool get_blocks_only(uint64_t start_offset, size_t count, std::vector<block>& blocks, std::vector<cryptonote::blobdata> *txs = nullptr) const;
     /**
      * @brief get blocks and transactions from blocks based on start height and count
      *
@@ -297,9 +299,11 @@ namespace cryptonote
     /**
      * @brief get the current height of the blockchain
      *
+     * @param lock lock the blockchain before querying the lock
+     *
      * @return the height
      */
-    uint64_t get_current_blockchain_height() const;
+    uint64_t get_current_blockchain_height(bool lock = false) const;
 
     /**
      * @brief get the hash of the most recent block on the blockchain
@@ -362,8 +366,21 @@ namespace cryptonote
      *
      * @return true if block template filled in successfully, else false
      */
-    bool create_block_template(block& b, const account_public_address& miner_address, difficulty_type& di, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
-    bool create_block_template(block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& di, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
+    bool create_miner_block_template     (block& b, const crypto::hash *from_block, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
+    bool create_next_miner_block_template(block& b, const account_public_address& miner_address, difficulty_type& diffic, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
+
+    /**
+     * @brief creates the next block suitable for using in a Pulse enabled network
+     *
+     * @param b return-by-reference block to be filled in
+     * @param block_producer the service node that will receive the block reward
+     * @param round the current pulse round the block is being generated for
+     * @param validator_bitset the bitset indicating which validators in the quorum are participating in constructing the block.
+     * @param ex_nonce extra data to be added to the miner transaction's extra
+     *
+     * @return true if block template filled in successfully, else false
+     */
+    bool create_next_pulse_block_template(block& b, const service_nodes::payout& block_producer, uint8_t round, uint16_t validator_bitset, uint64_t& height);
 
     /**
      * @brief checks if a block is known about with a given hash
@@ -861,13 +878,6 @@ namespace cryptonote
     bool get_hard_fork_voting_info(uint8_t version, uint32_t &window, uint32_t &votes, uint32_t &threshold, uint64_t &earliest_height, uint8_t &voting) const;
 
     /**
-     * @brief get difficulty target based on chain and hardfork version
-     *
-     * @return difficulty target
-     */
-    uint64_t get_difficulty_target() const;
-
-    /**
      * @brief remove transactions from the transaction pool (if present)
      *
      * @param txids a list of hashes of transactions to be removed
@@ -1068,6 +1078,29 @@ namespace cryptonote
   private:
 #endif
 
+    struct block_pow_verified
+    {
+      bool         valid;
+      bool         precomputed;
+      bool         per_block_checkpointed;
+      crypto::hash proof_of_work;
+    };
+
+    /**
+     * @brief Verify block proof of work against the expected difficulty
+     */
+    block_pow_verified verify_block_pow  (cryptonote::block const &blk, difficulty_type difficulty, uint64_t chain_height, bool alt_block);
+    bool               basic_block_checks(cryptonote::block const &blk, bool alt_block);
+
+    struct block_template_info
+    {
+      bool                   is_miner;
+      account_public_address miner_address;
+      service_nodes::payout  service_node_payout;
+    };
+
+    bool create_block_template_internal(block& b, const crypto::hash *from_block, block_template_info const &info, difficulty_type& di, uint64_t& height, uint64_t& expected_reward, const blobdata& ex_nonce);
+
     bool load_missing_blocks_into_loki_subsystems();
 
     // TODO: evaluate whether or not each of these typedefs are left over from blockchain_storage
@@ -1110,17 +1143,31 @@ namespace cryptonote
     uint64_t m_fake_scan_time;
     uint64_t m_sync_counter;
     uint64_t m_bytes_to_sync;
-    std::vector<uint64_t> m_timestamps;
-    std::vector<difficulty_type> m_difficulties;
-    uint64_t m_timestamps_and_difficulties_height;
+
     uint64_t m_long_term_block_weights_window;
     uint64_t m_long_term_effective_median_block_weight;
     mutable crypto::hash m_long_term_block_weights_cache_tip_hash;
     mutable epee::misc_utils::rolling_median_t<uint64_t> m_long_term_block_weights_cache_rolling_median;
 
-    std::mutex m_difficulty_lock;
-    crypto::hash m_difficulty_for_next_block_top_hash;
-    difficulty_type m_difficulty_for_next_block;
+    // NOTE: PoW/Difficulty Cache
+    // Before HF16, we use timestamps and difficulties only.
+    // After HF16, we check if the state of block producing in Pulse and return
+    // the PoW difficulty or the fixed Pulse difficulty if we're still eligible
+    // for Pulse blocks.
+    struct
+    {
+      std::mutex m_difficulty_lock;
+
+      // NOTE: PoW Difficulty Calculation Metadata
+      std::vector<uint64_t> m_timestamps;
+      std::vector<difficulty_type> m_difficulties;
+
+      // NOTE: Cache Invalidation Checks
+      uint64_t m_timestamps_and_difficulties_height{0};
+      crypto::hash m_difficulty_for_next_block_top_hash{crypto::null_hash};
+      difficulty_type m_difficulty_for_next_block{1};
+      pulse::timings m_pulse_timings{};
+    } m_cache;
 
     boost::asio::io_service m_async_service;
     std::thread m_async_thread;
@@ -1256,21 +1303,6 @@ namespace cryptonote
     /**
      * @brief validate and add a new block to the end of the blockchain
      *
-     * This function is merely a convenience wrapper around the other
-     * of the same name.  This one passes the block's hash to the other
-     * as well as the block and verification context.
-     *
-     * @param bl the block to be added
-     * @param bvc metadata concerning the block's validity
-     * @param notify if set to true, sends new block notification on success
-     *
-     * @return true if the block was added successfully, otherwise false
-     */
-    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify = true);
-
-    /**
-     * @brief validate and add a new block to the end of the blockchain
-     *
      * When a block is given to Blockchain to be added to the blockchain, it
      * is passed here if it is determined to belong at the end of the current
      * chain.
@@ -1319,7 +1351,7 @@ namespace cryptonote
      *
      * @return the difficulty requirement
      */
-    difficulty_type get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t height) const;
+    difficulty_type get_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t height) const;
 
     /**
      * @brief sanity checks a miner transaction before validating an entire block
