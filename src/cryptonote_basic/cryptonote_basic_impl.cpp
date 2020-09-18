@@ -124,7 +124,7 @@ namespace cryptonote {
     static_assert((TARGET_BLOCK_TIME % 1min) == 0s, "difficulty targets must be a multiple of a minute");
 
     uint64_t base_reward =
-      version >= network_version_16_pulse ? BLOCK_REWARD_HF16 :
+      version >= network_version_17 ? BLOCK_REWARD_HF17 :
       version >= network_version_15_lns ? BLOCK_REWARD_HF15 :
       version >= network_version_8  ? block_reward_unpenalized_formula_v8(height) :
         block_reward_unpenalized_formula_v7(already_generated_coins, height);

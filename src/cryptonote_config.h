@@ -329,6 +329,7 @@ namespace cryptonote
     network_version_14_blink,
     network_version_15_lns,
     network_version_16_pulse,
+    network_version_17, // future HF
 
     network_version_count,
   };

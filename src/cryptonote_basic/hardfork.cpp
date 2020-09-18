@@ -86,6 +86,8 @@ static constexpr HardFork::Params testnet_hard_forks[] =
   { network_version_13_enforce_checkpoints, 127028, 0, 1568440800 }, // 2019-09-13 16:00AEDT
   { network_version_14_blink,               174630, 0, 1575075600 }, // 2019-11-30 07:00UTC
   { network_version_15_lns,                 244777, 0, 1583940000 }, // 2020-03-11 15:20UTC
+  { network_version_16_pulse,               382222, 0, 1600468200 }, // 2020-09-18 22:30UTC
+  { network_version_17,                     382222 + BLOCKS_EXPECTED_IN_DAYS(180), 0, 1600468200 + 180*24*60*60 }, // HF16 + 180 days
 };
 
 static constexpr HardFork::Params devnet_hard_forks[] =
