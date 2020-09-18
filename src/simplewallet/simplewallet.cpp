@@ -7015,8 +7015,6 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
   std::vector<std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry>> rpc_results;
   std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::request> requests(1);
 
-  //TODO(sean): make friendly with unordered map
-  //std::vector<tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
   std::unordered_map<std::string, tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
 
   if (args.size() == 0)

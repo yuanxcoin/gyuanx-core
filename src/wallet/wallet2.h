@@ -806,8 +806,6 @@ private:
       std::string owner;
       std::string backup_owner;
     };
-    //std::vector<lns_detail> lns_records_cache;
-    //TODO: (sean): make this unordered map
     std::unordered_map<std::string, lns_detail> lns_records_cache;
 
     void set_lns_cache_record(const wallet2::lns_detail& detail);
@@ -815,7 +813,6 @@ private:
     void delete_lns_cache_record(std::string name);
 
     std::unordered_map<std::string, lns_detail> get_lns_cache();
-    //std::vector<lns_detail> get_lns_cache();
 
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
