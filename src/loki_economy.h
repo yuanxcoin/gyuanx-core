@@ -27,13 +27,6 @@ constexpr uint64_t BLOCKSWAP_LIQUIDITY_HF16 = BLOCK_REWARD_HF15 * 24 / 100;
 constexpr uint64_t BLOCK_REWARD_HF17      = 18'333'333'333;
 constexpr uint64_t FOUNDATION_REWARD_HF17 =  1'833'333'333;
 
-// TODO: For now we add 1 extra atomic loki to the HF16 block reward, above; ultimately with pulse
-// we want to just drop the miner reward output entirely when a tx has no transactions, but we don't
-// support that yet in the current code and if we put an output of 0 it currently breaks the test
-// suite (which assumes an output of 0 means ringct, which this is not).  Thus this +1 hack for now,
-// to keep the current test suite happy until we actually implement this for HF16.
-// constexpr uint64_t MINER_REWARD_HF16 = 0;
-
 static_assert(MINER_REWARD_HF15        + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
 static_assert(BLOCKSWAP_LIQUIDITY_HF16 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
 static_assert(                           SN_REWARD_HF15 + FOUNDATION_REWARD_HF17 == BLOCK_REWARD_HF17);
