@@ -405,12 +405,12 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
     return result;
 
   int owner_column = tools::enum_count<mapping_record_column>;
-  if (!sql_copy_blob(statement, owner_column, reinterpret_cast<void *>(&result.owner), sizeof(result.owner)))
+  if (!sql_copy_blob(statement, owner_column, &result.owner, sizeof(result.owner)))
     return result;
 
   if (result.backup_owner_id > 0)
   {
-    if (!sql_copy_blob(statement, owner_column + 1, reinterpret_cast<void *>(&result.backup_owner), sizeof(result.backup_owner)))
+    if (!sql_copy_blob(statement, owner_column + 1, &result.backup_owner, sizeof(result.backup_owner)))
       return result;
   }
 
@@ -440,7 +440,7 @@ bool sql_run_statement(lns_sql_type type, sql_compiled_statement& statement, voi
           {
             auto *entry = reinterpret_cast<owner_record *>(context);
             get(statement, owner_record_column::id, entry->id);
-            if (!sql_copy_blob(statement, owner_record_column::address, reinterpret_cast<void *>(&entry->address), sizeof(entry->address)))
+            if (!sql_copy_blob(statement, owner_record_column::address, &entry->address, sizeof(entry->address)))
               return false;
             data_loaded = true;
           }
