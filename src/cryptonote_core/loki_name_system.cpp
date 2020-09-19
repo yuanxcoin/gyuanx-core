@@ -2166,12 +2166,14 @@ std::optional<mapping_value> name_system_db::resolve(mapping_type type, std::str
   bind_all(resolve_sql, db_mapping_type(type), name_hash_b64, blockchain_height);
   if (step(resolve_sql) == SQLITE_ROW)
   {
-    auto& r = result.emplace();
-    auto data = get_blob(resolve_sql, 0);
-    assert(data.size() <= r.buffer.size());
-    r.len = data.size();
-    r.encrypted = true;
-    std::copy(data.begin(), data.end(), r.buffer.begin());
+    if (auto blob = get<std::optional<blob_view>>(resolve_sql, 0))
+    {
+      auto& r = result.emplace();
+      assert(blob->data.size() <= r.buffer.size());
+      r.len = blob->data.size();
+      r.encrypted = true;
+      std::copy(blob->data.begin(), blob->data.end(), r.buffer.begin());
+    }
   }
   reset(resolve_sql);
   clear_bindings(resolve_sql);
