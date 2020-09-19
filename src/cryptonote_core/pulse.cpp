@@ -742,9 +742,8 @@ bool pulse::get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t
   if (hf16_height == std::numeric_limits<uint64_t>::max())
     return false;
 
-  crypto::hash genesis_hash       = blockchain.get_block_id_by_height(hf16_height - 1);
-  cryptonote::block genesis_block = {};
-  if (bool orphaned = false; !blockchain.get_block_by_hash(genesis_hash, genesis_block, &orphaned) || orphaned)
+  cryptonote::block genesis_block;
+  if (!blockchain.get_block_by_height(hf16_height - 1, genesis_block))
     return false;
 
   uint64_t const delta_height = block_height - cryptonote::get_block_height(genesis_block);

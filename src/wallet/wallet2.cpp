@@ -5812,7 +5812,7 @@ void wallet2::trim_hashchain()
     if (r && res.status == rpc::STATUS_OK)
     {
       crypto::hash hash;
-      epee::string_tools::hex_to_pod(res.block_header.hash, hash);
+      epee::string_tools::hex_to_pod(res.block_header->hash, hash);
       m_blockchain.refill(hash);
     }
     else

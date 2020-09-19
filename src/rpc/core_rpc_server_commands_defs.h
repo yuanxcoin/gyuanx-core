@@ -316,7 +316,8 @@ namespace rpc {
 
       std::optional<std::string> pubkey;            // The tx extra public key
       std::optional<uint64_t> burn_amount;          // The amount of LOKI that this transaction burns
-      std::optional<std::string> extra_nonce;       // Optional extra nonce value (in hex)
+      std::optional<std::string> extra_nonce;       // Optional extra nonce value (in hex); will be empty if nonce is recognized as a payment id
+      std::optional<std::string> payment_id;        // The payment ID, if present. This is either a 16 hex character (8-byte) encrypted payment id, or a 64 hex character (32-byte) deprecated, unencrypted payment ID
       std::optional<uint32_t> mm_depth;             // (Merge-mining) the merge-mined depth
       std::optional<std::string> mm_root;           // (Merge-mining) the merge mining merkle root hash
       std::vector<std::string> additional_pubkeys;  // Additional public keys
@@ -606,6 +607,8 @@ namespace rpc {
       uint64_t height;                      // Current length of longest chain known to daemon.
       uint64_t target_height;               // The height of the next block in the chain.
       uint64_t immutable_height;            // The latest height in the blockchain that can not be reorganized from (backed by atleast 2 Service Node, or 1 hardcoded checkpoint, 0 if N/A).
+      uint64_t pulse_ideal_timestamp;       // For pulse blocks this is the ideal timestamp of the next block, that is, the timestamp if the network was operating with perfect 2-minute blocks since the pulse hard fork.
+      uint64_t pulse_target_timestamp;      // For pulse blocks this is the target timestamp of the next block, which targets 2 minutes after the previous block but will be slightly faster/slower if the previous block is behind/ahead of the ideal timestamp.
       uint64_t difficulty;                  // Network difficulty (analogous to the strength of the network).
       uint64_t target;                      // Current target for next proof of work.
       uint64_t tx_count;                    // Total number of non-coinbase transaction in the chain.
@@ -805,7 +808,7 @@ namespace rpc {
       uint64_t block_size;                    // The block size in bytes.
       uint64_t block_weight;                  // The block weight in bytes.
       uint64_t num_txes;                      // Number of transactions in the block, not counting the coinbase tx.
-      std::string pow_hash;                   // The hash of the block's proof of work.
+      std::optional<std::string> pow_hash;    // The hash of the block's proof of work (requires `fill_pow_hash`)
       uint64_t long_term_weight;              // Long term weight of the block.
       std::string miner_tx_hash;              // The TX hash of the miner transaction
       std::vector<std::string> tx_hashes;     // The TX hashes of all non-coinbase transactions (requires `get_tx_hashes`)
@@ -857,8 +860,8 @@ namespace rpc {
     struct response
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
-      block_header_response block_header; // A structure containing block header information.
-      std::vector<block_header_response> block_headers; // Result of multiple blocks requested via hashes
+      std::optional<block_header_response> block_header; // Block header information for the requested `hash` block
+      std::vector<block_header_response> block_headers;  // Block header information for the requested `hashes` blocks
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
       KV_MAP_SERIALIZABLE
@@ -873,7 +876,8 @@ namespace rpc {
 
     struct request
     {
-      uint64_t height;    // The block's height.
+      std::optional<uint64_t> height; // A block height to look up; returned in `block_header`
+      std::vector<uint64_t> heights;  // Block heights to retrieve; returned in `block_headers`
       bool fill_pow_hash; // Tell the daemon if it should fill out pow_hash field.
       bool get_tx_hashes; // If true (default false) then include the hashes of non-coinbase transactions
 
@@ -883,7 +887,8 @@ namespace rpc {
     struct response
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
-      block_header_response block_header; // A structure containing block header information.
+      std::optional<block_header_response> block_header; // Block header information for the requested `height` block
+      std::vector<block_header_response> block_headers;  // Block header information for the requested `heights` blocks
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
       KV_MAP_SERIALIZABLE
