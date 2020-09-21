@@ -372,9 +372,11 @@ namespace cryptonote { namespace rpc {
     res.top_block_hash = string_tools::pod_to_hex(top_hash);
     res.target_height = m_core.get_target_blockchain_height();
 
+    bool next_block_is_pulse = false;
     if (pulse::timings t; pulse::get_round_timings(m_core.get_blockchain_storage(), res.height, prev_ts, t)) {
       res.pulse_ideal_timestamp = tools::to_seconds(t.ideal_timestamp.time_since_epoch());
       res.pulse_target_timestamp = tools::to_seconds(t.r0_timestamp.time_since_epoch());
+      next_block_is_pulse = pulse::clock::now() < t.miner_fallback_timestamp;
     }
 
     res.immutable_height = 0;
@@ -385,7 +387,7 @@ namespace cryptonote { namespace rpc {
       res.immutable_block_hash = string_tools::pod_to_hex(checkpoint.block_hash);
     }
 
-    res.difficulty = m_core.get_blockchain_storage().get_difficulty_for_next_block();
+    res.difficulty = m_core.get_blockchain_storage().get_difficulty_for_next_block(next_block_is_pulse);
     res.target = tools::to_seconds(TARGET_BLOCK_TIME);
     res.tx_count = m_core.get_blockchain_storage().get_total_transactions() - res.height; //without coinbase
     res.tx_pool_size = m_core.get_pool().get_transactions_count();
@@ -1287,7 +1289,7 @@ namespace cryptonote { namespace rpc {
     const miner& lMiner = m_core.get_miner();
     res.active = lMiner.is_mining();
     res.block_target = tools::to_seconds(TARGET_BLOCK_TIME);
-    res.difficulty = m_core.get_blockchain_storage().get_difficulty_for_next_block();
+    res.difficulty = m_core.get_blockchain_storage().get_difficulty_for_next_block(false /*pulse*/);
     if ( lMiner.is_mining() ) {
       res.speed = lMiner.get_speed();
       res.threads_count = lMiner.get_threads_count();

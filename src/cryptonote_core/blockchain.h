@@ -334,9 +334,11 @@ namespace cryptonote
     /**
      * @brief returns the difficulty target the next block to be added must meet
      *
+     * pulse return difficulty for a pulse block
+     *
      * @return the target
      */
-    difficulty_type get_difficulty_for_next_block();
+    difficulty_type get_difficulty_for_next_block(bool pulse);
 
     /**
      * @brief adds a block to the blockchain
@@ -1175,8 +1177,7 @@ namespace cryptonote
       // NOTE: Cache Invalidation Checks
       uint64_t m_timestamps_and_difficulties_height{0};
       crypto::hash m_difficulty_for_next_block_top_hash{crypto::null_hash};
-      difficulty_type m_difficulty_for_next_block{1};
-      pulse::timings m_pulse_timings{};
+      difficulty_type m_difficulty_for_next_miner_block{1};
     } m_cache;
 
     boost::asio::io_service m_async_service;
@@ -1205,7 +1206,6 @@ namespace cryptonote
     block m_btc;
     account_public_address m_btc_address;
     blobdata m_btc_nonce;
-    difficulty_type m_btc_difficulty;
     uint64_t m_btc_height;
     uint64_t m_btc_pool_cookie;
     uint64_t m_btc_expected_reward;
