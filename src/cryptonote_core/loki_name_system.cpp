@@ -212,6 +212,7 @@ bool bind(sql_compiled_statement& s, int index, std::string&& text)
 // with a `blob_view` such as:
 //
 // bind(s, 123, blob_view{data, size});
+// auto data = get<blob_view>(s, 2);
 //
 struct blob_view {
   std::string_view data;
@@ -315,6 +316,15 @@ std::string get(sql_compiled_statement& s, int index)
           static_cast<size_t>(sqlite3_column_bytes(s.statement, index))};
 }
 
+// blob_view pointing at the blob data
+template <typename T, std::enable_if_t<std::is_same_v<T, blob_view>, int> = 0>
+blob_view get(sql_compiled_statement& s, int index)
+{
+  return blob_view{
+    reinterpret_cast<const char*>(sqlite3_column_blob(s.statement, index)),
+    static_cast<size_t>(sqlite3_column_bytes(s.statement, index))};
+}
+
 template <typename T> constexpr bool is_optional = false;
 template <typename T> constexpr bool is_optional<std::optional<T>> = true;
 
@@ -342,32 +352,19 @@ T get(sql_compiled_statement& s, I index)
 template <typename T, typename I>
 void get(sql_compiled_statement& s, I index, T& val) { val = get<T>(s, index); }
 
-// blob, via a string_view
-std::string_view get_blob(sql_compiled_statement& s, int index)
-{
-  return {reinterpret_cast<const char*>(sqlite3_column_blob(s.statement, index)),
-          static_cast<size_t>(sqlite3_column_bytes(s.statement, index))};
-}
-
-// blob, via a string_view
-template <typename I, std::enable_if_t<is_int_enum<I>, int> = 0>
-std::string_view get_blob(sql_compiled_statement& s, I index)
-{
-  return get_blob(s, static_cast<int>(index));
-}
-
 template <typename I>
 bool sql_copy_blob(sql_compiled_statement& statement, I column, void *dest, size_t dest_size)
 {
-  auto blob = get_blob(statement, column);
-  if (blob.size() != dest_size)
+
+  auto blob = get<blob_view>(statement, column);
+  if (blob.data.size() != dest_size)
   {
-    LOG_PRINT_L0("Unexpected blob size=" << blob.size() << ", in LNS DB does not match expected size=" << dest_size);
-    assert(blob.size() == dest_size);
+    LOG_PRINT_L0("Unexpected blob size=" << blob.data.size() << ", in LNS DB does not match expected size=" << dest_size);
+    assert(blob.data.size() == dest_size);
     return false;
   }
 
-  std::memcpy(dest, blob.data(), blob.size());
+  std::memcpy(dest, blob.data.data(), blob.data.size());
   return true;
 }
 
@@ -408,12 +405,12 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
     return result;
 
   int owner_column = tools::enum_count<mapping_record_column>;
-  if (!sql_copy_blob(statement, owner_column, reinterpret_cast<void *>(&result.owner), sizeof(result.owner)))
+  if (!sql_copy_blob(statement, owner_column, &result.owner, sizeof(result.owner)))
     return result;
 
   if (result.backup_owner_id > 0)
   {
-    if (!sql_copy_blob(statement, owner_column + 1, reinterpret_cast<void *>(&result.backup_owner), sizeof(result.backup_owner)))
+    if (!sql_copy_blob(statement, owner_column + 1, &result.backup_owner, sizeof(result.backup_owner)))
       return result;
   }
 
@@ -443,7 +440,7 @@ bool sql_run_statement(lns_sql_type type, sql_compiled_statement& statement, voi
           {
             auto *entry = reinterpret_cast<owner_record *>(context);
             get(statement, owner_record_column::id, entry->id);
-            if (!sql_copy_blob(statement, owner_record_column::address, reinterpret_cast<void *>(&entry->address), sizeof(entry->address)))
+            if (!sql_copy_blob(statement, owner_record_column::address, &entry->address, sizeof(entry->address)))
               return false;
             data_loaded = true;
           }
@@ -2169,12 +2166,14 @@ std::optional<mapping_value> name_system_db::resolve(mapping_type type, std::str
   bind_all(resolve_sql, db_mapping_type(type), name_hash_b64, blockchain_height);
   if (step(resolve_sql) == SQLITE_ROW)
   {
-    auto& r = result.emplace();
-    auto data = get_blob(resolve_sql, 0);
-    assert(data.size() <= r.buffer.size());
-    r.len = data.size();
-    r.encrypted = true;
-    std::copy(data.begin(), data.end(), r.buffer.begin());
+    if (auto blob = get<std::optional<blob_view>>(resolve_sql, 0))
+    {
+      auto& r = result.emplace();
+      assert(blob->data.size() <= r.buffer.size());
+      r.len = blob->data.size();
+      r.encrypted = true;
+      std::copy(blob->data.begin(), blob->data.end(), r.buffer.begin());
+    }
   }
   reset(resolve_sql);
   clear_bindings(resolve_sql);

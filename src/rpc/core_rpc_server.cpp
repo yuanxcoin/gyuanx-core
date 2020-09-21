@@ -3463,9 +3463,6 @@ namespace cryptonote { namespace rpc {
     {
       auto [val, nonce] = mapping->value_nonce(type);
       res.encrypted_value = lokimq::to_hex(val);
-      MFATAL("val: " << lokimq::to_hex(val));
-      MFATAL("nonce: " << lokimq::to_hex(nonce));
-      MFATAL("all: " << lokimq::to_hex(mapping->to_view()));
       if (val.size() < mapping->to_view().size())
         res.nonce = lokimq::to_hex(nonce);
     }
