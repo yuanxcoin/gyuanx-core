@@ -455,7 +455,13 @@ namespace rpc
 
     auto& chain = m_core.get_blockchain_storage();
 
-    res.info.difficulty = chain.get_difficulty_for_next_block();
+    bool next_block_is_pulse = false;
+    auto prev_ts             = m_core.get_blockchain_storage().get_db().get_block_timestamp(res.info.height);
+    if (pulse::timings t; pulse::get_round_timings(m_core.get_blockchain_storage(), res.info.height, prev_ts, t)) {
+      next_block_is_pulse = pulse::clock::now() < t.miner_fallback_timestamp;
+    }
+
+    res.info.difficulty = chain.get_difficulty_for_next_block(next_block_is_pulse);
 
     res.info.target = tools::to_seconds(TARGET_BLOCK_TIME);
 
