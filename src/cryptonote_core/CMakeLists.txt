@@ -39,8 +39,8 @@ add_library(cryptonote_core
   loki_name_system.cpp
   tx_pool.cpp
   tx_sanity_check.cpp
-  miner.cpp
-  cryptonote_tx_utils.cpp)
+  cryptonote_tx_utils.cpp
+  pulse.cpp)
 
 target_link_libraries(cryptonote_core
   PUBLIC
@@ -54,18 +54,8 @@ target_link_libraries(cryptonote_core
     sqlite3
   PRIVATE
     Boost::program_options
-    Boost::chrono
+    systemd
     extra)
-
-option(WITH_SYSTEMD "Attempts to link against and enable systemd daemon notification support" ON)
-if (WITH_SYSTEMD)
-    pkg_check_modules(SYSTEMD libsystemd)
-
-    if(SYSTEMD_FOUND)
-      target_compile_definitions(cryptonote_core PRIVATE ENABLE_SYSTEMD)
-      target_link_libraries(cryptonote_core PRIVATE ${SYSTEMD_LIBRARIES})
-    endif()
-endif()
 
 if(PER_BLOCK_CHECKPOINT)
   target_compile_definitions(cryptonote_core PUBLIC PER_BLOCK_CHECKPOINT)

@@ -29,18 +29,15 @@
 # Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 
-# This is broken up into two parts: first we check for miniupnp, compile it if we can't
-# find it, and thereafter we check for libunbound, and compile it if we can't find it.
 # We always compile if we are building statically to reduce static dependency issues...
 # ...except for FreeBSD, because FreeBSD is a special case that doesn't play well with
 # others.
 
-find_package(PkgConfig REQUIRED)
-
-if(NOT STATIC)
+if(NOT STATIC AND NOT BUILD_STATIC_DEPS)
+  find_package(PkgConfig REQUIRED)
   pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
   pkg_check_modules(UNBOUND libunbound)
-  pkg_check_modules(LOKIMQ liblokimq>=1.1.4)
+  pkg_check_modules(LOKIMQ liblokimq>=1.2)
 endif()
 
 if(MINIUPNPC_FOUND)
@@ -62,33 +59,6 @@ else()
   target_link_libraries(miniupnpc INTERFACE libminiupnpc-static)
 endif()
 
-
-if(NOT UNBOUND_FOUND)
-  # NOTE: If STATIC is true, CMAKE_FIND_LIBRARY_SUFFIXES has been reordered.
-  # unbound has config tests which used OpenSSL libraries, so -ldl may need to
-  # be set in this case.
-  # The unbound CMakeLists.txt can set it, since it's also needed for the
-  # static OpenSSL libraries set up there after with target_link_libraries.
-  message(STATUS "Using in-tree unbound")
-  if(STATIC AND NOT IOS)
-    if(UNIX)
-      set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};${CMAKE_DL_LIBS};${CMAKE_THREAD_LIBS_INIT}")
-    elseif(MINGW)
-      set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};extra")
-    endif()
-  endif()
-  add_subdirectory(unbound)
-  target_link_libraries(libunbound INTERFACE unbound)
-  target_include_directories(libunbound INTERFACE unbound/libunbound)
-else()
-  message(STATUS "Found libunbound include (unbound.h) in ${UNBOUND_INCLUDE_DIRS}")
-  if(NOT UNBOUND_LIBRARIES)
-    message(FATAL_ERROR "Found libunbound includes, but could not find libunbound library. Please make sure you have installed libunbound or libunbound-dev or the equivalent")
-  endif()
-
-  link_dep_libs(libunbound INTERFACE "${UNBOUND_LIBRARY_DIRS}" ${UNBOUND_LIBRARIES})
-  target_include_directories(libunbound INTERFACE ${UNBOUND_INCLUDE_DIRS})
-endif()
 
 if(NOT LOKIMQ_FOUND)
   message(STATUS "Using in-tree lokimq")
@@ -120,3 +90,61 @@ endif()
 add_subdirectory(db_drivers)
 add_subdirectory(easylogging++)
 add_subdirectory(randomx EXCLUDE_FROM_ALL)
+
+# uSockets doesn't really have a proper build system (just a very simple Makefile) so build it
+# ourselves.
+if (NOT CMAKE_VERSION VERSION_LESS 3.12)
+    set(conf_depends "CONFIGURE_DEPENDS")
+else()
+    set(conf_depends "")
+endif()
+file(GLOB usockets_src ${conf_depends} uWebSockets/uSockets/src/*.c uWebSockets/uSockets/src/eventing/*.c)
+file(COPY uWebSockets/uSockets/src/libusockets.h DESTINATION uWebSockets)
+add_library(uSockets STATIC EXCLUDE_FROM_ALL ${usockets_src})
+target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL=1)
+target_include_directories(uSockets PRIVATE uWebSockets/uSockets/src)
+
+# On Windows uSockets uses libuv for its event loop:
+if (WIN32)
+  add_subdirectory(libuv EXCLUDE_FROM_ALL)
+  target_link_libraries(uSockets uv_a)
+endif()
+
+
+# The uWebSockets C++ layer is header-only but isn't actually prefixed in the repository itself, but
+# rather only on install (which, as above, is just a very simple Makefile).  This is unfortunate
+# because it means that we can't use `#include <uWebSockets/App.h>` directly with the repo; so
+# instead we emulate the installation process into the build directory and include it (with the
+# prefix) from there.
+file(COPY uWebSockets/src/ DESTINATION uWebSockets/uWebSockets FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+add_library(uWebSockets INTERFACE)
+target_include_directories(uWebSockets INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets)
+target_link_libraries(uWebSockets INTERFACE uSockets)
+target_compile_definitions(uWebSockets INTERFACE UWS_HTTPRESPONSE_NO_WRITEMARK UWS_NO_ZLIB)
+
+
+# cpr configuration.  Ideally we'd just do this via add_subdirectory, but cpr's cmake requires
+# 3.15+, and we target lower than that (and this is fairly simple to build).
+
+if(NOT BUILD_STATIC_DEPS)
+  find_package(CURL REQUIRED COMPONENTS HTTP HTTPS SSL)
+
+  # CURL::libcurl wasn't added to FindCURL until cmake 3.12, so add it if necessary
+  if (CMAKE_VERSION VERSION_LESS 3.12 AND NOT TARGET CURL::libcurl)
+    add_library(libcurl UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(libcurl PROPERTIES
+      IMPORTED_LOCATION ${CURL_LIBRARIES}
+      INTERFACE_INCLUDE_DIRECTORIES "${CURL_INCLUDE_DIRS}")
+    add_library(CURL_libcurl INTERFACE)
+    target_link_libraries(CURL_libcurl INTERFACE libcurl)
+    add_library(CURL::libcurl ALIAS CURL_libcurl)
+  endif()
+endif()
+
+file(GLOB cpr_sources ${conf_depends} cpr/cpr/*.cpp)
+
+add_library(cpr STATIC EXCLUDE_FROM_ALL ${cpr_sources})
+target_link_libraries(cpr PUBLIC CURL::libcurl)
+target_include_directories(cpr PUBLIC cpr/include)
+target_compile_definitions(cpr PUBLIC CPR_CURL_NOSIGNAL)
+add_library(cpr::cpr ALIAS cpr)

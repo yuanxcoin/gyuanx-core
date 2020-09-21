@@ -41,36 +41,47 @@ sources are also used for statically-linked builds because distribution
 packages often include only shared library binaries (`.so`) but not static
 library archives (`.a`).
 
-| Dep          | Min. version  | Vendored | Debian/Ubuntu pkg  | Arch pkg     | Fedora            | Optional | Purpose          |
-| ------------ | ------------- | -------- | ------------------ | ------------ | ----------------- | -------- | ---------------- |
-| GCC          | 4.7.3         | NO       | `build-essential`  | `base-devel` | `gcc`             | NO       |                  |
-| CMake        | 3.5           | NO       | `cmake`            | `cmake`      | `cmake`           | NO       |                  |
-| pkg-config   | any           | NO       | `pkg-config`       | `base-devel` | `pkgconf`         | NO       |                  |
-| Boost        | 1.58          | NO       | `libboost-all-dev` | `boost`      | `boost-devel`     | NO       | C++ libraries    |
-| OpenSSL      | basically any | NO       | `libssl-dev`       | `openssl`    | `openssl-devel`   | NO       | sha256 sum       |
-| libzmq       | 4.0.0         | NO       | `libzmq3-dev`      | `zeromq`     | `zeromq-devel`    | NO       | ZeroMQ library   |
-| OpenPGM      | ?             | NO       | `libpgm-dev`       | `libpgm`     | `openpgm-devel`   | NO       | For ZeroMQ       |
-| sqlite3      | ?             | YES      | `libsqlite3-dev`   | `sqlite`     | `sqlite-devel`    | NO       | Loki Name System |
-| libnorm[2]   | ?             | NO       | `libnorm-dev`      |              |               `   | YES      | For ZeroMQ       |
-| libunbound   | 1.4.16        | YES      | `libunbound-dev`   | `unbound`    | `unbound-devel`   | NO       | DNS resolver     |
-| libsodium    | ?             | NO       | `libsodium-dev`    | `libsodium`  | `libsodium-devel` | NO       | cryptography     |
-| libunwind    | any           | NO       | `libunwind8-dev`   | `libunwind`  | `libunwind-devel` | YES      | Stack traces     |
-| liblzma      | any           | NO       | `liblzma-dev`      | `xz`         | `xz-devel`        | YES      | For libunwind    |
-| libreadline  | 6.3.0         | NO       | `libreadline6-dev` | `readline`   | `readline-devel`  | YES      | Input editing    |
-| ldns         | 1.6.17        | NO       | `libldns-dev`      | `ldns`       | `ldns-devel`      | YES      | SSL toolkit      |
-| expat        | 1.1           | NO       | `libexpat1-dev`    | `expat`      | `expat-devel`     | YES      | XML parsing      |
-| GTest        | 1.5           | YES      | `libgtest-dev`[1]  | `gtest`      | `gtest-devel`     | YES      | Test suite       |
-| Doxygen      | any           | NO       | `doxygen`          | `doxygen`    | `doxygen`         | YES      | Documentation    |
-| Graphviz     | any           | NO       | `graphviz`         | `graphviz`   | `graphviz`        | YES      | Documentation    |
+| Dep          | Min. version  | Vendored | Debian/Ubuntu pkg     | Arch pkg     | Fedora              | Optional | Purpose          |
+| ------------ | ------------- | -------- | --------------------- | ------------ | ------------------- | -------- | ---------------- |
+| GCC          | 8.1.0         | NO       | `g++`[1]              | `base-devel` | `gcc`               | NO       |                  |
+| CMake        | 3.10          | NO       | `cmake`               | `cmake`      | `cmake`             | NO       |                  |
+| pkg-config   | any           | NO       | `pkg-config`          | `base-devel` | `pkgconf`           | NO       |                  |
+| Boost        | 1.65          | NO       | `libboost-all-dev`[2] | `boost`      | `boost-devel`       | NO       | C++ libraries    |
+| OpenSSL      | basically any | NO       | `libssl-dev`          | `openssl`    | `openssl-devel`     | NO       | sha256 sum       |
+| libzmq       | 4.3.0         | YES      | `libzmq3-dev`         | `zeromq`     | `zeromq-devel`      | NO       | ZeroMQ library   |
+| sqlite3      | ?             | YES      | `libsqlite3-dev`      | `sqlite`     | `sqlite-devel`      | NO       | Loki Name System |
+| libunbound   | 1.4.16        | NO       | `libunbound-dev`      | `unbound`    | `unbound-devel`     | NO       | DNS resolver     |
+| libsodium    | 1.0.9         | YES      | `libsodium-dev`       | `libsodium`  | `libsodium-devel`   | NO       | cryptography     |
+| libuv (Win)  | any           | NO       | (Windows only)        | --           | --                  | NO       | RPC event loop   |
+| libunwind    | any           | NO       | `libunwind8-dev`      | `libunwind`  | `libunwind-devel`   | YES      | Stack traces     |
+| liblzma      | any           | NO       | `liblzma-dev`         | `xz`         | `xz-devel`          | YES      | For libunwind    |
+| libreadline  | 6.3.0         | NO       | `libreadline-dev`     | `readline`   | `readline-devel`    | YES      | Input editing    |
+| ldns         | 1.6.17        | NO       | `libldns-dev`         | `ldns`       | `ldns-devel`        | YES      | SSL toolkit      |
+| expat        | 1.1           | NO       | `libexpat1-dev`       | `expat`      | `expat-devel`       | YES      | XML parsing      |
+| Doxygen      | any           | NO       | `doxygen`             | `doxygen`    | `doxygen`           | YES      | Documentation    |
+| Graphviz     | any           | NO       | `graphviz`            | `graphviz`   | `graphviz`          | YES      | Documentation    |
+| Qt tools     | 5.x           | NO       | `qttools5-dev`        | `qt5-tools`  | `qt5-linguist`      | YES      | Translations     |
+| libhidapi    | ?             | NO       | `libhidapi-dev`       | `hidapi`     | `hidapi-devel`      | YES      | Hardware wallet  |
+| libusb       | ?             | NO       | `libusb-dev`          | `libusb`     | `libusb-devel`      | YES      | Hardware wallet  |
+| libprotobuf  | ?             | NO       | `libprotobuf-dev`     | `protobuf`   | `protobuf-devel`    | YES      | Hardware wallet  |
+| protoc       | ?             | NO       | `protobuf-compiler`   | `protobuf`   | `protobuf-compiler` | YES      | Hardware wallet  |
 
 
-[1] On Debian/Ubuntu `libgtest-dev` only includes sources and headers. You must
-build the library binary manually. This can be done with the following command ```sudo apt-get install libgtest-dev && cd /usr/src/gtest && sudo cmake . && sudo make && sudo mv libg* /usr/lib/ ```
-[2] libnorm-dev is needed if your zmq library was built with libnorm, and not needed otherwise
+[1] On Ubuntu Bionic you will need the g++-8 package instead of g++ (which is version 7) and will
+need to run `export CC=gcc-8 CXX=g++-8` before running `make` or `cmake`.
+
+[2] libboost-all-dev includes a lot of unnecessary packages; see the apt command below for a
+breakdown of the minimum set of required boost packages.
 
 Install all dependencies at once on Debian/Ubuntu:
 
-``` sudo apt update && sudo apt install build-essential cmake pkg-config libboost-all-dev libssl-dev libzmq3-dev libunbound-dev libsodium-dev libunwind8-dev liblzma-dev libreadline6-dev libldns-dev libexpat1-dev doxygen graphviz libpgm-dev libsqlite3-dev```
+```
+sudo apt update && \
+sudo apt install g++ cmake pkg-config libboost-filesystem-dev libboost-thread-dev libboost-date-time-dev \
+    libboost-serialization-dev libboost-program-options-dev \
+    libssl-dev libzmq3-dev libsqlite3-dev libunbound-dev libsodium-dev libunwind8-dev liblzma-dev libreadline-dev \
+    libldns-dev libexpat1-dev doxygen graphviz libsqlite3-dev
+```
 
 Install all dependencies at once on macOS with the provided Brewfile:
 ``` brew update && brew bundle --file=contrib/brew/Brewfile ```
@@ -86,12 +97,12 @@ Clone recursively to pull-in needed submodule(s):
 
 If you already have a repo cloned, initialize and update:
 
-`$ cd loki && git submodule init && git submodule update`
+`$ cd loki && git submodule update --init --recursive`
 
 ### Build instructions
 
-Loki uses the CMake build system and a top-level [Makefile](Makefile) that
-invokes cmake commands as needed.
+Loki uses the CMake build system and an optional top-level [Makefile](Makefile) that wraps cmake
+commands as needed (alternatively you may create a build directory and invoke cmake directly).
 
 #### On Linux and macOS
 
@@ -106,7 +117,7 @@ invokes cmake commands as needed.
 
     *Optional*: If your machine has several cores and enough memory, enable
     parallel build by running `make -j<number of threads>` instead of `make`. For
-    this to be worthwhile, the machine should have one core and about 2GB of RAM
+    this to be worthwhile, the machine should have one core and at least 2GB of RAM
     available per thread.
 
     *Note*: The instructions above will compile the most stable release of the
@@ -149,85 +160,20 @@ Dependencies need to be built with -fPIC. Static libraries usually aren't, so yo
     HAVE_DOT=YES doxygen Doxyfile
     ```
 
-#### On the Raspberry Pi
+#### On the Raspberry Pi (and similar ARM-based devices)
 
-Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (2017-09-07 or later) from https://www.raspberrypi.org/downloads/raspbian/. If you are using Raspian Jessie, [please see note in the following section](#note-for-raspbian-jessie-users).
+The build process is exactly the same, but note that some parts of the build require around 3GB of
+RAM which is more memory than most Raspberry Pi class devices have available.  You can work around
+this by enabling 2GB (or more) of swap, but this is not particularly recommended, particularly if
+the swap file is on the SD card: intensive writes to a swap file on an SD card can accelerate how
+quickly the SD card wears out.  Devices with 4GB of RAM (such as the 4GB model of the Pi 4B, and
+some other SBC ARM devices) can build without needing swap.
 
-* `apt-get update && apt-get upgrade` to install all of the latest software
-
-* Install the dependencies for Loki from the 'Debian' column in the table above.
-
-* Increase the system swap size:
-
-    ```bash
-    sudo /etc/init.d/dphys-swapfile stop  
-    sudo nano /etc/dphys-swapfile  
-    CONF_SWAPSIZE=2048
-    sudo /etc/init.d/dphys-swapfile start
-    ```
-
-* If using an external hard disk without an external power supply, ensure it gets enough power to avoid hardware issues when syncing, by adding the line "max_usb_current=1" to /boot/config.txt
-
-* Clone Loki and checkout the most recent release version:
-
-    ```bash
-    git clone https://github.com/loki-project/loki.git
-    cd loki
-    git checkout master
-    ```
-
-* Build:
-
-    ```bash
-    make release
-    ```
-
-* Wait 4-6 hours
-
-* The resulting executables can be found in `build/release/bin`
-
-* Add `PATH="$PATH:$HOME/loki/build/release/bin"` to `.profile`
-
-* Run Loki with `lokid --detach`
-
-* You may wish to reduce the size of the swap file after the build has finished, and delete the boost directory from your home directory
-
-#### *Note for Raspbian Jessie users:*
-
-If you are using the older Raspbian Jessie image, compiling Loki is a bit more complicated. The version of Boost available in the Debian Jessie repositories is too old to use with Loki, and thus you must compile a newer version yourself. The following explains the extra steps, and has been tested on a Raspberry Pi 2 with a clean install of minimal Raspbian Jessie.
-
-* As before, `apt-get update && apt-get upgrade` to install all of the latest software, and increase the system swap size
-
-    ```bash
-    sudo /etc/init.d/dphys-swapfile stop
-    sudo nano /etc/dphys-swapfile
-    CONF_SWAPSIZE=2048
-    sudo /etc/init.d/dphys-swapfile start
-    ```
-
-
-* Then, install the dependencies for Loki except `libunwind` and `libboost-all-dev`
-
-* Install the latest version of boost (this may first require invoking `apt-get remove --purge libboost*` to remove a previous version if you're not using a clean install):
-
-    ```bash
-    cd
-    wget https://sourceforge.net/projects/boost/files/boost/1.64.0/boost_1_64_0.tar.bz2
-    tar xvfo boost_1_64_0.tar.bz2
-    cd boost_1_64_0
-    ./bootstrap.sh
-    sudo ./b2
-    ```
-
-* Wait ~8 hours
-
-    ```bash    
-    sudo ./bjam cxxflags=-fPIC cflags=-fPIC -a install
-    ```
-
-* Wait ~4 hours
-
-* From here, follow the [general Raspberry Pi instructions](#on-the-raspberry-pi) from the "Clone loki and checkout most recent release version" step.
+As an alternative, pre-built loki debs are available for ARM32 and ARM64 for recent
+Debian/Raspbian/Ubuntu distributions and are often a much better alternative for SBC-class devices.
+If you still want to compile from source, ensure you have enough memory (or swap -- consult your OS
+documentation to learn how to enable or increase swap size) and follow the regular linux build
+instructions above.
 
 #### On Windows:
 
@@ -263,13 +209,13 @@ application.
     To build for 64-bit Windows:
 
     ```bash
-    pacman -S git mingw-w64-x86_64-toolchain make mingw-w64-x86_64-cmake mingw-w64-x86_64-boost mingw-w64-x86_64-openssl mingw-w64-x86_64-zeromq mingw-w64-x86_64-libsodium mingw-w64-x86_64-hidapi mingw-w64-x86_64-sqlite3
+    pacman -S git mingw-w64-x86_64-toolchain make mingw-w64-x86_64-cmake mingw-w64-x86_64-boost mingw-w64-x86_64-openssl mingw-w64-x86_64-zeromq mingw-w64-x86_64-libsodium mingw-w64-x86_64-hidapi mingw-w64-x86_64-sqlite3 mingw-w64-x86_64-unbound
     ```
 
     To build for 32-bit Windows:
 
     ```bash
-    pacman -S git mingw-w64-i686-toolchain make mingw-w64-i686-cmake mingw-w64-i686-boost mingw-w64-i686-openssl mingw-w64-i686-zeromq mingw-w64-i686-libsodium mingw-w64-i686-hidapi mingw-w64-i686-sqlite3
+    pacman -S git mingw-w64-i686-toolchain make mingw-w64-i686-cmake mingw-w64-i686-boost mingw-w64-i686-openssl mingw-w64-i686-zeromq mingw-w64-i686-libsodium mingw-w64-i686-hidapi mingw-w64-i686-sqlite3 mingw-w64-i686-unbound
     ```
 
 * Close and reopen the MSYS MinGW shell via `MSYS2 MinGW 64-bit` shortcut on
@@ -329,82 +275,15 @@ application.
 
 ### On FreeBSD:
 
-The project can be built from scratch by following instructions for Linux above(but use `gmake` instead of `make`). If you are running loki in a jail you need to add the flag: `allow.sysvipc=1` to your jail configuration, otherwise lmdb will throw the error message: `Failed to open lmdb environment: Function not implemented`.
-
-We expect to add Loki into the ports tree in the near future, which will aid in managing installations using ports or packages.
+The project can be built from scratch by following instructions for Linux above(but use `gmake` instead of `make`). 
+If you are running Loki in a jail, you need to add `sysvsem="new"` to your jail configuration, otherwise lmdb will throw the error message: `Failed to open lmdb environment: Function not implemented`.
 
 ### On OpenBSD:
 
-#### OpenBSD < 6.2
+You will need to add a few packages to your system. `pkg_add cmake gmake zeromq cppzmq libiconv boost`.
 
-This has been tested on OpenBSD 5.8.
-
-You will need to add a few packages to your system. `pkg_add db cmake gcc gcc-libs g++ gtest`.
-
-The doxygen and graphviz packages are optional and require the xbase set.
-
-The Boost package has a bug that will prevent librpc.a from building correctly. In order to fix this, you will have to Build boost yourself from scratch. Follow the directions here (under "Building Boost"):
-https://github.com/bitcoin/bitcoin/blob/master/doc/build-openbsd.md
-
-You will have to add the serialization, date_time, and regex modules to Boost when building as they are needed by Loki.
-
-To build: `env CC=egcc CXX=eg++ CPP=ecpp DEVELOPER_LOCAL_TOOLS=1 BOOST_ROOT=/path/to/the/boost/you/built make release-static-64`
-
-#### OpenBSD 6.2 and 6.3
-
-You will need to add a few packages to your system. `pkg_add cmake zeromq libiconv`.
-
-The doxygen and graphviz packages are optional and require the xbase set.
-
-
-Build the Boost library using clang. This guide is derived from: https://github.com/bitcoin/bitcoin/blob/master/doc/build-openbsd.md
-
-We assume you are compiling with a non-root user and you have `doas` enabled.
-
-Note: do not use the boost package provided by OpenBSD, as we are installing boost to `/usr/local`.
-
-```bash
-# Create boost building directory
-mkdir ~/boost
-cd ~/boost
-
-# Fetch boost source
-ftp -o boost_1_64_0.tar.bz2 https://netcologne.dl.sourceforge.net/project/boost/boost/1.64.0/boost_1_64_0.tar.bz2
-
-# MUST output: (SHA256) boost_1_64_0.tar.bz2: OK
-echo "7bcc5caace97baa948931d712ea5f37038dbb1c5d89b43ad4def4ed7cb683332 boost_1_64_0.tar.bz2" | sha256 -c
-tar xfj boost_1_64_0.tar.bz2
-
-# Fetch and apply boost patches, required for OpenBSD
-ftp -o boost_test_impl_execution_monitor_ipp.patch https://raw.githubusercontent.com/openbsd/ports/bee9e6df517077a7269ff0dfd57995f5c6a10379/devel/boost/patches/patch-boost_test_impl_execution_monitor_ipp
-ftp -o boost_config_platform_bsd_hpp.patch https://raw.githubusercontent.com/openbsd/ports/90658284fb786f5a60dd9d6e8d14500c167bdaa0/devel/boost/patches/patch-boost_config_platform_bsd_hpp
-
-# MUST output: (SHA256) boost_config_platform_bsd_hpp.patch: OK
-echo "1f5e59d1154f16ee1e0cc169395f30d5e7d22a5bd9f86358f738b0ccaea5e51d boost_config_platform_bsd_hpp.patch" | sha256 -c
-# MUST output: (SHA256) boost_test_impl_execution_monitor_ipp.patch: OK
-echo "30cec182a1437d40c3e0bd9a866ab5ddc1400a56185b7e671bb3782634ed0206 boost_test_impl_execution_monitor_ipp.patch" | sha256 -c
-
-cd boost_1_64_0
-patch -p0 < ../boost_test_impl_execution_monitor_ipp.patch
-patch -p0 < ../boost_config_platform_bsd_hpp.patch
-
-# Start building boost
-echo 'using clang : : c++ : <cxxflags>"-fvisibility=hidden -fPIC" <linkflags>"" <archiver>"ar" <striper>"strip"  <ranlib>"ranlib" <rc>"" : ;' > user-config.jam
-./bootstrap.sh --without-icu --with-libraries=chrono,filesystem,program_options,system,thread,test,date_time,regex,serialization,locale --with-toolset=clang
-./b2 toolset=clang cxxflags="-stdlib=libc++" linkflags="-stdlib=libc++" -sICONV_PATH=/usr/local
-doas ./b2 -d0 runtime-link=shared threadapi=pthread threading=multi link=static variant=release --layout=tagged --build-type=complete --user-config=user-config.jam -sNO_BZIP2=1 -sICONV_PATH=/usr/local --prefix=/usr/local install
-```
-
-Build Loki:
-```bash
-env DEVELOPER_LOCAL_TOOLS=1 BOOST_ROOT=/usr/local make release-static
-```
-
-#### OpenBSD >= 6.4
-
-You will need to add a few packages to your system. `pkg_add cmake gmake zeromq libiconv boost`.
-
-The doxygen and graphviz packages are optional and require the xbase set.
+The `doxygen` and `graphviz` packages are optional and require the xbase set.
+Running the test suite also requires `py-requests` package.
 
 Build loki: `env DEVELOPER_LOCAL_TOOLS=1 BOOST_ROOT=/usr/local gmake release-static`
 
@@ -483,11 +362,12 @@ The produced binaries still link libc dynamically. If the binary is compiled on 
 
 ## Installing Loki from a package
 
-**DISCLAIMER: These packages are not part of this repository or maintained by this project's contributors, and as such, do not go through the same review process to ensure their trustworthiness and security.**
+Pre-built packages are available for recent Debian and Ubuntu systems (and are often usable on
+Debian or Ubuntu-derived Linux distributions).  For more details see https://deb.imaginary.stream
 
-Packages are available for
 
-* Docker
+
+You can also build a docker package using:
 
     ```bash
     # Build using all available cores
@@ -628,6 +508,12 @@ gdb /path/to/lokid /path/to/dumpfile`
 
 Print the stack trace with `bt`
 
+ * If a program crashed and cores are managed by systemd, the following can also get a stack trace for that crash:
+
+```bash
+coredumpctl -1 gdb
+```
+
 #### To run Loki within gdb:
 
 Type `gdb /path/to/lokid`
@@ -669,3 +555,20 @@ The output of `mdb_stat -ea <path to blockchain dir>` will indicate inconsistenc
 The output of `mdb_dump -s blocks <path to blockchain dir>` and `mdb_dump -s block_info <path to blockchain dir>` is useful for indicating whether blocks and block_info contain the same keys.
 
 These records are dumped as hex data, where the first line is the key and the second line is the data.
+
+# Known Issues
+
+## Protocols
+
+### Socket-based
+
+Because of the nature of the socket-based protocols that drive Loki, certain protocol weaknesses are somewhat unavoidable at this time. While these weaknesses can theoretically be fully mitigated, the effort required (the means) may not justify the ends. As such, please consider taking the following precautions if you are a Loki node operator:
+
+- Run `lokid` on a "secured" machine. If operational security is not your forte, at a very minimum, have a dedicated a computer running `lokid` and **do not** browse the web, use email clients, or use any other potentially harmful apps on your `lokid` machine. **Do not click links or load URL/MUA content on the same machine**. Doing so may potentially exploit weaknesses in commands which accept "localhost" and "127.0.0.1".
+- If you plan on hosting a public "remote" node, start `lokid` with `--restricted-rpc`. This is a must.
+
+### Blockchain-based
+
+Certain blockchain "features" can be considered "bugs" if misused correctly. Consequently, please consider the following:
+
+- When receiving Loki, be aware that it may be locked for an arbitrary time if the sender elected to, preventing you from spending that Loki until the lock time expires. You may want to hold off acting upon such a transaction until the unlock time lapses. To get a sense of that time, you can consider the remaining blocktime until unlock as seen in the `show_transfers` command.

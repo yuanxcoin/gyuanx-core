@@ -31,9 +31,12 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <vector>
+#include "cryptonote_config.h"
+#include "common/util.h"
 
-#include "crypto/hash.h"
+namespace crypto { struct hash; }
 
 namespace cryptonote
 {
@@ -53,6 +56,28 @@ namespace cryptonote
      */
     bool check_hash(const crypto::hash &hash, difficulty_type difficulty);
 
-    difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds,
-        bool use_old_lwma, bool v12_initial_override);
+    // Add one timestamp and difficulty to the input arrays, trimming down the
+    // array if necessary for usage in next_difficulty_v2.
+    void add_timestamp_and_difficulty(cryptonote::network_type nettype,
+                                      uint64_t chain_height,
+                                      std::vector<uint64_t> &timestamps,
+                                      std::vector<difficulty_type> &difficulties,
+                                      uint64_t timestamp,
+                                      uint64_t cumulative_difficulty);
+
+
+    constexpr difficulty_type PULSE_FIXED_DIFFICULTY = 1'000'000;
+    enum struct difficulty_calc_mode
+    {
+      use_old_lwma,
+      hf12_override,
+      normal,
+    };
+
+    difficulty_calc_mode difficulty_mode(network_type nettype, uint8_t hf_version, uint64_t height);
+
+    difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps,
+                                       std::vector<difficulty_type> cumulative_difficulties,
+                                       size_t target_second,
+                                       difficulty_calc_mode mode);
 }

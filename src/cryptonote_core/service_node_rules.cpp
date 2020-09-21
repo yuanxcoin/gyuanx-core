@@ -1,6 +1,7 @@
 #include "cryptonote_config.h"
 #include "common/loki.h"
 #include "int-util.h"
+#include <limits>
 #include <vector>
 #include <boost/lexical_cast.hpp>
 #include <cfenv>
@@ -15,8 +16,20 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
   if (m_nettype == cryptonote::TESTNET || m_nettype == cryptonote::FAKECHAIN)
       return COIN * 100;
 
+  // For devnet we use the 10% of mainnet requirement at height (650k + H) so that we follow
+  // (proportionally) whatever staking changes happen on mainnet.  (The 650k is because devnet
+  // launched at ~600k mainnet height, so this puts it a little ahead).
+  if (m_nettype == cryptonote::DEVNET)
+      return get_staking_requirement(cryptonote::MAINNET, 600000 + height, hf_version) / 10;
+
+  if (hf_version >= cryptonote::network_version_16_pulse)
+    return 15000'000000000;
+
   if (hf_version >= cryptonote::network_version_13_enforce_checkpoints)
   {
+    // TODO: after HF16 we can remove excess elements here: we need to keep the first one higher
+    // than the HF16 fork height, but can delete everything above that (which probably will mean
+    // removing 688244 and above).
     constexpr int64_t heights[] = {
         385824,
         429024,
@@ -34,22 +47,22 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
     };
 
     constexpr int64_t lsr[] = {
-        20458380815527,
-        19332319724305,
-        18438564443912,
-        17729190407764,
-        17166159862153,
-        16719282221956,
-        16364595203882,
-        16083079931076,
-        15859641110978,
-        15682297601941,
-        15541539965538,
-        15429820555489,
-        15000000000000,
+        20458'380815527,
+        19332'319724305,
+        18438'564443912,
+        17729'190407764,
+        17166'159862153,
+        16719'282221956,
+        16364'595203882,
+        16083'079931076,
+        15859'641110978,
+        15682'297601941,
+        15541'539965538,
+        15429'820555489,
+        15000'000000000,
     };
 
-    assert(height >= heights[0]);
+    assert(static_cast<int64_t>(height) >= heights[0]);
     constexpr uint64_t LAST_HEIGHT      = heights[loki::array_count(heights) - 1];
     constexpr uint64_t LAST_REQUIREMENT = lsr    [loki::array_count(lsr) - 1];
     if (height >= LAST_HEIGHT)
@@ -70,7 +83,7 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
     return static_cast<uint64_t>(result);
   }
 
-  uint64_t hardfork_height = m_nettype == cryptonote::MAINNET ? 101250 : 96210 /* stagenet */;
+  uint64_t hardfork_height = 101250;
   if (height < hardfork_height) height = hardfork_height;
 
   uint64_t height_adjusted = height - hardfork_height;
@@ -142,6 +155,14 @@ static uint64_t get_min_node_contribution_pre_v11(uint64_t staking_requirement, 
   return std::min(staking_requirement - total_reserved, staking_requirement / MAX_NUMBER_OF_CONTRIBUTORS);
 }
 
+uint64_t get_max_node_contribution(uint8_t version, uint64_t staking_requirement, uint64_t total_reserved)
+{
+  if (version >= cryptonote::network_version_16_pulse)
+    return (staking_requirement - total_reserved) * config::MAXIMUM_ACCEPTABLE_STAKE::num
+      / config::MAXIMUM_ACCEPTABLE_STAKE::den;
+  return std::numeric_limits<uint64_t>::max();
+}
+
 uint64_t get_min_node_contribution(uint8_t version, uint64_t staking_requirement, uint64_t total_reserved, size_t num_contributions)
 {
   if (version < cryptonote::network_version_11_infinite_staking)
@@ -162,10 +183,10 @@ uint64_t get_min_node_contribution_in_portions(uint8_t version, uint64_t staking
   return result;
 }
 
-uint64_t get_portions_to_make_amount(uint64_t staking_requirement, uint64_t amount)
+uint64_t get_portions_to_make_amount(uint64_t staking_requirement, uint64_t amount, uint64_t max_portions)
 {
   uint64_t lo, hi, resulthi, resultlo;
-  lo = mul128(amount, STAKING_PORTIONS, &hi);
+  lo = mul128(amount, max_portions, &hi);
   if (lo > UINT64_MAX - (staking_requirement - 1))
     hi++;
   lo += staking_requirement-1;
@@ -183,7 +204,7 @@ static bool get_portions_from_percent(double cur_percent, uint64_t& portions) {
   }
   else
   {
-    portions = (cur_percent / 100.0) * STAKING_PORTIONS;
+    portions = (cur_percent / 100.0) * (double)STAKING_PORTIONS;
   }
 
   return true;

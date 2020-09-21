@@ -29,12 +29,26 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "loki_tests.h"
+#include "common/string_util.h"
+#include "cryptonote_basic/cryptonote_format_utils.h"
+#include "cryptonote_config.h"
+#include "cryptonote_core/loki_name_system.h"
 #include "cryptonote_core/service_node_list.h"
+#include "loki_economy.h"
+#include "common/random.h"
 
 extern "C"
 {
 #include <sodium.h>
 };
+
+static void add_service_nodes(loki_chain_generator &gen, size_t count)
+{
+  std::vector<cryptonote::transaction> registration_txs(count);
+  for (auto i = 0u; i < count; ++i)
+    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
+  gen.create_and_add_next_block(registration_txs);
+}
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "sn_core_tests"
@@ -58,31 +72,13 @@ bool loki_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vector
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-
-  int constexpr NUM_SERVICE_NODES = service_nodes::CHECKPOINT_QUORUM_SIZE;
-  std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
-  for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
-    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
-  gen.create_and_add_next_block(registration_txs);
-
-  // NOTE: Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.
-  int const MAX_TRIES = 16;
-  int tries           = 0;
-  for (; tries < MAX_TRIES; tries++)
-  {
-    gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-    if (quorum && quorum->validators.size()) break;
-  }
-  assert(tries != MAX_TRIES);
-
-  for (size_t i = 0; i < service_nodes::CHECKPOINT_INTERVAL - 1; i++)
-    gen.create_and_add_next_block();
+  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
 
   // NOTE: Create next block on checkpoint boundary and add checkpoiont
+
   loki_chain_generator fork = gen;
-  gen.create_and_add_next_block();
-  fork.create_and_add_next_block();
+  gen.add_blocks_until_next_checkpointable_height();
+  fork.add_blocks_until_next_checkpointable_height();
   fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
 
   // NOTE: Though we receive a checkpoint via votes, the alt block is still in
@@ -90,7 +86,7 @@ bool loki_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vector
   // block that confirms the alt block.
   uint64_t curr_height   = gen.height();
   crypto::hash curr_hash = get_block_hash(gen.top().block);
-  loki_register_callback(events, "check_alt_block_count", [&events, curr_height, curr_hash](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_alt_block_count", [curr_height, curr_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_alt_block_count");
 
@@ -99,17 +95,22 @@ bool loki_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vector
     c.get_blockchain_top(top_height, top_hash);
     CHECK_EQ(top_height, curr_height);
     CHECK_EQ(top_hash, curr_hash);
-    CHECK_EQ(c.get_blockchain_storage().get_alternative_blocks_count(), 1);
+    CHECK_TEST_CONDITION(c.get_blockchain_storage().get_alternative_blocks_count() > 0);
     return true;
   });
 
   // NOTE: We add a new block ontop that causes the alt block code path to run
   // again, and calculate that this alt chain now has 2 blocks on it with
   // now same difficulty but more checkpoints, causing a chain switch at this point.
+  gen.add_blocks_until_next_checkpointable_height();
+  fork.add_blocks_until_next_checkpointable_height();
+  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
+
   crypto::hash expected_top_hash = cryptonote::get_block_hash(fork.top().block);
-  loki_register_callback(events, "check_chain_reorged", [&events, expected_top_hash](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_chain_reorged", [expected_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_chain_reorged");
     CHECK_EQ(c.get_blockchain_storage().get_alternative_blocks_count(), 0);
@@ -137,17 +138,7 @@ bool loki_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtak
     registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
   gen.create_and_add_next_block(registration_txs);
 
-  // NOTE: Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.
-  int const MAX_TRIES = 16;
-  int tries           = 0;
-  for (; tries < MAX_TRIES; tries++)
-  {
-    gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-    if (quorum && quorum->validators.size()) break;
-  }
-  assert(tries != MAX_TRIES);
-
+  gen.add_blocks_until_next_checkpointable_height();
   loki_chain_generator fork_with_more_checkpoints = gen;
   gen.add_n_blocks(60); // Add blocks so that this chain has more PoW
 
@@ -156,7 +147,7 @@ bool loki_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtak
   uint64_t const fork_top_height   = cryptonote::get_block_height(fork_with_more_checkpoints.top().block);
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork_with_more_checkpoints.top().block);
 
-  loki_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash, fork_top_height](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash, fork_top_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -184,18 +175,10 @@ bool loki_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::ge
     registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
   gen.create_and_add_next_block(registration_txs);
 
-  // NOTE: Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.
-  int const MAX_TRIES = 16;
-  int tries           = 0;
-  for (; tries < MAX_TRIES; tries++)
-  {
-    gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-    if (quorum && quorum->validators.size()) break;
-  }
-  assert(tries != MAX_TRIES);
+  gen.add_event_msg("Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.");
+  gen.add_blocks_until_next_checkpointable_height();
 
-  // NOTE: Diverge the two chains in tandem, so they have the same PoW and generate alt service node states, but still remain on the mainchain due to PoW
+  gen.add_event_msg("Diverge the two chains in tandem, so they have the same PoW and generate alt service node states, but still remain on the mainchain due to PoW");
   loki_chain_generator fork = gen;
   for (size_t i = 0; i < service_nodes::CHECKPOINT_INTERVAL; i++)
   {
@@ -203,7 +186,7 @@ bool loki_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::ge
     fork.create_and_add_next_block();
   }
 
-  // NOTE: Fork generate two checkpoints worth of blocks.
+  gen.add_event_msg("Fork generate two checkpoints worth of blocks.");
   uint64_t first_checkpointed_height    = fork.height();
   uint64_t first_checkpointed_height_hf = fork.top().block.major_version;
   crypto::hash first_checkpointed_hash  = cryptonote::get_block_hash(fork.top().block);
@@ -215,13 +198,14 @@ bool loki_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::ge
     fork.create_and_add_next_block();
   }
 
-  // NOTE: Fork generates service node votes, upon sending them over and the
-  // main chain collecting them validly (they should be able to verify
-  // signatures because we store alt quorums) it should generate a checkpoint
-  // belonging to the forked chain- which should cause it to detach back to the
-  // checkpoint height
+  gen.add_event_msg(
+      "Fork generates service node votes, upon sending them over and the main chain collecting them validly (they "
+      "should be able to verify signatures because we store alt quorums) it should generate a checkpoint belonging to "
+      "the forked chain- which should cause it to detach back to the checkpoint height");
 
-  // Then we send the votes for the 2nd newest checkpoint. We don't reorg back until we receive a block confirming this checkpoint.
+  gen.add_event_msg(
+      "Then we send the votes for the 2nd newest checkpoint. We don't reorg back until we receive a block confirming "
+      "this checkpoint.");
   for (size_t i = 0; i < service_nodes::CHECKPOINT_MIN_VOTES; i++)
   {
     auto keys = gen.get_cached_keys(first_quorum->validators[i]);
@@ -229,10 +213,10 @@ bool loki_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::ge
     events.push_back(loki_blockchain_addable<service_nodes::quorum_vote_t>(fork_vote, true/*can_be_added_to_blockchain*/, "A first_checkpoint vote from the forked chain should be accepted since we should be storing alternative service node states and quorums"));
   }
 
-  // Upon adding the last block, we should now switch to our forked chain
+  gen.add_event_msg("Upon adding the last block, we should now switch to our forked chain");
   fork.create_and_add_next_block({});
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
-  loki_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -257,28 +241,17 @@ bool loki_checkpointing_alt_chain_too_old_should_be_dropped::generate(std::vecto
     registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
   gen.create_and_add_next_block(registration_txs);
 
-  // NOTE: Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.
-  int const MAX_TRIES = 16;
-  int tries           = 0;
-  for (; tries < MAX_TRIES; tries++)
-  {
-    gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-    if (quorum && quorum->validators.size()) break;
-  }
-  assert(tries != MAX_TRIES);
-
   loki_chain_generator fork = gen;
-  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
   gen.add_blocks_until_next_checkpointable_height();
   fork.add_blocks_until_next_checkpointable_height();
-
   gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+
   gen.add_blocks_until_next_checkpointable_height();
   fork.add_blocks_until_next_checkpointable_height();
-
   gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
-  gen.create_and_add_next_block();
+
+  gen.add_blocks_until_next_checkpointable_height();
+  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
 
   // NOTE: We now have 3 checkpoints. Extending this alt-chain is no longer
   // possible because this alt-chain starts before the immutable height, it
@@ -297,25 +270,9 @@ bool loki_checkpointing_alt_chain_with_increasing_service_node_checkpoints::gene
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
+  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
 
-  int constexpr NUM_SERVICE_NODES = service_nodes::CHECKPOINT_QUORUM_SIZE;
-  std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
-  for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
-    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
-  gen.create_and_add_next_block(registration_txs);
   gen.add_blocks_until_next_checkpointable_height();
-
-  // NOTE: Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.
-  int const MAX_TRIES = 16;
-  int tries           = 0;
-  for (; tries < MAX_TRIES; tries++)
-  {
-    gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-    if (quorum && quorum->validators.size()) break;
-  }
-  assert(tries != MAX_TRIES);
-  gen.add_n_blocks(service_nodes::CHECKPOINT_INTERVAL - 1);
 
   // Setup the two chains as follows, where C = checkpointed block, B = normal
   // block, the main chain should NOT reorg to the fork chain as they have the
@@ -324,7 +281,6 @@ bool loki_checkpointing_alt_chain_with_increasing_service_node_checkpoints::gene
   // Fork chain   B B B B C
 
   loki_chain_generator fork = gen;
-  gen.create_and_add_next_block();
   gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
 
   gen.add_blocks_until_next_checkpointable_height();
@@ -332,7 +288,7 @@ bool loki_checkpointing_alt_chain_with_increasing_service_node_checkpoints::gene
   fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
 
   crypto::hash const gen_top_hash = cryptonote::get_block_hash(gen.top().block);
-  loki_register_callback(events, "check_still_on_main_chain", [&events, gen_top_hash](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_still_on_main_chain", [gen_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_still_on_main_chain");
     uint64_t top_height;
@@ -353,7 +309,7 @@ bool loki_checkpointing_alt_chain_with_increasing_service_node_checkpoints::gene
   fork.create_and_add_next_block({}, &fork_second_checkpoint);
 
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
-  loki_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -374,28 +330,10 @@ bool loki_checkpointing_service_node_checkpoint_from_votes::generate(std::vector
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-
-  int constexpr NUM_SERVICE_NODES = service_nodes::CHECKPOINT_QUORUM_SIZE;
-  std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
-  for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
-    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
-  gen.create_and_add_next_block(registration_txs);
-
-  // NOTE: Regarding the 2nd condition in this loop, although the height could
-  // be a checkpoint interval, since for checkpoints we offset the height,
-  // namely (height - REORG_SAFETY_BUFFER_BLOCKS_POST_HF12) we may use a height
-  // before the service nodes were even registered.
-  int const MAX_TRIES = 16;
-  int tries           = 0;
-  for (; tries < MAX_TRIES; tries++)
-  {
-    gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-    if (quorum && quorum->validators.size()) break;
-  }
-  assert(tries != MAX_TRIES);
+  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
 
   // NOTE: Generate service node votes
+  gen.add_blocks_until_next_checkpointable_height();
   uint64_t checkpointed_height                                = gen.height();
   crypto::hash checkpointed_hash                              = cryptonote::get_block_hash(gen.top().block);
   std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
@@ -424,7 +362,7 @@ bool loki_checkpointing_service_node_checkpoint_from_votes::generate(std::vector
   for (size_t i = 0; i < service_nodes::CHECKPOINT_MIN_VOTES - 1; i++)
     gen.events_.push_back(loki_blockchain_addable<service_nodes::quorum_vote_t>(checkpoint_votes[i]));
 
-  loki_register_callback(events, "check_service_node_checkpoint_rejected_insufficient_votes", [&events, checkpointed_height](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_service_node_checkpoint_rejected_insufficient_votes", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_rejected_insufficient_votes");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
@@ -435,7 +373,7 @@ bool loki_checkpointing_service_node_checkpoint_from_votes::generate(std::vector
 
   // NOTE: Add last vote and check checkpoint has been generated
   gen.events_.push_back(checkpoint_votes.back());
-  loki_register_callback(events, "check_service_node_checkpoint_accepted", [&events, checkpointed_height](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_service_node_checkpoint_accepted", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_accepted");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
@@ -456,12 +394,7 @@ bool loki_checkpointing_service_node_checkpoints_check_reorg_windows::generate(s
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-
-  int constexpr NUM_SERVICE_NODES = service_nodes::CHECKPOINT_QUORUM_SIZE;
-  std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
-  for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
-    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
-  gen.create_and_add_next_block(registration_txs);
+  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
 
   // NOTE: Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.
   int const MAX_TRIES = 16;
@@ -474,31 +407,29 @@ bool loki_checkpointing_service_node_checkpoints_check_reorg_windows::generate(s
   }
   assert(tries != MAX_TRIES);
 
-  // NOTE: Mine up until 1 block before the next checkpointable height, fork the chain.
+  gen.add_event_msg("Mine up until 1 block before the next checkpointable height, fork the chain.");
   gen.add_n_blocks(service_nodes::CHECKPOINT_INTERVAL - 1);
   loki_chain_generator fork_1_block_before_checkpoint = gen;
 
-  // Mine one block and fork the chain before we add the checkpoint.
+  gen.add_event_msg("Mine one block and fork the chain before we add the checkpoint.");
   gen.create_and_add_next_block();
-  loki_chain_generator fork_1_block_after_checkpoint = gen;
   gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  loki_chain_generator fork_1_block_after_checkpoint = gen;
 
-  // Add the next service node checkpoints on the main chain to lock in the chain preceeding the first checkpoint
+  gen.add_event_msg("Add the next service node checkpoints on the main chain to lock in the chain preceeding the first checkpoint");
   gen.add_n_blocks(service_nodes::CHECKPOINT_INTERVAL - 1);
   loki_chain_generator fork_1_block_before_second_checkpoint = gen;
 
   gen.create_and_add_next_block();
   gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
 
-  // Try add a block before first checkpoint, should fail because we are already 2 checkpoints deep.
+  gen.add_event_msg("Try add a block before first checkpoint, should fail because we are already 2 checkpoints deep.");
   fork_1_block_before_checkpoint.create_and_add_next_block({}, nullptr /*checkpoint*/, false /*can_be_added_to_blockchain*/, "Can NOT add a block if the height would equal the immutable height");
 
-  // Try add a block after the first checkpoint. This should succeed because we can reorg the chain within the 2 checkpoint window
+  gen.add_event_msg("Try add a block after the first checkpoint. This should succeed because we can reorg the chain within the 2 checkpoint window");
   fork_1_block_after_checkpoint.create_and_add_next_block({});
 
-  // Try add a block on the second checkpoint. This should also succeed because we can reorg the chain within the 2
-  // checkpoint window, and although the height is checkpointed and should fail checkpoints::check, it should still be
-  // allowed as an alt block
+  gen.add_event_msg("Try add a block on the second checkpoint. This should also succeed because we can reorg the chain within the 2 checkpoint window, and although the height is checkpointed and should fail checkpoints::check, it should still be allowed as an alt block");
   fork_1_block_before_second_checkpoint.create_and_add_next_block({});
   return true;
 }
@@ -524,7 +455,7 @@ bool loki_core_block_reward_unpenalized::generate(std::vector<test_event_entry>&
   uint64_t unpenalized_block_reward     = cryptonote::block_reward_unpenalized_formula_v8(gen.height());
   uint64_t expected_service_node_reward = cryptonote::service_node_reward_formula(unpenalized_block_reward, newest_hf);
 
-  loki_register_callback(events, "check_block_rewards", [&events, unpenalized_block_reward, expected_service_node_reward](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_block_rewards", [unpenalized_block_reward, expected_service_node_reward](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_block_rewards");
     uint64_t top_height;
@@ -586,15 +517,22 @@ bool loki_core_fee_burning::generate(std::vector<test_event_entry>& events)
     ctx.fee = send_fee_burn[0][1] + send_fee_burn[1][1] - send_fee_burn[0][2] - send_fee_burn[1][2];
     block_reward_parts reward_parts;
     cryptonote::get_loki_block_reward(0, 0, 1 /*already generated, needs to be >0 to avoid premine*/, newest_hf, reward_parts, ctx);
-    good_miner_reward = reward_parts.miner_reward();
+    good_miner_reward = reward_parts.base_miner_fee + reward_parts.base_miner;
   }
 
   txs.clear();
   // Try to add another block with a fee that claims into the amount of the fee that must be burned
   txs.push_back(add_burning_tx(send_fee_burn[2]));
 
-  auto bad_fee_block = gen.create_next_block(txs, nullptr, send_fee_burn[2][1] - send_fee_burn[2][2] + 2);
-  gen.add_block(bad_fee_block, false, "Invalid miner reward");
+  {
+    loki_create_block_params block_params = gen.next_block_params();
+    block_params.total_fee = send_fee_burn[2][1] - send_fee_burn[2][2] + 2;
+
+    loki_blockchain_entry next = {};
+    bool created = gen.create_block(next, block_params, txs);
+    assert(created);
+    gen.add_block(next, false, "Invalid miner reward");
+  }
 
   loki_register_callback(events, "check_fee_burned", [good_hash, good_miner_reward](cryptonote::core &c, size_t ev_index)
   {
@@ -620,7 +558,6 @@ bool loki_core_fee_burning::generate(std::vector<test_event_entry>& events)
 bool loki_core_governance_batched_reward::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(cryptonote::network_version_10_bulletproofs);
-  const cryptonote::config_t &network = cryptonote::get_config(cryptonote::FAKECHAIN, cryptonote::network_version_count - 1);
 
   uint64_t hf10_height = 0;
   for (std::pair<uint8_t, uint64_t> hf_pair : hard_forks)
@@ -637,6 +574,7 @@ bool loki_core_governance_batched_reward::generate(std::vector<test_event_entry>
   loki_chain_generator batched_governance_generator(events, hard_forks);
   {
     batched_governance_generator.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
+    constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
     uint64_t blocks_to_gen = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS - batched_governance_generator.height();
     batched_governance_generator.add_n_blocks(blocks_to_gen);
   }
@@ -668,7 +606,7 @@ bool loki_core_governance_batched_reward::generate(std::vector<test_event_entry>
     }
   }
 
-  loki_register_callback(events, "check_batched_governance_amount_matches", [&events, hf10_height, expected_total_governance_paid](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_batched_governance_amount_matches", [hf10_height, expected_total_governance_paid](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_batched_governance_amount_matches");
 
@@ -694,35 +632,35 @@ bool loki_core_governance_batched_reward::generate(std::vector<test_event_entry>
 
 bool loki_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& events)
 {
-  auto& network = cryptonote::get_config(cryptonote::FAKECHAIN, cryptonote::network_version_16);
+  constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(cryptonote::network_version_15_lns);
-  hard_forks.emplace_back(cryptonote::network_version_16, hard_forks.back().second + network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS + 10);
+  hard_forks.emplace_back(cryptonote::network_version_16_pulse, hard_forks.back().second + network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS + 10);
+  hard_forks.emplace_back(cryptonote::network_version_17, hard_forks.back().second + network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS);
   loki_chain_generator batched_governance_generator(events, hard_forks);
-  batched_governance_generator.add_blocks_until_version(cryptonote::network_version_16);
+  batched_governance_generator.add_blocks_until_version(cryptonote::network_version_17);
   batched_governance_generator.add_n_blocks(network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS);
 
-  uint64_t hf15_height = 0, hf16_height = 0;
+  uint64_t hf15_height = 0, hf16_height = 0, hf17_height = 0;
   for (const auto &hf : hard_forks)
   {
     if (hf.first == cryptonote::network_version_15_lns)
       hf15_height = hf.second;
-    else if (hf.first == cryptonote::network_version_16)
-    {
+    else if (hf.first == cryptonote::network_version_16_pulse)
       hf16_height = hf.second;
-      break;
-    }
+    else
+      hf17_height = hf.second;
   }
 
-  loki_register_callback(events, "check_lrc6_block_rewards", [hf15_height, hf16_height, interval=network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_lrc6_7_block_rewards", [hf15_height, hf16_height, hf17_height, interval=network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS](cryptonote::core &c, size_t ev_index)
   {
-    DEFINE_TESTS_ERROR_CONTEXT("check_lrc6_block_rewards");
+    DEFINE_TESTS_ERROR_CONTEXT("check_lrc6_7_block_rewards");
 
     uint64_t height = c.get_current_blockchain_height();
     std::vector<cryptonote::block> blockchain;
     if (!c.get_blocks((uint64_t)0, (size_t)height, blockchain))
       return false;
 
-    int hf15_gov = 0, hf16_gov = 0;
+    int hf15_gov = 0, hf16_gov = 0, hf17_gov = 0;
     for (size_t block_height = hf15_height; block_height < hf16_height; ++block_height)
     {
       const cryptonote::block &block = blockchain[block_height];
@@ -737,23 +675,38 @@ bool loki_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& event
       else
         CHECK_EQ(block.miner_tx.vout.size(), 2);
     }
-    for (size_t block_height = hf16_height; block_height < height; ++block_height)
+
+    for (size_t block_height = hf16_height; block_height < hf17_height; ++block_height)
     {
       const cryptonote::block &block = blockchain[block_height];
-      // TODO: this 1 sat miner fee is just a placeholder until we address this properly in HF16.
-      CHECK_EQ(block.miner_tx.vout.at(0).amount, 1);
-      CHECK_EQ(block.miner_tx.vout.at(1).amount, SN_REWARD_HF16);
+      CHECK_EQ(block.miner_tx.vout.at(0).amount, SN_REWARD_HF15);
       if (cryptonote::block_has_governance_output(cryptonote::FAKECHAIN, block))
       {
         hf16_gov++;
-        CHECK_EQ(block.miner_tx.vout.at(2).amount, FOUNDATION_REWARD_HF16 * interval);
-        CHECK_EQ(block.miner_tx.vout.size(), 3);
+        CHECK_EQ(block.miner_tx.vout.at(1).amount, (FOUNDATION_REWARD_HF15 + BLOCKSWAP_LIQUIDITY_HF16) * interval);
+        CHECK_EQ(block.miner_tx.vout.size(), 2);
       }
       else
-        CHECK_EQ(block.miner_tx.vout.size(), 2);
+        CHECK_EQ(block.miner_tx.vout.size(), 1);
     }
+
+    for (size_t block_height = hf17_height; block_height < height; ++block_height)
+    {
+      const cryptonote::block &block = blockchain[block_height];
+      CHECK_EQ(block.miner_tx.vout.at(0).amount, SN_REWARD_HF15);
+      if (cryptonote::block_has_governance_output(cryptonote::FAKECHAIN, block))
+      {
+        hf17_gov++;
+        CHECK_EQ(block.miner_tx.vout.at(1).amount, FOUNDATION_REWARD_HF17 * interval);
+        CHECK_EQ(block.miner_tx.vout.size(), 2);
+      }
+      else
+        CHECK_EQ(block.miner_tx.vout.size(), 1);
+    }
+
     CHECK_EQ(hf15_gov, 1);
     CHECK_EQ(hf16_gov, 1);
+    CHECK_EQ(hf17_gov, 1);
 
     return true;
   });
@@ -771,15 +724,7 @@ bool loki_core_test_deregister_preferred::generate(std::vector<test_event_entry>
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_n_blocks(60); /// give miner some outputs to spend and unlock them
   gen.add_mined_money_unlock_blocks();
-
-  std::vector<cryptonote::transaction> reg_txs; /// register 12 random service nodes
-  for (auto i = 0; i < 12; ++i)
-  {
-    const auto tx = gen.create_and_add_registration_tx(miner);
-    reg_txs.push_back(tx);
-  }
-
-  gen.create_and_add_next_block(reg_txs);
+  add_service_nodes(gen, 12);
 
   /// generate transactions to fill up txpool entirely
   for (auto i = 0u; i < 45; ++i) {
@@ -802,13 +747,13 @@ bool loki_core_test_deregister_preferred::generate(std::vector<test_event_entry>
       uint64_t height;
       uint64_t expected_reward;
       cryptonote::blobdata extra_nonce;
-      c.get_block_template(full_blk, miner.get_keys().m_account_address, diffic, height, expected_reward, extra_nonce);
+      c.create_next_miner_block_template(full_blk, miner.get_keys().m_account_address, diffic, height, expected_reward, extra_nonce);
     }
 
     map_hash2tx_t mtx;
     {
       std::vector<cryptonote::block> chain;
-      CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(boost::get<cryptonote::block>(events[0]))));
+      CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(std::get<cryptonote::block>(events[0]))));
     }
 
     const auto deregister_count =
@@ -835,17 +780,7 @@ bool loki_core_test_deregister_safety_buffer::generate(std::vector<test_event_en
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_n_blocks(40); /// give miner some outputs to spend and unlock them
   gen.add_mined_money_unlock_blocks();
-
-  std::vector<cryptonote::keypair> used_sn_keys; /// save generated keys here
-  std::vector<cryptonote::transaction> reg_txs; /// register 21 random service nodes
-
-  constexpr auto SERVICE_NODES_NEEDED = service_nodes::STATE_CHANGE_QUORUM_SIZE * 2 + 1;
-  for (auto i = 0u; i < SERVICE_NODES_NEEDED; ++i)
-  {
-    const auto tx = gen.create_and_add_registration_tx(miner);
-    reg_txs.push_back(tx);
-  }
-  gen.create_and_add_next_block({reg_txs});
+  add_service_nodes(gen, service_nodes::STATE_CHANGE_QUORUM_SIZE * 2 + 1);
 
   const auto height_a                      = gen.height();
   std::vector<crypto::public_key> quorum_a = gen.quorum(height_a).obligations->workers;
@@ -894,14 +829,7 @@ bool loki_core_test_deregister_too_old::generate(std::vector<test_event_entry>& 
   /// generate some outputs and unlock them
   gen.add_n_blocks(20);
   gen.add_mined_money_unlock_blocks();
- 
-  std::vector<cryptonote::transaction> reg_txs; /// register 11 service nodes (10 voters and 1 to test)
-  for (auto i = 0; i < 11; ++i)
-  {
-    const auto tx = gen.create_and_add_registration_tx(gen.first_miner());
-    reg_txs.push_back(tx);
-  }
-  gen.create_and_add_next_block(reg_txs);
+  add_service_nodes(gen, 11);
 
   const auto pk       = gen.top_quorum().obligations->workers[0];
   const auto dereg_tx = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk);
@@ -950,56 +878,50 @@ bool loki_core_test_deregister_on_split::generate(std::vector<test_event_entry> 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
  
-  std::vector<cryptonote::transaction> reg_txs;
-  for (auto i = 0; i < 12; ++i) /// register 12 random service nodes
-  {
-    const auto tx = gen.create_and_add_registration_tx(gen.first_miner());
-    reg_txs.push_back(tx);
-  }
-
-  gen.create_and_add_next_block(reg_txs);
+  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE + 1);
   gen.create_and_add_next_block(); // Can't change service node state on the same height it was registered in
   auto fork = gen;
 
-  /// public key of the node to deregister (valid at the height of the pivot block)
+  gen.add_event_msg("public key of the node to deregister (valid at the height of the pivot block)");
   const auto pk           = gen.top_quorum().obligations->workers[0];
   const auto split_height = gen.height();
 
-  /// create deregistration A
+  gen.add_event_msg("create deregistration A");
   std::vector<uint64_t> const quorum_indexes = {1, 2, 3, 4, 5, 6, 7};
   const auto dereg_a                         = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk, split_height, quorum_indexes);
 
-  /// create deregistration on alt chain (B)
+  gen.add_event_msg("create deregistration on alt chain (B)");
   std::vector<uint64_t> const fork_quorum_indexes = {1, 3, 4, 5, 6, 7, 8};
   const auto dereg_b            = fork.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk, split_height, fork_quorum_indexes, 0 /*fee*/, true /*kept_by_block*/);
   crypto::hash expected_tx_hash = cryptonote::get_transaction_hash(dereg_b);
   size_t dereg_index            = gen.event_index();
 
-  gen.create_and_add_next_block({dereg_a});    /// continue main chain with deregister A
-  fork.create_and_add_next_block({dereg_b});   /// continue alt chain with deregister B
-  fork.create_and_add_next_block();            /// one more block on alt chain to switch
+  gen.add_event_msg("continue main chain with deregister A");
+  gen.create_and_add_next_block({dereg_a});
 
-  loki_register_callback(events, "test_on_split", [&events, expected_tx_hash](cryptonote::core &c, size_t ev_index)
+  fork.add_event_msg("continue alt chain with deregister B");
+  loki_blockchain_entry entry = fork.create_and_add_next_block({dereg_b});
+  crypto::hash const expected_block_hash = cryptonote::get_block_hash(entry.block);
+
+  fork.add_event_msg("add 2 consecutive check points to switch over");
+  fork.add_blocks_until_next_checkpointable_height();
+  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+
+  fork.add_blocks_until_next_checkpointable_height();
+  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+
+  loki_register_callback(events, "test_on_split", [expected_tx_hash, expected_block_hash](cryptonote::core &c, size_t ev_index)
   {
     /// Check that the deregister transaction is the one from the alternative branch
     DEFINE_TESTS_ERROR_CONTEXT("test_on_split");
-    std::vector<cryptonote::block> blocks; /// find a deregister transaction in the blockchain
-    bool r = c.get_blocks(0, 1000, blocks);
-    CHECK_TEST_CONDITION(r);
 
-    map_hash2tx_t mtx;
-    std::vector<cryptonote::block> chain;
-    r = find_block_chain(events, chain, mtx, cryptonote::get_block_hash(blocks.back()));
-    CHECK_TEST_CONDITION(r);
-
-    /// get the second last block; it contains the deregister
-    const auto blk = blocks[blocks.size() - 2];
+    /// get the block with the deregister
+    bool orphan = false;
+    cryptonote::block blk;
+    CHECK_TEST_CONDITION(c.get_block_by_hash(expected_block_hash, blk, &orphan));
 
     /// find the deregister tx:
-    const auto found_tx_hash = std::find_if(blk.tx_hashes.begin(), blk.tx_hashes.end(), [&mtx](const crypto::hash& hash) {
-      return mtx.at(hash)->type == cryptonote::txtype::state_change;
-    });
-
+    const auto found_tx_hash = std::find(blk.tx_hashes.begin(), blk.tx_hashes.end(), expected_tx_hash);
     CHECK_TEST_CONDITION(found_tx_hash != blk.tx_hashes.end());
     CHECK_EQ(*found_tx_hash, expected_tx_hash); /// check that it is the expected one
     return true;
@@ -1016,14 +938,7 @@ bool loki_core_test_state_change_ip_penalty_disallow_dupes::generate(std::vector
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
 
-  std::vector<cryptonote::transaction> reg_txs;
-  for (auto i = 0u; i < service_nodes::STATE_CHANGE_QUORUM_SIZE + 1; ++i)
-  {
-    const auto tx = gen.create_and_add_registration_tx(gen.first_miner());
-    reg_txs.push_back(tx);
-  }
-
-  gen.create_and_add_next_block(reg_txs);
+  add_service_nodes(gen, service_nodes::STATE_CHANGE_QUORUM_SIZE + 1);
   gen.create_and_add_next_block(); // Can't change service node state on the same height it was registered in
 
   const auto pub_key                         = gen.top_quorum().obligations->workers[0];
@@ -1049,35 +964,29 @@ bool loki_core_test_state_change_ip_penalty_disallow_dupes::generate(std::vector
   return true;
 }
 
-static lns::mapping_value helper_encrypt_lns_value(std::string const &name, lns::mapping_value const &value)
-{
-  lns::mapping_value result;
-  bool encrypted = lns::encrypt_mapping_value(name, value, result);
-  assert(encrypted);
-  return result;
-}
-
 static bool verify_lns_mapping_record(char const *perr_context,
                                       lns::mapping_record const &record,
                                       lns::mapping_type type,
                                       std::string const &name,
                                       lns::mapping_value const &value,
-                                      uint64_t register_height,
                                       uint64_t update_height,
+                                      std::optional<uint64_t> expiration_height,
                                       crypto::hash const &txid,
-                                      crypto::hash const &prev_txid,
                                       lns::generic_owner const &owner,
                                       lns::generic_owner const &backup_owner)
 {
-  lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, value);
   CHECK_EQ(record.loaded,          true);
   CHECK_EQ(record.type,            type);
-  CHECK_EQ(record.name_hash,       lns::name_to_base64_hash(name));
-  CHECK_EQ(record.encrypted_value, encrypted_value);
-  CHECK_EQ(record.register_height, register_height);
+  auto lcname = tools::lowercase_ascii_string(name);
+  CHECK_EQ(record.name_hash,       lns::name_to_base64_hash(lcname));
+  lns::mapping_value decrypted{record.encrypted_value};
+  CHECK_EQ(decrypted.decrypt(lcname, type), true);
+  CHECK_EQ(decrypted, value);
   CHECK_EQ(record.update_height,   update_height);
+  CHECK_EQ(record.expiration_height.has_value(), expiration_height.has_value());
+  if (expiration_height)
+    CHECK_EQ(*record.expiration_height, *expiration_height);
   CHECK_EQ(record.txid,            txid);
-  CHECK_EQ(record.prev_txid,       prev_txid);
   CHECK_TEST_CONDITION_MSG(record.owner == owner, record.owner.to_string(cryptonote::FAKECHAIN) << " == "<< owner.to_string(cryptonote::FAKECHAIN));
   CHECK_TEST_CONDITION_MSG(record.backup_owner == backup_owner, record.backup_owner.to_string(cryptonote::FAKECHAIN) << " == "<< backup_owner.to_string(cryptonote::FAKECHAIN));
   return true;
@@ -1097,7 +1006,7 @@ bool loki_name_system_disallow_reserved_type::generate(std::vector<test_event_en
 
   auto unusable_type = static_cast<lns::mapping_type>(-1);
   assert(!lns::mapping_type_allowed(gen.hardfork(), unusable_type));
-  cryptonote::transaction tx1 = gen.create_loki_name_system_tx(miner, unusable_type, "FriendlyName", mapping_value);
+  cryptonote::transaction tx1 = gen.create_loki_name_system_tx(miner, gen.hardfork(), unusable_type, "FriendlyName", mapping_value);
   gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can't create a LNS TX that requests a LNS type that is unused but reserved by the protocol");
   return true;
 }
@@ -1128,6 +1037,13 @@ static lns_keys_t make_lns_keys(cryptonote::account_base const &src)
   return result;
 }
 
+// Lokinet FAKECHAIN LNS expiry blocks
+uint64_t lokinet_expiry(lns::mapping_type type) {
+  auto exp = lns::expiry_blocks(cryptonote::FAKECHAIN, type);
+  if (!exp) throw std::logic_error{"test suite bug: lokinet_expiry called with non-lokinet mapping type"};
+  return *exp;
+}
+
 bool loki_name_system_expiration::generate(std::vector<test_event_entry> &events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
@@ -1138,19 +1054,19 @@ bool loki_name_system_expiration::generate(std::vector<test_event_entry> &events
   gen.add_mined_money_unlock_blocks();
 
   lns_keys_t miner_key = make_lns_keys(miner);
-  for (auto mapping_type = lns::mapping_type::lokinet_1year;
+  for (auto mapping_type = lns::mapping_type::lokinet;
        mapping_type     <= lns::mapping_type::lokinet_10years;
        mapping_type      = static_cast<lns::mapping_type>(static_cast<uint16_t>(mapping_type) + 1))
   {
     std::string const name     = "mydomain.loki";
     if (lns::mapping_type_allowed(gen.hardfork(), mapping_type))
     {
-      cryptonote::transaction tx = gen.create_and_add_loki_name_system_tx(miner, mapping_type, name, miner_key.lokinet_value);
+      cryptonote::transaction tx = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), mapping_type, name, miner_key.lokinet_value);
       gen.create_and_add_next_block({tx});
       crypto::hash tx_hash = cryptonote::get_transaction_hash(tx);
 
       uint64_t height_of_lns_entry   = gen.height();
-      uint64_t expected_expiry_block = height_of_lns_entry + lns::expiry_blocks(cryptonote::FAKECHAIN, mapping_type, nullptr);
+      uint64_t expected_expiry_block = height_of_lns_entry + lokinet_expiry(mapping_type);
       std::string name_hash = lns::name_to_base64_hash(name);
 
       loki_register_callback(events, "check_lns_entries", [=](cryptonote::core &c, size_t ev_index)
@@ -1165,7 +1081,7 @@ bool loki_name_system_expiration::generate(std::vector<test_event_entry> &events
                                      << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
         lns::mapping_record record = lns_db.get_mapping(mapping_type, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry, tx_hash, crypto::null_hash, miner_key.owner, {} /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry + lokinet_expiry(mapping_type), tx_hash, miner_key.owner, {} /*backup_owner*/));
         return true;
       });
 
@@ -1186,14 +1102,14 @@ bool loki_name_system_expiration::generate(std::vector<test_event_entry> &events
                                      << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
         lns::mapping_record record = lns_db.get_mapping(mapping_type, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry, tx_hash, crypto::null_hash, miner_key.owner, {} /*backup_owner*/));
-        CHECK_EQ(record.active(cryptonote::FAKECHAIN, blockchain_height), false);
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry + lokinet_expiry(mapping_type), tx_hash, miner_key.owner, {} /*backup_owner*/));
+        CHECK_EQ(record.active(blockchain_height), false);
         return true;
       });
     }
     else
     {
-      cryptonote::transaction tx = gen.create_loki_name_system_tx(miner, mapping_type, name, miner_key.lokinet_value);
+      cryptonote::transaction tx = gen.create_loki_name_system_tx(miner, gen.hardfork(), mapping_type, name, miner_key.lokinet_value);
       gen.add_tx(tx, false /*can_be_added_to_blockchain*/, "Can not add LNS TX that uses disallowed type");
     }
   }
@@ -1213,18 +1129,25 @@ bool loki_name_system_get_mappings_by_owner::generate(std::vector<test_event_ent
   {
     gen.add_mined_money_unlock_blocks();
 
-    cryptonote::transaction transfer = gen.create_and_add_tx(miner, bob.get_keys().m_account_address, MK_COINS(400));
-    gen.create_and_add_next_block({transfer});
-    gen.add_mined_money_unlock_blocks();
+    // Chop this transfer into multiple txes because we need enough inputs to send multiple txes at once below.
+    std::vector<cryptonote::transaction> txs;
+    txs.reserve(6);
+    for (int i = 0; i < 6; i++)
+      txs.push_back(gen.create_and_add_tx(miner, bob.get_keys().m_account_address, MK_COINS(100)));
+    gen.create_and_add_next_block(std::move(txs));
+    gen.add_transfer_unlock_blocks();
   }
 
   lns_keys_t bob_key = make_lns_keys(bob);
-  std::string session_name1       = "MyName";
-  std::string session_name2       = "AnotherName";
+  // NB: we sort the results later by (height, name hash), so our test values need to be in sorted order:
+  std::string session_name1       = "AnotherName";
+  std::string session_name_hash1  = "Dw4l4Qtc8plvIoVDpE7LjigVVEkjfl6CGiLIZJ0A+pE=";
+  std::string session_name2       = "MyName";
+  std::string session_name_hash2  = "pwlWkoJq8LXb6Y2ILlCXNvfyBQBt71XWz3c7rkt6myM=";
   crypto::hash session_name1_txid = {}, session_name2_txid = {};
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, lns::mapping_type::session, session_name1, bob_key.session_value);
-    cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, session_name2, bob_key.session_value, &bob_key.owner);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::session, session_name1, bob_key.session_value);
+    cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name2, bob_key.session_value, &bob_key.owner);
     gen.create_and_add_next_block({tx1, tx2});
     session_name1_txid = get_transaction_hash(tx1);
     session_name2_txid = get_transaction_hash(tx2);
@@ -1232,13 +1155,15 @@ bool loki_name_system_get_mappings_by_owner::generate(std::vector<test_event_ent
   uint64_t session_height = gen.height();
 
   // NOTE: Register some Lokinet names
-  std::string lokinet_name1 = "lorem.loki";
-  std::string lokinet_name2 = "ipsum.loki";
+  std::string lokinet_name1 = "Lorem.loki";
+  std::string lokinet_name_hash1 = "GsM6OUk5E5D9keBIK2PlA4kjwiPe+/UB0nUurjKvFJQ=";
+  std::string lokinet_name2 = "ipSum.loki";
+  std::string lokinet_name_hash2 = "p8IYR3ZWr0KSU4ZPazYxTkwvXsm0dzq5dmour7VmIDY=";
   crypto::hash lokinet_name1_txid = {}, lokinet_name2_txid = {};
-  if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
+  if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet))
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, lns::mapping_type::lokinet_1year, lokinet_name1, bob_key.lokinet_value);
-    cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::lokinet_1year, lokinet_name2, bob_key.lokinet_value, &bob_key.owner);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::lokinet, lokinet_name1, bob_key.lokinet_value);
+    cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::lokinet_5years, lokinet_name2, bob_key.lokinet_value, &bob_key.owner);
     gen.create_and_add_next_block({tx1, tx2});
     lokinet_name1_txid = get_transaction_hash(tx1);
     lokinet_name2_txid = get_transaction_hash(tx2);
@@ -1247,13 +1172,15 @@ bool loki_name_system_get_mappings_by_owner::generate(std::vector<test_event_ent
 
   // NOTE: Register some wallet names
   std::string wallet_name1 = "Wallet1";
+  std::string wallet_name_hash1 = "2dRJORvkHcT6Ns8mXprzgiZ26v7OT7FhiMo+DMB3Myw=";
   std::string wallet_name2 = "Wallet2";
+  std::string wallet_name_hash2 = "634Je6csR8w9a8vj/DEOIb1E1qk/ZmZF9DXSlh/p0zI=";
   crypto::hash wallet_name1_txid = {}, wallet_name2_txid = {};
   if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::wallet))
   {
     std::string bob_addr = cryptonote::get_account_address_as_str(cryptonote::FAKECHAIN, false, bob.get_keys().m_account_address);
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, lns::mapping_type::wallet, wallet_name1, bob_key.wallet_value);
-    cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::wallet, wallet_name2, bob_key.wallet_value, &bob_key.owner);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::wallet, wallet_name1, bob_key.wallet_value);
+    cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::wallet, wallet_name2, bob_key.wallet_value, &bob_key.owner);
     gen.create_and_add_next_block({tx1, tx2});
     wallet_name1_txid = get_transaction_hash(tx1);
     wallet_name2_txid = get_transaction_hash(tx2);
@@ -1269,25 +1196,36 @@ bool loki_name_system_get_mappings_by_owner::generate(std::vector<test_event_ent
     size_t expected_size = 0;
     if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::session)) expected_size += 2;
     if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::wallet)) expected_size += 2;
-    if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet_1year)) expected_size += 2;
+    if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet)) expected_size += 2;
     CHECK_EQ(records.size(), expected_size);
+
+    std::sort(records.begin(), records.end(), [](const auto& a, const auto& b) {
+      return std::make_tuple(a.update_height, a.name_hash)
+           < std::make_tuple(b.update_height, b.name_hash);
+    });
 
     if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::session))
     {
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, bob_key.session_value, session_height, session_height, session_name1_txid, crypto::null_hash, bob_key.owner, {} /*backup_owner*/));
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[1], lns::mapping_type::session, session_name2, bob_key.session_value, session_height, session_height, session_name2_txid, crypto::null_hash, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[0].name_hash, session_name_hash1);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, bob_key.session_value, session_height, std::nullopt, session_name1_txid, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[1].name_hash, session_name_hash2);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[1], lns::mapping_type::session, session_name2, bob_key.session_value, session_height, std::nullopt, session_name2_txid, bob_key.owner, {} /*backup_owner*/));
     }
 
-    if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet_1year))
+    if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet))
     {
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[2], lns::mapping_type::lokinet_1year, lokinet_name1, bob_key.lokinet_value, lokinet_height, lokinet_height, lokinet_name1_txid, crypto::null_hash, bob_key.owner, {} /*backup_owner*/));
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[3], lns::mapping_type::lokinet_1year, lokinet_name2, bob_key.lokinet_value, lokinet_height, lokinet_height, lokinet_name2_txid, crypto::null_hash, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[2].name_hash, lokinet_name_hash1);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[2], lns::mapping_type::lokinet, lokinet_name1, bob_key.lokinet_value, lokinet_height, lokinet_height + lokinet_expiry(lns::mapping_type::lokinet), lokinet_name1_txid, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[3].name_hash, lokinet_name_hash2);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[3], lns::mapping_type::lokinet, lokinet_name2, bob_key.lokinet_value, lokinet_height, lokinet_height + lokinet_expiry(lns::mapping_type::lokinet_5years), lokinet_name2_txid, bob_key.owner, {} /*backup_owner*/));
     }
 
     if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::wallet))
     {
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[4], lns::mapping_type::wallet, wallet_name1, bob_key.wallet_value, wallet_height, wallet_height, wallet_name1_txid, crypto::null_hash, bob_key.owner, {} /*backup_owner*/));
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[5], lns::mapping_type::wallet, wallet_name2, bob_key.wallet_value, wallet_height, wallet_height, wallet_name2_txid, crypto::null_hash, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[4].name_hash, wallet_name_hash1);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[4], lns::mapping_type::wallet, wallet_name1, bob_key.wallet_value, wallet_height, std::nullopt, wallet_name1_txid, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[5].name_hash, wallet_name_hash2);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[5], lns::mapping_type::wallet, wallet_name2, bob_key.wallet_value, wallet_height, std::nullopt, wallet_name2_txid, bob_key.owner, {} /*backup_owner*/));
     }
     return true;
   });
@@ -1309,7 +1247,7 @@ bool loki_name_system_get_mappings_by_owners::generate(std::vector<test_event_en
     gen.add_mined_money_unlock_blocks();
     cryptonote::transaction transfer = gen.create_and_add_tx(miner, bob.get_keys().m_account_address, MK_COINS(400));
     gen.create_and_add_next_block({transfer});
-    gen.add_mined_money_unlock_blocks();
+    gen.add_transfer_unlock_blocks();
   }
 
   lns_keys_t bob_key   = make_lns_keys(bob);
@@ -1318,29 +1256,32 @@ bool loki_name_system_get_mappings_by_owners::generate(std::vector<test_event_en
   std::string session_name1 = "MyName";
   crypto::hash session_tx_hash1;
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, lns::mapping_type::session, session_name1, bob_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::session, session_name1, bob_key.session_value);
     session_tx_hash1 = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height1 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name2 = "MyName2";
   crypto::hash session_tx_hash2;
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, lns::mapping_type::session, session_name2, bob_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::session, session_name2, bob_key.session_value);
     session_tx_hash2 = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height2 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name3 = "MyName3";
   crypto::hash session_tx_hash3;
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, session_name3, miner_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name3, miner_key.session_value);
     session_tx_hash3 = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height3 = gen.height();
+  gen.add_n_blocks(10);
 
   loki_register_callback(events, "check_lns_entries", [=](cryptonote::core &c, size_t ev_index)
   {
@@ -1349,13 +1290,13 @@ bool loki_name_system_get_mappings_by_owners::generate(std::vector<test_event_en
     std::vector<lns::mapping_record> records = lns_db.get_mappings_by_owners({bob_key.owner, miner_key.owner});
     CHECK_EQ(records.size(), 3);
     std::sort(records.begin(), records.end(), [](lns::mapping_record const &lhs, lns::mapping_record const &rhs) {
-      return lhs.register_height < rhs.register_height;
+      return lhs.update_height < rhs.update_height;
     });
 
     int index = 0;
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[index++], lns::mapping_type::session, session_name1, bob_key.session_value, session_height1, session_height1, session_tx_hash1, crypto::null_hash, bob_key.owner, {}));
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[index++], lns::mapping_type::session, session_name2, bob_key.session_value, session_height2, session_height2, session_tx_hash2, crypto::null_hash, bob_key.owner, {}));
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[index++], lns::mapping_type::session, session_name3, miner_key.session_value, session_height3, session_height3, session_tx_hash3, crypto::null_hash, miner_key.owner, {}));
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[index++], lns::mapping_type::session, session_name1, bob_key.session_value, session_height1, std::nullopt, session_tx_hash1, bob_key.owner, {}));
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[index++], lns::mapping_type::session, session_name2, bob_key.session_value, session_height2, std::nullopt, session_tx_hash2, bob_key.owner, {}));
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[index++], lns::mapping_type::session, session_name3, miner_key.session_value, session_height3, std::nullopt, session_tx_hash3, miner_key.owner, {}));
     return true;
   });
 
@@ -1377,27 +1318,27 @@ bool loki_name_system_get_mappings::generate(std::vector<test_event_entry> &even
 
     cryptonote::transaction transfer = gen.create_and_add_tx(miner, bob.get_keys().m_account_address, MK_COINS(400));
     gen.create_and_add_next_block({transfer});
-    gen.add_mined_money_unlock_blocks();
+    gen.add_transfer_unlock_blocks();
   }
 
   lns_keys_t bob_key = make_lns_keys(bob);
   std::string session_name1 = "MyName";
   crypto::hash session_tx_hash;
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, lns::mapping_type::session, session_name1, bob_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::session, session_name1, bob_key.session_value);
     session_tx_hash = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height = gen.height();
 
-  loki_register_callback(events, "check_lns_entries", [&events, bob_key, session_height, session_name1, session_tx_hash](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_lns_entries", [bob_key, session_height, session_name1, session_tx_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_lns_entries");
     lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
-    std::string session_name_hash = lns::name_to_base64_hash(session_name1);
-    std::vector<lns::mapping_record> records = lns_db.get_mappings({static_cast<uint16_t>(lns::mapping_type::session)}, session_name_hash);
+    std::string session_name_hash = lns::name_to_base64_hash(tools::lowercase_ascii_string(session_name1));
+    std::vector<lns::mapping_record> records = lns_db.get_mappings({lns::mapping_type::session}, session_name_hash);
     CHECK_EQ(records.size(), 1);
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, bob_key.session_value, session_height, session_height, session_tx_hash, crypto::null_hash /*prev_txid*/, bob_key.owner, {} /*backup_owner*/));
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, bob_key.session_value, session_height, std::nullopt, session_tx_hash, bob_key.owner, {} /*backup_owner*/));
     return true;
   });
 
@@ -1417,7 +1358,7 @@ bool loki_name_system_handles_duplicate_in_lns_db::generate(std::vector<test_eve
 
   cryptonote::transaction transfer = gen.create_and_add_tx(miner, bob.get_keys().m_account_address, MK_COINS(400));
   gen.create_and_add_next_block({transfer});
-  gen.add_mined_money_unlock_blocks();
+  gen.add_transfer_unlock_blocks();
 
   lns_keys_t miner_key     = make_lns_keys(miner);
   lns_keys_t bob_key       = make_lns_keys(bob);
@@ -1427,15 +1368,15 @@ bool loki_name_system_handles_duplicate_in_lns_db::generate(std::vector<test_eve
   crypto::hash session_tx_hash = {}, lokinet_tx_hash = {};
   {
     // NOTE: Allow duplicates with the same name but different type
-    cryptonote::transaction bar = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, session_name, bob_key.session_value);
+    cryptonote::transaction bar = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name, bob_key.session_value);
     session_tx_hash = get_transaction_hash(bar);
 
     std::vector<cryptonote::transaction> txs;
     txs.push_back(bar);
 
-    if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
+    if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet))
     {
-      cryptonote::transaction bar3 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::lokinet_1year, session_name, miner_key.lokinet_value);
+      cryptonote::transaction bar3 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::lokinet_2years, session_name, miner_key.lokinet_value);
       txs.push_back(bar3);
       lokinet_tx_hash = get_transaction_hash(bar3);
     }
@@ -1445,11 +1386,11 @@ bool loki_name_system_handles_duplicate_in_lns_db::generate(std::vector<test_eve
   uint64_t height_of_lns_entry = gen.height();
 
   {
-    cryptonote::transaction bar6 = gen.create_loki_name_system_tx(bob, lns::mapping_type::session, session_name, bob_key.session_value);
+    cryptonote::transaction bar6 = gen.create_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::session, session_name, bob_key.session_value);
     gen.add_tx(bar6, false /*can_be_added_to_blockchain*/, "Duplicate name requested by new owner: original already exists in lns db");
   }
 
-  loki_register_callback(events, "check_lns_entries", [=](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_lns_entries", [=, blockchain_height=gen.chain_height()](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_lns_entries");
     lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
@@ -1463,14 +1404,15 @@ bool loki_name_system_handles_duplicate_in_lns_db::generate(std::vector<test_eve
 
     std::string session_name_hash = lns::name_to_base64_hash(session_name);
     lns::mapping_record record1 = lns_db.get_mapping(lns::mapping_type::session, session_name_hash);
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record1, lns::mapping_type::session, session_name, bob_key.session_value, height_of_lns_entry, height_of_lns_entry, session_tx_hash, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record1, lns::mapping_type::session, session_name, bob_key.session_value, height_of_lns_entry, std::nullopt, session_tx_hash, miner_key.owner, {} /*backup_owner*/));
     CHECK_EQ(record1.owner_id, owner.id);
 
-    if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet_1year))
+    if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet))
     {
-      lns::mapping_record record2 = lns_db.get_mapping(lns::mapping_type::lokinet_1year, session_name);
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record2, lns::mapping_type::lokinet_1year, lokinet_name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry, lokinet_tx_hash, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+      lns::mapping_record record2 = lns_db.get_mapping(lns::mapping_type::lokinet, session_name_hash);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record2, lns::mapping_type::lokinet, lokinet_name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry + lokinet_expiry(lns::mapping_type::lokinet_2years), lokinet_tx_hash, miner_key.owner, {} /*backup_owner*/));
       CHECK_EQ(record2.owner_id, owner.id);
+      CHECK_EQ(record2.active(blockchain_height), true);
     }
 
     lns::owner_record owner2 = lns_db.get_owner_by_key(bob_key.owner);
@@ -1493,7 +1435,7 @@ bool loki_name_system_handles_duplicate_in_tx_pool::generate(std::vector<test_ev
 
     cryptonote::transaction transfer = gen.create_and_add_tx(miner, bob.get_keys().m_account_address, MK_COINS(400));
     gen.create_and_add_next_block({transfer});
-    gen.add_mined_money_unlock_blocks();
+    gen.add_transfer_unlock_blocks();
   }
 
   lns_keys_t bob_key       = make_lns_keys(bob);
@@ -1502,13 +1444,13 @@ bool loki_name_system_handles_duplicate_in_tx_pool::generate(std::vector<test_ev
   auto custom_type = static_cast<lns::mapping_type>(3928);
   {
     // NOTE: Allow duplicates with the same name but different type
-    cryptonote::transaction bar = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, session_name, bob_key.session_value);
+    cryptonote::transaction bar = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name, bob_key.session_value);
 
     if (lns::mapping_type_allowed(gen.hardfork(), custom_type))
-      cryptonote::transaction bar2 = gen.create_and_add_loki_name_system_tx(miner, custom_type, session_name, bob_key.session_value);
+      cryptonote::transaction bar2 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), custom_type, session_name, bob_key.session_value);
 
     // NOTE: Make duplicate in the TX pool, this should be rejected
-    cryptonote::transaction bar4 = gen.create_loki_name_system_tx(bob, lns::mapping_type::session, session_name, bob_key.session_value);
+    cryptonote::transaction bar4 = gen.create_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::session, session_name, bob_key.session_value);
     gen.add_tx(bar4, false /*can_be_added_to_blockchain*/, "Duplicate name requested by new owner: original already exists in tx pool");
   }
   return true;
@@ -1555,7 +1497,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     valid_data.fields |= lns::extra_field::buy_no_backup;
     valid_data.owner = miner_key.owner;
     valid_data.type  = lns::mapping_type::wallet;
-    valid_data.encrypted_value = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+    valid_data.encrypted_value = miner_key.wallet_value.make_encrypted(name).to_string();
     valid_data.name_hash       = lns::name_to_hash(name);
 
     if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::wallet))
@@ -1565,14 +1507,14 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
         data.name_hash                             = {};
-        data.encrypted_value                       = helper_encrypt_lns_value("", miner_key.wallet_value).to_string();
+        data.encrypted_value                       = miner_key.wallet_value.make_encrypted("").to_string();
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Blockchain) Empty wallet name in LNS is invalid");
       }
 
       // Blockchain value (wallet address) is invalid, too short
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+        data.encrypted_value                       = miner_key.wallet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() - 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Blockchain) Wallet value in LNS too long");
       }
@@ -1580,27 +1522,27 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
       // Blockchain value (wallet address) is invalid, too long
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+        data.encrypted_value                       = miner_key.wallet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() + 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Blockchain) Wallet value in LNS too long");
       }
     }
 
-    if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
+    if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet))
     {
-      valid_data.type = lns::mapping_type::lokinet_1year;
+      valid_data.type = lns::mapping_type::lokinet;
       // Lokinet name empty
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
         data.name_hash                             = {};
-        data.encrypted_value                       = helper_encrypt_lns_value("", miner_key.lokinet_value).to_string();
+        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted("").to_string();
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Empty domain name in LNS is invalid");
       }
 
       // Lokinet value too short
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.lokinet_value).to_string();
+        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() - 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Domain value in LNS too long");
       }
@@ -1608,7 +1550,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
       // Lokinet value too long
       {
         cryptonote::tx_extra_loki_name_system data = valid_data;
-        data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.lokinet_value).to_string();
+        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() + 1);
         make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Domain value in LNS too long");
       }
@@ -1621,7 +1563,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     valid_data.name_hash = lns::name_to_hash(name);
     {
       cryptonote::tx_extra_loki_name_system data = valid_data;
-      data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+      data.encrypted_value                       = miner_key.session_value.make_encrypted(name).to_string();
       data.encrypted_value.resize(data.encrypted_value.size() - 1);
       make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Session) User id, value too short");
     }
@@ -1629,7 +1571,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     // Session value too long
     {
       cryptonote::tx_extra_loki_name_system data = valid_data;
-      data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+      data.encrypted_value                       = miner_key.session_value.make_encrypted(name).to_string();
       data.encrypted_value.resize(data.encrypted_value.size() + 1);
       make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Session) User id, value too long");
     }
@@ -1638,7 +1580,7 @@ bool loki_name_system_invalid_tx_extra_params::generate(std::vector<test_event_e
     {
       cryptonote::tx_extra_loki_name_system data = valid_data;
       data.name_hash                             = {};
-      data.encrypted_value                       = helper_encrypt_lns_value("", miner_key.session_value).to_string();
+      data.encrypted_value                       = miner_key.session_value.make_encrypted("").to_string();
       make_lns_tx_with_custom_extra(gen, events, miner, data, false, "(Session) Name empty");
     }
   }
@@ -1660,48 +1602,39 @@ bool loki_name_system_large_reorg::generate(std::vector<test_event_entry> &event
 
     cryptonote::transaction transfer = gen.create_and_add_tx(miner, bob.get_keys().m_account_address, MK_COINS(400));
     gen.create_and_add_next_block({transfer});
-    gen.add_mined_money_unlock_blocks();
+    gen.add_transfer_unlock_blocks();
   }
 
   // NOTE: Generate the first round of LNS transactions belonging to miner
   uint64_t first_lns_height                 = 0;
-  uint64_t miner_earliest_renewable_height  = 0;
   std::string const lokinet_name1           = "website.loki";
   std::string const wallet_name1            = "MyWallet";
-  std::string const session_name1           = "I Like Loki";
+  std::string const session_name1           = "I-Like-Loki";
   crypto::hash session_tx_hash1 = {}, wallet_tx_hash1 = {}, lokinet_tx_hash1 = {};
   {
     // NOTE: Generate and add the (transactions + block) to the blockchain
     {
       std::vector<cryptonote::transaction> txs;
-      cryptonote::transaction session_tx = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, session_name1, miner_key.session_value);
+      cryptonote::transaction session_tx = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name1, miner_key.session_value);
       session_tx_hash1 = get_transaction_hash(session_tx);
       txs.push_back(session_tx);
 
       if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::wallet))
       {
-        cryptonote::transaction wallet_tx = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value);
+        cryptonote::transaction wallet_tx = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value);
         txs.push_back(wallet_tx);
         wallet_tx_hash1 = get_transaction_hash(wallet_tx);
       }
 
-      if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
+      if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_10years))
       {
-        cryptonote::transaction lokinet_tx = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::lokinet_1year, lokinet_name1, miner_key.lokinet_value);
+        cryptonote::transaction lokinet_tx = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::lokinet_10years, lokinet_name1, miner_key.lokinet_value);
         txs.push_back(lokinet_tx);
         lokinet_tx_hash1 = get_transaction_hash(lokinet_tx);
       }
       gen.create_and_add_next_block(txs);
     }
     first_lns_height = gen.height();
-
-    // NOTE: Determine the earliest height we can renew the Lokinet Entry
-    {
-      uint64_t height_of_lns_entry    = gen.height();
-      uint64_t renew_window           = 0;
-      uint64_t expiry_blocks          = lns::expiry_blocks(cryptonote::FAKECHAIN, lns::mapping_type::lokinet_1year, &renew_window);
-      miner_earliest_renewable_height = first_lns_height + expiry_blocks - renew_window;
-    }
 
     loki_register_callback(events, "check_first_lns_entries", [=](cryptonote::core &c, size_t ev_index)
     {
@@ -1712,17 +1645,17 @@ bool loki_name_system_large_reorg::generate(std::vector<test_event_entry> &event
 
       size_t expected_size = 1;
       if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::wallet)) expected_size += 1;
-      if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet_1year)) expected_size += 1;
+      if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet)) expected_size += 1;
       CHECK_EQ(records.size(), expected_size);
 
       for (lns::mapping_record const &record : records)
       {
         if (record.type == lns::mapping_type::session)
-          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, session_name1, miner_key.session_value, first_lns_height, first_lns_height, session_tx_hash1, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
-        else if (record.type == lns::mapping_type::lokinet_1year)
-          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, lokinet_name1, miner_key.lokinet_value, first_lns_height, first_lns_height, lokinet_tx_hash1, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, session_name1, miner_key.session_value, first_lns_height, std::nullopt, session_tx_hash1, miner_key.owner, {} /*backup_owner*/));
+        else if (record.type == lns::mapping_type::lokinet)
+          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, lokinet_name1, miner_key.lokinet_value, first_lns_height, first_lns_height + lokinet_expiry(lns::mapping_type::lokinet_10years), lokinet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else if (record.type == lns::mapping_type::wallet)
-          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_lns_height, first_lns_height, wallet_tx_hash1, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_lns_height, std::nullopt, wallet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else
         {
           assert(false);
@@ -1732,25 +1665,25 @@ bool loki_name_system_large_reorg::generate(std::vector<test_event_entry> &event
     });
   }
 
-  while (gen.height() <= miner_earliest_renewable_height)
-    gen.create_and_add_next_block();
-
   // NOTE: Generate and add the second round of (transactions + block) to the blockchain, renew lokinet and add bob's session, update miner's session value to other's session value
   cryptonote::account_base const other = gen.add_account();
   lns_keys_t const other_key           = make_lns_keys(other);
   uint64_t second_lns_height = 0;
   {
-    std::string const bob_session_name1 = "I Like Session";
+    std::string const bob_session_name1 = "I-Like-Session";
     crypto::hash session_tx_hash2 = {}, lokinet_tx_hash2 = {}, session_tx_hash3;
     {
       std::vector<cryptonote::transaction> txs;
-      txs.push_back(gen.create_and_add_loki_name_system_tx(bob, lns::mapping_type::session, bob_session_name1, bob_key.session_value));
+      txs.push_back(gen.create_and_add_loki_name_system_tx(bob, gen.hardfork(), lns::mapping_type::session, bob_session_name1, bob_key.session_value));
       session_tx_hash2 = cryptonote::get_transaction_hash(txs[0]);
 
-      if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
-        txs.push_back(gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::lokinet_1year, "loki.loki", miner_key.lokinet_value));
+      if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet))
+      {
+        txs.push_back(gen.create_and_add_loki_name_system_tx_renew(miner, gen.hardfork(), lns::mapping_type::lokinet_5years, lokinet_name1));
+        lokinet_tx_hash2 = cryptonote::get_transaction_hash(txs.back());
+      }
 
-      txs.push_back(gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, session_name1, &other_key.session_value));
+      txs.push_back(gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, session_name1, &other_key.session_value));
       session_tx_hash3 = cryptonote::get_transaction_hash(txs.back());
 
       gen.create_and_add_next_block(txs);
@@ -1764,17 +1697,16 @@ bool loki_name_system_large_reorg::generate(std::vector<test_event_entry> &event
       CHECK_EQ(lns_db.height(), second_lns_height);
 
       // NOTE: Check miner's record
-      if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet_1year))
       {
         std::vector<lns::mapping_record> records = lns_db.get_mappings_by_owner(miner_key.owner);
         for (lns::mapping_record const &record : records)
         {
           if (record.type == lns::mapping_type::session)
-            CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, session_name1, other_key.session_value, first_lns_height, second_lns_height, session_tx_hash3, session_tx_hash1 /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
-          else if (record.type == lns::mapping_type::lokinet_1year)
-            CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, lokinet_name1, miner_key.lokinet_value, second_lns_height, second_lns_height, lokinet_tx_hash2, lokinet_tx_hash1 /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+            CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, session_name1, other_key.session_value, second_lns_height, std::nullopt, session_tx_hash3, miner_key.owner, {} /*backup_owner*/));
+          else if (record.type == lns::mapping_type::lokinet)
+            CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, lokinet_name1, miner_key.lokinet_value, second_lns_height, first_lns_height + lokinet_expiry(lns::mapping_type::lokinet_5years) + lokinet_expiry(lns::mapping_type::lokinet_10years), lokinet_tx_hash2, miner_key.owner, {} /*backup_owner*/));
           else if (record.type == lns::mapping_type::wallet)
-            CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_lns_height, first_lns_height, wallet_tx_hash1, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+            CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_lns_height, std::nullopt, wallet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
           else
           {
             assert(false);
@@ -1786,7 +1718,7 @@ bool loki_name_system_large_reorg::generate(std::vector<test_event_entry> &event
       {
         std::vector<lns::mapping_record> records = lns_db.get_mappings_by_owner(bob_key.owner);
         CHECK_EQ(records.size(), 1);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, bob_session_name1, bob_key.session_value, second_lns_height, second_lns_height, session_tx_hash2, crypto::null_hash /*prev_txid*/, bob_key.owner, {} /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, bob_session_name1, bob_key.session_value, second_lns_height, std::nullopt, session_tx_hash2, bob_key.owner, {} /*backup_owner*/));
       }
 
       return true;
@@ -1819,17 +1751,17 @@ bool loki_name_system_large_reorg::generate(std::vector<test_event_entry> &event
       std::vector<lns::mapping_record> records = lns_db.get_mappings_by_owner(miner_key.owner);
       size_t expected_size = 1;
       if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::wallet)) expected_size += 1;
-      if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet_1year)) expected_size += 1;
+      if (lns::mapping_type_allowed(c.get_blockchain_storage().get_current_hard_fork_version(), lns::mapping_type::lokinet)) expected_size += 1;
       CHECK_EQ(records.size(), expected_size);
 
       for (lns::mapping_record const &record : records)
       {
         if (record.type == lns::mapping_type::session)
-          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, session_name1, miner_key.session_value, first_lns_height, first_lns_height, session_tx_hash1, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
-        else if (record.type == lns::mapping_type::lokinet_1year)
-          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, lokinet_name1, miner_key.lokinet_value, first_lns_height, first_lns_height, lokinet_tx_hash1, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, session_name1, miner_key.session_value, first_lns_height, std::nullopt, session_tx_hash1, miner_key.owner, {} /*backup_owner*/));
+        else if (record.type == lns::mapping_type::lokinet)
+          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, lokinet_name1, miner_key.lokinet_value, first_lns_height, first_lns_height + lokinet_expiry(lns::mapping_type::lokinet_10years), lokinet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else if (record.type == lns::mapping_type::wallet)
-          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_lns_height, first_lns_height, wallet_tx_hash1, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+          CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_lns_height, std::nullopt, wallet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else
         {
           assert(false);
@@ -1871,7 +1803,7 @@ bool loki_name_system_name_renewal::generate(std::vector<test_event_entry> &even
   loki_chain_generator gen(events, hard_forks);
   cryptonote::account_base miner = gen.first_miner_;
 
-  if (!lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
+  if (!lns::mapping_type_allowed(hard_forks.back().first, lns::mapping_type::lokinet))
       return true;
 
   {
@@ -1881,15 +1813,11 @@ bool loki_name_system_name_renewal::generate(std::vector<test_event_entry> &even
 
   lns_keys_t miner_key = make_lns_keys(miner);
   std::string const name    = "mydomain.loki";
-  lns::mapping_type mapping_type = lns::mapping_type::lokinet_1year;
-  cryptonote::transaction tx = gen.create_and_add_loki_name_system_tx(miner, mapping_type, name, miner_key.lokinet_value);
+  cryptonote::transaction tx = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::lokinet, name, miner_key.lokinet_value);
   gen.create_and_add_next_block({tx});
   crypto::hash prev_txid = get_transaction_hash(tx);
 
   uint64_t height_of_lns_entry = gen.height();
-  uint64_t renew_window        = 0;
-  uint64_t expiry_blocks       = lns::expiry_blocks(cryptonote::FAKECHAIN, mapping_type, &renew_window);
-  uint64_t renew_window_block  = height_of_lns_entry + expiry_blocks - renew_window;
 
   loki_register_callback(events, "check_lns_entries", [=](cryptonote::core &c, size_t ev_index)
   {
@@ -1904,16 +1832,21 @@ bool loki_name_system_name_renewal::generate(std::vector<test_event_entry> &even
                                  << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
     std::string name_hash = lns::name_to_base64_hash(name);
-    lns::mapping_record record = lns_db.get_mapping(lns::mapping_type::lokinet_1year, name_hash);
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry, prev_txid, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+    lns::mapping_record record = lns_db.get_mapping(lns::mapping_type::lokinet, name_hash);
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry + lokinet_expiry(lns::mapping_type::lokinet), prev_txid, miner_key.owner, {} /*backup_owner*/));
     return true;
   });
 
-  while (gen.height() <= renew_window_block)
-    gen.create_and_add_next_block();
+  gen.create_and_add_next_block();
 
-  // In the renewal window, try and renew the lokinet entry
-  cryptonote::transaction renew_tx = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::lokinet_1year, name, miner_key.lokinet_value);
+  // Renew the lokinet entry a few times
+  cryptonote::transaction renew_tx = gen.create_and_add_loki_name_system_tx_renew(miner, gen.hardfork(), lns::mapping_type::lokinet_5years, name);
+  gen.create_and_add_next_block({renew_tx});
+  renew_tx = gen.create_and_add_loki_name_system_tx_renew(miner, gen.hardfork(), lns::mapping_type::lokinet_10years, name);
+  gen.create_and_add_next_block({renew_tx});
+  renew_tx = gen.create_and_add_loki_name_system_tx_renew(miner, gen.hardfork(), lns::mapping_type::lokinet_2years, name);
+  gen.create_and_add_next_block({renew_tx});
+  renew_tx = gen.create_and_add_loki_name_system_tx_renew(miner, gen.hardfork(), lns::mapping_type::lokinet, name);
   gen.create_and_add_next_block({renew_tx});
   crypto::hash txid       = cryptonote::get_transaction_hash(renew_tx);
   uint64_t renewal_height = gen.height();
@@ -1931,8 +1864,16 @@ bool loki_name_system_name_renewal::generate(std::vector<test_event_entry> &even
                                  << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
     std::string name_hash = lns::name_to_base64_hash(name);
-    lns::mapping_record record = lns_db.get_mapping(lns::mapping_type::lokinet_1year, name_hash);
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, name, miner_key.lokinet_value, renewal_height, renewal_height, txid, prev_txid, miner_key.owner, {} /*backup_owner*/));
+    lns::mapping_record record = lns_db.get_mapping(lns::mapping_type::lokinet, name_hash);
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, name, miner_key.lokinet_value, renewal_height,
+          // Original registration:
+          height_of_lns_entry + lokinet_expiry(lns::mapping_type::lokinet)
+          // The renewals:
+          + lokinet_expiry(lns::mapping_type::lokinet_5years)
+          + lokinet_expiry(lns::mapping_type::lokinet_10years)
+          + lokinet_expiry(lns::mapping_type::lokinet_2years)
+          + lokinet_expiry(lns::mapping_type::lokinet),
+          txid, miner_key.owner, {} /*backup_owner*/));
     return true;
   });
 
@@ -1978,36 +1919,31 @@ bool loki_name_system_name_value_max_lengths::generate(std::vector<test_event_en
   // Wallet
   if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::wallet))
   {
-    std::string name(lns::WALLET_NAME_MAX, 'A');
+    std::string name(lns::WALLET_NAME_MAX, 'a');
     data.type            = lns::mapping_type::wallet;
     data.name_hash       = lns::name_to_hash(name);
-    data.encrypted_value = helper_encrypt_lns_value(name, miner_key.wallet_value).to_string();
+    data.encrypted_value = miner_key.wallet_value.make_encrypted(name).to_string();
     make_lns_tx_with_custom_extra(gen, events, miner, data);
   }
 
   // Lokinet
-  if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
+  if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet))
   {
-    std::string name(lns::LOKINET_DOMAIN_NAME_MAX, 'A');
-    size_t last_index  = name.size() - 1;
-    name[last_index--] = 'i';
-    name[last_index--] = 'k';
-    name[last_index--] = 'o';
-    name[last_index--] = 'l';
-    name[last_index--] = '.';
+    std::string name(lns::LOKINET_DOMAIN_NAME_MAX, 'a');
+    name.replace(name.size() - 6, 5, ".loki");
 
-    data.type            = lns::mapping_type::lokinet_1year;
+    data.type            = lns::mapping_type::lokinet;
     data.name_hash       = lns::name_to_hash(name);
-    data.encrypted_value = helper_encrypt_lns_value(name, miner_key.lokinet_value).to_string();
+    data.encrypted_value = miner_key.lokinet_value.make_encrypted(name).to_string();
     make_lns_tx_with_custom_extra(gen, events, miner, data);
   }
 
   // Session
   {
-    std::string name(lns::SESSION_DISPLAY_NAME_MAX, 'A');
+    std::string name(lns::SESSION_DISPLAY_NAME_MAX, 'a');
     data.type            = lns::mapping_type::session;
     data.name_hash       = lns::name_to_hash(name);
-    data.encrypted_value = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+    data.encrypted_value = miner_key.session_value.make_encrypted(name).to_string();
     make_lns_tx_with_custom_extra(gen, events, miner, data);
   }
 
@@ -2024,26 +1960,26 @@ bool loki_name_system_update_mapping_after_expiry_fails::generate(std::vector<te
   gen.add_mined_money_unlock_blocks();
 
   lns_keys_t miner_key = make_lns_keys(miner);
-  if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet_1year))
+  if (lns::mapping_type_allowed(gen.hardfork(), lns::mapping_type::lokinet))
   {
     std::string const name     = "mydomain.loki";
-    cryptonote::transaction tx = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::lokinet_1year, name, miner_key.lokinet_value);
+    cryptonote::transaction tx = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::lokinet, name, miner_key.lokinet_value);
     crypto::hash tx_hash = cryptonote::get_transaction_hash(tx);
     gen.create_and_add_next_block({tx});
 
     uint64_t height_of_lns_entry   = gen.height();
-    uint64_t expected_expiry_block = height_of_lns_entry + lns::expiry_blocks(cryptonote::FAKECHAIN, lns::mapping_type::lokinet_1year, nullptr);
+    uint64_t expected_expiry_block = height_of_lns_entry + lokinet_expiry(lns::mapping_type::lokinet);
 
     while (gen.height() <= expected_expiry_block)
       gen.create_and_add_next_block();
 
     {
       lns_keys_t bob_key = make_lns_keys(gen.add_account());
-      cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, lns::mapping_type::lokinet_1year, name, &bob_key.lokinet_value);
+      cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::lokinet, name, &bob_key.lokinet_value);
       gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not update a LNS record that is already expired");
     }
 
-    loki_register_callback(events, "check_still_expired", [=](cryptonote::core &c, size_t ev_index)
+    loki_register_callback(events, "check_still_expired", [=, blockchain_height=gen.chain_height()](cryptonote::core &c, size_t ev_index)
     {
       DEFINE_TESTS_ERROR_CONTEXT("check_still_expired");
       lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
@@ -2056,8 +1992,9 @@ bool loki_name_system_update_mapping_after_expiry_fails::generate(std::vector<te
                                    << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
       std::string name_hash        = lns::name_to_base64_hash(name);
-      lns::mapping_record record = lns_db.get_mapping(lns::mapping_type::lokinet_1year, name_hash);
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet_1year, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry, tx_hash, crypto::null_hash /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+      lns::mapping_record record = lns_db.get_mapping(lns::mapping_type::lokinet, name_hash);
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_lns_entry, height_of_lns_entry + lokinet_expiry(lns::mapping_type::lokinet), tx_hash, miner_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(record.active(blockchain_height), false);
       CHECK_EQ(record.owner_id, owner.id);
       return true;
     });
@@ -2065,9 +2002,11 @@ bool loki_name_system_update_mapping_after_expiry_fails::generate(std::vector<te
   return true;
 }
 
+uint8_t loki_name_system_update_mapping::hf() { return cryptonote::network_version_count - 1; }
+uint8_t loki_name_system_update_mapping_argon2::hf() { return cryptonote::network_version_15_lns; }
 bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &events)
 {
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(hf());
   loki_chain_generator gen(events, hard_forks);
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
@@ -2078,9 +2017,9 @@ bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &ev
   lns_keys_t bob_key                 = make_lns_keys(bob);
 
   crypto::hash session_tx_hash1;
-  std::string session_name1 = "MyName";
+  std::string session_name1 = "myname";
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, session_name1, miner_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, session_name1, miner_key.session_value);
     session_tx_hash1 = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
@@ -2092,22 +2031,22 @@ bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &ev
     lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
 
     std::string name_hash = lns::name_to_base64_hash(session_name1);
-    std::vector<lns::mapping_record> records = lns_db.get_mappings({static_cast<uint16_t>(lns::mapping_type::session)}, name_hash);
+    std::vector<lns::mapping_record> records = lns_db.get_mappings({lns::mapping_type::session}, name_hash);
 
     CHECK_EQ(records.size(), 1);
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, miner_key.session_value, register_height, register_height, session_tx_hash1, {} /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, miner_key.session_value, register_height, std::nullopt, session_tx_hash1, miner_key.owner, {} /*backup_owner*/));
     return true;
   });
 
   // Test update mapping with same name fails
-  {
-    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, lns::mapping_type::session, session_name1, &miner_key.session_value);
+  if (hf() == cryptonote::network_version_15_lns) {
+    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, session_name1, &miner_key.session_value);
     gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not add a LNS TX that re-updates the underlying value to same value");
   }
 
   crypto::hash session_tx_hash2;
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, session_name1, &bob_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, session_name1, &bob_key.session_value);
     session_tx_hash2 = cryptonote::get_transaction_hash(tx1);
     gen.create_and_add_next_block({tx1});
   }
@@ -2118,10 +2057,10 @@ bool loki_name_system_update_mapping::generate(std::vector<test_event_entry> &ev
     lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
 
     std::string name_hash = lns::name_to_base64_hash(session_name1);
-    std::vector<lns::mapping_record> records = lns_db.get_mappings({static_cast<uint16_t>(lns::mapping_type::session)}, name_hash);
+    std::vector<lns::mapping_record> records = lns_db.get_mappings({lns::mapping_type::session}, name_hash);
 
     CHECK_EQ(records.size(), 1);
-    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, bob_key.session_value, register_height, blockchain_height, session_tx_hash2, session_tx_hash1 /*prev_txid*/, miner_key.owner, {} /*backup_owner*/));
+    CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, records[0], lns::mapping_type::session, session_name1, bob_key.session_value, blockchain_height, std::nullopt, session_tx_hash2, miner_key.owner, {} /*backup_owner*/));
     return true;
   });
 
@@ -2151,33 +2090,31 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     owner1.type = lns::generic_owner_sig_type::ed25519;
     owner2.type = lns::generic_owner_sig_type::ed25519;
 
-    std::string name      = "Hello_World";
+    std::string name      = "hello_world";
     std::string name_hash = lns::name_to_base64_hash(name);
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
     uint64_t height = gen.height();
     crypto::hash txid      = cryptonote::get_transaction_hash(tx1);
-    crypto::hash prev_txid = crypto::null_hash;
 
     loki_register_callback(events, "check_update0", [=](cryptonote::core &c, size_t ev_index)
     {
       const char* perr_context = "check_update0";
       lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
       lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, miner_key.session_value, height, height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+      CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, miner_key.session_value, height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
       return true;
     });
 
     // Update with owner1
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update1", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2185,7 +2122,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update1";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2193,13 +2130,12 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner2
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update2", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2207,7 +2143,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update2";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2220,24 +2156,22 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     lns::generic_owner owner1         = lns::make_monero_owner(account1.get_keys().m_account_address, false /*subaddress*/);
     lns::generic_owner owner2         = lns::make_monero_owner(account2.get_keys().m_account_address, false /*subaddress*/);
 
-    std::string name            = "Hello_Sailor";
+    std::string name            = "hello_sailor";
     std::string name_hash = lns::name_to_base64_hash(name);
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
     uint64_t height        = gen.height();
     crypto::hash txid      = cryptonote::get_transaction_hash(tx1);
-    crypto::hash prev_txid = crypto::null_hash;
 
     // Update with owner1
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update3", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2245,7 +2179,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update3";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2253,13 +2187,12 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner2
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update3", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2267,7 +2200,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update3";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2284,24 +2217,22 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     crypto_sign_ed25519_keypair(owner1.ed25519.data, owner1_key.data);
     owner1.type = lns::generic_owner_sig_type::ed25519;
 
-    std::string name = "Hello_Driver";
+    std::string name = "hello_driver";
     std::string name_hash = lns::name_to_base64_hash(name);
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
     uint64_t height        = gen.height();
     crypto::hash txid      = cryptonote::get_transaction_hash(tx1);
-    crypto::hash prev_txid = crypto::null_hash;
 
     // Update with owner1
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update4", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2309,7 +2240,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update4";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2317,13 +2248,12 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     // Update with owner2
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update5", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2331,7 +2261,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update5";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2347,25 +2277,23 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     crypto_sign_ed25519_keypair(owner2.ed25519.data, owner2_key.data);
     owner2.type = lns::generic_owner_sig_type::ed25519;
 
-    std::string name = "Hello_Passenger";
+    std::string name = "hello_passenger";
     std::string name_hash = lns::name_to_base64_hash(name);
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value, &owner1, &owner2);
     gen.create_and_add_next_block({tx1});
     uint64_t height        = gen.height();
     crypto::hash txid      = cryptonote::get_transaction_hash(tx1);
-    crypto::hash prev_txid = crypto::null_hash;
 
     // Update with owner1
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update6", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2373,7 +2301,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update6";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2382,13 +2310,12 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
-      lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      lns::mapping_value encrypted_value = temp_keys.session_value.make_encrypted(name);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
-      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
+      cryptonote::transaction tx2 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
       gen.create_and_add_next_block({tx2});
-      prev_txid = txid;
       txid      = cryptonote::get_transaction_hash(tx2);
 
       loki_register_callback(events, "check_update7", [=, blockchain_height = gen.height()](cryptonote::core &c, size_t ev_index)
@@ -2396,7 +2323,7 @@ bool loki_name_system_update_mapping_multiple_owners::generate(std::vector<test_
         const char* perr_context = "check_update7";
         lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
         lns::mapping_record const record = lns_db.get_mapping(lns::mapping_type::session, name_hash);
-        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, height, blockchain_height, txid, prev_txid, owner1, owner2 /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_lns_mapping_record(perr_context, record, lns::mapping_type::session, name, temp_keys.session_value, blockchain_height, std::nullopt, txid, owner1, owner2 /*backup_owner*/));
         return true;
       });
     }
@@ -2413,8 +2340,8 @@ bool loki_name_system_update_mapping_non_existent_name_fails::generate(std::vect
 
   cryptonote::account_base miner = gen.first_miner_;
   lns_keys_t miner_key           = make_lns_keys(miner);
-  std::string name               = "Hello World";
-  cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &miner_key.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, nullptr /*signature*/, false /*use_asserts*/);
+  std::string name               = "hello-world";
+  cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &miner_key.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, nullptr /*signature*/, false /*use_asserts*/);
   gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not add a updating LNS TX referencing a non-existent LNS entry");
   return true;
 }
@@ -2429,13 +2356,14 @@ bool loki_name_system_update_mapping_invalid_signature::generate(std::vector<tes
   cryptonote::account_base miner = gen.first_miner_;
   lns_keys_t miner_key           = make_lns_keys(miner);
 
-  std::string const name = "Hello World";
-  cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, name, miner_key.session_value);
+  std::string const name = "hello-world";
+  cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value);
   gen.create_and_add_next_block({tx1});
 
   lns_keys_t bob_key = make_lns_keys(gen.add_account());
+  lns::mapping_value encrypted_value = bob_key.session_value.make_encrypted(name);
   lns::generic_signature invalid_signature = {};
-  cryptonote::transaction tx2 = gen.create_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &bob_key.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &invalid_signature, false /*use_asserts*/);
+  cryptonote::transaction tx2 = gen.create_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &encrypted_value, nullptr /*owner*/, nullptr /*backup_owner*/, &invalid_signature, false /*use_asserts*/);
   gen.add_tx(tx2, false /*can_be_added_to_blockchain*/, "Can not add a updating LNS TX with an invalid signature");
   return true;
 }
@@ -2452,31 +2380,32 @@ bool loki_name_system_update_mapping_replay::generate(std::vector<test_event_ent
   lns_keys_t bob_key             = make_lns_keys(gen.add_account());
   lns_keys_t alice_key           = make_lns_keys(gen.add_account());
 
-  std::string const name = "Hello World";
+  std::string const name = "hello-world";
   // Make LNS Mapping
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, lns::mapping_type::session, name, miner_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx(miner, gen.hardfork(), lns::mapping_type::session, name, miner_key.session_value);
     gen.create_and_add_next_block({tx1});
   }
 
   // (1) Update LNS Mapping
   cryptonote::tx_extra_loki_name_system lns_entry = {};
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &bob_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &bob_key.session_value);
     gen.create_and_add_next_block({tx1});
-    assert(cryptonote::get_loki_name_system_from_tx_extra(tx1.extra, lns_entry));
+    [[maybe_unused]] bool found_tx_extra = cryptonote::get_field_from_tx_extra(tx1.extra, lns_entry);
+    assert(found_tx_extra);
   }
 
   // Replay the (1)st update mapping, should fail because the update is to the same session value
   {
-    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update_w_extra(miner, lns_entry);
+    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update_w_extra(miner, gen.hardfork(), lns_entry);
     gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not replay an older update mapping to the same session value");
   }
 
   // (2) Update Again
   crypto::hash new_hash = {};
   {
-    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, lns::mapping_type::session, name, &alice_key.session_value);
+    cryptonote::transaction tx1 = gen.create_and_add_loki_name_system_tx_update(miner, gen.hardfork(), lns::mapping_type::session, name, &alice_key.session_value);
     gen.create_and_add_next_block({tx1});
     new_hash = cryptonote::get_transaction_hash(tx1);
   }
@@ -2484,7 +2413,7 @@ bool loki_name_system_update_mapping_replay::generate(std::vector<test_event_ent
   // Replay the (1)st update mapping, should fail now even though it's not to the same session value, but that the signature no longer matches so you can't replay.
   lns_entry.prev_txid = new_hash;
   {
-    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update_w_extra(miner, lns_entry);
+    cryptonote::transaction tx1 = gen.create_loki_name_system_tx_update_w_extra(miner, gen.hardfork(), lns_entry);
     gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not replay an older update mapping, should fail signature verification");
   }
 
@@ -2504,7 +2433,7 @@ bool loki_name_system_wrong_burn::generate(std::vector<test_event_entry> &events
   }
 
   lns_keys_t lns_keys             = make_lns_keys(miner);
-  lns::mapping_type const types[] = {lns::mapping_type::session, lns::mapping_type::wallet, lns::mapping_type::lokinet_1year};
+  lns::mapping_type const types[] = {lns::mapping_type::session, lns::mapping_type::wallet, lns::mapping_type::lokinet};
   for (int i = 0; i < 2; i++)
   {
     bool under_burn = (i == 0);
@@ -2518,17 +2447,17 @@ bool loki_name_system_wrong_burn::generate(std::vector<test_event_entry> &events
         if (type == lns::mapping_type::session)
         {
           value = lns_keys.session_value;
-          name  = "My Friendly Session Name";
+          name  = "my-friendly-session-name";
         }
         else if (type == lns::mapping_type::wallet)
         {
           value = lns_keys.wallet_value;
-          name = "My Friendly Wallet Name";
+          name = "my-friendly-wallet-name";
         }
-        else if (type == lns::mapping_type::lokinet_1year)
+        else if (type == lns::mapping_type::lokinet)
         {
           value = lns_keys.lokinet_value;
-          name  = "MyFriendlyLokinetName.loki";
+          name  = "myfriendlylokinetname.loki";
         }
         else
             assert("Unhandled type enum" == nullptr);
@@ -2539,7 +2468,7 @@ bool loki_name_system_wrong_burn::generate(std::vector<test_event_entry> &events
         if (under_burn) burn -= 1;
         else            burn += 1;
 
-        cryptonote::transaction tx = gen.create_loki_name_system_tx(miner, type, name, value, nullptr /*owner*/, nullptr /*backup_owner*/, burn);
+        cryptonote::transaction tx = gen.create_loki_name_system_tx(miner, gen.hardfork(), type, name, value, nullptr /*owner*/, nullptr /*backup_owner*/, burn);
         gen.add_tx(tx, false /*can_be_added_to_blockchain*/, "Wrong burn for a LNS tx", false /*kept_by_block*/);
       }
     }
@@ -2563,7 +2492,7 @@ bool loki_name_system_wrong_version::generate(std::vector<test_event_entry> &eve
   data.owner                                 = miner_key.owner;
   data.type                                  = lns::mapping_type::session;
   data.name_hash                             = lns::name_to_hash(name);
-  data.encrypted_value                       = helper_encrypt_lns_value(name, miner_key.session_value).to_string();
+  data.encrypted_value                       = miner_key.session_value.make_encrypted(name).to_string();
 
   uint64_t new_height       = cryptonote::get_block_height(gen.top().block) + 1;
   uint8_t new_hf_version    = gen.get_hf_version_at(new_height);
@@ -2592,12 +2521,7 @@ bool loki_service_nodes_alt_quorums::generate(std::vector<test_event_entry>& eve
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-
-  int constexpr NUM_SERVICE_NODES = service_nodes::STATE_CHANGE_QUORUM_SIZE + 3;
-  std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
-  for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
-    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
-  gen.create_and_add_next_block(registration_txs);
+  add_service_nodes(gen, service_nodes::STATE_CHANGE_QUORUM_SIZE + 3);
 
   loki_chain_generator fork = gen;
   gen.create_and_add_next_block();
@@ -2605,7 +2529,7 @@ bool loki_service_nodes_alt_quorums::generate(std::vector<test_event_entry>& eve
   uint64_t height_with_fork = gen.height();
 
   service_nodes::quorum_manager fork_quorums = fork.top_quorum();
-  loki_register_callback(events, "check_alt_quorums_exist", [&events, fork_quorums, height_with_fork](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "check_alt_quorums_exist", [fork_quorums, height_with_fork](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_alt_quorums_exist");
 
@@ -2645,40 +2569,24 @@ bool loki_service_nodes_checkpoint_quorum_size::generate(std::vector<test_event_
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
+  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE - 1);
 
-  std::vector<cryptonote::transaction> registration_txs(service_nodes::CHECKPOINT_QUORUM_SIZE - 1);
-  for (auto i = 0u; i < service_nodes::CHECKPOINT_QUORUM_SIZE - 1; ++i)
-    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
-  gen.create_and_add_next_block(registration_txs);
-
-  int const MAX_TRIES = 16;
-  int tries           = 0;
-  for (; tries < MAX_TRIES; tries++)
-    gen.add_blocks_until_next_checkpointable_height();
-
-  uint64_t check_height_1 = gen.height();
-  loki_register_callback(events, "check_checkpoint_quorum_should_be_empty", [&events, check_height_1](cryptonote::core &c, size_t ev_index)
+  for (int i = 0; i < 16; i++)
   {
-    DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_empty");
-    std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_1);
-    CHECK_TEST_CONDITION(quorum != nullptr);
-    CHECK_TEST_CONDITION(quorum->validators.size() == 0);
-    return true;
-  });
+    loki_register_callback(events, "check_checkpoint_quorum_should_be_empty", [check_height_1 = gen.height()](cryptonote::core &c, size_t ev_index)
+    {
+      DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_empty");
+      std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_1);
+      CHECK_TEST_CONDITION(quorum != nullptr);
+      CHECK_TEST_CONDITION(quorum->validators.size() == 0);
+      return true;
+    });
+  }
 
   cryptonote::transaction new_registration_tx = gen.create_and_add_registration_tx(gen.first_miner());
   gen.create_and_add_next_block({new_registration_tx});
-
-  for (tries = 0; tries < MAX_TRIES; tries++)
-  {
-    gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-    if (quorum && quorum->validators.size()) break;
-  }
-  assert(tries != MAX_TRIES);
-
-  uint64_t check_height_2 = gen.height();
-  loki_register_callback(events, "check_checkpoint_quorum_should_be_populated", [&events, check_height_2](cryptonote::core &c, size_t ev_index)
+  gen.add_blocks_until_next_checkpointable_height();
+  loki_register_callback(events, "check_checkpoint_quorum_should_be_populated", [check_height_2 = gen.height()](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_populated");
     std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_2);
@@ -2777,14 +2685,7 @@ bool loki_service_nodes_test_rollback::generate(std::vector<test_event_entry>& e
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_n_blocks(20); /// generate some outputs and unlock them
   gen.add_mined_money_unlock_blocks();
-
-  std::vector<cryptonote::transaction> reg_txs;
-  for (auto i = 0; i < 11; ++i) /// register some service nodes
-  {
-    const auto tx = gen.create_and_add_registration_tx(gen.first_miner());
-    reg_txs.push_back(tx);
-  }
-  gen.create_and_add_next_block(reg_txs);
+  add_service_nodes(gen, 11);
 
   gen.add_n_blocks(5);   /// create a few blocks with active service nodes
   auto fork = gen;       /// chain split here
@@ -2811,8 +2712,8 @@ bool loki_service_nodes_test_rollback::generate(std::vector<test_event_entry>& e
     {
       /// obtain public key of node A
       const auto event_a = events.at(deregister_index);
-      CHECK_TEST_CONDITION(event_a.type() == typeid(loki_blockchain_addable<loki_transaction>));
-      const auto dereg_tx = boost::get<loki_blockchain_addable<loki_transaction>>(event_a);
+      CHECK_TEST_CONDITION(std::holds_alternative<loki_blockchain_addable<loki_transaction>>(event_a));
+      const auto dereg_tx = std::get<loki_blockchain_addable<loki_transaction>>(event_a);
       CHECK_TEST_CONDITION(dereg_tx.data.tx.type == cryptonote::txtype::state_change);
 
       cryptonote::tx_extra_service_node_state_change deregistration;
@@ -2833,8 +2734,8 @@ bool loki_service_nodes_test_rollback::generate(std::vector<test_event_entry>& e
       /// obtain public key of node B
       constexpr size_t reg_evnt_idx = 73;
       const auto event_b = events.at(reg_evnt_idx);
-      CHECK_TEST_CONDITION(event_b.type() == typeid(loki_blockchain_addable<loki_transaction>));
-      const auto reg_tx = boost::get<loki_blockchain_addable<loki_transaction>>(event_b);
+      CHECK_TEST_CONDITION(std::holds_alternative<loki_blockchain_addable<loki_transaction>>(event_b));
+      const auto reg_tx = std::get<loki_blockchain_addable<loki_transaction>>(event_b);
 
       crypto::public_key pk_b;
       if (!cryptonote::get_service_node_pubkey_from_tx_extra(reg_tx.data.tx.extra, pk_b)) {
@@ -2867,21 +2768,14 @@ bool loki_service_nodes_test_swarms_basic::generate(std::vector<test_event_entry
   gen.add_mined_money_unlock_blocks();
 
   /// register some service nodes
-  std::vector<cryptonote::transaction> reg_txs;
-  for (auto i = 0u; i < INIT_SN_COUNT; ++i)
-  {
-    const auto tx = gen.create_and_add_registration_tx(gen.first_miner());
-    reg_txs.push_back(tx);
-  }
-
-  gen.create_and_add_next_block(reg_txs);
+  add_service_nodes(gen, INIT_SN_COUNT);
 
   /// create a few blocks with active service nodes
   gen.add_n_blocks(5);
   assert(gen.hf_version_ == cryptonote::network_version_9_service_nodes);
 
   gen.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
-  loki_register_callback(events, "test_initial_swarms", [&events](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "test_initial_swarms", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_swarms_basic::test_initial_swarms");
     const auto sn_list = c.get_service_node_list_state({}); /// Check that there is one active swarm and the swarm queue is not empty
@@ -2903,7 +2797,7 @@ bool loki_service_nodes_test_swarms_basic::generate(std::vector<test_event_entry
     gen.create_and_add_next_block({tx});
   }
 
-  loki_register_callback(events, "test_with_one_more_sn", [&events](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
+  loki_register_callback(events, "test_with_one_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_one_more_sn");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2923,7 +2817,7 @@ bool loki_service_nodes_test_swarms_basic::generate(std::vector<test_event_entry
     gen.create_and_add_next_block({tx});
   }
 
-  loki_register_callback(events, "test_with_more_sn", [&events](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
+  loki_register_callback(events, "test_with_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_more_sn");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2948,7 +2842,7 @@ bool loki_service_nodes_test_swarms_basic::generate(std::vector<test_event_entry
   }
 
   gen.create_and_add_next_block(dereg_txs);
-  loki_register_callback(events, "test_after_first_deregisters", [&events](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "test_after_first_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2971,7 +2865,7 @@ bool loki_service_nodes_test_swarms_basic::generate(std::vector<test_event_entry
   }
   gen.create_and_add_next_block(dereg_txs);
 
-  loki_register_callback(events, "test_after_final_deregisters", [&events](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "test_after_final_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
     const auto sn_list = c.get_service_node_list_state({});
@@ -3008,7 +2902,7 @@ bool loki_service_nodes_insufficient_contribution::generate(std::vector<test_eve
   cryptonote::transaction stake = gen.create_and_add_staking_tx(sn_keys.pub, gen.first_miner_, MK_COINS(1));
   gen.create_and_add_next_block({stake});
 
-  loki_register_callback(events, "test_insufficient_stake_does_not_get_accepted", [&events, sn_keys](cryptonote::core &c, size_t ev_index)
+  loki_register_callback(events, "test_insufficient_stake_does_not_get_accepted", [sn_keys](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_insufficient_stake_does_not_get_accepted");
     const auto sn_list = c.get_service_node_list_state({sn_keys.pub});
@@ -3019,5 +2913,324 @@ bool loki_service_nodes_insufficient_contribution::generate(std::vector<test_eve
     return true;
   });
 
+  return true;
+}
+
+static loki_chain_generator setup_pulse_tests(std::vector<test_event_entry> &events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  loki_chain_generator result(events, hard_forks);
+
+  result.add_blocks_until_version(hard_forks.back().first);
+  result.add_mined_money_unlock_blocks();
+
+  std::vector<cryptonote::transaction> registration_txs(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN));
+  for (auto i = 0u; i < service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN); ++i)
+    registration_txs[i] = result.create_and_add_registration_tx(result.first_miner());
+
+  // NOTE: Generate Valid Blocks
+  result.create_and_add_next_block({registration_txs});
+  result.create_and_add_next_block();
+  return result;
+}
+
+bool loki_pulse_invalid_validator_bitset::generate(std::vector<test_event_entry> &events)
+{
+  loki_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Validator bitset wrong");
+  loki_blockchain_entry entry     = {};
+  loki_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Overwrite valiadator bitset to be wrong
+  entry.block.pulse.validator_bitset = ~service_nodes::pulse_validator_bit_mask();
+
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool loki_pulse_invalid_signature::generate(std::vector<test_event_entry> &events)
+{
+  loki_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Wrong signature given (null signature)");
+  loki_blockchain_entry entry     = {};
+  loki_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Overwrite signature
+  entry.block.signatures[0].signature = {};
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool loki_pulse_oob_voter_index::generate(std::vector<test_event_entry> &events)
+{
+  loki_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Quorum index that indexes out of bounds");
+  loki_blockchain_entry entry     = {};
+  loki_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Overwrite oob voter index
+  entry.block.signatures.back().voter_index = service_nodes::PULSE_QUORUM_NUM_VALIDATORS + 1;
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool loki_pulse_non_participating_validator::generate(std::vector<test_event_entry> &events)
+{
+  loki_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Validator gave signature but is not locked in to participate this round.");
+  loki_blockchain_entry entry     = {};
+  loki_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Manually generate signatures to break test
+  {
+    entry.block.pulse = {};
+    entry.block.signatures.clear();
+
+    {
+      entry.block.pulse.round = 0;
+      for (size_t i = 0; i < sizeof(entry.block.pulse.random_value.data); i++)
+        entry.block.pulse.random_value.data[i] = static_cast<char>(tools::uniform_distribution_portable(tools::rng, 256));
+    }
+
+    service_nodes::quorum quorum = {};
+    {
+      std::vector<service_nodes::pubkey_and_sninfo> active_snode_list = params.prev.service_node_state.active_service_nodes_infos();
+      std::vector<crypto::hash> entropy = service_nodes::get_pulse_entropy_for_next_block(gen.db_, params.prev.block, entry.block.pulse.round);
+      quorum = generate_pulse_quorum(cryptonote::FAKECHAIN, params.block_leader.key, entry.block.major_version, active_snode_list, entropy, entry.block.pulse.round);
+      assert(quorum.validators.size() == service_nodes::PULSE_QUORUM_NUM_VALIDATORS);
+      assert(quorum.workers.size() == 1);
+    }
+
+    // NOTE: First 7 validators are locked in. We received signatures from the
+    // first 6 in the quorum, then the 8th validator in the quorum (who is not
+    // meant to be participating).
+    static_assert(service_nodes::PULSE_QUORUM_NUM_VALIDATORS > service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
+    entry.block.pulse.validator_bitset = 0b0000'000'0111'1111;
+    size_t const voter_indexes[]       = {0, 1, 2, 3, 4, 5, 7};
+
+    crypto::hash block_hash = cryptonote::get_block_hash(entry.block);
+    for (size_t index : voter_indexes)
+    {
+      service_nodes::service_node_keys validator_keys = gen.get_cached_keys(quorum.validators[index]);
+      assert(validator_keys.pub == quorum.validators[index]);
+
+      service_nodes::quorum_signature signature = {};
+      signature.voter_index                     = index;
+      crypto::generate_signature(block_hash, validator_keys.pub, validator_keys.key, signature.signature);
+      entry.block.signatures.push_back(signature);
+    }
+  }
+
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool loki_pulse_generate_all_rounds::generate(std::vector<test_event_entry> &events)
+{
+  loki_chain_generator gen = setup_pulse_tests(events);
+
+  for (uint8_t round = 0; round < static_cast<uint8_t>(-1); round++)
+  {
+    loki_blockchain_entry entry     = {};
+    loki_create_block_params params = gen.next_block_params();
+    params.pulse_round              = round;
+    gen.block_begin(entry, params, {} /*tx_list*/);
+    gen.block_end(entry, params);
+    gen.add_block(entry, true);
+  }
+
+  return true;
+}
+
+bool loki_pulse_out_of_order_voters::generate(std::vector<test_event_entry> &events)
+{
+  loki_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Quorum voters are out of order");
+  loki_blockchain_entry entry     = {};
+  loki_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+  // NOTE: Swap voters so that the votes are not sorted in order
+  auto tmp                       = entry.block.signatures.back();
+  entry.block.signatures.back()  = entry.block.signatures.front();
+  entry.block.signatures.front() = tmp;
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the signatures not in sorted order");
+
+  return true;
+}
+
+bool loki_pulse_reject_miner_block::generate(std::vector<test_event_entry> &events)
+{
+  loki_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: PoW Block but we have enough service nodes for Pulse");
+  loki_blockchain_entry entry     = {};
+  loki_create_block_params params = gen.next_block_params();
+  params.type = loki_create_block_type::miner;
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Create an ordinary miner block even when we have enough Service Nodes for Pulse.
+  fill_nonce_with_loki_generator(&gen, entry.block, TEST_DEFAULT_DIFFICULTY, cryptonote::get_block_height(entry.block));
+
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, block was mined with a miner but we have enough nodes for Pulse");
+  return true;
+}
+
+bool loki_pulse_generate_blocks::generate(std::vector<test_event_entry> &events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  loki_chain_generator gen(events, hard_forks);
+
+  gen.add_blocks_until_version(hard_forks.back().first);
+  gen.add_mined_money_unlock_blocks();
+
+  add_service_nodes(gen, service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN));
+  gen.add_n_blocks(40); // Chain genereator will generate blocks via Pulse quorums
+
+  loki_register_callback(events, "check_pulse_blocks", [](cryptonote::core &c, size_t ev_index)
+  {
+    DEFINE_TESTS_ERROR_CONTEXT("check_pulse_blocks");
+    uint64_t top_height;
+    crypto::hash top_hash;
+    c.get_blockchain_top(top_height, top_hash);
+    cryptonote::block top_block = c.get_blockchain_storage().get_db().get_block(top_hash);
+    CHECK_TEST_CONDITION(cryptonote::block_has_pulse_components(top_block));
+    return true;
+  });
+  return true;
+}
+
+bool loki_pulse_fallback_to_pow_and_back::generate(std::vector<test_event_entry> &events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  loki_chain_generator gen(events, hard_forks);
+
+  gen.add_blocks_until_version(hard_forks.back().first);
+  gen.add_mined_money_unlock_blocks();
+
+  add_service_nodes(gen, service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN));
+  gen.create_and_add_next_block();
+
+  gen.add_event_msg("Deregister 1 node, we now have insufficient nodes for Pulse");
+  {
+    const auto deregister_pub_key_1 = gen.top_quorum().obligations->workers[0];
+    cryptonote::transaction tx =
+        gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key_1);
+    gen.create_and_add_next_block({tx});
+  }
+
+  gen.add_event_msg("Check that we accept a PoW block");
+  {
+    loki_create_block_params block_params = gen.next_block_params();
+    block_params.type                     = loki_create_block_type::miner;
+
+    loki_blockchain_entry entry = {};
+    bool created = gen.create_block(entry, block_params, {});
+    assert(created);
+    gen.add_block(entry, true, "Can add a Miner block, we have insufficient nodes for Pulse so we fall back to PoW blocks.");
+  }
+
+  loki_register_callback(events, "check_no_pulse_quorum_exists", [](cryptonote::core &c, size_t ev_index)
+  {
+    DEFINE_TESTS_ERROR_CONTEXT("check_no_pulse_quorum_exists");
+    const auto quorum = c.get_quorum(service_nodes::quorum_type::pulse, c.get_current_blockchain_height() - 1, false, nullptr);
+    CHECK_TEST_CONDITION(quorum.get() == nullptr);
+    return true;
+  });
+
+  gen.add_event_msg("Re-register a node, allowing us to re-enter Pulse");
+  {
+    cryptonote::transaction registration_txs = gen.create_and_add_registration_tx(gen.first_miner());
+    gen.create_and_add_next_block({registration_txs});
+    gen.add_n_blocks(10);
+  }
+
+  return true;
+}
+
+bool loki_pulse_chain_split::generate(std::vector<test_event_entry> &events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  loki_chain_generator gen(events, hard_forks);
+
+  gen.add_blocks_until_version(hard_forks.back().first);
+  gen.add_mined_money_unlock_blocks();
+  add_service_nodes(gen, std::max(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN), service_nodes::CHECKPOINT_QUORUM_SIZE));
+
+  gen.create_and_add_next_block();
+
+  gen.add_event_msg("Diverge the two chains");
+  loki_chain_generator fork = gen;
+  gen.create_and_add_next_block();
+  fork.create_and_add_next_block();
+
+  gen.add_event_msg(
+      "On both chains add equivalent blocks in tandem (to avoid one chain attaining greater chain weight before the "
+      "other) and add checkpoint causing reorg");
+  for (;;)
+  {
+    gen.create_and_add_next_block();
+    fork.create_and_add_next_block();
+    std::shared_ptr<const service_nodes::quorum> fork_quorum = fork.get_quorum(service_nodes::quorum_type::checkpointing, fork.height());
+    if (fork_quorum && fork_quorum->validators.size()) break;
+  }
+  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.create_and_add_next_block();
+  fork.create_and_add_next_block();
+
+  crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
+  loki_register_callback(events, "check_reorganized_to_pulse_chain_with_checkpoints", [fork_top_hash](cryptonote::core &c, size_t ev_index)
+  {
+    DEFINE_TESTS_ERROR_CONTEXT("check_reorganized_to_pulse_chain_with_checkpoints");
+    uint64_t top_height;
+    crypto::hash top_hash;
+    c.get_blockchain_top(top_height, top_hash);
+    CHECK_EQ(fork_top_hash, top_hash);
+    return true;
+  });
+  return true;
+}
+
+// Same as loki_pulse_chain_split but, we don't use checkpoints. We rely on
+// Pulse chain weight to switch over.
+bool loki_pulse_chain_split_with_no_checkpoints::generate(std::vector<test_event_entry> &events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  loki_chain_generator gen(events, hard_forks);
+
+  gen.add_blocks_until_version(hard_forks.back().first);
+  gen.add_mined_money_unlock_blocks();
+  add_service_nodes(gen, std::max(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN), service_nodes::CHECKPOINT_QUORUM_SIZE));
+
+  gen.create_and_add_next_block();
+
+  gen.add_event_msg("Diverge the two chains");
+  loki_chain_generator fork = gen;
+  gen.create_and_add_next_block();
+  fork.create_and_add_next_block();
+
+  fork.create_and_add_next_block();
+  crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
+  loki_register_callback(events, "check_reorganized_to_pulse_chain_with_no_checkpoints", [fork_top_hash](cryptonote::core &c, size_t ev_index)
+  {
+    DEFINE_TESTS_ERROR_CONTEXT("check_reorganized_to_pulse_chain_with_no_checkpoints");
+    uint64_t top_height;
+    crypto::hash top_hash;
+    c.get_blockchain_top(top_height, top_hash);
+    CHECK_EQ(fork_top_hash, top_hash);
+    return true;
+  });
   return true;
 }

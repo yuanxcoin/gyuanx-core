@@ -1,4 +1,4 @@
-# Copyright (c) 2018, The Loki Project
+# Copyright (c) 2018-2020, The Loki Project
 # Copyright (c) 2014-2019, The Monero Project
 #
 # All rights reserved.
@@ -31,13 +31,13 @@ loki_add_executable(daemon "lokid"
   command_parser_executor.cpp
   command_server.cpp
   daemon.cpp
-  executor.cpp
   main.cpp
   rpc_command_executor.cpp
   )
 target_link_libraries(daemon
   PRIVATE
     rpc
+    rpc_http_client
     blockchain_db
     cryptonote_core
     p2p
@@ -45,10 +45,9 @@ target_link_libraries(daemon
     daemonizer
     serialization
     daemon_rpc_server
-    epee_readline
     version
-    Boost::chrono
     Boost::filesystem
     Boost::program_options
     Boost::system
+    systemd
     extra)

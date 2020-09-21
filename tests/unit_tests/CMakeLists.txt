@@ -30,18 +30,15 @@ add_executable(unit_tests
   account.cpp
   apply_permutation.cpp
   address_from_url.cpp
-  ban.cpp
   base58.cpp
   blockchain_db.cpp
   block_queue.cpp
   block_reward.cpp
   bulletproofs.cpp
-  canonical_amounts.cpp
   chacha.cpp
   checkpoints.cpp
   command_line.cpp
   crypto.cpp
-  decompose_amount_into_digits.cpp
   device.cpp
   dns_resolver.cpp
   epee_boosted_tcp_server.cpp
@@ -52,8 +49,8 @@ add_executable(unit_tests
   get_xtype_from_string.cpp
   hashchain.cpp
   hmac_keccak.cpp
-  http.cpp
   keccak.cpp
+  levin.cpp
   logging.cpp
   loki_name_system.cpp
   long_term_block_weight.cpp
@@ -66,6 +63,7 @@ add_executable(unit_tests
   multiexp.cpp
   multisig.cpp
   net.cpp
+  node_server.cpp
   notify.cpp
   output_distribution.cpp
   parse_amount.cpp
@@ -76,7 +74,7 @@ add_executable(unit_tests
   service_nodes.cpp
   service_nodes_swarm.cpp
   sha256.cpp
-  slow_memmem.cpp
+  string_util.cpp
   subaddress.cpp
   test_tx_utils.cpp
   test_peerlist.cpp
@@ -91,7 +89,6 @@ add_executable(unit_tests
   vercmp.cpp
   ringdb.cpp
   wipeable_string.cpp
-  is_hdd.cpp
   aligned.cpp)
 
 target_link_libraries(unit_tests
@@ -107,10 +104,9 @@ target_link_libraries(unit_tests
     wallet
     p2p
     version
-    Boost::chrono
     Boost::thread
     miniupnpc
-    ${GTEST_LIBRARIES}
+    gtest
     extra)
 set_property(TARGET unit_tests
   PROPERTY

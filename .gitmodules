@@ -1,11 +1,6 @@
-[submodule "external/unbound"]
-	path = external/unbound
-	url = https://github.com/monero-project/unbound
-	branch = monero
 [submodule "external/miniupnp"]
 	path = external/miniupnp
-	url = https://github.com/monero-project/miniupnp
-	branch = monero
+	url = https://github.com/miniupnp/miniupnp
 [submodule "external/rapidjson"]
 	path = external/rapidjson
 	url = https://github.com/Tencent/rapidjson
@@ -18,3 +13,15 @@
 [submodule "external/loki-mq"]
 	path = external/loki-mq
 	url = https://github.com/loki-project/loki-mq.git
+[submodule "external/googletest"]
+	path = external/googletest
+	url = https://github.com/google/googletest.git
+[submodule "external/uWebSockets"]
+	path = external/uWebSockets
+	url = https://github.com/uNetworking/uWebSockets.git
+[submodule "external/libuv"]
+	path = external/libuv
+	url = https://github.com/libuv/libuv.git
+[submodule "external/cpr"]
+	path = external/cpr
+	url = https://github.com/whoshuu/cpr.git

@@ -31,6 +31,7 @@
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/blobdatatype.h" // for type blobdata
 #include "ringct/rctTypes.h"
+#include <boost/thread/thread.hpp>
 #include <boost/thread/tss.hpp>
 
 #include <lmdb.h>
@@ -192,7 +193,9 @@ public:
 
   std::string get_db_name() const override;
 
-  bool lock() override;
+  void lock() override;
+
+  bool try_lock() override;
 
   void unlock() override;
 
@@ -200,11 +203,13 @@ public:
 
   uint64_t get_block_height(const crypto::hash& h) const override;
 
-  block_header get_block_header(const crypto::hash& h) const override;
+  block get_block_from_height(uint64_t height) const override;
+
+  block_header get_block_header_from_height(uint64_t height) const override;
 
   cryptonote::blobdata get_block_blob(const crypto::hash& h) const override;
 
-  cryptonote::blobdata get_block_blob_from_height(const uint64_t& height) const override;
+  cryptonote::blobdata get_block_blob_from_height(uint64_t height) const override;
 
   std::vector<uint64_t> get_block_cumulative_rct_outputs(const std::vector<uint64_t> &heights) const override;
 
@@ -245,6 +250,7 @@ public:
 
   bool get_tx_blob(const crypto::hash& h, cryptonote::blobdata &tx) const override;
   bool get_pruned_tx_blob(const crypto::hash& h, cryptonote::blobdata &tx) const override;
+  bool get_pruned_tx_blobs_from(const crypto::hash& h, size_t count, std::vector<cryptonote::blobdata> &bd) const override;
   bool get_prunable_tx_blob(const crypto::hash& h, cryptonote::blobdata &tx) const override;
   bool get_prunable_tx_hash(const crypto::hash& tx_hash, crypto::hash &prunable_hash) const override;
 
@@ -284,7 +290,7 @@ public:
   bool check_pruning() override;
 
   void add_alt_block(const crypto::hash &blkid, const cryptonote::alt_block_data_t &data, const cryptonote::blobdata &blob, const cryptonote::blobdata *checkpoint) override;
-  bool get_alt_block(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::blobdata *blob, cryptonote::blobdata *checkpoint) override;
+  bool get_alt_block(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::blobdata *blob, cryptonote::blobdata *checkpoint) const override;
   void remove_alt_block(const crypto::hash &blkid) override;
   uint64_t get_alt_block_count() override;
   void drop_alt_blocks() override;
@@ -343,7 +349,7 @@ public:
   std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> get_output_histogram(const std::vector<uint64_t> &amounts, bool unlocked, uint64_t recent_cutoff, uint64_t min_count) const override;
 
   bool get_output_distribution(uint64_t amount, uint64_t from_height, uint64_t to_height, std::vector<uint64_t> &distribution, uint64_t &base) const override;
-  bool get_output_blacklist(std::vector<uint64_t>       &blacklist) const override;
+  void get_output_blacklist(std::vector<uint64_t>       &blacklist) const override;
   void add_output_blacklist(std::vector<uint64_t> const &blacklist) override;
 
   // helper functions
@@ -442,6 +448,12 @@ private:
   bool remove_service_node_proof(const crypto::public_key& pubkey) override;
 
 private:
+  template <typename T,
+            std::enable_if_t<std::is_same_v<T, cryptonote::block> ||
+                             std::is_same_v<T, cryptonote::block_header> ||
+                             std::is_same_v<T, cryptonote::blobdata>, int> = 0>
+  T get_and_convert_block_blob_from_height(uint64_t height) const;
+
   MDB_env* m_env;
 
   MDB_dbi m_blocks;
@@ -499,6 +511,9 @@ private:
   constexpr static uint64_t DEFAULT_MAPSIZE = 1LL << 33;
 #endif
 #endif
+
+  // Guards LMDB resize
+  std::mutex m_synchronization_lock;
 
   constexpr static float RESIZE_PERCENT = 0.9f;
 };

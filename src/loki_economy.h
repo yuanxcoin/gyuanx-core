@@ -8,26 +8,28 @@ constexpr uint64_t EMISSION_SUPPLY_MULTIPLIER = 19;
 constexpr uint64_t EMISSION_SUPPLY_DIVISOR    = 10;
 constexpr uint64_t EMISSION_DIVISOR           = 2000000;
 
-// Transition (HF15) money supply parameters
+// HF15 money supply parameters:
 constexpr uint64_t BLOCK_REWARD_HF15      = 25 * COIN;
-constexpr uint64_t MINER_REWARD_HF15      = BLOCK_REWARD_HF15 * 24 / 100;
+constexpr uint64_t MINER_REWARD_HF15      = BLOCK_REWARD_HF15 * 24 / 100; // Only until HF16
 constexpr uint64_t SN_REWARD_HF15         = BLOCK_REWARD_HF15 * 66 / 100;
 constexpr uint64_t FOUNDATION_REWARD_HF15 = BLOCK_REWARD_HF15 * 10 / 100;
 
-// New (HF16+) money supply parameters (tentative - HF16 not yet scheduled)
-constexpr uint64_t BLOCK_REWARD_HF16      = 21 * COIN + 1 /* TODO - see below */;
-constexpr uint64_t SN_REWARD_HF16         = BLOCK_REWARD_HF16 * 90 / 100;
-constexpr uint64_t FOUNDATION_REWARD_HF16 = BLOCK_REWARD_HF16 * 10 / 100;
+// HF16+ money supply parameters: same as HF15 except the miner fee goes away and is redirected to
+// LF to be used exclusively for Loki Blockswap liquidity seeding and incentives.  See
+// https://github.com/loki-project/loki-improvement-proposals/issues/24 for more details.  This ends
+// after 6 months.
+constexpr uint64_t BLOCKSWAP_LIQUIDITY_HF16 = BLOCK_REWARD_HF15 * 24 / 100;
 
-// TODO: For now we add 1 extra atomic loki to the HF16 block reward, above; ultimately with pulse
-// we want to just drop the miner reward output entirely when a tx has no transactions, but we don't
-// support that yet in the current code and if we put an output of 0 it currently breaks the test
-// suite (which assumes an output of 0 means ringct, which this is not).  Thus this +1 hack for now,
-// to keep the current test suite happy until we actually implement this for HF16.
-constexpr uint64_t MINER_REWARD_HF16 = 1;
+// HF17: at most 6 months after HF16.  This is tentative and will likely be replaced before the
+// actual HF with a new reward schedule including Blockswap rewards, but as per the LRC linked
+// above, the liquidity funds end after 6 months.  That means that until HF17 is finalized, this is
+// the fallback if we hit the 6-months-after-HF16 point:
+constexpr uint64_t BLOCK_REWARD_HF17      = 18'333'333'333;
+constexpr uint64_t FOUNDATION_REWARD_HF17 =  1'833'333'333;
 
-static_assert(MINER_REWARD_HF15 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15, "math fail");
-static_assert(MINER_REWARD_HF16 + SN_REWARD_HF16 + FOUNDATION_REWARD_HF16 == BLOCK_REWARD_HF16, "math fail");
+static_assert(MINER_REWARD_HF15        + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
+static_assert(BLOCKSWAP_LIQUIDITY_HF16 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
+static_assert(                           SN_REWARD_HF15 + FOUNDATION_REWARD_HF17 == BLOCK_REWARD_HF17);
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -58,9 +60,9 @@ namespace lns
 {
 enum struct mapping_type : uint16_t
 {
-  session,
-  wallet,
-  lokinet_1year,
+  session = 0,
+  wallet = 1,
+  lokinet = 2, // the type value stored in the database; counts as 1-year when used in a buy tx.
   lokinet_2years,
   lokinet_5years,
   lokinet_10years,
@@ -68,25 +70,37 @@ enum struct mapping_type : uint16_t
   update_record_internal,
 };
 
-constexpr uint64_t burn_needed(uint8_t /*hf_version*/, mapping_type type)
+constexpr bool is_lokinet_type(mapping_type t) { return t >= mapping_type::lokinet && t <= mapping_type::lokinet_10years; }
+
+// How many days we add per "year" of LNS lokinet registration.  We slightly extend this to the 368
+// days per registration "year" to allow for some blockchain time drift + leap years.
+constexpr uint64_t REGISTRATION_YEAR_DAYS = 368;
+
+constexpr uint64_t burn_needed(uint8_t hf_version, mapping_type type)
 {
   uint64_t result = 0;
+
+  // The base amount for session/wallet/lokinet-1year:
+  const uint64_t basic_fee = (
+      hf_version >= 16 ? 15*COIN :  // cryptonote::network_version_16_pulse -- but don't want to add cryptonote_config.h include
+      20*COIN                       // cryptonote::network_version_15_lns
+  );
   switch (type)
   {
     case mapping_type::update_record_internal:
       result = 0;
       break;
 
-    case mapping_type::lokinet_1year: /* FALLTHRU */
+    case mapping_type::lokinet: /* FALLTHRU */
     case mapping_type::session: /* FALLTHRU */
     case mapping_type::wallet: /* FALLTHRU */
     default:
-      result = 20 * COIN;
+      result = basic_fee;
       break;
 
-    case mapping_type::lokinet_2years: result = 40 * COIN; break;
-    case mapping_type::lokinet_5years: result = 80 * COIN; break;
-    case mapping_type::lokinet_10years: result = 120 * COIN; break;
+    case mapping_type::lokinet_2years: result = 2 * basic_fee; break;
+    case mapping_type::lokinet_5years: result = 4 * basic_fee; break;
+    case mapping_type::lokinet_10years: result = 6 * basic_fee; break;
   }
   return result;
 }

@@ -32,21 +32,23 @@
 #include "ringct/rctOps.h"
 #include "ringct/multiexp.h"
 
-static const rct::key TESTPOW2SCALAR = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-static const rct::key TESTSMALLSCALAR = {{5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+namespace {
+
+const rct::key TESTPOW2SCALAR = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+const rct::key TESTSMALLSCALAR = {{5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
 struct lazy_init
 {
    rct::key TESTSCALAR = rct::skGen();
    rct::key TESTPOINT = rct::scalarmultBase(rct::skGen());
 };
 
-static lazy_init &get_context()
+lazy_init &get_context()
 {
   static lazy_init result;
   return result;
 }
 
-static rct::key basic(const std::vector<rct::MultiexpData> &data)
+rct::key basic(const std::vector<rct::MultiexpData> &data)
 {
   ge_p3 res_p3 = ge_p3_identity;
   for (const auto &d: data)
@@ -64,12 +66,14 @@ static rct::key basic(const std::vector<rct::MultiexpData> &data)
   return res;
 }
 
-static ge_p3 get_p3(const rct::key &point)
+ge_p3 get_p3(const rct::key &point)
 {
   ge_p3 p3;
   EXPECT_TRUE(ge_frombytes_vartime(&p3, point.bytes) == 0);
   return p3;
 }
+
+} // empty namespace
 
 TEST(multiexp, bos_coster_empty)
 {
@@ -259,5 +263,67 @@ TEST(multiexp, pippenger_cached)
       data.push_back({rct::skGen(), P[s].point});
     }
     ASSERT_TRUE(basic(data) == pippenger(data, cache));
+  }
+}
+
+TEST(multiexp, scalarmult_triple)
+{
+  std::vector<rct::MultiexpData> data;
+  ge_p2 p2;
+  rct::key res;
+  ge_p3 Gp3;
+
+  ge_frombytes_vartime(&Gp3, rct::G.bytes);
+
+  static const rct::key scalars[] = {
+    rct::Z,
+    rct::I,
+    rct::L,
+    rct::EIGHT,
+    rct::INV_EIGHT,
+  };
+  static const ge_p3 points[] = {
+    ge_p3_identity,
+    ge_p3_H,
+    Gp3,
+  };
+  ge_dsmp ppre[sizeof(points) / sizeof(points[0])];
+
+  for (size_t i = 0; i < sizeof(points) / sizeof(points[0]); ++i)
+    ge_dsm_precomp(ppre[i], &points[i]);
+
+  data.resize(3);
+  for (const rct::key &x: scalars)
+  {
+    data[0].scalar = x;
+    for (const rct::key &y: scalars)
+    {
+      data[1].scalar = y;
+      for (const rct::key &z: scalars)
+      {
+        data[2].scalar = z;
+        for (size_t i = 0; i < sizeof(points) / sizeof(points[0]); ++i)
+        {
+          data[1].point = points[i];
+          for (size_t j = 0; j < sizeof(points) / sizeof(points[0]); ++j)
+          {
+            data[0].point = Gp3;
+            data[2].point = points[j];
+
+            ge_triple_scalarmult_base_vartime(&p2, data[0].scalar.bytes, data[1].scalar.bytes, ppre[i], data[2].scalar.bytes, ppre[j]);
+            ge_tobytes(res.bytes, &p2);
+            ASSERT_TRUE(basic(data) == res);
+
+            for (size_t k = 0; k < sizeof(points) / sizeof(points[0]); ++k)
+            {
+              data[0].point = points[k];
+              ge_triple_scalarmult_precomp_vartime(&p2, data[0].scalar.bytes, ppre[k], data[1].scalar.bytes, ppre[i], data[2].scalar.bytes, ppre[j]);
+              ge_tobytes(res.bytes, &p2);
+              ASSERT_TRUE(basic(data) == res);
+            }
+          }
+        }
+      }
+    }
   }
 }

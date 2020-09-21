@@ -45,6 +45,7 @@ namespace
   const command_line::arg_descriptor<bool>        arg_test_transactions           = {"test_transactions", ""};
   const command_line::arg_descriptor<std::string> arg_filter                      = { "filter", "Regular expression filter for which tests to run" };
   const command_line::arg_descriptor<bool>        arg_list_tests                  = {"list_tests", ""};
+  const command_line::arg_descriptor<std::string> arg_log_level                   = {"log-level", ""};
 }
 
 int main(int argc, char* argv[])
@@ -55,7 +56,6 @@ int main(int argc, char* argv[])
 
   //set up logging options
   mlog_configure(mlog_get_default_log_path("core_tests.log"), true);
-  mlog_set_log_level(2);
   
   po::options_description desc_options("Allowed options");
   command_line::add_arg(desc_options, command_line::arg_help);
@@ -66,6 +66,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_options, arg_test_transactions);
   command_line::add_arg(desc_options, arg_filter);
   command_line::add_arg(desc_options, arg_list_tests);
+  command_line::add_arg(desc_options, arg_log_level);
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc_options, [&]()
@@ -83,8 +84,12 @@ int main(int argc, char* argv[])
     return 0;
   }
 
-  const std::string filter = tools::glob_to_regex(command_line::get_arg(vm, arg_filter));
-  boost::smatch match;
+  if (!command_line::is_arg_defaulted(vm, arg_log_level))
+    mlog_set_log(command_line::get_arg(vm, arg_log_level).c_str());
+  else
+    mlog_set_log_level(0);
+
+  const std::string filter = command_line::get_arg(vm, arg_filter);
 
   size_t tests_count = 0;
   std::vector<std::string> failed_tests;
@@ -137,6 +142,7 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(loki_name_system_name_value_max_lengths);
     GENERATE_AND_PLAY(loki_name_system_update_mapping_after_expiry_fails);
     GENERATE_AND_PLAY(loki_name_system_update_mapping);
+    GENERATE_AND_PLAY(loki_name_system_update_mapping_argon2);
     GENERATE_AND_PLAY(loki_name_system_update_mapping_multiple_owners);
     GENERATE_AND_PLAY(loki_name_system_update_mapping_non_existent_name_fails);
     GENERATE_AND_PLAY(loki_name_system_update_mapping_invalid_signature);
@@ -149,6 +155,17 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(loki_service_nodes_insufficient_contribution);
     GENERATE_AND_PLAY(loki_service_nodes_test_rollback);
     GENERATE_AND_PLAY(loki_service_nodes_test_swarms_basic);
+    GENERATE_AND_PLAY(loki_pulse_invalid_validator_bitset);
+    GENERATE_AND_PLAY(loki_pulse_invalid_signature);
+    GENERATE_AND_PLAY(loki_pulse_oob_voter_index);
+    GENERATE_AND_PLAY(loki_pulse_non_participating_validator);
+    GENERATE_AND_PLAY(loki_pulse_generate_all_rounds);
+    GENERATE_AND_PLAY(loki_pulse_out_of_order_voters);
+    GENERATE_AND_PLAY(loki_pulse_reject_miner_block);
+    GENERATE_AND_PLAY(loki_pulse_generate_blocks);
+    GENERATE_AND_PLAY(loki_pulse_fallback_to_pow_and_back);
+    GENERATE_AND_PLAY(loki_pulse_chain_split);
+    GENERATE_AND_PLAY(loki_pulse_chain_split_with_no_checkpoints);
 
     // NOTE: Monero Tests
     GENERATE_AND_PLAY(gen_simple_chain_001);
@@ -223,8 +240,8 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_48_1_no_signers);
     GENERATE_AND_PLAY(gen_multisig_tx_invalid_48_1_23_no_threshold);
 
-    // Bulletproof Tests
-    GENERATE_AND_PLAY(gen_bp_tx_valid_1);
+    GENERATE_AND_PLAY(gen_bp_tx_valid_1_old);
+    GENERATE_AND_PLAY(gen_bp_tx_invalid_1_new);
     GENERATE_AND_PLAY(gen_bp_tx_invalid_1_1);
     GENERATE_AND_PLAY(gen_bp_tx_valid_2);
     GENERATE_AND_PLAY(gen_bp_tx_valid_3);
@@ -239,6 +256,9 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_bp_tx_invalid_too_many_proofs);
     GENERATE_AND_PLAY(gen_bp_tx_invalid_wrong_amount);
     GENERATE_AND_PLAY(gen_bp_tx_invalid_borromean_type);
+    GENERATE_AND_PLAY(gen_bp_tx_invalid_bulletproof2_type);
+
+    GENERATE_AND_PLAY(gen_rct2_tx_clsag_malleability);
 
     // TODO(loki): Tests we need to fix
 #if 0
@@ -288,6 +308,11 @@ int main(int argc, char* argv[])
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_increase_vin_and_fee);
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_altered_extra);
       GENERATE_AND_PLAY(gen_rct_tx_rct_altered_extra);
+
+      // NOTE: For loki we should re-write this which is trivial to do with
+      // generating some funds and attempting to spend them immediately instead
+      // of the minutia of the monero framework.
+      GENERATE_AND_PLAY(gen_rct_tx_uses_output_too_early);
 
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2);
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2_many_inputs);
