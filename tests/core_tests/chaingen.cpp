@@ -68,7 +68,7 @@ void loki_register_callback(std::vector<test_event_entry> &events,
 }
 
 std::vector<std::pair<uint8_t, uint64_t>>
-loki_generate_sequential_hard_fork_table(uint8_t max_hf_version)
+loki_generate_sequential_hard_fork_table(uint8_t max_hf_version, uint64_t pos_delay)
 {
   assert(max_hf_version < cryptonote::network_version_count);
   std::vector<std::pair<uint8_t, uint64_t>> result = {};
@@ -76,10 +76,8 @@ loki_generate_sequential_hard_fork_table(uint8_t max_hf_version)
 
   // HF15 reduces and HF16 eliminates miner block rewards, so we need to ensure we have enough
   // pre-HF15 blocks to generate enough LOKI for tests:
-  constexpr uint64_t pos_delay = 60;
-
   bool delayed = false;
-  for (uint8_t version = cryptonote::network_version_7; version <= max_hf_version; )
+  for (uint8_t version = cryptonote::network_version_7; version <= max_hf_version; version++)
   {
     if (version >= cryptonote::network_version_15_lns && !delayed)
     {
@@ -87,14 +85,6 @@ loki_generate_sequential_hard_fork_table(uint8_t max_hf_version)
       delayed = true;
     }
     result.emplace_back(version, version_height++);
-
-    // If we're going to HF16 or above, just skip over the RandomX version (HF12 through 15) so that
-    // we can avoid initializing the RandomX engine (which slows down the test suite quite
-    // substantially).
-    if (max_hf_version >= cryptonote::network_version_16_pulse && version == cryptonote::network_version_11_infinite_staking)
-      version = cryptonote::network_version_16_pulse;
-    else
-      version++;
   }
   return result;
 }
