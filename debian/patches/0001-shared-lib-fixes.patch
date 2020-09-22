@@ -4,14 +4,14 @@ Subject: Make loki build and install shared libs
 
 Patch the loki cmake files to properly build and install shared libs.
 ---
- CMakeLists.txt              | 16 ++++++++++++++--
+ CMakeLists.txt              | 17 +++++++++++++++--
  contrib/epee/CMakeLists.txt |  5 +++++
  external/CMakeLists.txt     | 10 ++++++++--
  src/CMakeLists.txt          |  6 +++++-
- 4 files changed, 32 insertions(+), 5 deletions(-)
+ 4 files changed, 33 insertions(+), 5 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 0c0bb4e..8ac9427 100644
+index 0c0bb4e..87fc2bf 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -53,7 +53,7 @@ if(CCACHE_PROGRAM)
@@ -34,13 +34,14 @@ index 0c0bb4e..8ac9427 100644
  
  if(APPLE)
    include_directories(SYSTEM /usr/include/malloc)
-@@ -944,6 +946,16 @@ if(BUILD_DOCUMENTATION)
+@@ -944,6 +946,17 @@ if(BUILD_DOCUMENTATION)
    endif()
  endif()
  
 +set(lokilibs epee blockchain_db checkpoints common cncrypto cryptonote_basic
 +        cryptonote_core cryptonote_protocol daemonizer device device_trezor lmdb_lib mnemonics
-+        multisig net p2p ringct_basic ringct rpc_base rpc daemon_messages daemon_rpc_server
++        multisig net p2p ringct_basic ringct
++        rpc_server_base rpc rpc_http_client rpc_commands daemon_messages daemon_rpc_server
 +        serialization wallet easylogging lmdb randomx blocks version)
 +install(TARGETS ${lokilibs}
 +    ARCHIVE DESTINATION lib${LOKI_INSTALL_LIBDIR_SUFFIX}
