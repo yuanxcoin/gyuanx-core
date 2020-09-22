@@ -4,36 +4,37 @@ Subject: Make loki build and install shared libs
 
 Patch the loki cmake files to properly build and install shared libs.
 ---
- CMakeLists.txt              | 14 +++++++++++++-
- cmake/Version.cmake         |  9 +++++++++
+ CMakeLists.txt              | 16 ++++++++++++++--
  contrib/epee/CMakeLists.txt |  5 +++++
- external/CMakeLists.txt     |  6 ++++++
- src/CMakeLists.txt          |  6 +++++-
- 5 files changed, 38 insertions(+), 2 deletions(-)
+ external/CMakeLists.txt     | 10 ++++++++--
+ src/CMakeLists.txt          |  5 +++++
+ 4 files changed, 32 insertions(+), 4 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 1889044..78a047d 100644
+index 0c0bb4e..b50e1ad 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -40,7 +40,7 @@ if (IOS)
-     INCLUDE(CmakeLists_IOS.txt)
+@@ -53,7 +53,7 @@ if(CCACHE_PROGRAM)
+   endforeach()
  endif()
  
--cmake_minimum_required(VERSION 3.7)
+-cmake_minimum_required(VERSION 3.10)
 +cmake_minimum_required(VERSION 3.13)
  message(STATUS "CMake version ${CMAKE_VERSION}")
  
- project(loki)
-@@ -300,6 +300,8 @@ endif()
+ project(loki
+@@ -332,7 +332,9 @@ endif()
  # elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
  #   set(BSDI TRUE)
  
+-include_directories(external/rapidjson/include src external)
 +include(Version)
 +
- include_directories(external/rapidjson/include src contrib/epee/include external)
++include_directories(external/rapidjson/include src contrib/epee/include external)
  
  if(APPLE)
-@@ -943,6 +945,16 @@ if(BUILD_DOCUMENTATION)
+   include_directories(SYSTEM /usr/include/malloc)
+@@ -944,6 +946,16 @@ if(BUILD_DOCUMENTATION)
    endif()
  endif()
  
@@ -45,28 +46,11 @@ index 1889044..78a047d 100644
 +    ARCHIVE DESTINATION lib${LOKI_INSTALL_LIBDIR_SUFFIX}
 +    LIBRARY DESTINATION lib${LOKI_INSTALL_LIBDIR_SUFFIX})
 +set_target_properties(${lokilibs} PROPERTIES
-+    VERSION "${LOKI_VERSION_MAJOR}.${LOKI_VERSION_MINOR}.${LOKI_VERSION_PATCH}")
++    VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 +
  # when ON - will install libwallet_merged into "lib"
  option(BUILD_GUI_DEPS "Build GUI dependencies." OFF)
  
-diff --git a/cmake/Version.cmake b/cmake/Version.cmake
-index 4042bc6..9e4ad65 100644
---- a/cmake/Version.cmake
-+++ b/cmake/Version.cmake
-@@ -51,3 +51,12 @@ else()
- endif ()
- add_custom_target(genversion ALL
-   DEPENDS "${CMAKE_BINARY_DIR}/version.cpp")
-+
-+
-+file(STRINGS "${CMAKE_SOURCE_DIR}/src/version.cpp.in" loki_version_defines
-+    REGEX "#define DEF_LOKI_VERSION_(MAJOR|MINOR|PATCH) ")
-+foreach(ver ${loki_version_defines})
-+  if(ver MATCHES "#define DEF_LOKI_VERSION_(MAJOR|MINOR|PATCH) +([0-9]+)$")
-+    set(LOKI_VERSION_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}" CACHE INTERNAL "")
-+  endif()
-+endforeach()
 diff --git a/contrib/epee/CMakeLists.txt b/contrib/epee/CMakeLists.txt
 index 035b24b..357984d 100644
 --- a/contrib/epee/CMakeLists.txt
@@ -81,32 +65,45 @@ index 035b24b..357984d 100644
 +    COMPONENT development
 +    FILES_MATCHING PATTERN "*.h" PATTERN "*.inl")
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 55c3cc5..6c56c1b 100644
+index a66d343..40e1e81 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
-@@ -120,3 +120,9 @@ endif()
- add_subdirectory(db_drivers)
+@@ -45,7 +45,7 @@ if(MINIUPNPC_FOUND)
+   link_dep_libs(miniupnpc INTERFACE "${MINIUPNPC_LIBRARY_DIRS}" ${MINIUPNPC_LIBRARIES})
+   target_include_directories(miniupnpc INTERFACE ${MINIUPNPC_INCLUDE_DIRS})
+ else()
+-  message(STATUS "Using in-tree miniupnpc")
++  message(FATAL_ERROR "Using in-tree miniupnpc")
+   add_subdirectory(miniupnp/miniupnpc)
+   if(MSVC)
+     target_compile_options(libminiupnpc-static PRIVATE -wd4244 -wd4267)
+@@ -61,7 +61,7 @@ endif()
+ 
+ 
+ if(NOT LOKIMQ_FOUND)
+-  message(STATUS "Using in-tree lokimq")
++  message(FATAL_ERROR "Using in-tree lokimq")
+   if (DEPENDS)
+     # The depends system builds a static libzmq so set up a target loki-mq can use to avoid building
+     add_library(libzmq STATIC IMPORTED GLOBAL)
+@@ -91,6 +91,12 @@ add_subdirectory(db_drivers)
  add_subdirectory(easylogging++)
  add_subdirectory(randomx EXCLUDE_FROM_ALL)
-+
+ 
 +install(
 +  DIRECTORY boost
 +  DESTINATION include${LOKI_INSTALL_INCLUDEDIR_SUFFIX}
 +  COMPONENT   development
 +  FILES_MATCHING PATTERN "*.hpp")
++
+ # uSockets doesn't really have a proper build system (just a very simple Makefile) so build it
+ # ourselves.
+ if (NOT CMAKE_VERSION VERSION_LESS 3.12)
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 339d7ab..57fe031 100644
+index bff4259..a0d684e 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
-@@ -54,7 +54,6 @@ function (loki_add_executable target binary)
-   install(TARGETS "${target}" DESTINATION bin)
- endfunction ()
- 
--include(Version)
- add_library(version ${CMAKE_BINARY_DIR}/version.cpp)
- add_dependencies(version genversion)
- 
-@@ -97,3 +96,8 @@ endif()
+@@ -106,3 +106,8 @@ endif()
  
  add_subdirectory(device)
  add_subdirectory(device_trezor)
