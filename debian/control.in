@@ -27,7 +27,7 @@ Description: Loki wallet shared libraries
 Package: lokid
 Architecture: any
 Depends: libloki-core@LIBLOKI_VERSION@ (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}, debconf
-Suggests: loki-blockchain-tools, loki-wallet
+Suggests: loki-blockchain-tools, loki-wallet-cli
 Description: Loki network daemon
  This package contains the loki network daemon, lokid, for running a loki node
  or loki service node.
