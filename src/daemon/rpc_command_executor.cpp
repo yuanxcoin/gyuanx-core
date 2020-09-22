@@ -1546,7 +1546,6 @@ static void print_vote_history(std::ostringstream &stream, std::vector<service_n
     {
       stream << "[" << entry.height << ", ";
       stream << +entry.pulse.round << ", ";
-      stream << (entry.pulse.block_producer ? "Block Producer" : "Validator") << ", ";
       stream << (entry.voted ? "Yes" : "No") << "]";
     }
     else
@@ -1684,7 +1683,7 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
     stream << indent2 <<  "Checkpoint Participation [Height, Voted]\n" << indent3;
     print_vote_history(stream, entry.checkpoint_participation);
 
-    stream << "\n\n" << indent2 << "Pulse Participation [Height, Round, (Block Producer|Validator), Voted]\n" << indent3;
+    stream << "\n\n" << indent2 << "Pulse Participation [Height, Round, Voted]\n" << indent3;
     print_vote_history(stream, entry.pulse_participation);
   }
 
