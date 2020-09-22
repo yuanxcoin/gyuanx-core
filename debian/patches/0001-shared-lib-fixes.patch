@@ -11,7 +11,7 @@ Patch the loki cmake files to properly build and install shared libs.
  4 files changed, 33 insertions(+), 5 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 0c0bb4e..87fc2bf 100644
+index 0c0bb4e..e68ccf1 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -53,7 +53,7 @@ if(CCACHE_PROGRAM)
@@ -39,7 +39,7 @@ index 0c0bb4e..87fc2bf 100644
  endif()
  
 +set(lokilibs epee blockchain_db checkpoints common cncrypto cryptonote_basic
-+        cryptonote_core cryptonote_protocol daemonizer device device_trezor lmdb_lib mnemonics
++        cryptonote_core cryptonote_protocol device device_trezor lmdb_lib mnemonics
 +        multisig net p2p ringct_basic ringct
 +        rpc_server_base rpc rpc_http_client rpc_commands daemon_messages daemon_rpc_server
 +        serialization wallet easylogging lmdb randomx blocks version)
