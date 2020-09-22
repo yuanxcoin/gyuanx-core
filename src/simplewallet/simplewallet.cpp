@@ -6560,7 +6560,7 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
     //Save the LNS record to the wallet cache
     std::string name_hash_str = lns::name_to_base64_hash(name);
     tools::wallet2::lns_detail detail = {
-      lns::mapping_type::session,
+      type,
       name,
       name_hash_str,
       value,
@@ -6767,7 +6767,7 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     std::string name_hash_str = lns::name_to_base64_hash(name);
     m_wallet->delete_lns_cache_record(name_hash_str);
     tools::wallet2::lns_detail detail = {
-      lns::mapping_type::session,
+      type,
       name,
       name_hash_str,
       value,
@@ -6957,6 +6957,8 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       return false;
     }
 
+    std::unordered_map<std::string, tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
+
     // Print any skipped (i.e. not registered) results:
     for (size_t i = last_index + 1; i < mapping.entry_index; i++)
       fail_msg_writer() << args[i] << " not found\n";
@@ -6974,6 +6976,8 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       return false;
     }
 
+    std::unordered_map<std::string,tools::wallet2::lns_detail>::const_iterator got = cache.find (lns::name_to_base64_hash(name));
+
     auto writer = tools::msg_writer();
     writer
       << "Name: " << name
@@ -6986,6 +6990,8 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       << "\n    Last updated height: " << mapping.update_height;
     if (mapping.expiration_height) writer
       << "\n    Expiration height: " << *mapping.expiration_height;
+    if ( got != cache.end() ) writer
+      << "\n    Value: " << got->second.value;
     writer
       << "\n    Encrypted value: " << enc_hex;
     writer
@@ -6998,7 +7004,7 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       request.entries[0].name_hash,
       value.to_readable_value(m_wallet->nettype(), static_cast<lns::mapping_type>(mapping.type)),
       mapping.owner,
-      (mapping.backup_owner.empty() ? NULL_STR : mapping.backup_owner) };
+      mapping.backup_owner.value_or(NULL_STR)};
     m_wallet->set_lns_cache_record(detail);
   }
   for (size_t i = last_index + 1; i < args.size(); i++)
@@ -7078,8 +7084,6 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         continue;
       }
 
-      std::string name = "";
-      std::string value = "";
       std::unordered_map<std::string,tools::wallet2::lns_detail>::const_iterator got = cache.find (entry.name_hash);
 
       if ( got != cache.end() )
@@ -7091,8 +7095,8 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
       auto writer = tools::msg_writer();
       writer
         << "Name (hashed): " << entry.name_hash;
-      if (!name.empty()) writer
-        << "\n    Name: " << name;
+      if ( got != cache.end() ) writer
+        << "\n    Name: " << got->second.name;
       writer
         << "\n    Type: " << entry.type
         << "\n    Owner: " << *owner;
@@ -7102,10 +7106,10 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         << "\n    Last updated height: " << entry.update_height;
       if (entry.expiration_height) writer
         << "\n    Expiration height: " << *entry.expiration_height;
+      if ( got != cache.end() ) writer
+        << "\n    Value: " << got->second.value;
       writer
         << "\n    Encrypted value: " << entry.encrypted_value;
-      if (!value.empty()) writer
-        << "\n    Value: " << value;
     }
   }
   return true;
