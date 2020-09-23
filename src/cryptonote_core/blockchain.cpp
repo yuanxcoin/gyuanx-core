@@ -1324,10 +1324,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
   //validate reward
-  uint64_t money_in_use = 0;
-  for (auto& o: b.miner_tx.vout)
-    money_in_use += o.amount;
-
+  uint64_t const money_in_use = get_outs_money_amount(b.miner_tx);
   if (b.miner_tx.vout.size() == 0) {
     MERROR_VER("miner tx has no outputs");
     return false;
@@ -4484,12 +4481,13 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   }
 
   abort_block.cancel();
+  uint64_t const fee_after_penalty = get_outs_money_amount(bl.miner_tx) - base_reward;
   if (bl.signatures.size() == service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES)
   {
     MINFO("+++++ PULSE BLOCK SUCCESSFULLY ADDED"
         "\n\tid: " << id <<
         "\n\tHEIGHT: " << new_height-1 << ", v" << +bl.major_version << '.' << +bl.minor_version <<
-        "\n\tblock reward: " << print_money(fee_summary + base_reward) << "(" << print_money(base_reward) << " + " << print_money(fee_summary) << ")"
+        "\n\tblock reward: " << print_money(fee_after_penalty + base_reward) << "(" << print_money(base_reward) << " + " << print_money(fee_after_penalty) << ")"
           ", coinbase_weight: " << coinbase_weight <<
           ", cumulative weight: " << cumulative_block_weight <<
           ", " << block_processing_time << "ms");
@@ -4501,7 +4499,7 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
         "\n\tid:  " << id <<
         "\n\tPoW: " << miner.blk_pow.proof_of_work <<
         "\n\tHEIGHT: " << new_height - 1 << ", v" << +bl.major_version << '.' << +bl.minor_version << ", difficulty: " << current_diffic <<
-        "\n\tblock reward: " << print_money(fee_summary + base_reward) << "(" << print_money(base_reward) << " + " << print_money(fee_summary) << ")"
+        "\n\tblock reward: " << print_money(fee_after_penalty + base_reward) << "(" << print_money(base_reward) << " + " << print_money(fee_after_penalty) << ")"
           ", coinbase_weight: " << coinbase_weight <<
           ", cumulative weight: " << cumulative_block_weight <<
           ", " << block_processing_time << "(" << miner.difficulty_calc_time << "/" << miner.verify_pow_time << ")ms");
