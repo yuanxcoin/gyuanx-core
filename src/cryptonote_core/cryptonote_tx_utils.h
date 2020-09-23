@@ -116,9 +116,10 @@ namespace cryptonote
   struct loki_block_reward_context
   {
     using portions = uint64_t;
-    uint64_t              height;
-    uint64_t              fee;
-    uint64_t              batched_governance;   // Optional: 0 hardfork v10, then must be calculated using blockchain::calc_batched_governance_reward
+    bool                     testnet_override;
+    uint64_t                 height;
+    uint64_t                 fee;
+    uint64_t                 batched_governance;   // Optional: 0 hardfork v10, then must be calculated using blockchain::calc_batched_governance_reward
     std::vector<service_nodes::payout_entry> block_leader_payouts = {service_nodes::null_payout_entry};
   };
 

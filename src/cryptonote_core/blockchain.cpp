@@ -1346,6 +1346,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   loki_block_reward_context block_reward_context = {};
   block_reward_context.fee                       = fee;
   block_reward_context.height                    = height;
+  block_reward_context.testnet_override          = nettype() == TESTNET && height < 386000;
   if (!calc_batched_governance_reward(height, block_reward_context.batched_governance))
   {
     MERROR_VER("Failed to calculate batched governance reward");

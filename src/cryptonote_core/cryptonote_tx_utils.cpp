@@ -489,6 +489,7 @@ namespace cryptonote
     // exceeding the block limit is already removed from base_reward).
     uint64_t non_miner_amounts = result.governance_due + result.service_node_paid;
     result.base_miner = base_reward > non_miner_amounts ? base_reward - non_miner_amounts : 0;
+    result.base_miner_fee = loki_context.fee;
 
     if (hard_fork_version >= cryptonote::network_version_16_pulse)
     {
@@ -505,20 +506,19 @@ namespace cryptonote
         return false;
       }
 
-      uint64_t const penalty = base_reward_unpenalized - base_reward;
-      if (penalty > loki_context.fee)
+      if (!loki_context.testnet_override)
       {
-        MERROR("Block reward penalty is greater than the fee that would be received, penalty "
-               << cryptonote::print_money(penalty) << ", fee "
-               << cryptonote::print_money(loki_context.fee));
-        return false;
-      }
+        uint64_t const penalty = base_reward_unpenalized - base_reward;
+        if (penalty > loki_context.fee)
+        {
+          MERROR("Block reward penalty is greater than the fee that would be received, penalty "
+                 << cryptonote::print_money(penalty) << ", fee "
+                 << cryptonote::print_money(loki_context.fee));
+          return false;
+        }
 
-      result.base_miner_fee = loki_context.fee - penalty;
-    }
-    else
-    {
-      result.base_miner_fee = loki_context.fee;
+        result.base_miner_fee = loki_context.fee - penalty;
+      }
     }
 
     return true;
