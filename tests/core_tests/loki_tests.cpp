@@ -523,9 +523,14 @@ bool loki_core_block_reward_unpenalized_post_pulse::generate(std::vector<test_ev
 
     CHECK_TEST_CONDITION(orphan == false);
 
+    uint64_t rewards_from_fee = top_block.miner_tx.vout[0].amount;
     CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout.size() == 2, "1 for miner, 1 for service node");
-    CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout[0].amount == tx_fee, "Miner should have just received tx fee" << top_block.miner_tx.vout[0].amount);
-    CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout[1].amount < unpenalized_reward, "We should add enough transactions that the penalty is realised on the Service Node " << unpenalized_reward);
+    CHECK_TEST_CONDITION_MSG(rewards_from_fee > 0 && rewards_from_fee < tx_fee, "Block producer should receive a penalised tx fee less than " << cryptonote::print_money(tx_fee) << "received, " << cryptonote::print_money(rewards_from_fee) << "");
+    CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout[1].amount == unpenalized_reward, "Service Node should receive full reward " << unpenalized_reward);
+
+    MGINFO("rewards_from_fee: "   << cryptonote::print_money(rewards_from_fee));
+    MGINFO("tx_fee: "             << cryptonote::print_money(tx_fee));
+    MGINFO("unpenalized_amount: " << cryptonote::print_money(unpenalized_reward));
     return true;
   });
   return true;

@@ -1397,16 +1397,16 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   // +1 here to allow a 1 atomic unit error in the calculation (which can happen because of floating point errors or rounding)
   // TODO(loki): eliminate all floating point math in reward calculations.
   uint64_t max_base_reward = reward_parts.base_miner + reward_parts.governance_paid + reward_parts.service_node_paid + 1;
-  uint64_t max_money_in_use = max_base_reward + fee;
+  uint64_t max_money_in_use = max_base_reward + reward_parts.base_miner_fee;
   if (money_in_use > max_money_in_use)
   {
     MERROR_VER("coinbase transaction spends too much money (" << print_money(money_in_use) << "). Maximum block reward is "
-            << print_money(max_money_in_use) << " (= " << print_money(max_base_reward) << " base + " << print_money(fee) << " fees)");
+            << print_money(max_money_in_use) << " (= " << print_money(max_base_reward) << " base + " << print_money(reward_parts.base_miner_fee) << " fees)");
     return false;
   }
 
-  CHECK_AND_ASSERT_MES(money_in_use >= fee, false, "base reward calculation bug");
-  base_reward = money_in_use - fee;
+  CHECK_AND_ASSERT_MES(money_in_use >= reward_parts.base_miner_fee, false, "base reward calculation bug");
+  base_reward = money_in_use - reward_parts.base_miner_fee;
 
   return true;
 }

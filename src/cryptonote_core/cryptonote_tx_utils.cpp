@@ -469,36 +469,11 @@ namespace cryptonote
 
     // We base governance fees and SN rewards based on the block reward formula.  (Prior to HF13,
     // however, they were accidentally based on the block reward formula *after* subtracting a
-    // potential penalty if the miner includes txes beyond the median size limit).
+    // potential penalty if the block producer includes txes beyond the median size limit).
     result.original_base_reward =
         hard_fork_version >= network_version_13_enforce_checkpoints ? base_reward_unpenalized : base_reward;
 
-    if (hard_fork_version >= cryptonote::network_version_16_pulse)
-    {
-      // In HF16, the block producer changes from the Miner to the Service Node
-      // due to Pulse.  Any penalty for exceeding the block limit must now be
-      // paid by the Service Node instead of the Miner. (i.e. we use the
-      // base_reward, the amount after the penalty has been removed).
-      uint64_t const penalty   = base_reward_unpenalized - base_reward;
-      uint64_t const sn_reward = service_node_reward_formula(base_reward, hard_fork_version);
-      assert(sn_reward == SN_REWARD_HF15);
-
-      if (penalty > sn_reward)
-      {
-        MERROR("Unexpected block reward penalty amount, base reward "
-               << cryptonote::print_money(base_reward) << ", base_reward_unpenalized "
-               << cryptonote::print_money(base_reward_unpenalized) << ", sn_reward "
-               << cryptonote::print_money(sn_reward));
-        return false;
-      }
-
-      result.service_node_total = sn_reward - penalty;
-    }
-    else
-    {
-      result.service_node_total = service_node_reward_formula(result.original_base_reward, hard_fork_version);
-    }
-
+    result.service_node_total = service_node_reward_formula(result.original_base_reward, hard_fork_version);
     result.service_node_paid = calculate_sum_of_portions(loki_context.block_leader_payouts, result.service_node_total);
 
     // There is a goverance fee due every block.  Beginning in hardfork 10 this is still subtracted
@@ -514,15 +489,36 @@ namespace cryptonote
     // exceeding the block limit is already removed from base_reward).
     uint64_t non_miner_amounts = result.governance_due + result.service_node_paid;
     result.base_miner = base_reward > non_miner_amounts ? base_reward - non_miner_amounts : 0;
-    result.base_miner_fee = loki_context.fee;
 
     if (hard_fork_version >= cryptonote::network_version_16_pulse)
     {
+      // In HF16, the block producer changes between the Miner and Service Node
+      // depending on the state of the Service Node network. The producer is no
+      // longer allocated a block reward (unless they are a Service Node) but
+      // always receive the transaction fees. Any penalty for exceeding the
+      // block limit must now be paid from the common reward received by all
+      // Block Producer's (i.e. their transaction fees for constructing the
+      // block).
       if (result.base_miner != 0)
       {
         MERROR("Miner no longer receives a reward after HF16 but we calculated it to receive " << cryptonote::print_money(result.base_miner));
         return false;
       }
+
+      uint64_t const penalty = base_reward_unpenalized - base_reward;
+      if (penalty > loki_context.fee)
+      {
+        MERROR("Block reward penalty is greater than the fee that would be received, penalty "
+               << cryptonote::print_money(penalty) << ", fee "
+               << cryptonote::print_money(loki_context.fee));
+        return false;
+      }
+
+      result.base_miner_fee = loki_context.fee - penalty;
+    }
+    else
+    {
+      result.base_miner_fee = loki_context.fee;
     }
 
     return true;
