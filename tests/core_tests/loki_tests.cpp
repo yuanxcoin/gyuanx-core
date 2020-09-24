@@ -434,9 +434,9 @@ bool loki_checkpointing_service_node_checkpoints_check_reorg_windows::generate(s
   return true;
 }
 
-bool loki_core_block_reward_unpenalized::generate(std::vector<test_event_entry>& events)
+bool loki_core_block_reward_unpenalized_pre_pulse::generate(std::vector<test_event_entry>& events)
 {
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(cryptonote::network_version_16_pulse - 1);
   loki_chain_generator gen(events, hard_forks);
   gen.add_blocks_until_version(hard_forks.back().first);
 
@@ -468,6 +468,69 @@ bool loki_core_block_reward_unpenalized::generate(std::vector<test_event_entry>&
     CHECK_TEST_CONDITION(orphan == false);
     CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout[0].amount < unpenalized_block_reward, "We should add enough transactions that the penalty is realised on the base block reward");
     CHECK_EQ(top_block.miner_tx.vout[1].amount, expected_service_node_reward);
+    return true;
+  });
+  return true;
+}
+
+bool loki_core_block_reward_unpenalized_post_pulse::generate(std::vector<test_event_entry>& events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table(cryptonote::network_version_count -1, 150 /*Proof Of Stake Delay*/);
+  loki_chain_generator gen(events, hard_forks);
+
+  uint8_t const newest_hf = hard_forks.back().first;
+  assert(newest_hf >= cryptonote::network_version_13_enforce_checkpoints);
+
+  gen.add_blocks_until_version(hard_forks.back().first);
+  gen.add_mined_money_unlock_blocks();
+
+  // Make big chunky TX's to trigger the block size penalty
+  cryptonote::account_base dummy = gen.add_account();
+  uint64_t tx_fee = 0;
+  std::vector<cryptonote::transaction> txs(150);
+  for (size_t i = 0; i < txs.size(); i++)
+  {
+    std::array<loki_service_node_contribution, 3> contributions = {};
+    for (size_t i = 0; i < contributions.size(); i++)
+    {
+      loki_service_node_contribution &entry = contributions[i];
+      entry.contributor                     = gen.add_account().get_keys().m_account_address;
+      entry.portions                        = STAKING_PORTIONS / 4;
+    }
+
+    txs[i] = gen.create_registration_tx(gen.first_miner(),
+                                        cryptonote::keypair::generate(hw::get_device("default")),
+                                        STAKING_PORTIONS / 4, /*operator portions*/
+                                        0,                    /*operator cut*/
+                                        contributions,
+                                        3);
+    gen.add_tx(txs[i], true /*can_be_added_to_blockchain*/, ""/*fail_msg*/, true /*kept_by_block*/);
+    tx_fee += txs[i].rct_signatures.txnFee;
+  }
+  gen.create_and_add_next_block(txs);
+
+  uint64_t unpenalized_reward = cryptonote::service_node_reward_formula(BLOCK_REWARD_HF17, newest_hf);
+  loki_register_callback(events, "check_block_rewards", [unpenalized_reward, tx_fee](cryptonote::core &c, size_t ev_index)
+  {
+    DEFINE_TESTS_ERROR_CONTEXT("check_block_rewards");
+    uint64_t top_height;
+    crypto::hash top_hash;
+    c.get_blockchain_top(top_height, top_hash);
+
+    bool orphan;
+    cryptonote::block top_block;
+    CHECK_TEST_CONDITION(c.get_block_by_hash(top_hash, top_block, &orphan));
+
+    CHECK_TEST_CONDITION(orphan == false);
+
+    uint64_t rewards_from_fee = top_block.miner_tx.vout[0].amount;
+    CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout.size() == 2, "1 for miner, 1 for service node");
+    CHECK_TEST_CONDITION_MSG(rewards_from_fee > 0 && rewards_from_fee < tx_fee, "Block producer should receive a penalised tx fee less than " << cryptonote::print_money(tx_fee) << "received, " << cryptonote::print_money(rewards_from_fee) << "");
+    CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout[1].amount == unpenalized_reward, "Service Node should receive full reward " << unpenalized_reward);
+
+    MGINFO("rewards_from_fee: "   << cryptonote::print_money(rewards_from_fee));
+    MGINFO("tx_fee: "             << cryptonote::print_money(tx_fee));
+    MGINFO("unpenalized_amount: " << cryptonote::print_money(unpenalized_reward));
     return true;
   });
   return true;
@@ -2573,15 +2636,19 @@ bool loki_service_nodes_checkpoint_quorum_size::generate(std::vector<test_event_
 
   for (int i = 0; i < 16; i++)
   {
-    loki_register_callback(events, "check_checkpoint_quorum_should_be_empty", [check_height_1 = gen.height()](cryptonote::core &c, size_t ev_index)
-    {
-      DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_empty");
-      std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_1);
-      CHECK_TEST_CONDITION(quorum != nullptr);
-      CHECK_TEST_CONDITION(quorum->validators.size() == 0);
-      return true;
-    });
+    gen.create_and_add_next_block();
+    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
+    if (quorum) break;
   }
+
+  loki_register_callback(events, "check_checkpoint_quorum_should_be_empty", [check_height_1 = gen.height()](cryptonote::core &c, size_t ev_index)
+  {
+    DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_empty");
+    std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_1);
+    CHECK_TEST_CONDITION(quorum != nullptr);
+    CHECK_TEST_CONDITION(quorum->validators.size() == 0);
+    return true;
+  });
 
   cryptonote::transaction new_registration_tx = gen.create_and_add_registration_tx(gen.first_miner());
   gen.create_and_add_next_block({new_registration_tx});

@@ -18,6 +18,7 @@ constexpr uint64_t FOUNDATION_REWARD_HF15 = BLOCK_REWARD_HF15 * 10 / 100;
 // LF to be used exclusively for Loki Blockswap liquidity seeding and incentives.  See
 // https://github.com/loki-project/loki-improvement-proposals/issues/24 for more details.  This ends
 // after 6 months.
+constexpr uint64_t BLOCK_REWARD_HF16        = BLOCK_REWARD_HF15;
 constexpr uint64_t BLOCKSWAP_LIQUIDITY_HF16 = BLOCK_REWARD_HF15 * 24 / 100;
 
 // HF17: at most 6 months after HF16.  This is tentative and will likely be replaced before the
@@ -28,7 +29,7 @@ constexpr uint64_t BLOCK_REWARD_HF17      = 18'333'333'333;
 constexpr uint64_t FOUNDATION_REWARD_HF17 =  1'833'333'333;
 
 static_assert(MINER_REWARD_HF15        + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
-static_assert(BLOCKSWAP_LIQUIDITY_HF16 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
+static_assert(BLOCKSWAP_LIQUIDITY_HF16 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF16);
 static_assert(                           SN_REWARD_HF15 + FOUNDATION_REWARD_HF17 == BLOCK_REWARD_HF17);
 
 // -------------------------------------------------------------------------------------------------
