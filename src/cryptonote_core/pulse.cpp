@@ -457,19 +457,6 @@ bool enforce_validator_participation_and_timeouts(round_context const &context,
 
   if (timed_out && !all_received)
   {
-    for (uint16_t quorum_index = 0; quorum_index < service_nodes::PULSE_QUORUM_SIZE; quorum_index++)
-    {
-      uint16_t validator_bit        = 1 << quorum_index;
-      bool locked_in_to_participate = (validator_bitset & validator_bit);
-      bool participated_in_stage    = (stage.bitset & validator_bit);
-
-      if (locked_in_to_participate && !participated_in_stage)
-      {
-        crypto::public_key const &pkey = context.prepare_for_round.quorum.validators[quorum_index];
-        node_list.record_pulse_participation(pkey, context.wait_for_next_block.height, context.prepare_for_round.round, false /*participated*/, false /*block_producer*/);
-      }
-    }
-
     MDEBUG(log_prefix(context) << "Stage timed out: insufficient responses. Expected "
                                << "(" << bitset_view16(validator_bitset).count() << ") " << bitset_view16(validator_bitset) << " received "
                                << "(" << bitset_view16(stage.bitset).count()     << ") " << bitset_view16(stage.bitset));
@@ -740,6 +727,9 @@ bool pulse::get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t
   times = {};
   static uint64_t const hf16_height = blockchain.get_earliest_ideal_height_for_version(cryptonote::network_version_16_pulse);
   if (hf16_height == std::numeric_limits<uint64_t>::max())
+    return false;
+
+  if (blockchain.get_current_blockchain_height() < hf16_height)
     return false;
 
   cryptonote::block genesis_block;
@@ -1388,17 +1378,6 @@ round_state wait_for_handshake_bitsets(round_context &context, service_nodes::se
       return goto_preparing_for_next_round(context);
     }
 
-    // Record all the nodes that are not participating in the round
-    for (size_t quorum_index = 0; quorum_index < quorum.size(); quorum_index++)
-    {
-      uint16_t quorum_bit = 1 << quorum_index;
-      if ((quorum_bit & best_bitset) == 0)
-      {
-        crypto::public_key const &pkey = context.prepare_for_round.quorum.validators[quorum_index];
-        node_list.record_pulse_participation(pkey, context.wait_for_next_block.height, context.prepare_for_round.round, false /*participated*/, false /*block_producer*/);
-      }
-    }
-
     context.transient.wait_for_handshake_bitsets.best_bitset = best_bitset;
     context.transient.wait_for_handshake_bitsets.best_count  = count;
     MINFO(log_prefix(context) << count << "/" << quorum.size()
@@ -1475,10 +1454,6 @@ round_state wait_for_block_template(round_context &context, service_nodes::servi
   bool received = context.transient.wait_for_block_template.stage.msgs_received == 1;
   if (timed_out || received)
   {
-    // Record if the block producer sent a block template or not
-    crypto::public_key const &block_producer = context.prepare_for_round.quorum.workers[0];
-    node_list.record_pulse_participation(block_producer, context.wait_for_next_block.height, context.prepare_for_round.round, received /*participated*/, true /*block_producer*/);
-
     if (received)
     {
       cryptonote::block const &block = context.transient.wait_for_block_template.block;
@@ -1675,18 +1650,6 @@ round_state send_and_wait_for_signed_blocks(round_context &context, service_node
       assert(signature);
       MDEBUG(log_prefix(context) << "Signature added: " << validator_index << ":" << context.prepare_for_round.quorum.validators[validator_index] << ", " << *signature);
       final_block.signatures.emplace_back(validator_index, *signature);
-    }
-
-    // Record all the validators that participated in the round to help produce
-    // the block.
-    for (uint16_t quorum_index = 0; quorum_index < quorum.size(); quorum_index++)
-    {
-      uint16_t bit = 1 << quorum_index;
-      if (bit & stage.bitset)
-      {
-        crypto::public_key const &pkey = context.prepare_for_round.quorum.validators[quorum_index];
-        node_list.record_pulse_participation(pkey, context.wait_for_next_block.height, context.prepare_for_round.round, true /*participated*/, false /*block_producer*/);
-      }
     }
 
     // Propagate Final Block

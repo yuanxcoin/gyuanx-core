@@ -58,8 +58,7 @@ namespace service_nodes
 
     struct
     {
-      uint8_t round          = 0;
-      bool    block_producer = false;
+      uint8_t round = 0;
     } pulse;
 
     BEGIN_KV_SERIALIZE_MAP()
@@ -68,8 +67,7 @@ namespace service_nodes
       KV_SERIALIZE(is_pulse);
       if (this_ref.is_pulse)
       {
-        KV_SERIALIZE_N(pulse.round,          "pulse_round");
-        KV_SERIALIZE_N(pulse.block_producer, "pulse_block_producer");
+        KV_SERIALIZE_N(pulse.round, "pulse_round");
       }
     END_KV_SERIALIZE_MAP()
   };
@@ -473,7 +471,6 @@ namespace service_nodes
     bool handle_uptime_proof(cryptonote::NOTIFY_UPTIME_PROOF::request const &proof, bool &my_uptime_proof_confirmation, crypto::x25519_public_key &x25519_pkey);
 
     void record_checkpoint_participation(crypto::public_key const &pubkey, uint64_t height, bool participated);
-    void record_pulse_participation     (crypto::public_key const &pubkey, uint64_t height, uint8_t round, bool participated, bool block_producer);
 
     // Called every hour to remove proofs for expired SNs from memory and the database.
     void cleanup_proofs();
@@ -595,6 +592,7 @@ namespace service_nodes
     // Note(maxim): private methods don't have to be protected the mutex
     bool m_rescanning = false; /* set to true when doing a rescan so we know not to reset proofs */
     void process_block(const cryptonote::block& block, const std::vector<cryptonote::transaction>& txs);
+    void record_pulse_participation(crypto::public_key const &pubkey, uint64_t height, uint8_t round, bool participated);
 
     // Verify block against Service Node state that has just been called with 'state.update_from_block(block)'.
     bool verify_block(const cryptonote::block& block, bool alt_block, cryptonote::checkpoint_t const *checkpoint);
