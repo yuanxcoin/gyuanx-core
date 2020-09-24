@@ -386,7 +386,7 @@ namespace cryptonote
      * @param already_generated_coins the current total number of coins "minted"
      * @param total_weight return-by-reference the total weight of the new block
      * @param fee return-by-reference the total of fees from the included transactions
-     * @param expected_reward return-by-reference the total reward awarded to the miner finding this block, including transaction fees
+     * @param expected_reward return-by-reference the total reward awarded to the block producer finding this block, including transaction fees
      * @param version hard fork version to use for consensus rules
      *
      * @return true

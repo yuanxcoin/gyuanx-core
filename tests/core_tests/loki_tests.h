@@ -42,7 +42,8 @@ struct loki_checkpointing_alt_chain_too_old_should_be_dropped                   
 struct loki_checkpointing_alt_chain_with_increasing_service_node_checkpoints         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_checkpointing_service_node_checkpoint_from_votes                         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_checkpointing_service_node_checkpoints_check_reorg_windows               : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct loki_core_block_reward_unpenalized                                            : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct loki_core_block_reward_unpenalized_pre_pulse                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct loki_core_block_reward_unpenalized_post_pulse                                 : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_core_fee_burning                                                         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_core_governance_batched_reward                                           : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct loki_core_block_rewards_lrc6                                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };

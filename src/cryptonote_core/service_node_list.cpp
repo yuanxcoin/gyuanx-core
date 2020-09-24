@@ -2352,9 +2352,7 @@ namespace service_nodes
     // original amount, i.e. 50% of the original base reward goes to service
     // nodes not 50% of the reward after removing the governance component (the
     // adjusted base reward post hardfork 10).
-    payout const block_leader                = m_state.get_block_leader();
-    uint64_t const base_reward               = reward_parts.original_base_reward;
-    uint64_t const total_service_node_reward = cryptonote::service_node_reward_formula(base_reward, hf_version);
+    payout const block_leader = m_state.get_block_leader();
     {
       auto const check_block_leader_pubkey = cryptonote::get_service_node_winner_from_tx_extra(miner_tx.extra);
       if (block_leader.key != check_block_leader_pubkey)
@@ -2470,7 +2468,7 @@ namespace service_nodes
         for (size_t i = 0; i < block_leader.payouts.size(); i++)
         {
           payout_entry const &payout = block_leader.payouts[i];
-          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, total_service_node_reward);
+          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, reward_parts.service_node_total);
           if (reward)
           {
             if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
@@ -2483,7 +2481,7 @@ namespace service_nodes
 
       case verify_mode::pulse_block_leader_is_producer:
       {
-        uint64_t total_reward = total_service_node_reward + reward_parts.base_miner_fee;
+        uint64_t total_reward = reward_parts.service_node_total + reward_parts.base_miner_fee;
         assert(total_reward > 0);
         for (size_t vout_index = 0; vout_index < block_leader.payouts.size(); vout_index++)
         {
@@ -2519,7 +2517,7 @@ namespace service_nodes
         for (size_t i = 0; i < block_leader.payouts.size(); i++)
         {
           payout_entry const &payout = block_leader.payouts[i];
-          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, reward_parts.base_miner + total_service_node_reward);
+          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, reward_parts.base_miner + reward_parts.service_node_total);
           if (reward)
           {
             if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
