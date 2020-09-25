@@ -746,7 +746,7 @@ bool loki_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& event
       if (cryptonote::block_has_governance_output(cryptonote::FAKECHAIN, block))
       {
         hf16_gov++;
-        CHECK_EQ(block.miner_tx.vout.at(1).amount, (FOUNDATION_REWARD_HF15 + BLOCKSWAP_LIQUIDITY_HF16) * interval);
+        CHECK_EQ(block.miner_tx.vout.at(1).amount, (FOUNDATION_REWARD_HF15 + CHAINFLIP_LIQUIDITY_HF16) * interval);
         CHECK_EQ(block.miner_tx.vout.size(), 2);
       }
       else
