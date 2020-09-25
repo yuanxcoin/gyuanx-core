@@ -413,25 +413,23 @@ static std::string get_mining_speed(uint64_t hr)
   return (boost::format("%.0f H/s") % hr).str();
 }
 
-static std::string get_fork_extra_info(uint64_t t, uint64_t now, uint64_t block_time)
+static std::ostream& print_fork_extra_info(std::ostream& o, uint64_t t, uint64_t now, uint64_t block_time)
 {
   uint64_t blocks_per_day = 86400 / block_time;
 
   if (t == now)
-    return " (forking now)";
-
-  if (t > now)
-  {
-    uint64_t dblocks = t - now;
-    if (dblocks <= 30)
-      return (boost::format(" (next fork in %u blocks)") % (unsigned)dblocks).str();
-    if (dblocks <= blocks_per_day / 2)
-      return (boost::format(" (next fork in %.1f hours)") % (dblocks / (float)(blocks_per_day / 24))).str();
-    if (dblocks <= blocks_per_day * 30)
-      return (boost::format(" (next fork in %.1f days)") % (dblocks / (float)blocks_per_day)).str();
-    return "";
-  }
-  return "";
+    return o << " (forking now)";
+  if (t < now)
+    return o;
+  uint64_t dblocks = t - now;
+  if (dblocks > blocks_per_day * 30)
+    return o;
+  o << " (next fork in ";
+  if (dblocks <= 30)
+    return o << dblocks << " blocks)";
+  if (dblocks <= blocks_per_day / 2)
+    return o << boost::format("%.1f hours)") % (dblocks / (float)blocks_per_day * 24);
+  return o << boost::format("%.1f days)") % (dblocks / (float)blocks_per_day);
 }
 
 static float get_sync_percentage(uint64_t height, uint64_t target_height)
@@ -497,48 +495,55 @@ bool rpc_command_executor::show_status() {
     }
   }
 
-  std::time_t uptime = std::time(nullptr) - ires.start_time;
   uint64_t net_height = ires.target_height > ires.height ? ires.target_height : ires.height;
   std::string bootstrap_msg;
+
+  std::ostringstream str;
+  str << "Height: " << ires.height;
+  if (ires.height != net_height)
+      str << "/ " << net_height << " (" << boost::format("%.1f") % get_sync_percentage(ires) << ")";
+
+  if (ires.testnet)     str << " ON TESTNET";
+  else if (ires.devnet) str << " ON DEVNET";
+
   if (ires.was_bootstrap_ever_used)
   {
-    bootstrap_msg = ", bootstrapping from " + ires.bootstrap_daemon_address;
+    str << ", bootstrap " << *ires.bootstrap_daemon_address;
     if (ires.untrusted)
-    {
-      bootstrap_msg += (boost::format(", local height: %llu (%.1f%%)") % ires.height_without_bootstrap % get_sync_percentage(ires.height_without_bootstrap, net_height)).str();
-    }
+      str << boost::format(", local height: %llu (%.1f%%)") % ires.height_without_bootstrap % get_sync_percentage(ires.height_without_bootstrap, net_height);
     else
-    {
-      bootstrap_msg += " was used before";
-    }
+      str << " was used";
   }
-
-  std::stringstream str;
-  str << boost::format("Height: %llu/%llu (%.1f%%)%s%s%s, net hash %s, v%s(net v%u)%s, %s, %u(out)+%u(in) connections")
-    % (unsigned long long)ires.height
-    % (unsigned long long)net_height
-    % get_sync_percentage(ires)
-    % (ires.testnet ? " ON TESTNET" : ires.devnet ? " ON DEVNET" : ""/*mainnet*/)
-    % bootstrap_msg
-    % (!has_mining_info ? ", mining info unavailable" : mining_busy ? ", syncing" : mres.active ? ( ", mining at " + get_mining_speed(mres.speed)) : ""/*not mining*/)
-    % get_mining_speed(ires.difficulty / ires.target)
-    % (ires.version.empty() ? "?.?.?" : ires.version)
-    % (unsigned)hfres.version
-    % get_fork_extra_info(hfres.earliest_height, net_height, ires.target)
-    % (hfres.state == cryptonote::HardFork::Ready ? "up to date" : hfres.state == cryptonote::HardFork::UpdateNeeded ? "update needed" : "out of date, likely forked")
-    % (unsigned)ires.outgoing_connections_count
-    % (unsigned)ires.incoming_connections_count
-  ;
-
-  // restricted RPC does not disclose start time
-  if (ires.start_time)
+  if (hfres.version < HF_VERSION_PULSE)
   {
-    str << boost::format(", uptime %ud %uh %um %us")
-      % (unsigned int)floor(uptime / 60.0 / 60.0 / 24.0)
-      % (unsigned int)floor(fmod((uptime / 60.0 / 60.0), 24.0))
-      % (unsigned int)floor(fmod((uptime / 60.0), 60.0))
-      % (unsigned int)fmod(uptime, 60.0)
-    ;
+    if (!has_mining_info) str << ", mining info unavailable";
+    else if (mining_busy) str << ", syncing";
+  }
+  if (has_mining_info && !mining_busy && mres.active)
+    str << ", mining at " << get_mining_speed(mres.speed);
+
+  if (hfres.version < HF_VERSION_PULSE)
+    str << ", net hash " << get_mining_speed(ires.difficulty / ires.target);
+
+  str << ", v" << (ires.version.empty() ? "?.?.?" : ires.version);
+  str << "(net v" << +hfres.version << ')';
+  print_fork_extra_info(str, hfres.earliest_height, net_height, ires.target);
+
+  str << ", " << (
+    hfres.state == cryptonote::HardFork::Ready ? "up to date" :
+    hfres.state == cryptonote::HardFork::UpdateNeeded ? "update needed" :
+    "out of date, likely forked");
+
+  // restricted RPC does not disclose these:
+  if ((ires.outgoing_connections_count > 0 || ires.incoming_connections_count > 0) && ires.start_time)
+  {
+    std::time_t uptime = std::time(nullptr) - ires.start_time;
+    str << ", " << ires.outgoing_connections_count << "(out)+" << ires.incoming_connections_count << "(in) connections"
+      << ", uptime "
+      << (uptime / (24*60*60)) << 'd'
+      << (uptime / (60*60)) % 24 << 'h'
+      << (uptime / 60) % 60 << 'm'
+      << uptime % 60 << 's';
   }
 
   tools::success_msg_writer() << str.str();
