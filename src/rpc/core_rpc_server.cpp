@@ -349,17 +349,19 @@ namespace cryptonote { namespace rpc {
     PERF_TIMER(on_get_info);
     if (use_bootstrap_daemon_if_necessary<GET_INFO>(req, res))
     {
+      if (context.admin)
       {
+        crypto::hash top_hash;
+        m_core.get_blockchain_top(res.height_without_bootstrap.emplace(), top_hash);
+        ++*res.height_without_bootstrap; // turn top block height into blockchain height
+        res.was_bootstrap_ever_used = true;
+
         std::shared_lock lock{m_bootstrap_daemon_mutex};
         if (m_bootstrap_daemon.get() != nullptr)
         {
           res.bootstrap_daemon_address = m_bootstrap_daemon->address();
         }
       }
-      crypto::hash top_hash;
-      m_core.get_blockchain_top(res.height_without_bootstrap.emplace(), top_hash);
-      ++*res.height_without_bootstrap; // turn top block height into blockchain height
-      res.was_bootstrap_ever_used = true;
       return res;
     }
 
