@@ -2498,8 +2498,12 @@ namespace service_nodes
         for (size_t vout_index = 0; vout_index < block_leader.payouts.size(); vout_index++)
         {
           payout_entry const &payout = block_leader.payouts[vout_index];
-          if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, total_reward))
-            return false;
+          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, total_reward);
+          if (reward)
+          {
+            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
+              return false;
+          }
         }
       }
       break;
