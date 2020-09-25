@@ -357,13 +357,11 @@ namespace cryptonote { namespace rpc {
         }
       }
       crypto::hash top_hash;
-      m_core.get_blockchain_top(res.height_without_bootstrap, top_hash);
-      ++res.height_without_bootstrap; // turn top block height into blockchain height
+      m_core.get_blockchain_top(res.height_without_bootstrap.emplace(), top_hash);
+      ++*res.height_without_bootstrap; // turn top block height into blockchain height
       res.was_bootstrap_ever_used = true;
       return res;
     }
-
-    const bool restricted = !context.admin;
 
     crypto::hash top_hash;
     m_core.get_blockchain_top(res.height, top_hash);
@@ -391,12 +389,15 @@ namespace cryptonote { namespace rpc {
     res.target = tools::to_seconds(TARGET_BLOCK_TIME);
     res.tx_count = m_core.get_blockchain_storage().get_total_transactions() - res.height; //without coinbase
     res.tx_pool_size = m_core.get_pool().get_transactions_count();
-    res.alt_blocks_count = restricted ? 0 : m_core.get_blockchain_storage().get_alternative_blocks_count();
-    uint64_t total_conn = restricted ? 0 : m_p2p.get_public_connections_count();
-    res.outgoing_connections_count = restricted ? 0 : m_p2p.get_public_outgoing_connections_count();
-    res.incoming_connections_count = restricted ? 0 : (total_conn - res.outgoing_connections_count);
-    res.white_peerlist_size = restricted ? 0 : m_p2p.get_public_white_peers_count();
-    res.grey_peerlist_size = restricted ? 0 : m_p2p.get_public_gray_peers_count();
+    if (context.admin)
+    {
+      res.alt_blocks_count = m_core.get_blockchain_storage().get_alternative_blocks_count();
+      uint64_t total_conn = m_p2p.get_public_connections_count();
+      res.outgoing_connections_count = m_p2p.get_public_outgoing_connections_count();
+      res.incoming_connections_count = (total_conn - *res.outgoing_connections_count);
+      res.white_peerlist_size = m_p2p.get_public_white_peers_count();
+      res.grey_peerlist_size = m_p2p.get_public_gray_peers_count();
+    }
 
     cryptonote::network_type nettype = m_core.get_nettype();
     res.mainnet = nettype == MAINNET;
@@ -414,34 +415,30 @@ namespace cryptonote { namespace rpc {
       return res;
     }
 
-    res.service_node = m_core.service_node();
     res.block_size_limit = res.block_weight_limit = m_core.get_blockchain_storage().get_current_cumulative_block_weight_limit();
     res.block_size_median = res.block_weight_median = m_core.get_blockchain_storage().get_current_cumulative_block_weight_median();
-    res.start_time = restricted ? 0 : (uint64_t)m_core.get_start_time();
-    res.last_storage_server_ping = restricted ? 0 : (uint64_t)m_core.m_last_storage_server_ping;
-    res.last_lokinet_ping = restricted ? 0 : (uint64_t)m_core.m_last_lokinet_ping;
-    res.free_space = restricted ? std::numeric_limits<uint64_t>::max() : m_core.get_free_space();
-    res.offline = m_core.offline();
-    res.height_without_bootstrap = restricted ? 0 : res.height;
-    if (restricted)
+    if (context.admin)
     {
-      res.bootstrap_daemon_address = "";
-      res.was_bootstrap_ever_used = false;
-    }
-    else
-    {
+      res.service_node = m_core.service_node();
+      res.start_time = (uint64_t)m_core.get_start_time();
+      res.last_storage_server_ping = (uint64_t)m_core.m_last_storage_server_ping;
+      res.last_lokinet_ping = (uint64_t)m_core.m_last_lokinet_ping;
+      res.free_space = m_core.get_free_space();
+      res.height_without_bootstrap = res.height;
       std::shared_lock lock{m_bootstrap_daemon_mutex};
-      if (m_bootstrap_daemon.get() != nullptr)
+      if (m_bootstrap_daemon)
       {
         res.bootstrap_daemon_address = m_bootstrap_daemon->address();
       }
       res.was_bootstrap_ever_used = m_was_bootstrap_ever_used;
     }
+
+    res.offline = m_core.offline();
     res.database_size = m_core.get_blockchain_storage().get_db().get_database_size();
-    if (restricted)
+    if (!context.admin)
       res.database_size = round_up(res.database_size, 1'000'000'000);
-    res.version = restricted ? std::to_string(LOKI_VERSION[0]) : LOKI_VERSION_FULL;
-    res.status_line = !restricted ? m_core.get_status_string() :
+    res.version = context.admin ? LOKI_VERSION_FULL : std::to_string(LOKI_VERSION[0]);
+    res.status_line = context.admin ? m_core.get_status_string() :
       "v" + std::to_string(LOKI_VERSION[0]) + "; Height: " + std::to_string(res.height);
 
     res.status = STATUS_OK;

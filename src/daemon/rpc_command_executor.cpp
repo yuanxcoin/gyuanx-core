@@ -450,22 +450,23 @@ bool rpc_command_executor::show_status() {
   HARD_FORK_INFO::request hfreq{};
   HARD_FORK_INFO::response hfres{};
   MINING_STATUS::response mres{};
-  bool has_mining_info = true;
+  bool has_mining_info = false;
 
   hfreq.version = 0;
   bool mining_busy = false;
   if (!invoke<GET_INFO>({}, ires, "Failed to get node info") ||
       !invoke<HARD_FORK_INFO>(std::move(hfreq), hfres, "Failed to retrieve hard fork info"))
     return false;
-  has_mining_info = invoke<MINING_STATUS>({}, mres, "Failed to retrieve mining info", false);
-  // FIXME: make sure this fails elegantly (i.e. just setting has_mining_info to false) with a
-  // restricted RPC connection
-  if (has_mining_info) {
-    if (mres.status == STATUS_BUSY)
-      mining_busy = true;
-    else if (mres.status != STATUS_OK) {
-      tools::fail_msg_writer() << "Failed to retrieve mining info";
-      return false;
+  if (ires.start_time) // This will only be non-null if we were recognized as admin (which we need for mining info)
+  {
+    has_mining_info = invoke<MINING_STATUS>({}, mres, "Failed to retrieve mining info", false);
+    if (has_mining_info) {
+      if (mres.status == STATUS_BUSY)
+        mining_busy = true;
+      else if (mres.status != STATUS_OK) {
+        tools::fail_msg_writer() << "Failed to retrieve mining info";
+        return false;
+      }
     }
   }
 
@@ -473,7 +474,7 @@ bool rpc_command_executor::show_status() {
   int64_t my_decomm_remaining = 0;
   uint64_t my_sn_last_uptime = 0;
   bool my_sn_registered = false, my_sn_staked = false, my_sn_active = false;
-  if (ires.service_node) {
+  if (ires.service_node && *ires.service_node) {
     GET_SERVICE_KEYS::response res{};
 
     if (!invoke<GET_SERVICE_KEYS>({}, res, "Failed to retrieve service node keys"))
@@ -506,11 +507,11 @@ bool rpc_command_executor::show_status() {
   if (ires.testnet)     str << " ON TESTNET";
   else if (ires.devnet) str << " ON DEVNET";
 
-  if (ires.was_bootstrap_ever_used)
+  if (ires.was_bootstrap_ever_used && *ires.was_bootstrap_ever_used && ires.bootstrap_daemon_address)
   {
     str << ", bootstrap " << *ires.bootstrap_daemon_address;
     if (ires.untrusted)
-      str << boost::format(", local height: %llu (%.1f%%)") % ires.height_without_bootstrap % get_sync_percentage(ires.height_without_bootstrap, net_height);
+      str << boost::format(", local height: %llu (%.1f%%)") % *ires.height_without_bootstrap % get_sync_percentage(*ires.height_without_bootstrap, net_height);
     else
       str << " was used";
   }
@@ -535,10 +536,10 @@ bool rpc_command_executor::show_status() {
     "out of date, likely forked");
 
   // restricted RPC does not disclose these:
-  if ((ires.outgoing_connections_count > 0 || ires.incoming_connections_count > 0) && ires.start_time)
+  if (ires.outgoing_connections_count && ires.incoming_connections_count && ires.start_time)
   {
-    std::time_t uptime = std::time(nullptr) - ires.start_time;
-    str << ", " << ires.outgoing_connections_count << "(out)+" << ires.incoming_connections_count << "(in) connections"
+    std::time_t uptime = std::time(nullptr) - *ires.start_time;
+    str << ", " << *ires.outgoing_connections_count << "(out)+" << *ires.incoming_connections_count << "(in) connections"
       << ", uptime "
       << (uptime / (24*60*60)) << 'd'
       << (uptime / (60*60)) % 24 << 'h'
@@ -557,18 +558,17 @@ bool rpc_command_executor::show_status() {
       str << (!my_sn_staked ? "awaiting" : my_sn_active ? "active" : "DECOMMISSIONED (" + std::to_string(my_decomm_remaining) + " blocks credit)")
         << ", proof: " << (my_sn_last_uptime ? get_human_time_ago(my_sn_last_uptime, time(nullptr)) : "(never)");
     str << ", last pings: ";
-    if (ires.last_storage_server_ping > 0)
-        str << get_human_time_ago(ires.last_storage_server_ping, time(nullptr), true /*abbreviate*/);
+    if (*ires.last_storage_server_ping > 0)
+        str << get_human_time_ago(*ires.last_storage_server_ping, time(nullptr), true /*abbreviate*/);
     else
         str << "NOT RECEIVED";
     str << " (storage), ";
 
-    if (ires.last_lokinet_ping > 0)
-        str << get_human_time_ago(ires.last_lokinet_ping, time(nullptr), true /*abbreviate*/);
+    if (*ires.last_lokinet_ping > 0)
+        str << get_human_time_ago(*ires.last_lokinet_ping, time(nullptr), true /*abbreviate*/);
     else
         str << "NOT RECEIVED";
     str << " (lokinet)";
-
 
     tools::success_msg_writer() << str.str();
   }
