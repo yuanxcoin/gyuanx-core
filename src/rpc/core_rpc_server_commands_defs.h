@@ -616,7 +616,6 @@ namespace rpc {
       uint64_t alt_blocks_count;            // Number of alternative blocks to main chain.
       uint64_t outgoing_connections_count;  // Number of peers that you are connected to and getting information from.
       uint64_t incoming_connections_count;  // Number of peers connected to and pulling from your node.
-      uint64_t rpc_connections_count;       // Number of RPC client connected to the daemon (Including this RPC request).
       uint64_t white_peerlist_size;         // White Peerlist Size
       uint64_t grey_peerlist_size;          // Grey Peerlist Size
       bool mainnet;                         // States if the node is on the mainnet (`true`) or not (`false`).

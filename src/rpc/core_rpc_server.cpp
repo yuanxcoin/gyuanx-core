@@ -395,10 +395,6 @@ namespace cryptonote { namespace rpc {
     uint64_t total_conn = restricted ? 0 : m_p2p.get_public_connections_count();
     res.outgoing_connections_count = restricted ? 0 : m_p2p.get_public_outgoing_connections_count();
     res.incoming_connections_count = restricted ? 0 : (total_conn - res.outgoing_connections_count);
-    // FIXME: We don't really have RPC connections here anymore, and HTTP/LMQ RPC interfaces
-    // deliberately sit outside this.  Deprecate it for now since there's no trivial way to get it,
-    // but it might be useful to bring it back.
-    //res.rpc_connections_count = restricted ? 0 : get_connections_count();
     res.white_peerlist_size = restricted ? 0 : m_p2p.get_public_white_peers_count();
     res.grey_peerlist_size = restricted ? 0 : m_p2p.get_public_gray_peers_count();
 
