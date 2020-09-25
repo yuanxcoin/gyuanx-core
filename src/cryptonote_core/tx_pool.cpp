@@ -1720,7 +1720,15 @@ end:
     return true;
   }
   //---------------------------------------------------------------------------------
-  bool tx_memory_pool::have_key_images(const std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
+  /**
+   * @brief check if any of a transaction's spent key images are present in a given set
+   *
+   * @param kic the set of key images to check against
+   * @param tx the transaction to check
+   *
+   * @return true if any key images present in the set, otherwise false
+   */
+  static bool have_key_images(const std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
   {
     for(size_t i = 0; i!= tx.vin.size(); i++)
     {
@@ -1731,7 +1739,16 @@ end:
     return false;
   }
   //---------------------------------------------------------------------------------
-  bool tx_memory_pool::append_key_images(std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
+
+  /**
+   * @brief append the key images from a transaction to the given set
+   *
+   * @param kic the set of key images to append to
+   * @param tx the transaction
+   *
+   * @return false if any append fails, otherwise true
+   */
+  static bool append_key_images(std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
   {
     for(size_t i = 0; i!= tx.vin.size(); i++)
     {
