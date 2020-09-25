@@ -544,11 +544,11 @@ namespace cryptonote
       // Block Producer's (i.e. their transaction fees for constructing the
       // block).
       uint64_t allocated = result.governance_due + result.service_node_total;
-      uint64_t remainder = base_reward - allocated;
-      if (allocated > base_reward || remainder != 0)
+      uint64_t remainder = base_reward_unpenalized - allocated;
+      if (allocated > base_reward_unpenalized || remainder != 0)
       {
-        if (allocated > base_reward)
-          MERROR("We allocated more reward " << cryptonote::print_money(allocated) << " than what was available " << cryptonote::print_money(base_reward));
+        if (allocated > base_reward_unpenalized)
+          MERROR("We allocated more reward " << cryptonote::print_money(allocated) << " than what was available " << cryptonote::print_money(base_reward_unpenalized));
         else
           MERROR("We allocated reward but there was still " << cryptonote::print_money(remainder) << " loki left to distribute.");
         return false;
