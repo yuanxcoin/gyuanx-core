@@ -211,6 +211,28 @@ namespace cryptonote
     return rewardlo;
   }
 
+  std::vector<uint64_t> distribute_reward_by_portions(const std::vector<service_nodes::payout_entry>& payout, uint64_t total_reward, bool distribute_remainder)
+  {
+    uint64_t paid_reward = 0;
+    std::vector<uint64_t> result;
+
+    result.reserve(payout.size());
+    for (auto const &entry : payout)
+    {
+      uint64_t reward = get_portion_of_reward(entry.portions, total_reward);
+      paid_reward += reward;
+      result.push_back(reward);
+    }
+
+    if (distribute_remainder && payout.size())
+    {
+      uint64_t remainder = total_reward - paid_reward;
+      result.front() += remainder;
+    }
+
+    return result;
+  }
+
   static uint64_t calculate_sum_of_portions(const std::vector<service_nodes::payout_entry>& payout, uint64_t total_service_node_reward)
   {
     uint64_t reward = 0;
@@ -333,13 +355,14 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(miner_tx_context.block_leader.payouts.size(), false, "Constructing a block leader reward for block but no payout entries specified");
 
     // NOTE: Add Block Producer Reward
+    service_nodes::payout const &leader = miner_tx_context.block_leader;
     if (miner_tx_context.pulse)
     {
       CHECK_AND_ASSERT_MES(miner_tx_context.pulse_block_producer.payouts.size(), false, "Constructing a reward for block produced by pulse but no payout entries specified");
       CHECK_AND_ASSERT_MES(miner_tx_context.pulse_block_producer.key, false, "Null Key given for Pulse Block Producer");
       CHECK_AND_ASSERT_MES(hard_fork_version >= cryptonote::network_version_16_pulse, false, "Pulse Block Producer is not valid until HF16, current HF" << hard_fork_version);
 
-      uint64_t leader_reward = reward_parts.service_node_paid + reward_parts.base_miner;
+      uint64_t leader_reward = reward_parts.service_node_total;
       if (miner_tx_context.block_leader.key == miner_tx_context.pulse_block_producer.key)
       {
         leader_reward += reward_parts.miner_fee;
@@ -348,19 +371,22 @@ namespace cryptonote
       {
         // Alternative Block Producer (receives just miner fee)
         service_nodes::payout const &producer = miner_tx_context.pulse_block_producer;
-        for (auto const &payee : producer.payouts)
+        std::vector<uint64_t> split_rewards   = distribute_reward_by_portions(producer.payouts, reward_parts.miner_fee, true /*distribute_remainder*/);
+
+        for (size_t i = 0; i < producer.payouts.size(); i++)
         {
-          uint64_t reward_amount = get_portion_of_reward(payee.portions, reward_parts.miner_fee);
-          if (reward_amount)
-            rewards[rewards_length++] = {reward_type::snode, payee.address, reward_amount};
+          auto const &payee = producer.payouts[i];
+          if (uint64_t amount = split_rewards[i]; amount)
+            rewards[rewards_length++] = {reward_type::snode, payee.address, amount};
         }
       }
 
-      for (auto const &payee : miner_tx_context.block_leader.payouts)
+      std::vector<uint64_t> split_rewards = distribute_reward_by_portions(leader.payouts, leader_reward, true /*distribute_remainder*/);
+      for (size_t i = 0; i < leader.payouts.size(); i++)
       {
-        uint64_t reward_amount = get_portion_of_reward(payee.portions, leader_reward);
-        if (reward_amount)
-          rewards[rewards_length++] = {reward_type::snode, payee.address, reward_amount};
+        auto const &payee = leader.payouts[i];
+        if (uint64_t amount = split_rewards[i]; amount)
+          rewards[rewards_length++] = {reward_type::snode, payee.address, amount};
       }
     }
     else
@@ -373,11 +399,15 @@ namespace cryptonote
 
       if (hard_fork_version >= cryptonote::network_version_9_service_nodes)
       {
-        for (auto const &payee : miner_tx_context.block_leader.payouts)
+        std::vector<uint64_t> split_rewards =
+            distribute_reward_by_portions(leader.payouts,
+                                          reward_parts.service_node_total,
+                                          hard_fork_version >= cryptonote::network_version_16_pulse /*distribute_remainder*/);
+        for (size_t i = 0; i < leader.payouts.size(); i++)
         {
-          uint64_t reward_amount = get_portion_of_reward(payee.portions, reward_parts.service_node_paid);
-          if (reward_amount)
-            rewards[rewards_length++] = {reward_type::snode, payee.address, reward_amount};
+          auto const &payee = leader.payouts[i];
+          if (split_rewards[i])
+            rewards[rewards_length++] = {reward_type::snode, payee.address, split_rewards[i]};
         }
       }
     }
@@ -431,7 +461,7 @@ namespace cryptonote
       summary_amounts += amount;
     }
 
-    uint64_t expected_amount = reward_parts.base_miner + reward_parts.miner_fee + reward_parts.governance_paid + reward_parts.service_node_paid;
+    uint64_t expected_amount = reward_parts.base_miner + reward_parts.miner_fee + reward_parts.governance_paid + reward_parts.service_node_total;
     CHECK_AND_ASSERT_MES(summary_amounts == expected_amount, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal total block_reward = " << expected_amount);
     CHECK_AND_ASSERT_MES(tx.vout.size() == rewards_length, false, "TX output mis-match with rewards expected: " << rewards_length << ", tx outputs: " << tx.vout.size());
 
@@ -470,11 +500,7 @@ namespace cryptonote
     // We base governance fees and SN rewards based on the block reward formula.  (Prior to HF13,
     // however, they were accidentally based on the block reward formula *after* subtracting a
     // potential penalty if the block producer includes txes beyond the median size limit).
-    result.original_base_reward =
-        hard_fork_version >= network_version_13_enforce_checkpoints ? base_reward_unpenalized : base_reward;
-
-    result.service_node_total = service_node_reward_formula(result.original_base_reward, hard_fork_version);
-    result.service_node_paid = calculate_sum_of_portions(loki_context.block_leader_payouts, result.service_node_total);
+    result.original_base_reward = hard_fork_version >= network_version_13_enforce_checkpoints ? base_reward_unpenalized : base_reward;
 
     // There is a goverance fee due every block.  Beginning in hardfork 10 this is still subtracted
     // from the block reward as if it was paid, but the actual payments get batched into rare, large
@@ -484,15 +510,32 @@ namespace cryptonote
         ? loki_context.batched_governance
         : result.governance_due;
 
-    // The base_miner amount is everything left in the base reward after subtracting off the service
-    // node and governance fee amounts (the due amount in the latter case). (Any penalty for
-    // exceeding the block limit is already removed from base_reward).
-    uint64_t non_miner_amounts = result.governance_due + result.service_node_paid;
-    result.base_miner = base_reward > non_miner_amounts ? base_reward - non_miner_amounts : 0;
-    result.miner_fee = loki_context.fee;
-
-    if (hard_fork_version >= cryptonote::network_version_16_pulse)
+    uint64_t const service_node_reward = service_node_reward_formula(result.original_base_reward, hard_fork_version);
+    if (hard_fork_version < cryptonote::network_version_16_pulse)
     {
+      result.service_node_total = calculate_sum_of_portions(loki_context.block_leader_payouts, service_node_reward);
+
+      // The base_miner amount is everything left in the base reward after subtracting off the service
+      // node and governance fee amounts (the due amount in the latter case). (Any penalty for
+      // exceeding the block limit is already removed from base_reward).
+      uint64_t non_miner_amounts = result.governance_due + result.service_node_total;
+      result.base_miner = base_reward > non_miner_amounts ? base_reward - non_miner_amounts : 0;
+      result.miner_fee = loki_context.fee;
+    }
+    else
+    {
+      result.service_node_total = service_node_reward;
+
+      if (loki_context.testnet_override)
+      {
+        result.miner_fee = loki_context.fee;
+      }
+      else
+      {
+        uint64_t const penalty = base_reward_unpenalized - base_reward;
+        result.miner_fee = penalty >= loki_context.fee ? 0 : loki_context.fee - penalty;
+      }
+
       // In HF16, the block producer changes between the Miner and Service Node
       // depending on the state of the Service Node network. The producer is no
       // longer allocated a block reward (unless they are a Service Node) but
@@ -500,16 +543,15 @@ namespace cryptonote
       // block limit must now be paid from the common reward received by all
       // Block Producer's (i.e. their transaction fees for constructing the
       // block).
-      if (result.base_miner != 0)
+      uint64_t allocated = result.governance_due + result.service_node_total;
+      uint64_t remainder = base_reward - allocated;
+      if (allocated > base_reward || remainder != 0)
       {
-        MERROR("Miner no longer receives a reward after HF16 but we calculated it to receive " << cryptonote::print_money(result.base_miner));
+        if (allocated > base_reward)
+          MERROR("We allocated more reward " << cryptonote::print_money(allocated) << " than what was available " << cryptonote::print_money(base_reward));
+        else
+          MERROR("We allocated reward but there was still " << cryptonote::print_money(remainder) << " loki left to distribute.");
         return false;
-      }
-
-      if (!loki_context.testnet_override)
-      {
-        uint64_t const penalty = base_reward_unpenalized - base_reward;
-        result.miner_fee  = penalty >= loki_context.fee ? 0 : loki_context.fee - penalty;
       }
     }
 

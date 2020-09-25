@@ -2477,13 +2477,16 @@ namespace service_nodes
         // miner reward ends up with the difference (and so actual miner output amount can be a few
         // atoms larger than base_miner+miner_fee).
 
+        std::vector<uint64_t> split_rewards = cryptonote::distribute_reward_by_portions(block_leader.payouts,
+                                                                                        reward_parts.service_node_total,
+                                                                                        hf_version >= cryptonote::network_version_16_pulse /*distribute_remainder*/);
+
         for (size_t i = 0; i < block_leader.payouts.size(); i++)
         {
           payout_entry const &payout = block_leader.payouts[i];
-          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, reward_parts.service_node_total);
-          if (reward)
+          if (split_rewards[i])
           {
-            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
+            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, split_rewards[i]))
               return false;
             vout_index++;
           }
@@ -2494,15 +2497,18 @@ namespace service_nodes
       case verify_mode::pulse_block_leader_is_producer:
       {
         uint64_t total_reward = reward_parts.service_node_total + reward_parts.miner_fee;
+        std::vector<uint64_t> split_rewards = cryptonote::distribute_reward_by_portions(block_leader.payouts, total_reward, true /*distribute_remainder*/);
         assert(total_reward > 0);
-        for (size_t vout_index = 0; vout_index < block_leader.payouts.size(); vout_index++)
+
+        size_t vout_index = 0;
+        for (size_t i = 0; i < block_leader.payouts.size(); i++)
         {
-          payout_entry const &payout = block_leader.payouts[vout_index];
-          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, total_reward);
-          if (reward)
+          payout_entry const &payout = block_leader.payouts[i];
+          if (split_rewards[i])
           {
-            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
+            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, split_rewards[i]))
               return false;
+            vout_index++;
           }
         }
       }
@@ -2510,35 +2516,30 @@ namespace service_nodes
 
       case verify_mode::pulse_different_block_producer:
       {
-        const uint64_t max_portions = STAKING_PORTIONS - block_producer->portions_for_operator;
-        size_t vout_index           = 0;
-        for (size_t i = 0; i < block_producer->contributors.size(); i++)
+        size_t vout_index = 0;
         {
-          auto const &contributor = block_producer->contributors[i];
-
-          uint64_t portions = get_portions_to_make_amount(block_producer->staking_requirement, contributor.amount, max_portions);
-          if (contributor.address == block_producer->operator_address)
-            portions += block_producer->portions_for_operator;
-
-          uint64_t const reward = cryptonote::get_portion_of_reward(portions, reward_parts.miner_fee);
-          if (reward)
+          payout block_producer_payouts       = service_node_info_to_payout(block_producer_key, *block_producer);
+          std::vector<uint64_t> split_rewards = cryptonote::distribute_reward_by_portions(block_producer_payouts.payouts, reward_parts.miner_fee, true /*distribute_remainder*/);
+          for (size_t i = 0; i < block_producer_payouts.payouts.size(); i++)
           {
-            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, contributor.address, reward))
-              return false;
-
-            vout_index++;
+            payout_entry const &payout = block_producer_payouts.payouts[i];
+            if (split_rewards[i])
+            {
+              if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, split_rewards[i]))
+                return false;
+              vout_index++;
+            }
           }
         }
 
+        std::vector<uint64_t> split_rewards = cryptonote::distribute_reward_by_portions(block_leader.payouts, reward_parts.service_node_total, true /*distribute_remainder*/);
         for (size_t i = 0; i < block_leader.payouts.size(); i++)
         {
           payout_entry const &payout = block_leader.payouts[i];
-          uint64_t const reward = cryptonote::get_portion_of_reward(payout.portions, reward_parts.base_miner + reward_parts.service_node_total);
-          if (reward)
+          if (split_rewards[i])
           {
-            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, reward))
+            if (!verify_coinbase_tx_output(miner_tx, height, vout_index, payout.address, split_rewards[i]))
               return false;
-
             vout_index++;
           }
         }

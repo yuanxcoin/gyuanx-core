@@ -1392,9 +1392,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
     }
   }
 
-  // +1 here to allow a 1 atomic unit error in the calculation (which can happen because of floating point errors or rounding)
-  // TODO(loki): eliminate all floating point math in reward calculations.
-  uint64_t max_base_reward = reward_parts.base_miner + reward_parts.governance_paid + reward_parts.service_node_paid + 1;
+  uint64_t max_base_reward  = reward_parts.base_miner + reward_parts.governance_paid + reward_parts.service_node_total;
   uint64_t max_money_in_use = max_base_reward + reward_parts.miner_fee;
   if (money_in_use > max_money_in_use)
   {

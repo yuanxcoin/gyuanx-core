@@ -47,8 +47,9 @@ namespace cryptonote
   bool     height_has_governance_output         (network_type nettype, uint8_t hard_fork_version, uint64_t height);
   uint64_t derive_governance_from_block_reward  (network_type nettype, const cryptonote::block &block, uint8_t hf_version);
 
-  uint64_t get_portion_of_reward                (uint64_t portions, uint64_t total_service_node_reward);
-  uint64_t service_node_reward_formula          (uint64_t base_reward, uint8_t hard_fork_version);
+  std::vector<uint64_t> distribute_reward_by_portions(const std::vector<service_nodes::payout_entry>& payout, uint64_t total_reward, bool distribute_remainder);
+  uint64_t get_portion_of_reward                     (uint64_t portions, uint64_t total_service_node_reward);
+  uint64_t service_node_reward_formula               (uint64_t base_reward, uint8_t hard_fork_version);
 
   struct loki_miner_tx_context
   {
@@ -99,7 +100,6 @@ namespace cryptonote
   struct block_reward_parts
   {
     uint64_t service_node_total;
-    uint64_t service_node_paid;
 
     uint64_t governance_due;
     uint64_t governance_paid;
