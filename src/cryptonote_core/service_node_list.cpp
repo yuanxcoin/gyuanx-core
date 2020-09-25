@@ -2435,12 +2435,12 @@ namespace service_nodes
       }
 
       block_producer = info_it->second;
-      if (mode == verify_mode::pulse_different_block_producer && reward_parts.base_miner_fee > 0)
+      if (mode == verify_mode::pulse_different_block_producer && reward_parts.miner_fee > 0)
         expected_vouts_size += block_producer->contributors.size();
     }
     else
     {
-      if ((reward_parts.base_miner + reward_parts.base_miner_fee) > 0) // (HF >= 16) this can be zero, no miner coinbase.
+      if ((reward_parts.base_miner + reward_parts.miner_fee) > 0) // (HF >= 16) this can be zero, no miner coinbase.
         expected_vouts_size += 1; /*miner*/
     }
 
@@ -2470,12 +2470,12 @@ namespace service_nodes
     {
       case verify_mode::miner:
       {
-        size_t vout_index = 0 + (reward_parts.base_miner + reward_parts.base_miner_fee > 0);
+        size_t vout_index = 0 + (reward_parts.base_miner + reward_parts.miner_fee > 0);
 
         // We don't verify the miner reward amount because it is already implied by the overall
         // sum of outputs check and because when there are truncation errors on other outputs the
         // miner reward ends up with the difference (and so actual miner output amount can be a few
-        // atoms larger than base_miner+base_miner_fee).
+        // atoms larger than base_miner+miner_fee).
 
         for (size_t i = 0; i < block_leader.payouts.size(); i++)
         {
@@ -2493,7 +2493,7 @@ namespace service_nodes
 
       case verify_mode::pulse_block_leader_is_producer:
       {
-        uint64_t total_reward = reward_parts.service_node_total + reward_parts.base_miner_fee;
+        uint64_t total_reward = reward_parts.service_node_total + reward_parts.miner_fee;
         assert(total_reward > 0);
         for (size_t vout_index = 0; vout_index < block_leader.payouts.size(); vout_index++)
         {
@@ -2520,7 +2520,7 @@ namespace service_nodes
           if (contributor.address == block_producer->operator_address)
             portions += block_producer->portions_for_operator;
 
-          uint64_t const reward = cryptonote::get_portion_of_reward(portions, reward_parts.base_miner_fee);
+          uint64_t const reward = cryptonote::get_portion_of_reward(portions, reward_parts.miner_fee);
           if (reward)
           {
             if (!verify_coinbase_tx_output(miner_tx, height, vout_index, contributor.address, reward))

@@ -342,7 +342,7 @@ namespace cryptonote
       uint64_t leader_reward = reward_parts.service_node_paid + reward_parts.base_miner;
       if (miner_tx_context.block_leader.key == miner_tx_context.pulse_block_producer.key)
       {
-        leader_reward += reward_parts.base_miner_fee;
+        leader_reward += reward_parts.miner_fee;
       }
       else
       {
@@ -350,7 +350,7 @@ namespace cryptonote
         service_nodes::payout const &producer = miner_tx_context.pulse_block_producer;
         for (auto const &payee : producer.payouts)
         {
-          uint64_t reward_amount = get_portion_of_reward(payee.portions, reward_parts.base_miner_fee);
+          uint64_t reward_amount = get_portion_of_reward(payee.portions, reward_parts.miner_fee);
           if (reward_amount)
             rewards[rewards_length++] = {reward_type::snode, payee.address, reward_amount};
         }
@@ -368,7 +368,7 @@ namespace cryptonote
 
       CHECK_AND_ASSERT_MES(miner_tx_context.pulse_block_producer.payouts.empty(), false, "Constructing a reward for block produced by miner but payout entries specified");
 
-      if (uint64_t miner_amount = reward_parts.base_miner + reward_parts.base_miner_fee; miner_amount)
+      if (uint64_t miner_amount = reward_parts.base_miner + reward_parts.miner_fee; miner_amount)
         rewards[rewards_length++] = {reward_type::miner, miner_tx_context.miner_block_producer, miner_amount};
 
       if (hard_fork_version >= cryptonote::network_version_9_service_nodes)
@@ -431,7 +431,7 @@ namespace cryptonote
       summary_amounts += amount;
     }
 
-    uint64_t expected_amount = reward_parts.base_miner + reward_parts.base_miner_fee + reward_parts.governance_paid + reward_parts.service_node_paid;
+    uint64_t expected_amount = reward_parts.base_miner + reward_parts.miner_fee + reward_parts.governance_paid + reward_parts.service_node_paid;
     CHECK_AND_ASSERT_MES(summary_amounts == expected_amount, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal total block_reward = " << expected_amount);
     CHECK_AND_ASSERT_MES(tx.vout.size() == rewards_length, false, "TX output mis-match with rewards expected: " << rewards_length << ", tx outputs: " << tx.vout.size());
 
@@ -489,7 +489,7 @@ namespace cryptonote
     // exceeding the block limit is already removed from base_reward).
     uint64_t non_miner_amounts = result.governance_due + result.service_node_paid;
     result.base_miner = base_reward > non_miner_amounts ? base_reward - non_miner_amounts : 0;
-    result.base_miner_fee = loki_context.fee;
+    result.miner_fee = loki_context.fee;
 
     if (hard_fork_version >= cryptonote::network_version_16_pulse)
     {
@@ -509,7 +509,7 @@ namespace cryptonote
       if (!loki_context.testnet_override)
       {
         uint64_t const penalty = base_reward_unpenalized - base_reward;
-        result.base_miner_fee  = penalty >= loki_context.fee ? 0 : loki_context.fee - penalty;
+        result.miner_fee  = penalty >= loki_context.fee ? 0 : loki_context.fee - penalty;
       }
     }
 

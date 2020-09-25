@@ -1870,12 +1870,12 @@ end:
       // applied on the base reward.
       if (version >= cryptonote::network_version_16_pulse)
       {
-        next_reward = next_reward_parts.base_miner_fee;
+        next_reward = next_reward_parts.miner_fee;
       }
       else
       {
-        next_reward = next_reward_parts.base_miner + next_reward_parts.base_miner_fee;
-        assert(next_reward_parts.base_miner_fee == raw_fee + meta.fee);
+        next_reward = next_reward_parts.base_miner + next_reward_parts.miner_fee;
+        assert(next_reward_parts.miner_fee == raw_fee + meta.fee);
       }
 
       // If we're getting lower reward tx, don't include this TX
@@ -1928,7 +1928,7 @@ end:
       bl.tx_hashes.push_back(sorted_it.second);
       total_weight += meta.weight;
       raw_fee      += meta.fee;
-      net_fee       = next_reward_parts.base_miner_fee;
+      net_fee       = next_reward_parts.miner_fee;
       best_reward   = next_reward;
       append_key_images(k_images, tx);
       LOG_PRINT_L2("  added, new block weight " << total_weight << "/" << max_total_weight << ", reward " << print_money(best_reward));

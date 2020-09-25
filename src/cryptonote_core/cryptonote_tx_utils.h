@@ -105,7 +105,7 @@ namespace cryptonote
     uint64_t governance_paid;
 
     uint64_t base_miner;
-    uint64_t base_miner_fee;
+    uint64_t miner_fee;
 
     /// The base block reward from which non-miner amounts (i.e. SN rewards and governance fees) are
     /// calculated.  Before HF 13 this was (mistakenly) reduced by the block size penalty for
