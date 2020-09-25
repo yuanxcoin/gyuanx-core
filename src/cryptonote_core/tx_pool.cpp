@@ -1804,12 +1804,12 @@ end:
   }
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version, uint64_t height)
+  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &raw_fee, uint64_t &expected_reward, uint8_t version, uint64_t height)
   {
     auto locks = tools::unique_locks(m_transactions_lock, m_blockchain);
 
     total_weight         = 0;
-    fee                  = 0;
+    raw_fee              = 0;
     uint64_t best_reward = 0;
     {
       // NOTE: Calculate base line empty block reward
@@ -1834,6 +1834,8 @@ end:
     LockedTXN lock(m_blockchain);
 
     uint64_t next_reward = 0;
+    uint64_t net_fee     = 0;
+
     for (auto sorted_it : m_txs_by_fee_and_receive_time)
     {
       txpool_tx_meta_t meta;
@@ -1854,7 +1856,7 @@ end:
       // NOTE: Calculate the next block reward for the block producer
       loki_block_reward_context next_block_reward_context = {};
       next_block_reward_context.height                    = height;
-      next_block_reward_context.fee                       = fee + meta.fee;
+      next_block_reward_context.fee                       = raw_fee + meta.fee;
 
       block_reward_parts next_reward_parts           = {};
       if(!get_loki_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, next_reward_parts, next_block_reward_context))
@@ -1863,10 +1865,18 @@ end:
         return false;
       }
 
+      // NOTE: Use the net fee for comparison (after penalty is applied).
+      // After HF16, penalty is applied on the miner fee. Before, penalty is
+      // applied on the base reward.
       if (version >= cryptonote::network_version_16_pulse)
+      {
         next_reward = next_reward_parts.base_miner_fee;
+      }
       else
+      {
         next_reward = next_reward_parts.base_miner + next_reward_parts.base_miner_fee;
+        assert(next_reward_parts.base_miner_fee == raw_fee + meta.fee);
+      }
 
       // If we're getting lower reward tx, don't include this TX
       if (next_reward < best_reward)
@@ -1917,8 +1927,9 @@ end:
 
       bl.tx_hashes.push_back(sorted_it.second);
       total_weight += meta.weight;
-      fee         = next_reward_parts.base_miner_fee;
-      best_reward = next_reward;
+      raw_fee      += meta.fee;
+      net_fee       = next_reward_parts.base_miner_fee;
+      best_reward   = next_reward;
       append_key_images(k_images, tx);
       LOG_PRINT_L2("  added, new block weight " << total_weight << "/" << max_total_weight << ", reward " << print_money(best_reward));
     }
@@ -1927,7 +1938,7 @@ end:
     expected_reward = best_reward;
     LOG_PRINT_L2("Block template filled with " << bl.tx_hashes.size() << " txes, weight "
         << total_weight << "/" << max_total_weight << ", reward " << print_money(best_reward)
-        << " (including " << print_money(fee) << " in fees)");
+        << " (including " << print_money(net_fee) << " in fees)");
     return true;
   }
   //---------------------------------------------------------------------------------
