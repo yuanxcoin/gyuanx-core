@@ -329,7 +329,7 @@ namespace epee
     {
       if constexpr (is_std_optional<T>) {
         // Emplace a new value and try to deserialize into it
-        d = T{};
+        d = typename T::value_type{};
         bool ret = kv_unserialize(*d, stg, parent_section, pname);
         if (!ret) d.reset(); // Deserialization failed so clear the value
         return ret;
