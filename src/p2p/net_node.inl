@@ -2043,20 +2043,17 @@ namespace nodetool
 
     const epee::net_utils::network_address na = context.m_remote_address;
     std::string ip;
-    uint32_t ipv4_addr;
+    std::optional<uint32_t> ipv4_addr;
     boost::asio::ip::address_v6 ipv6_addr;
-    bool is_ipv4;
     if (na.get_type_id() == epee::net_utils::ipv4_network_address::get_type_id())
     {
       ipv4_addr = na.as<const epee::net_utils::ipv4_network_address>().ip();
-      ip = epee::string_tools::get_ip_string_from_int32(ipv4_addr);
-      is_ipv4 = true;
+      ip = epee::string_tools::get_ip_string_from_int32(*ipv4_addr);
     }
     else
     {
       ipv6_addr = na.as<const epee::net_utils::ipv6_network_address>().ip();
       ip = ipv6_addr.to_string();
-      is_ipv4 = false;
     }
     network_zone& zone = m_network_zones.at(na.get_zone());
 
@@ -2066,9 +2063,9 @@ namespace nodetool
     std::string port = epee::string_tools::num_to_string_fast(node_data.my_port);
 
     epee::net_utils::network_address address;
-    if (is_ipv4)
+    if (ipv4_addr)
     {
-      address = epee::net_utils::network_address{epee::net_utils::ipv4_network_address(ipv4_addr, node_data.my_port)};
+      address = epee::net_utils::network_address{epee::net_utils::ipv4_network_address(*ipv4_addr, node_data.my_port)};
     }
     else
     {
@@ -2822,16 +2819,11 @@ namespace nodetool
       address = epee::string_tools::get_ip_string_from_int32(ipv4.ip());
       port = epee::string_tools::num_to_string_fast(ipv4.port());
     }
-    else if (is_ipv6)
+    else
     {
       const epee::net_utils::ipv6_network_address &ipv6 = na.as<const epee::net_utils::ipv6_network_address>();
       address = ipv6.ip().to_string();
       port = epee::string_tools::num_to_string_fast(ipv6.port());
-    }
-    else
-    {
-      LOG_ERROR("Only IPv4 or IPv6 addresses are supported here");
-      return std::nullopt;
     }
 
     typename net_server::t_connection_context con{};
