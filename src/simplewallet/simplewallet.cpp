@@ -4100,7 +4100,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     cryptonote::rpc::GET_INFO::response res;
     bool r = m_wallet->invoke_http<rpc::GET_INFO>(req, res);
     std::string err = interpret_rpc_response(r, res.status);
-    if (r && err.empty() && (res.was_bootstrap_ever_used || !res.bootstrap_daemon_address.empty()))
+    if (r && err.empty() && res.untrusted)
       message_writer(epee::console_color_yellow, true) << tr("Moreover, a daemon is also less secure when running in bootstrap mode");
   }
 
