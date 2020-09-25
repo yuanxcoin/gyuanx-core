@@ -1058,26 +1058,6 @@ namespace cryptonote
     cn_fast_hash(blob.data(), blob.size(), res);
   }
   //---------------------------------------------------------------
-  void set_default_decimal_point(unsigned int decimal_point)
-  {
-    switch (decimal_point)
-    {
-      case 9:
-      case 6:
-      case 3:
-      case 0:
-        default_decimal_point = decimal_point;
-        break;
-      default:
-        ASSERT_MES_AND_THROW("Invalid decimal point specification: " << decimal_point);
-    }
-  }
-  //---------------------------------------------------------------
-  unsigned int get_default_decimal_point()
-  {
-    return default_decimal_point;
-  }
-  //---------------------------------------------------------------
   std::string get_unit(unsigned int decimal_point)
   {
     if (decimal_point == (unsigned int)-1)

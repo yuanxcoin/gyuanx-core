@@ -884,8 +884,8 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
   const auto base_fee = m_wallet->get_base_fees();
   const uint64_t typical_size = 2500, typical_outs = 2;
   message_writer() << (boost::format(tr("Current base fee is %s %s per byte + %s %s per output")) %
-          print_money(base_fee.first) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first) % cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT) %
+          print_money(base_fee.second) % cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT)).str();
 
   std::vector<uint64_t> fees;
   std::ostringstream typical_fees;
@@ -904,13 +904,13 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
 
     if (fixed)
       message_writer() << (boost::format(tr("Current blink fee is %s %s per byte + %s %s per output + %s %s")) %
-          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(fixed) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT) %
+          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT) %
+          print_money(fixed) % cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT)).str();
     else
       message_writer() << (boost::format(tr("Current blink fee is %s %s per byte + %s %s per output")) %
-          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT) %
+          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT)).str();
 
     typical_fees << ", " << print_money(typical_blink_fee) << " (blink)";
   }
@@ -2320,17 +2320,8 @@ bool simple_wallet::set_ask_password(const std::vector<std::string> &args/* = st
 bool simple_wallet::set_unit(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   const std::string &unit = args[1];
-  unsigned int decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
 
-  if (unit == "loki")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
-  else if (unit == "megarok")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 3;
-  else if (unit == "kilorok")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 6;
-  else if (unit == "rok")
-    decimal_point = 0;
-  else
+  if (unit != "loki" && unit != "megarok" && unit != "kilorok" && unit != "rok")
   {
     fail_msg_writer() << tr("invalid unit");
     return true;
@@ -2339,7 +2330,6 @@ bool simple_wallet::set_unit(const std::vector<std::string> &args/* = std::vecto
   const auto pwd_container = get_and_verify_password();
   if (pwd_container)
   {
-    cryptonote::set_default_decimal_point(decimal_point);
     m_wallet->rewrite(m_wallet_file, pwd_container->password());
   }
   return true;
@@ -3240,7 +3230,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     success_msg_writer() << "refresh-type = " << get_refresh_type_name(m_wallet->get_refresh_type());
     success_msg_writer() << "priority = " << priority<< " (" << priority_string << ")";
     success_msg_writer() << "ask-password = " << m_wallet->ask_password() << " (" << ask_password_string << ")";
-    success_msg_writer() << "unit = " << cryptonote::get_unit(cryptonote::get_default_decimal_point());
+    success_msg_writer() << "unit = " << cryptonote::get_unit(CRYPTONOTE_DISPLAY_DECIMAL_POINT);
     success_msg_writer() << "min-outputs-count = " << m_wallet->get_min_output_count();
     success_msg_writer() << "min-outputs-value = " << cryptonote::print_money(m_wallet->get_min_output_value());
     success_msg_writer() << "merge-destinations = " << m_wallet->merge_destinations();
