@@ -1,6 +1,10 @@
 local distro = "sid";
+local distro_name = 'Debian sid';
+local distro_docker = 'debian:sid';
 
 local apt_get_quiet = 'apt-get -o=Dpkg::Use-Pty=0 -q';
+
+local repo_suffix = '/staging'; // can be /beta or /staging for non-primary repo deps
 
 local submodules = {
     name: 'submodules',
@@ -8,22 +12,21 @@ local submodules = {
     commands: ['git fetch --tags', 'git submodule update --init --recursive --depth=1']
 };
 
-local repo_suffix = '/staging'; // can be /beta or /staging for non-primary repo deps
-
-local deb_pipeline(name, image, buildarch='amd64', debarch='amd64', jobs=6) = {
+local deb_pipeline(image, buildarch='amd64', debarch='amd64', jobs=6) = {
     kind: 'pipeline',
     type: 'docker',
     name: name,
     platform: { arch: buildarch },
-    steps: [submodules,
+    steps: [
+        submodules,
         {
             name: 'build',
             image: image,
             environment: { SSH_KEY: { from_secret: "SSH_KEY" } },
             commands: [
                 'echo "man-db man-db/auto-update boolean false" | debconf-set-selections',
-                'echo deb http://deb.loki.network' + repo_suffix + ' ' + distro + ' main >/etc/apt/sources.list.d/loki.list',
                 'cp debian/deb.loki.network.gpg /etc/apt/trusted.gpg.d/deb.loki.network.gpg',
+                'echo deb http://deb.loki.network' + repo_suffix + ' ' + distro + ' main >/etc/apt/sources.list.d/loki.list',
                 apt_get_quiet + ' update',
                 apt_get_quiet + ' install -y eatmydata',
                 'eatmydata ' + apt_get_quiet + ' dist-upgrade -y',
@@ -40,8 +43,8 @@ local deb_pipeline(name, image, buildarch='amd64', debarch='amd64', jobs=6) = {
 };
 
 [
-    deb_pipeline("Debian sid (amd64)", "debian:sid"),
-    deb_pipeline("Debian sid (i386)", "i386/debian:sid", buildarch='amd64', debarch='i386'),
-    deb_pipeline("Debian sid (arm64)", "arm64v8/debian:sid", buildarch='arm64', debarch="arm64", jobs=1),
-    deb_pipeline("Debian sid (armhf)", "arm32v7/debian:sid", buildarch='arm64', debarch="armhf", jobs=1),
+    deb_pipeline(distro_docker),
+    deb_pipeline("i386/" + distro_docker, buildarch='amd64', debarch='i386'),
+    deb_pipeline("arm64v8/" + distro_docker, buildarch='arm64', debarch="arm64", jobs=1),
+    deb_pipeline("arm32v7/" + distro_docker, buildarch='arm64', debarch="armhf", jobs=1),
 ]
