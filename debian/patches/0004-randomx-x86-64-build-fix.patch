@@ -9,7 +9,7 @@ override it to x86-64 when compiled with the deb default `westmere`.
  1 file changed, 4 insertions(+)
 
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 40e1e81..c3ef5dc 100644
+index 9650285..4f1abc8 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -89,6 +89,10 @@ endif()
