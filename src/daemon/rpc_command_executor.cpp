@@ -507,6 +507,9 @@ bool rpc_command_executor::show_status() {
   if (ires.testnet)     str << " ON TESTNET";
   else if (ires.devnet) str << " ON DEVNET";
 
+  if (ires.height < ires.target_height)
+    str << ", syncing";
+
   if (ires.was_bootstrap_ever_used && *ires.was_bootstrap_ever_used && ires.bootstrap_daemon_address)
   {
     str << ", bootstrap " << *ires.bootstrap_daemon_address;
@@ -515,11 +518,9 @@ bool rpc_command_executor::show_status() {
     else
       str << " was used";
   }
-  if (hfres.version < HF_VERSION_PULSE)
-  {
-    if (!has_mining_info) str << ", mining info unavailable";
-    else if (mining_busy) str << ", syncing";
-  }
+
+  if (hfres.version < HF_VERSION_PULSE && !has_mining_info)
+    str << ", mining info unavailable";
   if (has_mining_info && !mining_busy && mres.active)
     str << ", mining at " << get_mining_speed(mres.speed);
 
