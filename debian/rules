@@ -20,11 +20,12 @@ else
 endif
 
 %:
-	dh $@ --buildsystem=cmake+ninja --with-systemd
+	dh $@ --buildsystem=cmake --with-systemd
 
 override_dh_auto_configure:
 	debian/gen-libloki-install.sh $(DEB_VERSION_UPSTREAM)
 	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release -DSTATIC=OFF -DUSE_LTO=ON -DBUILD_SHARED_LIBS=ON \
+		-DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 \
 		$(DEB_CMAKE_ARCH_OPTIONS) \
 		-DLOKI_INSTALL_LIBDIR_SUFFIX=/$(DEB_HOST_MULTIARCH)/loki-core -DLOKI_INSTALL_INCLUDEDIR_SUFFIX=/loki-core \
 		-DCMAKE_INSTALL_RPATH=/usr/lib/$(DEB_HOST_MULTIARCH)/loki-core \
