@@ -1,4 +1,5 @@
 /usr/bin/lokid
+/usr/bin/loki-sn-keys
 debian/loki.conf /etc/loki
 debian/loki.conf /usr/share/lokid
 debian/testnet.conf /etc/loki
