@@ -15,7 +15,7 @@ local submodules = {
 local deb_pipeline(image, buildarch='amd64', debarch='amd64', jobs=6) = {
     kind: 'pipeline',
     type: 'docker',
-    name: name,
+    name: distro_name + ' (' + debarch + ')',
     platform: { arch: buildarch },
     steps: [
         submodules,
