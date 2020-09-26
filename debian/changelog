@@ -1,3 +1,50 @@
+loki (8.0.1~pre1-1) unstable; urgency=medium
+
+  [ Jason Rhinelander ]
+  * First stab at debs for loki8
+  * Add equivs
+  * Refresh patches
+  * Update control
+  * Add libcurl dep
+  * Dep updates
+  * Refresh patches
+  * Remove defunct epee_readline lib
+  * Fix rpc lib updates
+  * Remove fake daemonizer target
+  * chmod +x ci-upload.sh
+  * Fix loki-wallet-cli Suggests package name
+  * Drop bionic arm64 build
+  * Don't prepend /usr/lib/ccache
+  * Fix derived monero pubkey assertion (#1272)
+
+  [ Doyle ]
+  * Pulse: Apply block limit penalty on SN reward
+  * tests: Fix checkpoint quorum size test
+  * Pulse: Subtract block penalty from the miner fee
+  * Pulse: Switch fill_block_template to calculate using new rewards
+  * Pulse: Correctly display penalized fee in summary print
+  * Pulse: Record Pulse participation globally on network
+  * Pulse: Don't query HF16 blocks too early
+  * Pulse: Add testnet soft-fork for tx fee reward change
+
+  [ Jason Rhinelander ]
+  * Fix internal RPC requests for service nodes (#1273)
+
+  [ Sean ]
+  * CMake needs curl on ubuntu to compile
+  * Update README.md
+
+  [ Jason Rhinelander ]
+  * Replace apt-key usage with copy in /etc/apt/trusted.gpg.d
+  * Avoid needing multiple apt-get updates
+  * Dearmor gpg key (as apt-get requires)
+  * de-https
+  * Move gpg into debian and allow it
+  * Enable arm deb builds
+  * i386 build fixes
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Fri, 25 Sep 2020 22:47:07 -0300
+
 loki (8.0.0-1) unstable; urgency=medium
 
   * `dev` snapshot build.
