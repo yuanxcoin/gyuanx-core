@@ -33,7 +33,7 @@ local deb_pipeline(image, buildarch='amd64', debarch='amd64', jobs=6) = {
                 'eatmydata ' + apt_get_quiet + ' install --no-install-recommends -y git-buildpackage devscripts equivs g++ ccache openssh-client curl ca-certificates gnupg',
                 'eatmydata dpkg-reconfigure ccache',
                 'curl https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor - >/etc/apt/trusted.gpg.d/kitware.gpg',
-                'echo deb https://apt.kitware.com/ubuntu/ focal main >/etc/apt/sources.list.d/kitware.list',
+                'echo deb https://apt.kitware.com/ubuntu/ bionic main >/etc/apt/sources.list.d/kitware.list',
                 'eatmydata ' + apt_get_quiet + ' update',
                 'cd debian',
                 'eatmydata mk-build-deps -i -r --tool="' + apt_get_quiet + ' -o Debug::pkgProblemResolver=yes --no-install-recommends -y" control',
