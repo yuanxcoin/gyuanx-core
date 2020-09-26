@@ -1,4 +1,4 @@
-loki (8.0.0-2~ubuntu2010) unstable; urgency=medium
+loki (8.0.0-2~ubuntu2004) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * First stab at debs for loki8
