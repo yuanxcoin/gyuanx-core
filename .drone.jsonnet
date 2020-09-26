@@ -47,7 +47,9 @@ local deb_pipeline(image, buildarch='amd64', debarch='amd64', jobs=6) = {
 
 [
     deb_pipeline(distro_docker),
-    deb_pipeline("i386/" + distro_docker, debarch="i386"),
-    deb_pipeline("arm64v8/" + distro_docker, buildarch='arm64', debarch="arm64", jobs=1),
-    deb_pipeline("arm32v7/" + distro_docker, buildarch='arm64', debarch="armhf", jobs=1),
+# Don't have cmake 3.13+ for these (kitware only provides cmake for amd64, and it isn't worth
+# building cmake ourselves for a fairly obscure distro+architecture combination).
+#    deb_pipeline("i386/" + distro_docker, debarch="i386"),
+#    deb_pipeline("arm64v8/" + distro_docker, buildarch='arm64', debarch="arm64", jobs=1),
+#    deb_pipeline("arm32v7/" + distro_docker, buildarch='arm64', debarch="armhf", jobs=1),
 ]
