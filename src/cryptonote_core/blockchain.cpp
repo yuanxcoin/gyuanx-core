@@ -5005,7 +5005,7 @@ bool Blockchain::calc_batched_governance_reward(uint64_t height, uint64_t &rewar
   {
     reward = num_blocks * (
         hard_fork_version >= network_version_17 ? FOUNDATION_REWARD_HF17 :
-        hard_fork_version >= network_version_16_pulse ? FOUNDATION_REWARD_HF15 + BLOCKSWAP_LIQUIDITY_HF16 :
+        hard_fork_version >= network_version_16_pulse ? FOUNDATION_REWARD_HF15 + CHAINFLIP_LIQUIDITY_HF16 :
         FOUNDATION_REWARD_HF15);
     return true;
   }
