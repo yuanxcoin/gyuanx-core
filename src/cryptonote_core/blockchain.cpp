@@ -1184,12 +1184,15 @@ bool Blockchain::switch_to_alternative_blockchain(const std::list<block_extended
 //------------------------------------------------------------------
 // This function calculates the difficulty target for the block being added to
 // an alternate chain.
-difficulty_type Blockchain::get_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t alt_block_height) const
+difficulty_type Blockchain::get_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t alt_block_height, bool pulse) const
 {
   if (m_fixed_difficulty)
   {
     return m_db->height() ? m_fixed_difficulty : 1;
   }
+
+  if (pulse)
+    return PULSE_FIXED_DIFFICULTY;
 
   LOG_PRINT_L3("Blockchain::" << __func__);
 
@@ -1575,7 +1578,7 @@ bool Blockchain::create_block_template_internal(block& b, const crypto::hash *fr
     bei.bl = b;
     bei.height = alt_chain.size() ? prev_data.height + 1 : m_db->get_block_height(*from_block) + 1;
 
-    diffic = get_difficulty_for_alternative_chain(alt_chain, bei.height);
+    diffic = get_difficulty_for_alternative_chain(alt_chain, bei.height, !info.is_miner);
   }
   else
   {
@@ -1904,7 +1907,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
 
   // NOTE: Check proof of work
   block_pow_verified blk_pow         = {};
-  difficulty_type const current_diff = get_difficulty_for_alternative_chain(alt_chain, blk_height);
+  difficulty_type const current_diff = get_difficulty_for_alternative_chain(alt_chain, blk_height, pulse_block);
   if (pulse_block)
   {
     // NOTE: Pulse blocks don't use PoW. They use Service Node signatures.
@@ -2104,7 +2107,12 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     }
     else
     {
-      MGINFO_BLUE("----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << std::endl << "id:\t" << id << std::endl << "PoW:\t" << blk_pow.proof_of_work << std::endl << "difficulty:\t" << current_diff);
+      std::stringstream stream;
+      stream << "----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << "\n" << "id:\t" << id;
+      if (!pulse_block) stream << "PoW:\t" << blk_pow.proof_of_work;
+      stream << "difficulty:\t" << current_diff;
+
+      MGINFO_BLUE(stream.str());
       return true;
     }
   }
@@ -2125,7 +2133,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
         else
         {
           keep_alt_chain = true;
-          MGINFO_GREEN("###### REORGANIZE on height: " << alt_chain.front().height << " of " << m_db->height() - 1 << " with cum_difficulty " << m_db->get_block_cumulative_difficulty(m_db->height() - 1) << std::endl << " alternative blockchain size: " << alt_chain.size() << " with cum_difficulty " << alt_data.cumulative_difficulty);
+          MGINFO_GREEN("###### REORGANIZE on height: " << alt_chain.front().height << " of " << m_db->height() - 1 << " with cum_difficulty " << m_db->get_block_cumulative_difficulty(m_db->height() - 1) << "\n" << " alternative blockchain size: " << alt_chain.size() << " with cum_difficulty " << alt_data.cumulative_difficulty);
         }
 
         bool r = switch_to_alternative_blockchain(alt_chain, keep_alt_chain);
@@ -2137,7 +2145,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
       }
       else
       {
-        MGINFO_BLUE("----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << std::endl << "id:\t" << id << std::endl << "PoW:\t" << blk_pow.proof_of_work << std::endl << "difficulty:\t" << current_diff);
+        MGINFO_BLUE("----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << "\n" << "id:\t" << id << "\n" << "PoW:\t" << blk_pow.proof_of_work << "\n" << "difficulty:\t" << current_diff);
         return true;
       }
     }
@@ -2145,7 +2153,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     {
       if (alt_chain_has_greater_pow)
       {
-        MGINFO_GREEN("###### REORGANIZE on height: " << alt_chain.front().height << " of " << m_db->height() - 1 << " with cum_difficulty " << m_db->get_block_cumulative_difficulty(m_db->height() - 1) << std::endl << " alternative blockchain size: " << alt_chain.size() << " with cum_difficulty " << alt_data.cumulative_difficulty);
+        MGINFO_GREEN("###### REORGANIZE on height: " << alt_chain.front().height << " of " << m_db->height() - 1 << " with cum_difficulty " << m_db->get_block_cumulative_difficulty(m_db->height() - 1) << "\n" << " alternative blockchain size: " << alt_chain.size() << " with cum_difficulty " << alt_data.cumulative_difficulty);
         bool r = switch_to_alternative_blockchain(alt_chain, true);
         if (r)
           bvc.m_added_to_main_chain = true;
@@ -2155,7 +2163,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
       }
       else
       {
-        MGINFO_BLUE("----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << std::endl << "id:\t" << id << std::endl << "PoW:\t" << blk_pow.proof_of_work << std::endl << "difficulty:\t" << current_diff);
+        MGINFO_BLUE("----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << "\n" << "id:\t" << id << "\n" << "PoW:\t" << blk_pow.proof_of_work << "\n" << "difficulty:\t" << current_diff);
         return true;
       }
     }
