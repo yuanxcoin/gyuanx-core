@@ -1424,6 +1424,7 @@ namespace service_nodes
     catch(std::exception const &e)
     {
       // ignore not found block, try alt db
+      LOG_PRINT_L1("Block " << hash << " not found in main DB, searching alt DB");
       cryptonote::alt_block_data_t alt_data;
       cryptonote::blobdata blob;
       if (!db.get_alt_block(hash, &alt_data, &blob, nullptr))
@@ -1433,7 +1434,10 @@ namespace service_nodes
       }
 
       if (!cryptonote::parse_and_validate_block_from_blob(blob, block, nullptr))
+      {
+        MERROR("Failed to parse alt block blob at " << alt_data.height << ":" << hash);
         return false;
+      }
     }
 
     return true;

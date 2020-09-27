@@ -39,6 +39,7 @@
 #include "file_io_utils.h"
 #include "common/file.h"
 #include "common/pruning.h"
+#include "common/hex.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "crypto/crypto.h"
 #include "profile_tools.h"
@@ -2588,7 +2589,7 @@ uint64_t BlockchainLMDB::get_block_height(const crypto::hash& h) const
   MDB_val_set(key, h);
   auto get_result = mdb_cursor_get(m_cur_block_heights, (MDB_val *)&zerokval, &key, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
-    throw1(BLOCK_DNE("Attempted to retrieve non-existent block height"));
+    throw1(BLOCK_DNE("Attempted to retrieve non-existent block height from hash " + tools::type_to_hex(h)));
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a block height from the db"));
 
