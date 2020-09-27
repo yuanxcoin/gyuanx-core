@@ -1347,6 +1347,7 @@ namespace service_nodes
         bool failed_quorum_verify = true;
         if (pulse_quorum)
         {
+          LOG_PRINT_L1("Verifying alt-block " << height << ":" << hash << " against main chain quorum");
           failed_quorum_verify = service_nodes::verify_quorum_signatures(*pulse_quorum,
                                                                          quorum_type::pulse,
                                                                          block.major_version,
@@ -1359,6 +1360,7 @@ namespace service_nodes
         // NOTE: Check alt pulse quorums
         if (failed_quorum_verify)
         {
+          LOG_PRINT_L1("Verifying alt-block " << height << ":" << hash << " against alt chain quorum(s)");
           for (auto const &alt_quorum : alt_pulse_quorums)
           {
             if (service_nodes::verify_quorum_signatures(*alt_quorum,
@@ -1401,6 +1403,8 @@ namespace service_nodes
       if (quorum_verified)
       {
         // NOTE: These invariants are already checked in verify_quorum_signatures
+        if (alt_block)
+          LOG_PRINT_L1("Alt-block " << height << ":" << hash << " verified successfully");
         assert(block.pulse.validator_bitset != 0);
         assert(block.pulse.validator_bitset < (1 << PULSE_QUORUM_NUM_VALIDATORS));
         assert(block.signatures.size() == service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);

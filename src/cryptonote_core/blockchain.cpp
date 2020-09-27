@@ -2108,9 +2108,9 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     else
     {
       std::stringstream stream;
-      stream << "----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << "\n" << "id:\t" << id;
-      if (!pulse_block) stream << "PoW:\t" << blk_pow.proof_of_work;
-      stream << "difficulty:\t" << current_diff;
+      stream << "----- " << block_type << " BLOCK ADDED AS ALTERNATIVE ON HEIGHT " << blk_height << "\n" << "id: " << id;
+      if (!pulse_block) stream << " PoW: " << blk_pow.proof_of_work;
+      stream << " difficulty: " << current_diff;
 
       MGINFO_BLUE(stream.str());
       return true;
