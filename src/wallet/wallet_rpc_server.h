@@ -191,6 +191,15 @@ namespace tools
       // remote STOP command).
       void run_loop();
 
+      // Starts the long poll thread, if not already active and m_long_poll_disabled is not set.
+      // m_wallet must already be set.
+      void start_long_poll_thread();
+
+      // Stops the long poll thread and joins it.  This must be done before resetting m_wallet.
+      // After the call `m_long_poll_disabled` will be false (and must be set back to true if you
+      // want to re-start the thread).
+      void stop_long_poll_thread();
+
       std::unique_ptr<wallet2> m_wallet;
       std::string m_wallet_dir;
       std::vector<std::tuple<std::string /*ip*/, uint16_t /*port*/, bool /*required*/>> m_bind;
@@ -202,5 +211,6 @@ namespace tools
       std::chrono::steady_clock::time_point m_last_auto_refresh_time;
       std::atomic<bool> m_long_poll_new_changes;
       std::atomic<bool> m_long_poll_disabled;
+      std::thread m_long_poll_thread;
   };
 }
