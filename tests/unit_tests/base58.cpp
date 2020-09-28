@@ -69,7 +69,7 @@ namespace
 
   void do_test_decode_block_pos(const std::string& enc, const std::string& expected)
   {
-    std::string data(base58::decoded_block_sizes::instance(enc.size()), '\0');
+    std::string data(base58::decoded_block_sizes[enc.size()], '\0');
     ASSERT_TRUE(base58::decode_block(enc.data(), enc.size(), &data[0]));
     ASSERT_EQ(data, expected);
   }
@@ -150,18 +150,18 @@ TEST_uint_64_to_8be(0x0102030405060708, "\x1\x2\x3\x4\x5\x6\x7\x8");
 
 TEST(reverse_alphabet, is_correct)
 {
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance(0));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance(std::numeric_limits<char>::min()));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance(std::numeric_limits<char>::max()));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance('1' - 1));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance('z' + 1));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance('0'));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance('I'));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance('O'));
-  ASSERT_EQ(-1, base58::reverse_alphabet::instance('l'));
-  ASSERT_EQ(0,  base58::reverse_alphabet::instance('1'));
-  ASSERT_EQ(8,  base58::reverse_alphabet::instance('9'));
-  ASSERT_EQ(base58::alphabet_size - 1, base58::reverse_alphabet::instance('z'));
+  ASSERT_EQ(-1, base58::reverse_alphabet[0]);
+  ASSERT_EQ(-1, base58::reverse_alphabet[std::numeric_limits<char>::min()]);
+  ASSERT_EQ(-1, base58::reverse_alphabet[std::numeric_limits<char>::max()]);
+  ASSERT_EQ(-1, base58::reverse_alphabet['1' - 1]);
+  ASSERT_EQ(-1, base58::reverse_alphabet['z' + 1]);
+  ASSERT_EQ(-1, base58::reverse_alphabet['0']);
+  ASSERT_EQ(-1, base58::reverse_alphabet['I']);
+  ASSERT_EQ(-1, base58::reverse_alphabet['O']);
+  ASSERT_EQ(-1, base58::reverse_alphabet['l']);
+  ASSERT_EQ(0,  base58::reverse_alphabet['1']);
+  ASSERT_EQ(8,  base58::reverse_alphabet['9']);
+  ASSERT_EQ(base58::alphabet.size() - 1, base58::reverse_alphabet['z']);
 }
 
 
