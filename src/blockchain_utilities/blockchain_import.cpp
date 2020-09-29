@@ -72,18 +72,13 @@ uint64_t db_batch_size_verify = 5000;
 
 std::string refresh_string = "\r                                    \r";
 
-const command_line::arg_descriptor<uint64_t> arg_recalculate_difficulty = {
+const command_line::arg_descriptor<bool> arg_recalculate_difficulty = {
   "recalculate-difficulty",
   "Recalculate per-block difficulty starting from the height specified",
   // This is now enabled by default because the network broke at 526483 because of divergent
   // difficulty values (and the chain that kept going violated the correct difficulty, and got
   // checkpointed multiple times because enough of the network followed it).
-  //
-  // TODO: We can disable this post-pulse (since diff won't matter anymore), but until then there
-  // is a subtle bug somewhere in difficulty calculations that can cause divergence; this seems
-  // important enough to just rescan at every startup (and only takes a few seconds).
-  1};
-
+  false};
 }
 
 
@@ -740,6 +735,9 @@ int main(int argc, char* argv[])
     core.deinit();
     return 0;
   }
+
+  if (command_line::get_arg(vm, arg_recalculate_difficulty))
+    core.get_blockchain_storage().get_db().fixup(core.get_nettype());
 
   import_from_file(core, import_file_path, block_stop);
 

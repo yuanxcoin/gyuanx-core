@@ -490,11 +490,7 @@ bool Blockchain::init(BlockchainDB* db, sqlite3 *lns_db, const network_type nett
   }
 
   if (m_nettype != FAKECHAIN)
-  {
-    cryptonote::BlockchainDB::fixup_context context = {};
-    context.nettype = m_nettype;
-    m_db->fixup(context);
-  }
+    m_db->fixup(m_nettype);
 
   db_rtxn_guard rtxn_guard(m_db);
 
@@ -4468,19 +4464,6 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   }
 
   TIME_MEASURE_FINISH(addblock);
-
-  // TODO(loki): Temporary forking code.
-  {
-    // Rescan difficulty every N block we have a reocurring difficulty bug that causes daemons to miscalculate difficulty
-    uint64_t block_height = get_block_height(bl);
-    if (nettype() == MAINNET && (block_height % BLOCKS_EXPECTED_IN_DAYS(1) == 0))
-    {
-      cryptonote::BlockchainDB::fixup_context context  = {};
-      context.nettype = m_nettype;
-      context.recalc_diff.start_height = block_height - BLOCKS_EXPECTED_IN_DAYS(1);
-      m_db->fixup(context);
-    }
-  }
 
   // do this after updating the hard fork state since the weight limit may change due to fork
   if (!update_next_cumulative_weight_limit())

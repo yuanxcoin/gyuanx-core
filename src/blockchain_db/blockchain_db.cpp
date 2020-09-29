@@ -349,9 +349,8 @@ void BlockchainDB::show_stats()
   );
 }
 
-void BlockchainDB::fixup(fixup_context const context)
+void BlockchainDB::fixup(cryptonote::network_type)
 {
-  (void)context;
   if (is_read_only()) {
     LOG_PRINT_L1("Database is opened read only - skipping fixup check");
     return;
@@ -435,8 +434,8 @@ void BlockchainDB::fill_timestamps_and_difficulties_for_pow(cryptonote::network_
                                                             uint64_t chain_height,
                                                             uint64_t timestamps_difficulty_height) const
 {
-  constexpr uint64_t MIN_HEIGHT = 1;
-  if (chain_height <= MIN_HEIGHT)
+  constexpr uint64_t MIN_CHAIN_HEIGHT = 2;
+  if (chain_height < MIN_CHAIN_HEIGHT)
     return;
 
   uint64_t const top_block_height   = chain_height - 1;
@@ -460,7 +459,7 @@ void BlockchainDB::fill_timestamps_and_difficulties_for_pow(cryptonote::network_
     uint64_t start_height = chain_height - std::min<size_t>(chain_height, block_count);
     start_height          = std::max<uint64_t>(start_height, 1);
 
-    for (uint64_t block_height = start_height; block_height < (chain_height - MIN_HEIGHT); block_height++)
+    for (uint64_t block_height = start_height; block_height < (chain_height - 1) /*skip latest block*/; block_height++)
     {
       timestamps.push_back(get_block_timestamp(block_height));
       difficulties.push_back(get_block_cumulative_difficulty(block_height));

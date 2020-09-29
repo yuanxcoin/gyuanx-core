@@ -4755,90 +4755,86 @@ uint64_t BlockchainLMDB::get_database_size() const
   return size;
 }
 
-void BlockchainLMDB::fixup(fixup_context const context)
+void BlockchainLMDB::fixup(cryptonote::network_type nettype)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   // Always call parent as well
-  BlockchainDB::fixup(context);
+  BlockchainDB::fixup(nettype);
 
   if (is_read_only())
     return;
 
-  uint64_t start_height = (context.recalc_diff.start_height == 0) ?  1 : context.recalc_diff.start_height;
-
-  if (start_height >= height())
-   return;
-
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> difficulties;
-  BlockchainDB::fill_timestamps_and_difficulties_for_pow(context.nettype,
-                                                         timestamps,
-                                                         difficulties,
-                                                         context.recalc_diff.start_height /*chain_height*/,
-                                                         0 /*timestamps_difficulty_height*/);
 
   try
   {
-    uint64_t const num_blocks                = height() - start_height;
-    uint64_t prev_cumulative_diff            = get_block_cumulative_difficulty(start_height - 1);
-    uint64_t const BLOCKS_PER_BATCH          = 10000;
-    uint64_t const blocks_in_left_over_batch = num_blocks % BLOCKS_PER_BATCH;
-    uint64_t const num_batches               = (num_blocks + (BLOCKS_PER_BATCH - 1)) / BLOCKS_PER_BATCH;
-    size_t const left_over_batch_index       = num_batches - 1;
+    uint64_t const BLOCKS_PER_BATCH     = 10000;
+    uint64_t num_blocks                 = height() - 1;
+    uint64_t const blocks_in_last_batch = num_blocks % BLOCKS_PER_BATCH;
+    uint64_t const num_batches          = (num_blocks + (BLOCKS_PER_BATCH - 1)) / BLOCKS_PER_BATCH;
+
+    uint64_t curr_cumulative_diff = 1;
+    uint64_t curr_timestamp       = 0;
     for (size_t batch_index = 0; batch_index < num_batches; batch_index++)
     {
       block_wtxn_start();
       mdb_txn_cursors *m_cursors = &m_wcursors; // Necessary for macro
       CURSOR(block_info);
 
-      uint64_t blocks_in_batch = (batch_index == left_over_batch_index ? blocks_in_left_over_batch : BLOCKS_PER_BATCH);
-      for (uint64_t block_index = 0; block_index < blocks_in_batch; block_index++)
+      uint64_t blocks_in_batch = std::min(BLOCKS_PER_BATCH, num_blocks);
+      for (uint64_t block_index = 0;
+           block_index < blocks_in_batch;
+           block_index++, num_blocks -= BLOCKS_PER_BATCH)
       {
-        uint64_t const curr_height = (start_height + (batch_index * BLOCKS_PER_BATCH) + block_index);
-        difficulty_type diff       = {};
+        uint64_t const curr_height       = (batch_index * BLOCKS_PER_BATCH) + block_index;
+        uint64_t const curr_chain_height = curr_height + 1;
 
-        bool use_next_difficulty_function = true;
-        uint8_t hf_version                = get_hard_fork_version(curr_height);
-        if (hf_version >= cryptonote::network_version_16_pulse)
+        difficulty_type diff = 1;
+        if (curr_height >= 1 /*Skip Genesis Block*/)
         {
-          block_header header = get_block_header_from_height(curr_height);
-          if (block_header_has_pulse_components(header))
+          add_timestamp_and_difficulty(nettype, curr_chain_height, timestamps, difficulties, curr_timestamp, curr_cumulative_diff);
+
+          // NOTE: Calculate next block difficulty
+          uint8_t const hf_version = get_hard_fork_version(curr_height);
+          if (hf_version >= cryptonote::network_version_16_pulse && block_header_has_pulse_components(get_block_header_from_height(curr_height)))
           {
-            diff                         = PULSE_FIXED_DIFFICULTY;
-            use_next_difficulty_function = false;
+            diff = PULSE_FIXED_DIFFICULTY;
+          }
+          else
+          {
+            diff = next_difficulty_v2(timestamps,
+                                      difficulties,
+                                      tools::to_seconds(TARGET_BLOCK_TIME),
+                                      difficulty_mode(nettype, hf_version, curr_height + 1));
           }
         }
 
-        if (use_next_difficulty_function)
-        {
-          diff = next_difficulty_v2(timestamps,
-                                    difficulties,
-                                    tools::to_seconds(TARGET_BLOCK_TIME),
-                                    difficulty_mode(context.nettype, hf_version, curr_height));
-        }
-
-        MDB_val_set(key, curr_height);
+        // NOTE: Store next block difficulty into the next block
         try
         {
+          // NOTE: Retrieve block info
+          MDB_val_copy key(curr_height + 1);
           if (int result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &key, MDB_GET_BOTH))
             throw1(BLOCK_DNE(lmdb_error("Failed to get block info in recalculate difficulty: ", result).c_str()));
 
-          mdb_block_info block_info    = *(mdb_block_info *)key.mv_data;
-          uint64_t old_cumulative_diff = block_info.bi_diff;
-          block_info.bi_diff           = prev_cumulative_diff + diff;
-          prev_cumulative_diff         = block_info.bi_diff;
+          // NOTE: Update values
+          mdb_block_info next_block          = *(mdb_block_info *)key.mv_data;
+          uint64_t const old_cumulative_diff = next_block.bi_diff;
+          next_block.bi_diff                 = curr_cumulative_diff + diff;
 
-          if (old_cumulative_diff != block_info.bi_diff)
-            LOG_PRINT_L0("Height: " << curr_height << " prev difficulty: " << old_cumulative_diff <<  ", new difficulty: " << block_info.bi_diff);
-          else
-            LOG_PRINT_L2("Height: " << curr_height << " difficulty unchanged (" << old_cumulative_diff << ")");
+          // NOTE: Make a copy of timestamp/diff because we commit to the DB in
+          // batches (can't query it from DB).
+          curr_cumulative_diff = next_block.bi_diff;
+          curr_timestamp       = next_block.bi_timestamp;
 
-          MDB_val_set(val, block_info);
+          if (old_cumulative_diff != next_block.bi_diff) LOG_PRINT_L0("Height: " << curr_height << " curr difficulty: " << old_cumulative_diff <<  ", new difficulty: " << next_block.bi_diff);
+          else                                           LOG_PRINT_L2("Height: " << curr_height << " difficulty unchanged (" << old_cumulative_diff << ")");
+
+          // NOTE: Store to DB
+          MDB_val_set(val, next_block);
           if (int result = mdb_cursor_put(m_cur_block_info, (MDB_val *)&zerokval, &val, MDB_CURRENT))
               throw1(BLOCK_DNE(lmdb_error("Failed to put block info: ", result).c_str()));
-
-          add_timestamp_and_difficulty(
-              context.nettype, curr_height, timestamps, difficulties, block_info.bi_timestamp, block_info.bi_diff);
         }
         catch (DB_ERROR const &e)
         {
@@ -4849,7 +4845,6 @@ void BlockchainLMDB::fixup(fixup_context const context)
       }
       block_wtxn_stop();
     }
-
   }
   catch (DB_ERROR const &e)
   {
@@ -5985,15 +5980,6 @@ void BlockchainLMDB::migrate_4_5(cryptonote::network_type nettype)
     if (ret) throw0(DB_ERROR(lmdb_error("Failed to re-update alt block data: ", ret).c_str()));
   }
   txn.commit();
-
-  // NOTE: Rescan chain difficulty to mitigate difficulty problem pre hardfork v12
-  fixup_context context            = {};
-  context.nettype                  = nettype;
-  context.recalc_diff.start_height = HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_12_checkpointing);
-
-  uint64_t constexpr FUDGE = BLOCKS_EXPECTED_IN_DAYS(1);
-  context.recalc_diff.start_height = (context.recalc_diff.start_height < FUDGE) ? 0 : context.recalc_diff.start_height - FUDGE;
-  fixup(context);
 
   if (int result = write_db_version(m_env, m_properties, (uint32_t)lmdb_version::v5))
     throw0(DB_ERROR(lmdb_error("Failed to update version for the db: ", result).c_str()));

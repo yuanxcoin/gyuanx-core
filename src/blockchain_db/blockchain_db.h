@@ -1841,15 +1841,7 @@ public:
   /**
    * @brief fix up anything that may be wrong due to past bugs
    */
-  struct fixup_context
-  {
-    cryptonote::network_type nettype;
-    struct
-    {
-      uint64_t start_height;
-    } recalc_diff;
-  };
-  virtual void fixup(fixup_context const context);
+  virtual void fixup(cryptonote::network_type nettype);
 
   virtual void get_output_blacklist(std::vector<uint64_t> &blacklist) const   = 0;
   virtual void add_output_blacklist(std::vector<uint64_t> const &blacklist)   = 0;
