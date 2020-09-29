@@ -57,7 +57,7 @@ cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 project(loki
-    VERSION 8.0.0
+    VERSION 8.0.1
     LANGUAGES CXX C)
 set(LOKI_RELEASE_CODENAME "Salty Saga")
 
