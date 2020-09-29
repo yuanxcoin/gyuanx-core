@@ -8,7 +8,7 @@ include /usr/share/dpkg/pkg-info.mk
 include /usr/share/dpkg/architecture.mk
 
 ifeq ($(DEB_TARGET_ARCH),amd64)
-	DEB_CMAKE_ARCH_OPTIONS=-DARCH=westmere -DCMAKE_CXX_FLAGS="-mtune=haswell" -DCMAKE_C_FLAGS="-mtune=haswell"
+	DEB_CMAKE_ARCH_OPTIONS=-DARCH=x86-64 -DCMAKE_CXX_FLAGS="-mtune=haswell" -DCMAKE_C_FLAGS="-mtune=haswell"
 else ifeq ($(DEB_TARGET_ARCH),i386)
 	DEB_CMAKE_ARCH_OPTIONS=-DARCH=i686 -DARCH_ID=i386
 else ifeq ($(DEB_TARGET_ARCH),arm64)
