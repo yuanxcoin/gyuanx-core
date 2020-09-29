@@ -415,7 +415,7 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
   else if (trusted_daemon)
     MINFO(tools::wallet2::tr("Daemon is local, assuming trusted"));
 
-  std::unique_ptr<tools::wallet2> wallet(new tools::wallet2(nettype, kdf_rounds, unattended));
+  auto wallet = std::make_unique<tools::wallet2>(nettype, kdf_rounds, unattended);
   wallet->init(std::move(daemon_address), std::move(login), std::move(proxy), 0, trusted_daemon);
   boost::filesystem::path ringdb_path = command_line::get_arg(vm, opts.shared_ringdb_dir);
   wallet->set_ring_database(ringdb_path.string());
@@ -2989,8 +2989,13 @@ bool wallet2::long_poll_pool_state()
   try {
     res = m_long_poll_client.binary<GET_TRANSACTION_POOL_HASHES_BIN>(GET_TRANSACTION_POOL_HASHES_BIN::names()[0], req);
   } catch (const std::exception& e) {
-    MWARNING("Long poll request failed: " << e.what());
-    std::this_thread::sleep_for(error_sleep);
+    if (m_long_poll_disabled)
+      MDEBUG("Long poll request cancelled");
+    else
+    {
+      MWARNING("Long poll request failed: " << e.what());
+      std::this_thread::sleep_for(error_sleep);
+    }
     throw;
   }
 
