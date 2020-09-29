@@ -415,7 +415,7 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
   else if (trusted_daemon)
     MINFO(tools::wallet2::tr("Daemon is local, assuming trusted"));
 
-  std::unique_ptr<tools::wallet2> wallet(new tools::wallet2(nettype, kdf_rounds, unattended));
+  auto wallet = std::make_unique<tools::wallet2>(nettype, kdf_rounds, unattended);
   wallet->init(std::move(daemon_address), std::move(login), std::move(proxy), 0, trusted_daemon);
   boost::filesystem::path ringdb_path = command_line::get_arg(vm, opts.shared_ringdb_dir);
   wallet->set_ring_database(ringdb_path.string());
@@ -2989,8 +2989,13 @@ bool wallet2::long_poll_pool_state()
   try {
     res = m_long_poll_client.binary<GET_TRANSACTION_POOL_HASHES_BIN>(GET_TRANSACTION_POOL_HASHES_BIN::names()[0], req);
   } catch (const std::exception& e) {
-    MWARNING("Long poll request failed: " << e.what());
-    std::this_thread::sleep_for(error_sleep);
+    if (m_long_poll_disabled)
+      MDEBUG("Long poll request cancelled");
+    else
+    {
+      MWARNING("Long poll request failed: " << e.what());
+      std::this_thread::sleep_for(error_sleep);
+    }
     throw;
   }
 
@@ -6616,7 +6621,7 @@ bool wallet2::is_transfer_unlocked(uint64_t unlock_time, uint64_t block_height, 
   if(block_height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE > blockchain_height)
     return false;
 
-  if (!m_offline)
+  if (m_offline)
     return true;
 
   if (!key_image) // TODO(loki): Try make all callees always pass in a key image for accuracy
@@ -8113,7 +8118,8 @@ wallet2::stake_result wallet2::check_stake_allowed(const crypto::public_key& sn_
       max_contrib_total  += reserved_amount_not_contributed_yet;
       is_preexisting_contributor = true;
 
-      min_contrib_total = std::max(min_contrib_total, reserved_amount_not_contributed_yet);
+      if (min_contrib_total == UINT64_MAX || reserved_amount_not_contributed_yet > min_contrib_total)
+        min_contrib_total = reserved_amount_not_contributed_yet;
       break;
     }
   }

@@ -596,6 +596,8 @@ namespace rpc {
 
   LOKI_RPC_DOC_INTROSPECT
   // Retrieve general information about the state of your node and the network.
+  // Note that all of the std::optional<> fields here are not included if the request is a public
+  // (restricted) RPC request.
   struct GET_INFO : PUBLIC, LEGACY
   {
     static constexpr auto names() { return NAMES("get_info", "getinfo"); }
@@ -613,12 +615,11 @@ namespace rpc {
       uint64_t target;                      // Current target for next proof of work.
       uint64_t tx_count;                    // Total number of non-coinbase transaction in the chain.
       uint64_t tx_pool_size;                // Number of transactions that have been broadcast but not included in a block.
-      uint64_t alt_blocks_count;            // Number of alternative blocks to main chain.
-      uint64_t outgoing_connections_count;  // Number of peers that you are connected to and getting information from.
-      uint64_t incoming_connections_count;  // Number of peers connected to and pulling from your node.
-      uint64_t rpc_connections_count;       // Number of RPC client connected to the daemon (Including this RPC request).
-      uint64_t white_peerlist_size;         // White Peerlist Size
-      uint64_t grey_peerlist_size;          // Grey Peerlist Size
+      std::optional<uint64_t> alt_blocks_count;            // Number of alternative blocks to main chain.
+      std::optional<uint64_t> outgoing_connections_count;  // Number of peers that you are connected to and getting information from.
+      std::optional<uint64_t> incoming_connections_count;  // Number of peers connected to and pulling from your node.
+      std::optional<uint64_t> white_peerlist_size;         // White Peerlist Size
+      std::optional<uint64_t> grey_peerlist_size;          // Grey Peerlist Size
       bool mainnet;                         // States if the node is on the mainnet (`true`) or not (`false`).
       bool testnet;                         // States if the node is on the testnet (`true`) or not (`false`).
       bool devnet;                          // States if the node is on the devnet (`true`) or not (`false`).
@@ -630,17 +631,17 @@ namespace rpc {
       uint64_t block_weight_limit;          // Maximum allowed block weight.
       uint64_t block_size_median;           // Median block size of latest 100 blocks.
       uint64_t block_weight_median;         // Median block weight of latest 100 blocks.
-      uint64_t start_time;                  // Start time of the daemon, as UNIX time.
-      bool service_node;                    // Will be true if the node is running in --service-node mode.
-      uint64_t last_storage_server_ping;    // Last ping time of the storage server (0 if never or not running as a service node)
-      uint64_t last_lokinet_ping;           // Last ping time of lokinet (0 if never or not running as a service node)
-      uint64_t free_space;                  // Available disk space on the node.
+      std::optional<bool> service_node;                    // Will be true if the node is running in --service-node mode.
+      std::optional<uint64_t> start_time;                  // Start time of the daemon, as UNIX time.
+      std::optional<uint64_t> last_storage_server_ping;    // Last ping time of the storage server (0 if never or not running as a service node)
+      std::optional<uint64_t> last_lokinet_ping;           // Last ping time of lokinet (0 if never or not running as a service node)
+      std::optional<uint64_t> free_space;                  // Available disk space on the node.
       bool offline;                         // States if the node is offline (`true`) or online (`false`).
       bool untrusted;                       // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
-      std::string bootstrap_daemon_address; // Bootstrap node to give immediate usability to wallets while syncing by proxying RPC to it. (Note: the replies may be untrustworthy).
-      uint64_t height_without_bootstrap;    // Current length of the local chain of the daemon.
-      bool was_bootstrap_ever_used;         // States if a bootstrap node has ever been used since the daemon started.
-      uint64_t database_size;               // Current size of Blockchain data.
+      std::optional<std::string> bootstrap_daemon_address; // Bootstrap node to give immediate usability to wallets while syncing by proxying RPC to it. (Note: the replies may be untrustworthy).
+      std::optional<uint64_t> height_without_bootstrap;    // Current length of the local chain of the daemon.
+      std::optional<bool> was_bootstrap_ever_used;         // States if a bootstrap node has ever been used since the daemon started.
+      uint64_t database_size;               // Current size of Blockchain data.  Over public RPC this is rounded up to the next-largest GB value.
       std::string version;                  // Current version of software running.
       std::string status_line;              // A short one-line summary status of the node (requires an admin/unrestricted connection for most details)
 

@@ -1720,7 +1720,15 @@ end:
     return true;
   }
   //---------------------------------------------------------------------------------
-  bool tx_memory_pool::have_key_images(const std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
+  /**
+   * @brief check if any of a transaction's spent key images are present in a given set
+   *
+   * @param kic the set of key images to check against
+   * @param tx the transaction to check
+   *
+   * @return true if any key images present in the set, otherwise false
+   */
+  static bool have_key_images(const std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
   {
     for(size_t i = 0; i!= tx.vin.size(); i++)
     {
@@ -1731,7 +1739,16 @@ end:
     return false;
   }
   //---------------------------------------------------------------------------------
-  bool tx_memory_pool::append_key_images(std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
+
+  /**
+   * @brief append the key images from a transaction to the given set
+   *
+   * @param kic the set of key images to append to
+   * @param tx the transaction
+   *
+   * @return false if any append fails, otherwise true
+   */
+  static bool append_key_images(std::unordered_set<crypto::key_image>& k_images, const transaction_prefix& tx)
   {
     for(size_t i = 0; i!= tx.vin.size(); i++)
     {
@@ -1787,30 +1804,28 @@ end:
   }
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version, uint64_t height)
+  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &raw_fee, uint64_t &expected_reward, uint8_t version, uint64_t height)
   {
     auto locks = tools::unique_locks(m_transactions_lock, m_blockchain);
 
-    total_weight      = 0;
-    fee               = 0;
-
-    //baseline empty block
-    loki_block_reward_context block_reward_context = {};
-    block_reward_context.height                    = height;
-    if (!m_blockchain.calc_batched_governance_reward(height, block_reward_context.batched_governance))
+    total_weight         = 0;
+    raw_fee              = 0;
+    uint64_t best_reward = 0;
     {
-      MERROR("Failed to calculated batched governance reward");
-      return false;
+      // NOTE: Calculate base line empty block reward
+      loki_block_reward_context block_reward_context = {};
+      block_reward_context.height                    = height;
+
+      block_reward_parts reward_parts = {};
+      if (!get_loki_block_reward(median_weight, total_weight, already_generated_coins, version, reward_parts, block_reward_context))
+      {
+        MERROR("Failed to get block reward for empty block");
+        return false;
+      }
+
+      best_reward = version >= cryptonote::network_version_16_pulse ? 0 /*Empty block, starts with 0 fee*/ : reward_parts.base_miner;
     }
 
-    block_reward_parts reward_parts = {};
-    if (!get_loki_block_reward(median_weight, total_weight, already_generated_coins, version, reward_parts, block_reward_context))
-    {
-      MERROR("Failed to get block reward for empty block");
-      return false;
-    }
-    uint64_t best_block_producer_reward =
-        version >= cryptonote::network_version_16_pulse ? reward_parts.base_miner_fee : reward_parts.base_miner;
     size_t const max_total_weight = 2 * median_weight - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     std::unordered_set<crypto::key_image> k_images;
 
@@ -1818,7 +1833,9 @@ end:
 
     LockedTXN lock(m_blockchain);
 
-    uint64_t reward = 0;
+    uint64_t next_reward = 0;
+    uint64_t net_fee     = 0;
+
     for (auto sorted_it : m_txs_by_fee_and_receive_time)
     {
       txpool_tx_meta_t meta;
@@ -1827,7 +1844,7 @@ end:
         MERROR("  failed to find tx meta");
         continue;
       }
-      LOG_PRINT_L2("Considering " << sorted_it.second << ", weight " << meta.weight << ", current block weight " << total_weight << "/" << max_total_weight << ", current coinbase " << print_money(best_block_producer_reward));
+      LOG_PRINT_L2("Considering " << sorted_it.second << ", weight " << meta.weight << ", current block weight " << total_weight << "/" << max_total_weight << ", current reward " << print_money(best_reward));
 
       // Can not exceed maximum block weight
       if (max_total_weight < total_weight + meta.weight)
@@ -1836,19 +1853,35 @@ end:
         continue;
       }
 
-      // If we're getting lower coinbase tx, stop including more tx
-      block_reward_parts reward_parts_other = {};
-      if(!get_loki_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, reward_parts_other, block_reward_context))
+      // NOTE: Calculate the next block reward for the block producer
+      loki_block_reward_context next_block_reward_context = {};
+      next_block_reward_context.height                    = height;
+      next_block_reward_context.fee                       = raw_fee + meta.fee;
+
+      block_reward_parts next_reward_parts           = {};
+      if(!get_loki_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, next_reward_parts, next_block_reward_context))
       {
         LOG_PRINT_L2("Block reward calculation bug");
         return false;
       }
 
-      uint64_t const block_producer_reward = version >= cryptonote::network_version_16_pulse ? reward_parts_other.base_miner_fee : reward_parts_other.base_miner;
-      reward = block_producer_reward + fee + meta.fee;
-      if (reward < best_block_producer_reward)
+      // NOTE: Use the net fee for comparison (after penalty is applied).
+      // After HF16, penalty is applied on the miner fee. Before, penalty is
+      // applied on the base reward.
+      if (version >= cryptonote::network_version_16_pulse)
       {
-        LOG_PRINT_L2("  would decrease coinbase to " << print_money(reward));
+        next_reward = next_reward_parts.miner_fee;
+      }
+      else
+      {
+        next_reward = next_reward_parts.base_miner + next_reward_parts.miner_fee;
+        assert(next_reward_parts.miner_fee == raw_fee + meta.fee);
+      }
+
+      // If we're getting lower reward tx, don't include this TX
+      if (next_reward < best_reward)
+      {
+        LOG_PRINT_L2("  would decrease reward to " << print_money(next_reward));
         continue;
       }
 
@@ -1894,17 +1927,18 @@ end:
 
       bl.tx_hashes.push_back(sorted_it.second);
       total_weight += meta.weight;
-      fee += meta.fee;
-      best_block_producer_reward = reward;
+      raw_fee      += meta.fee;
+      net_fee       = next_reward_parts.miner_fee;
+      best_reward   = next_reward;
       append_key_images(k_images, tx);
-      LOG_PRINT_L2("  added, new block weight " << total_weight << "/" << max_total_weight << ", coinbase " << print_money(best_block_producer_reward));
+      LOG_PRINT_L2("  added, new block weight " << total_weight << "/" << max_total_weight << ", reward " << print_money(best_reward));
     }
     lock.commit();
 
-    expected_reward = best_block_producer_reward;
+    expected_reward = best_reward;
     LOG_PRINT_L2("Block template filled with " << bl.tx_hashes.size() << " txes, weight "
-        << total_weight << "/" << max_total_weight << ", coinbase " << print_money(best_block_producer_reward)
-        << " (including " << print_money(fee) << " in fees)");
+        << total_weight << "/" << max_total_weight << ", reward " << print_money(best_reward)
+        << " (including " << print_money(net_fee) << " in fees)");
     return true;
   }
   //---------------------------------------------------------------------------------

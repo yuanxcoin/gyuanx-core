@@ -580,7 +580,7 @@ bool loki_core_fee_burning::generate(std::vector<test_event_entry>& events)
     ctx.fee = send_fee_burn[0][1] + send_fee_burn[1][1] - send_fee_burn[0][2] - send_fee_burn[1][2];
     block_reward_parts reward_parts;
     cryptonote::get_loki_block_reward(0, 0, 1 /*already generated, needs to be >0 to avoid premine*/, newest_hf, reward_parts, ctx);
-    good_miner_reward = reward_parts.base_miner_fee + reward_parts.base_miner;
+    good_miner_reward = reward_parts.miner_fee + reward_parts.base_miner;
   }
 
   txs.clear();
@@ -746,7 +746,7 @@ bool loki_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& event
       if (cryptonote::block_has_governance_output(cryptonote::FAKECHAIN, block))
       {
         hf16_gov++;
-        CHECK_EQ(block.miner_tx.vout.at(1).amount, (FOUNDATION_REWARD_HF15 + BLOCKSWAP_LIQUIDITY_HF16) * interval);
+        CHECK_EQ(block.miner_tx.vout.at(1).amount, (FOUNDATION_REWARD_HF15 + CHAINFLIP_LIQUIDITY_HF16) * interval);
         CHECK_EQ(block.miner_tx.vout.size(), 2);
       }
       else

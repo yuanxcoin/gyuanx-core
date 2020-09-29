@@ -366,7 +366,10 @@ namespace service_nodes
       }
 
       if (!verify_quorum_signatures(quorum, quorum_type::checkpointing, hf_version, checkpoint.height, checkpoint.block_hash, checkpoint.signatures, std::any{}))
+      {
+        LOG_PRINT_L1("Checkpoint failed signature validation at block " << checkpoint.height << " " << checkpoint.block_hash);
         return false;
+      }
     }
     else
     {

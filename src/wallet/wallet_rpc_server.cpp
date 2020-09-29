@@ -364,28 +364,8 @@ namespace tools
     m_loop = loop;
     m_listen_socks = std::move(sockets);
 
-    // Start up the long poll thread.
-    std::thread long_poll_thread{[&] {
-      for (;;)
-      {
-        if (m_long_poll_disabled) return;
-        if (m_auto_refresh_period == 0s)
-        {
-          std::this_thread::sleep_for(std::chrono::seconds(1));
-          continue;
-        }
-
-        try
-        {
-          if (m_wallet && m_wallet->long_poll_pool_state())
-            m_long_poll_new_changes = true;
-        }
-        catch (...)
-        {
-          // NOTE: Don't care about error, non fatal.
-        }
-      }
-    }};
+    if (m_wallet)
+      start_long_poll_thread();
 
     // Used to prevent queuing up multiple refreshes at once
     std::atomic<bool> refreshing = false;
@@ -426,13 +406,8 @@ namespace tools
     for (auto* s : m_listen_socks)
       us_listen_socket_close(/*ssl=*/false, s);
 
-    MINFO("Cancelling long poll");
-    if (m_wallet)
-      m_wallet->cancel_long_poll();
-    m_long_poll_disabled = true;
+    stop_long_poll_thread();
 
-    MDEBUG("Joining long poll thread");
-    long_poll_thread.join();
     MDEBUG("Joining uws thread");
     uws_thread.join();
 
@@ -440,6 +415,50 @@ namespace tools
     if (m_wallet)
       m_wallet->store();
     MGINFO("Wallet stopped.");
+  }
+  void wallet_rpc_server::start_long_poll_thread()
+  {
+    assert(m_wallet);
+    if (m_long_poll_thread.joinable() || m_long_poll_disabled)
+    {
+      MDEBUG("Not starting long poll thread: " << (m_long_poll_thread.joinable() ? "already running" : "long polling disabled"));
+      return;
+    }
+    MINFO("Starting long poll thread");
+    m_long_poll_thread = std::thread{[this] {
+      for (;;)
+      {
+        if (m_long_poll_disabled) return;
+        if (m_auto_refresh_period == 0s)
+        {
+          std::this_thread::sleep_for(100ms);
+          continue;
+        }
+
+        try
+        {
+          if (m_wallet->long_poll_pool_state())
+            m_long_poll_new_changes = true;
+        }
+        catch (...)
+        {
+          // NOTE: Don't care about error, non fatal.
+        }
+      }
+    }};
+  }
+  void wallet_rpc_server::stop_long_poll_thread()
+  {
+    assert(m_wallet);
+    if (!m_long_poll_thread.joinable())
+    {
+      MDEBUG("Not stopping long poll thread: not running");
+      return;
+    }
+    MINFO("Stopping long poll thread");
+    m_wallet->cancel_long_poll();
+    m_long_poll_disabled = true;
+    m_long_poll_thread.join();
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::init()
@@ -2400,8 +2419,16 @@ namespace {
     if (ptr)
       throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Invalid filename"};
 
-    if (m_wallet && req.autosave_current)
-      m_wallet->store();
+    if (m_wallet)
+    {
+      // stopping the thread resets this but we want to turn it on again for the next wallet:
+      bool was_long_polling = !m_long_poll_disabled;
+      stop_long_poll_thread();
+      m_long_poll_disabled = !was_long_polling;
+      if (req.autosave_current)
+        m_wallet->store();
+      m_wallet.reset();
+    }
 
     std::string wallet_file = m_wallet_dir + "/" + req.filename;
     auto vm2 = password_arg_hack(req.password, m_vm);
@@ -2410,6 +2437,8 @@ namespace {
       throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Failed to open wallet"};
 
     m_wallet = std::move(wal);
+    start_long_poll_thread();
+
     return {};
   }
   //------------------------------------------------------------------------------------------------------------------------------
