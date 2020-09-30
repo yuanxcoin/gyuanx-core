@@ -4068,15 +4068,17 @@ Blockchain::block_pow_verified Blockchain::verify_block_pow(cryptonote::block co
           result.valid = false;
           return result;
         }
+
+        result.per_block_checkpointed = true;
       }
       else
       {
         MCINFO("verify", "No pre-validated hash at height " << chain_height << ", verifying fully");
       }
-      result.per_block_checkpointed = true;
     }
-    else
 #endif
+
+    if (!result.per_block_checkpointed)
     {
       auto it = m_blocks_longhash_table.find(blk_hash);
       if (it != m_blocks_longhash_table.end())
