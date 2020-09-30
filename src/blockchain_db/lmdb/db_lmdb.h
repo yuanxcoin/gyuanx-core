@@ -422,7 +422,7 @@ private:
   void add_max_block_size(uint64_t sz) override;
 
   // fix up anything that may be wrong due to past bugs
-  void fixup(fixup_context const context) override;
+  void fixup(cryptonote::network_type nettype) override;
 
   // migrate from older DB version to current
   void migrate(const uint32_t oldversion, cryptonote::network_type nettype);

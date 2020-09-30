@@ -174,7 +174,7 @@ namespace cryptonote {
     }
     // HF12 switches to RandomX with a likely drastically reduced hashrate versus Turtle, so override
     // difficulty for the first difficulty window blocks:
-    else if (hf_version >= cryptonote::network_version_12_checkpointing &&
+    else if (height >= hf12_height &&
              height < hf12_height + (DIFFICULTY_WINDOW + 1))
     {
       result = difficulty_calc_mode::hf12_override;
