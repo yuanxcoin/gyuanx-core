@@ -35,6 +35,7 @@
 #include <boost/endian/conversion.hpp>
 
 #include "common/rules.h"
+#include "common/hex.h"
 #include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
@@ -4469,19 +4470,6 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
 
   TIME_MEASURE_FINISH(addblock);
 
-  // TODO(loki): Temporary forking code.
-  {
-    // Rescan difficulty every N block we have a reocurring difficulty bug that causes daemons to miscalculate difficulty
-    uint64_t block_height = get_block_height(bl);
-    if (nettype() == MAINNET && (block_height % BLOCKS_EXPECTED_IN_DAYS(1) == 0))
-    {
-      cryptonote::BlockchainDB::fixup_context context  = {};
-      context.nettype = m_nettype;
-      context.recalc_diff.start_height = block_height - BLOCKS_EXPECTED_IN_DAYS(1);
-      m_db->fixup(context);
-    }
-  }
-
   // do this after updating the hard fork state since the weight limit may change due to fork
   if (!update_next_cumulative_weight_limit())
   {
@@ -5547,7 +5535,6 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "8754309c4501f4b1c547c5c14d41dca30e0836a2942b09584ccc43b287040d07";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (!get_checkpoints || !m_fast_sync)
@@ -5567,14 +5554,17 @@ void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get
         MERROR("Failed to hash precomputed blocks data");
         return;
       }
-      MINFO("precomputed blocks hash: " << hash << ", expected " << expected_block_hashes_hash);
-      cryptonote::blobdata expected_hash_data;
-      if (!epee::string_tools::parse_hexstr_to_binbuff(std::string(expected_block_hashes_hash), expected_hash_data) || expected_hash_data.size() != sizeof(crypto::hash))
+
+      constexpr auto EXPECTED_SHA256_HASH = "d5772a74dadb64a439b60312f9dc3e5243157c5477037a318840b8c36da9644b"sv;
+      MINFO("Precomputed blocks hash: " << hash << ", expected " << EXPECTED_SHA256_HASH);
+
+      crypto::hash expected_hash;
+      if (!tools::hex_to_type(EXPECTED_SHA256_HASH, expected_hash))
       {
         MERROR("Failed to parse expected block hashes hash");
         return;
       }
-      const crypto::hash expected_hash = *reinterpret_cast<const crypto::hash*>(expected_hash_data.data());
+
       if (hash != expected_hash)
       {
         MERROR("Block hash data does not match expected hash");
@@ -5592,7 +5582,7 @@ void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get
         MERROR("Block hash data is too large");
         return;
       }
-      const size_t size_needed = 4 + nblocks * (sizeof(crypto::hash) * 2);
+      const size_t size_needed = 4 + (nblocks * sizeof(crypto::hash));
       if(checkpoints.size() != size_needed)
       {
         MERROR("Failed to load hashes - unexpected data size " << checkpoints.size() << ", expected " << size_needed);
