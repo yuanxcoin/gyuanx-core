@@ -1,3 +1,17 @@
+loki (8.0.1-2~ubuntu1804) bionic; urgency=medium
+
+  [ Doyle ]
+  * rescan_diffic: Simplify params, update cli arg in blockchain_import
+  * blocks: Regenerate block hashes
+  * blockchain: Fix pre-computed block hash verification failure
+  * rescan_diffic: Correctly iterate blocks loop
+  * blockchain: Fix non-checkpointed blocks skipping verification
+
+  [ Jason Rhinelander ]
+  * Allow unlimited time for startup
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Wed, 30 Sep 2020 12:48:48 -0300
+
 loki (8.0.1-1~ubuntu1804) bionic; urgency=medium
 
   New dev branch build.
