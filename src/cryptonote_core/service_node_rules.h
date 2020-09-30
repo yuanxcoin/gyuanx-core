@@ -211,7 +211,7 @@ namespace service_nodes {
   // blocks out of sync and sending something that it thinks is legit.
   constexpr uint64_t VOTE_OR_TX_VERIFY_HEIGHT_BUFFER    = 5;
 
-  constexpr std::array<int, 3> MIN_STORAGE_SERVER_VERSION{{2, 0, 0}};
+  constexpr std::array<int, 3> MIN_STORAGE_SERVER_VERSION{{2, 0, 7}};
   constexpr std::array<int, 3> MIN_LOKINET_VERSION{{0, 7, 0}};
 
   // The minimum accepted version number, broadcasted by Service Nodes via uptime proofs for each hardfork
