@@ -6,6 +6,7 @@ Before=loki-storage.service
 [Service]
 User=_loki
 Type=notify
+TimeoutStartSec=infinity
 WatchdogSec=5min
 WorkingDirectory=/var/lib/loki
 Restart=always
