@@ -35,6 +35,7 @@
 #include <boost/endian/conversion.hpp>
 
 #include "common/rules.h"
+#include "common/hex.h"
 #include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
@@ -4071,8 +4072,9 @@ Blockchain::block_pow_verified Blockchain::verify_block_pow(cryptonote::block co
         MCINFO("verify", "No pre-validated hash at height " << chain_height << ", verifying fully");
       }
     }
-    else
 #endif
+
+    if (!result.per_block_checkpointed)
     {
       auto it = m_blocks_longhash_table.find(blk_hash);
       if (it != m_blocks_longhash_table.end())
@@ -4085,10 +4087,17 @@ Blockchain::block_pow_verified Blockchain::verify_block_pow(cryptonote::block co
     }
   }
 
-  // validate proof_of_work versus difficulty target
-  result.valid = check_hash(result.proof_of_work, difficulty);
-  if (!result.valid)
-    MGINFO_RED((alt_block ? "Alternative block" : "Block") << " with id: " << blk_hash << "\n does not have enough proof of work: " << result.proof_of_work << " at height " << blk_height << ", required difficulty: " << difficulty);
+  if (result.per_block_checkpointed)
+  {
+    result.valid = true;
+  }
+  else
+  {
+    // validate proof_of_work versus difficulty target
+    result.valid = check_hash(result.proof_of_work, difficulty);
+    if (!result.valid)
+      MGINFO_RED((alt_block ? "Alternative block" : "Block") << " with id: " << blk_hash << "\n does not have enough proof of work: " << result.proof_of_work << " at height " << blk_height << ", required difficulty: " << difficulty);
+  }
 
   return result;
 }
@@ -5530,7 +5539,6 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "8754309c4501f4b1c547c5c14d41dca30e0836a2942b09584ccc43b287040d07";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (!get_checkpoints || !m_fast_sync)
@@ -5550,14 +5558,17 @@ void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get
         MERROR("Failed to hash precomputed blocks data");
         return;
       }
-      MINFO("precomputed blocks hash: " << hash << ", expected " << expected_block_hashes_hash);
-      cryptonote::blobdata expected_hash_data;
-      if (!epee::string_tools::parse_hexstr_to_binbuff(std::string(expected_block_hashes_hash), expected_hash_data) || expected_hash_data.size() != sizeof(crypto::hash))
+
+      constexpr auto EXPECTED_SHA256_HASH = "d5772a74dadb64a439b60312f9dc3e5243157c5477037a318840b8c36da9644b"sv;
+      MINFO("Precomputed blocks hash: " << hash << ", expected " << EXPECTED_SHA256_HASH);
+
+      crypto::hash expected_hash;
+      if (!tools::hex_to_type(EXPECTED_SHA256_HASH, expected_hash))
       {
         MERROR("Failed to parse expected block hashes hash");
         return;
       }
-      const crypto::hash expected_hash = *reinterpret_cast<const crypto::hash*>(expected_hash_data.data());
+
       if (hash != expected_hash)
       {
         MERROR("Block hash data does not match expected hash");
@@ -5575,7 +5586,7 @@ void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get
         MERROR("Block hash data is too large");
         return;
       }
-      const size_t size_needed = 4 + nblocks * (sizeof(crypto::hash) * 2);
+      const size_t size_needed = 4 + (nblocks * sizeof(crypto::hash));
       if(checkpoints.size() != size_needed)
       {
         MERROR("Failed to load hashes - unexpected data size " << checkpoints.size() << ", expected " << size_needed);
