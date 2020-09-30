@@ -4068,13 +4068,12 @@ Blockchain::block_pow_verified Blockchain::verify_block_pow(cryptonote::block co
           result.valid = false;
           return result;
         }
-
-        result.per_block_checkpointed = true;
       }
       else
       {
         MCINFO("verify", "No pre-validated hash at height " << chain_height << ", verifying fully");
       }
+      result.per_block_checkpointed = true;
     }
     else
 #endif
@@ -4090,10 +4089,17 @@ Blockchain::block_pow_verified Blockchain::verify_block_pow(cryptonote::block co
     }
   }
 
-  // validate proof_of_work versus difficulty target
-  result.valid = check_hash(result.proof_of_work, difficulty);
-  if (!result.valid)
-    MGINFO_RED((alt_block ? "Alternative block" : "Block") << " with id: " << blk_hash << "\n does not have enough proof of work: " << result.proof_of_work << " at height " << blk_height << ", required difficulty: " << difficulty);
+  if (result.per_block_checkpointed)
+  {
+    result.valid = true;
+  }
+  else
+  {
+    // validate proof_of_work versus difficulty target
+    result.valid = check_hash(result.proof_of_work, difficulty);
+    if (!result.valid)
+      MGINFO_RED((alt_block ? "Alternative block" : "Block") << " with id: " << blk_hash << "\n does not have enough proof of work: " << result.proof_of_work << " at height " << blk_height << ", required difficulty: " << difficulty);
+  }
 
   return result;
 }
@@ -4469,6 +4475,19 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   }
 
   TIME_MEASURE_FINISH(addblock);
+
+  // TODO(loki): Temporary forking code.
+  {
+    // Rescan difficulty every N block we have a reocurring difficulty bug that causes daemons to miscalculate difficulty
+    uint64_t block_height = get_block_height(bl);
+    if (nettype() == MAINNET && (block_height % BLOCKS_EXPECTED_IN_DAYS(1) == 0))
+    {
+      cryptonote::BlockchainDB::fixup_context context  = {};
+      context.nettype = m_nettype;
+      context.recalc_diff.start_height = block_height - BLOCKS_EXPECTED_IN_DAYS(1);
+      m_db->fixup(context);
+    }
+  }
 
   // do this after updating the hard fork state since the weight limit may change due to fork
   if (!update_next_cumulative_weight_limit())
