@@ -4782,10 +4782,9 @@ void BlockchainLMDB::fixup(cryptonote::network_type nettype)
       mdb_txn_cursors *m_cursors = &m_wcursors; // Necessary for macro
       CURSOR(block_info);
 
-      uint64_t blocks_in_batch = std::min(BLOCKS_PER_BATCH, num_blocks);
       for (uint64_t block_index = 0;
-           block_index < blocks_in_batch;
-           block_index++, num_blocks -= BLOCKS_PER_BATCH)
+           block_index < std::min(BLOCKS_PER_BATCH, num_blocks);
+           block_index++, num_blocks -= std::min(BLOCKS_PER_BATCH, num_blocks))
       {
         uint64_t const curr_height       = (batch_index * BLOCKS_PER_BATCH) + block_index;
         uint64_t const curr_chain_height = curr_height + 1;
