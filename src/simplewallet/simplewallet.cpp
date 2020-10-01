@@ -884,8 +884,8 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
   const auto base_fee = m_wallet->get_base_fees();
   const uint64_t typical_size = 2500, typical_outs = 2;
   message_writer() << (boost::format(tr("Current base fee is %s %s per byte + %s %s per output")) %
-          print_money(base_fee.first) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first) % cryptonote::get_unit() %
+          print_money(base_fee.second) % cryptonote::get_unit()).str();
 
   std::vector<uint64_t> fees;
   std::ostringstream typical_fees;
@@ -904,13 +904,13 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
 
     if (fixed)
       message_writer() << (boost::format(tr("Current blink fee is %s %s per byte + %s %s per output + %s %s")) %
-          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(fixed) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first * pct / 100) % cryptonote::get_unit() %
+          print_money(base_fee.second * pct / 100) % cryptonote::get_unit() %
+          print_money(fixed) % cryptonote::get_unit()).str();
     else
       message_writer() << (boost::format(tr("Current blink fee is %s %s per byte + %s %s per output")) %
-          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first * pct / 100) % cryptonote::get_unit() %
+          print_money(base_fee.second * pct / 100) % cryptonote::get_unit()).str();
 
     typical_fees << ", " << print_money(typical_blink_fee) << " (blink)";
   }
@@ -2317,34 +2317,6 @@ bool simple_wallet::set_ask_password(const std::vector<std::string> &args/* = st
   return true;
 }
 
-bool simple_wallet::set_unit(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
-{
-  const std::string &unit = args[1];
-  unsigned int decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
-
-  if (unit == "loki")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
-  else if (unit == "megarok")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 3;
-  else if (unit == "kilorok")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 6;
-  else if (unit == "rok")
-    decimal_point = 0;
-  else
-  {
-    fail_msg_writer() << tr("invalid unit");
-    return true;
-  }
-
-  const auto pwd_container = get_and_verify_password();
-  if (pwd_container)
-  {
-    cryptonote::set_default_decimal_point(decimal_point);
-    m_wallet->rewrite(m_wallet_file, pwd_container->password());
-  }
-  return true;
-}
-
 bool simple_wallet::set_min_output_count(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   uint32_t count;
@@ -2793,8 +2765,6 @@ simple_wallet::simple_wallet()
  ask-password <never|action|decrypt>
    action: ask the password before many actions such as transfer, etc
    decrypt: same as action, but keeps the spend key encrypted in memory when not needed
- unit <loki|megarok|kilorok|rok>
-   Set the default loki (sub-)unit.
  min-outputs-count [n]
    Try to keep at least that many outputs of value at least min-outputs-value.
  min-outputs-value [n]
@@ -3240,7 +3210,6 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     success_msg_writer() << "refresh-type = " << get_refresh_type_name(m_wallet->get_refresh_type());
     success_msg_writer() << "priority = " << priority<< " (" << priority_string << ")";
     success_msg_writer() << "ask-password = " << m_wallet->ask_password() << " (" << ask_password_string << ")";
-    success_msg_writer() << "unit = " << cryptonote::get_unit(cryptonote::get_default_decimal_point());
     success_msg_writer() << "min-outputs-count = " << m_wallet->get_min_output_count();
     success_msg_writer() << "min-outputs-value = " << cryptonote::print_money(m_wallet->get_min_output_value());
     success_msg_writer() << "merge-destinations = " << m_wallet->merge_destinations();
@@ -3300,7 +3269,6 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     CHECK_SIMPLE_VARIABLE("refresh-type", set_refresh_type, tr("full (slowest, no assumptions); optimize-coinbase (fast, assumes the whole coinbase is paid to a single address); no-coinbase (fastest, assumes we receive no coinbase transaction), default (same as optimize-coinbase)"));
     CHECK_SIMPLE_VARIABLE("priority", set_default_priority, tr("0-5 or one of ") << join_priority_strings(", "));
     CHECK_SIMPLE_VARIABLE("ask-password", set_ask_password, tr("0|1|2 (or never|action|decrypt)"));
-    CHECK_SIMPLE_VARIABLE("unit", set_unit, tr("loki, megarok, kilorok, rok"));
     CHECK_SIMPLE_VARIABLE("min-outputs-count", set_min_output_count, tr("unsigned integer"));
     CHECK_SIMPLE_VARIABLE("min-outputs-value", set_min_output_value, tr("amount"));
     CHECK_SIMPLE_VARIABLE("merge-destinations", set_merge_destinations, tr("0 or 1"));

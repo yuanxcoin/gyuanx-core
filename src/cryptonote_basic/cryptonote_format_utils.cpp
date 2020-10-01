@@ -54,8 +54,6 @@
 
 using namespace crypto;
 
-static std::atomic<unsigned int> default_decimal_point(CRYPTONOTE_DISPLAY_DECIMAL_POINT);
-
 static std::atomic<uint64_t> tx_hashes_calculated_count(0);
 static std::atomic<uint64_t> tx_hashes_cached_count(0);
 static std::atomic<uint64_t> block_hashes_calculated_count(0);
@@ -383,8 +381,6 @@ namespace cryptonote
     if (parts[0].find_first_not_of("0123456789"sv) != std::string::npos)
       return false; // whole part contains non-digit
 
-    const unsigned int decimal_point = default_decimal_point; // to avoid needing a bunch of atomic reads below
-
     if (parts[0].empty()) {
       // Only allow an empty whole number part if there is a fractional part.
       if (parts.size() == 1)
@@ -400,7 +396,7 @@ namespace cryptonote
       //
       // TODO: get rid of the user-configurable default_decimal_point nonsense and just multiply
       // this value by the `COIN` constant.
-      for (size_t i = 0; i < decimal_point; i++)
+      for (size_t i = 0; i < CRYPTONOTE_DISPLAY_DECIMAL_POINT; i++)
       {
         if (amount > std::numeric_limits<uint64_t>::max() / 10)
           return false; // would overflow
@@ -415,10 +411,10 @@ namespace cryptonote
       return false; // fractional part contains non-digit
 
     // If too long, but with insignificant 0's, trim them off
-    while (parts[1].size() > decimal_point && parts[1].back() == '0')
+    while (parts[1].size() > CRYPTONOTE_DISPLAY_DECIMAL_POINT && parts[1].back() == '0')
       parts[1].remove_suffix(1);
 
-    if (parts[1].size() > decimal_point)
+    if (parts[1].size() > CRYPTONOTE_DISPLAY_DECIMAL_POINT)
       return false; // fractional part has too many significant digits
 
     uint64_t fractional;
@@ -427,7 +423,7 @@ namespace cryptonote
 
     // Scale up the value if it wasn't a full fractional value, e.g. if we have "10.45" then we
     // need to convert the 45 we just parsed to 450'000'000.
-    for (size_t i = parts[1].size(); i < decimal_point; i++)
+    for (size_t i = parts[1].size(); i < CRYPTONOTE_DISPLAY_DECIMAL_POINT; i++)
       fractional *= 10;
 
     if (fractional > std::numeric_limits<uint64_t>::max() - amount)
@@ -1058,30 +1054,10 @@ namespace cryptonote
     cn_fast_hash(blob.data(), blob.size(), res);
   }
   //---------------------------------------------------------------
-  void set_default_decimal_point(unsigned int decimal_point)
-  {
-    switch (decimal_point)
-    {
-      case 9:
-      case 6:
-      case 3:
-      case 0:
-        default_decimal_point = decimal_point;
-        break;
-      default:
-        ASSERT_MES_AND_THROW("Invalid decimal point specification: " << decimal_point);
-    }
-  }
-  //---------------------------------------------------------------
-  unsigned int get_default_decimal_point()
-  {
-    return default_decimal_point;
-  }
-  //---------------------------------------------------------------
   std::string get_unit(unsigned int decimal_point)
   {
     if (decimal_point == (unsigned int)-1)
-      decimal_point = default_decimal_point;
+      decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
     switch (decimal_point)
     {
       case 9:
@@ -1100,7 +1076,7 @@ namespace cryptonote
   std::string print_money(uint64_t amount, unsigned int decimal_point)
   {
     if (decimal_point == (unsigned int)-1)
-      decimal_point = default_decimal_point;
+      decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
     std::string s = std::to_string(amount);
     if(s.size() < decimal_point+1)
     {

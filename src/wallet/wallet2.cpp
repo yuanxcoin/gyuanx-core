@@ -3984,7 +3984,7 @@ std::optional<wallet2::keys_file_data> wallet2::get_keys_file_data(const epee::w
   value2.SetUint64(m_min_output_value);
   json.AddMember("min_output_value", value2, json.GetAllocator());
 
-  value2.SetInt(cryptonote::get_default_decimal_point());
+  value2.SetInt(CRYPTONOTE_DISPLAY_DECIMAL_POINT);
   json.AddMember("default_decimal_point", value2, json.GetAllocator());
 
   value2.SetInt(m_merge_destinations ? 1 :0);
@@ -4175,7 +4175,6 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_refresh_from_block_height = 0;
     m_confirm_non_default_ring_size = true;
     m_ask_password = AskPasswordToDecrypt;
-    cryptonote::set_default_decimal_point(CRYPTONOTE_DISPLAY_DECIMAL_POINT);
     m_min_output_count = 0;
     m_min_output_value = 0;
     m_merge_destinations = false;
@@ -4317,8 +4316,6 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_confirm_non_default_ring_size = field_confirm_non_default_ring_size;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, ask_password, AskPasswordType, Int, false, AskPasswordToDecrypt);
     m_ask_password = field_ask_password;
-    GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, default_decimal_point, int, Int, false, CRYPTONOTE_DISPLAY_DECIMAL_POINT);
-    cryptonote::set_default_decimal_point(field_default_decimal_point);
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, min_output_count, uint32_t, Uint, false, 0);
     m_min_output_count = field_min_output_count;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, min_output_value, uint64_t, Uint64, false, 0);
