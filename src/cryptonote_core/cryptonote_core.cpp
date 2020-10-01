@@ -1375,7 +1375,6 @@ namespace cryptonote
       }
     }
 
-    if (tx_pool_changed) long_poll_trigger(m_mempool);
     return ok;
   }
   //-----------------------------------------------------------------------------------------------
@@ -1541,7 +1540,11 @@ namespace cryptonote
         if (m_mempool.add_existing_blink(b))
           added++;
 
-    MINFO("Added blink signatures for " << added << " blinks");
+    if (added)
+    {
+      MINFO("Added blink signatures for " << added << " blinks");
+      long_poll_trigger(m_mempool);
+    }
 
     return added;
   }

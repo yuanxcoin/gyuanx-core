@@ -5036,7 +5036,7 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
   {
     m_in_manual_refresh.store(true, std::memory_order_relaxed);
     LOKI_DEFER { m_in_manual_refresh.store(false, std::memory_order_relaxed); };
-    m_wallet->refresh(m_wallet->is_trusted_daemon(), start_height, fetched_blocks, received_money);
+    m_wallet->refresh(m_wallet->is_trusted_daemon(), start_height, fetched_blocks, received_money, true /*check_pool*/);
 
     if (reset == ResetSoftKeepKI)
     {
@@ -8873,7 +8873,7 @@ void simple_wallet::wallet_idle_thread()
 #ifndef _WIN32
       m_inactivity_checker.do_call([this] { check_inactivity(); });
 #endif
-      m_refresh_checker.do_call([this] { check_refresh(); });
+      m_refresh_checker.do_call([this] { check_refresh(false /*long_poll_trigger*/); });
       m_mms_checker.do_call([this] { check_mms(); });
 
       if (!m_idle_run.load(std::memory_order_relaxed))
@@ -8902,7 +8902,7 @@ bool simple_wallet::check_inactivity()
     return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::check_refresh()
+bool simple_wallet::check_refresh(bool long_poll_trigger)
 {
     // auto refresh
     if (m_auto_refresh_enabled)
@@ -8913,7 +8913,7 @@ bool simple_wallet::check_refresh()
         uint64_t fetched_blocks;
         bool received_money;
         if (try_connect_to_daemon(true))
-          m_wallet->refresh(m_wallet->is_trusted_daemon(), 0, fetched_blocks, received_money, false /*don't check pool in background*/);
+          m_wallet->refresh(m_wallet->is_trusted_daemon(), 0, fetched_blocks, received_money, long_poll_trigger /*check pool*/);
       }
       catch(...) {}
       m_auto_refresh_refreshing = false;
@@ -8986,7 +8986,7 @@ bool simple_wallet::run()
       try
       {
         if (m_auto_refresh_enabled && m_wallet->long_poll_pool_state())
-          m_idle_cond.notify_one();
+          check_refresh(true /*long_poll_trigger*/);
       }
       catch (...)
       {

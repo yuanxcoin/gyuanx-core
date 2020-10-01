@@ -334,7 +334,7 @@ namespace cryptonote
 
     // idle thread workers
     bool check_inactivity();
-    bool check_refresh();
+    bool check_refresh(bool long_poll_trigger);
     bool check_mms();
 
     //----------------- i_wallet2_callback ---------------------
