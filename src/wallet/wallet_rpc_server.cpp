@@ -3225,6 +3225,27 @@ namespace {
     return res;
   }
 
+  LNS_KNOWN_NAMES::response wallet_rpc_server::invoke(LNS_KNOWN_NAMES::request&& req)
+  {
+    require_open();
+    LNS_KNOWN_NAMES::response res{};
+
+    auto cache = m_wallet->get_lns_cache();
+    res.known_names.reserve(cache.size());
+    for (auto& [name, details] : m_wallet->get_lns_cache())
+    {
+      auto& entry = res.known_names.emplace_back();
+      auto type = details.type;
+      if (type > lns::mapping_type::lokinet && type <= lns::mapping_type::lokinet_10years)
+        type = lns::mapping_type::lokinet;
+      entry.type = lns::mapping_type_str(type);
+      entry.hashed = details.hashed_name;
+      entry.name = details.name;
+    }
+
+    return res;
+  }
+
   LNS_DECRYPT_VALUE::response wallet_rpc_server::invoke(LNS_DECRYPT_VALUE::request&& req)
   {
     require_open();
