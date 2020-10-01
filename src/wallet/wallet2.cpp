@@ -2999,12 +2999,9 @@ bool wallet2::long_poll_pool_state()
     throw;
   }
 
-  bool maxed_out_connections = res.status == rpc::STATUS_TX_LONG_POLL_MAX_CONNECTIONS;
-  bool timed_out             = res.status == rpc::STATUS_TX_LONG_POLL_TIMED_OUT;
-  if (maxed_out_connections || timed_out)
+  if (res.status == rpc::STATUS_TX_LONG_POLL_TIMED_OUT)
   {
-    MINFO("Long poll " << (maxed_out_connections ? "replied with max connections" : "replied with no pool change"));
-    if (maxed_out_connections) std::this_thread::sleep_for(error_sleep);
+    MINFO("Long poll replied with no pool change");
     return false;
   }
 
@@ -3016,9 +3013,10 @@ bool wallet2::long_poll_pool_state()
     checksum ^= hash;
   {
     std::lock_guard lock{m_long_poll_tx_pool_checksum_mutex};
-    m_long_poll_tx_pool_checksum = std::move(checksum);
+    m_long_poll_tx_pool_checksum = checksum;
   }
-  return true;
+
+  return checksum != crypto::null_hash;
 }
 
 void wallet2::cancel_long_poll()
@@ -3070,9 +3068,15 @@ std::vector<wallet2::get_pool_state_tx> wallet2::get_pool_state(bool refreshed)
   MTRACE("get_pool_state: take hashes from cache");
   std::vector<crypto::hash> tx_hashes;
   {
-    // get the pool state
+    // NOTE: Only request blinked transactions, normal transactions will appear
+    // in the wallet when it arrives in a block. This is to prevent pulling down
+    // TX's that are awaiting blink approval being cached in the wallet as
+    // non-blink and external applications failing to respect this.
+    cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::request req{};
+    req.blinked_txs_only = true;
+
     cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::response res{};
-    bool r = invoke_http<rpc::GET_TRANSACTION_POOL_HASHES_BIN>({}, res);
+    bool r = invoke_http<rpc::GET_TRANSACTION_POOL_HASHES_BIN>(req, res);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::get_tx_pool_error);
@@ -3489,7 +3493,9 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   // since that might cause a password prompt, which would introduce a data
   // leak allowing a passive adversary with traffic analysis capability to
   // infer when we get an incoming output
-  std::vector<get_pool_state_tx> process_pool_txs = get_pool_state(true);
+  std::vector<get_pool_state_tx> process_pool_txs;
+  if (check_pool)
+    process_pool_txs = get_pool_state(true /*refreshed*/);
 
   bool first = true, last = false;
   while(m_run.load(std::memory_order_relaxed))

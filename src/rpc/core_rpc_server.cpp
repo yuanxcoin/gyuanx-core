@@ -1465,7 +1465,7 @@ namespace cryptonote { namespace rpc {
       return res;
 
     std::vector<crypto::hash> tx_pool_hashes;
-    m_core.get_pool().get_transaction_hashes(tx_pool_hashes, context.admin);
+    m_core.get_pool().get_transaction_hashes(tx_pool_hashes, context.admin, req.blinked_txs_only);
 
     res.tx_hashes = std::move(tx_pool_hashes);
     res.status    = STATUS_OK;

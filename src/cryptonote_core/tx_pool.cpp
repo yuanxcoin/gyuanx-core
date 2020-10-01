@@ -1141,13 +1141,15 @@ namespace cryptonote
     }, true, include_unrelayed_txes);
   }
   //------------------------------------------------------------------
-  void tx_memory_pool::get_transaction_hashes(std::vector<crypto::hash>& txs, bool include_unrelayed_txes) const
+  void tx_memory_pool::get_transaction_hashes(std::vector<crypto::hash>& txs, bool include_unrelayed_txes, bool include_only_blinked) const
   {
     auto locks = tools::unique_locks(m_transactions_lock, m_blockchain);
 
     txs.reserve(m_blockchain.get_txpool_tx_count(include_unrelayed_txes));
-    m_blockchain.for_all_txpool_txes([&txs](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata *bd){
-      txs.push_back(txid);
+    m_blockchain.for_all_txpool_txes([&txs, include_only_blinked, this](const crypto::hash &txid, const txpool_tx_meta_t &meta, const cryptonote::blobdata *bd){
+      bool include_tx = true;
+      if (include_only_blinked) include_tx = has_blink(txid);
+      if (include_tx) txs.push_back(txid);
       return true;
     }, false, include_unrelayed_txes);
   }

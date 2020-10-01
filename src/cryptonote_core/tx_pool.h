@@ -409,7 +409,7 @@ namespace cryptonote
      * @param include_unrelayed_txes include unrelayed txes in the result
      *
      */
-    void get_transaction_hashes(std::vector<crypto::hash>& txs, bool include_unrelayed_txes = true) const;
+    void get_transaction_hashes(std::vector<crypto::hash>& txs, bool include_unrelayed_txes = true, bool include_only_blinked = false) const;
 
     /**
      * @brief get (weight, fee, receive time) for all transaction in the pool
