@@ -12995,6 +12995,21 @@ uint64_t wallet2::get_approximate_blockchain_height() const
   return approx_blockchain_height;
 }
 
+void wallet2::set_lns_cache_record(const wallet2::lns_detail& detail)
+{
+  lns_records_cache[detail.hashed_name] = detail;
+}
+
+void wallet2::delete_lns_cache_record(std::string hashed_name)
+{
+  lns_records_cache.erase(hashed_name);
+}
+
+std::unordered_map<std::string, wallet2::lns_detail> wallet2::get_lns_cache()
+{
+  return lns_records_cache;
+}
+
 void wallet2::set_tx_note(const crypto::hash &txid, const std::string &note)
 {
   m_tx_notes[txid] = note;

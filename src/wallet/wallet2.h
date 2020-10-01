@@ -797,6 +797,23 @@ private:
     auto lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request) const { return m_node_rpc_proxy.lns_owners_to_names(request); }
     auto lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request) const { return m_node_rpc_proxy.lns_names_to_owners(request); }
 
+    struct lns_detail
+    {
+      lns::mapping_type type;
+      std::string name;
+      std::string hashed_name;
+      std::string value;
+      std::string owner;
+      std::string backup_owner;
+    };
+    std::unordered_map<std::string, lns_detail> lns_records_cache;
+
+    void set_lns_cache_record(const wallet2::lns_detail& detail);
+
+    void delete_lns_cache_record(std::string name);
+
+    std::unordered_map<std::string, lns_detail> get_lns_cache();
+
     uint64_t get_blockchain_current_height() const { return m_light_wallet_blockchain_height ? m_light_wallet_blockchain_height : m_blockchain.size(); }
     void rescan_spent();
     void rescan_blockchain(bool hard, bool refresh = true, bool keep_key_images = false);
@@ -923,6 +940,9 @@ private:
       if(ver < 29)
         return;
       a & m_immutable_height;
+      if(ver < 30)
+        return;
+      a & lns_records_cache;
     }
 
     /*!
@@ -1657,7 +1677,7 @@ private:
   bool parse_priority          (const std::string& arg, uint32_t& priority);
 
 }
-BOOST_CLASS_VERSION(tools::wallet2, 29)
+BOOST_CLASS_VERSION(tools::wallet2, 30)
 BOOST_CLASS_VERSION(tools::wallet2::payment_details, 6)
 BOOST_CLASS_VERSION(tools::wallet2::pool_payment_details, 1)
 BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 9)
@@ -1667,6 +1687,17 @@ BOOST_CLASS_VERSION(tools::wallet2::reserve_proof_entry, 0)
 
 namespace boost::serialization
 {
+    template <class Archive>
+    inline void serialize(Archive &a, tools::wallet2::lns_detail &x, const boost::serialization::version_type ver)
+    {
+      a & x.type;
+      a & x.name;
+      a & x.hashed_name;
+      a & x.value;
+      a & x.owner;
+      a & x.backup_owner;
+    }
+
     template <class Archive>
     void serialize(Archive &a, tools::wallet2::unconfirmed_transfer_details &x, const unsigned int ver)
     {
