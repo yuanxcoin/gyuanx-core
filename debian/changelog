@@ -1,3 +1,41 @@
+loki (8.1.0-1~ubuntu1804) bionic; urgency=medium
+
+  [ Sean ]
+  * CMake needs curl on ubuntu to compile
+  * Update README.md
+
+  [ sarawut ]
+  * rip out configurable decimal places
+  * fix comments
+
+  [ Jason Rhinelander ]
+  * update version in control
+
+  [ Doyle ]
+  * Blink: Make wallet only long poll blinks
+  * wallet: Remove unused long poll max connections status
+
+  [ Jason Rhinelander ]
+  * Remove unit from "help set" and "set" display
+
+  [ Sean Darcy ]
+  * LNS detail struct created and vector for cache
+  * functions to save to cache
+  * Saves to LNS cache and retrieves
+  * print_owners_to_names now shows cached names and values
+  * Creates a Cache in the CLI Wallet for LNS Records
+  * unordered map, added to RPC commands
+  * cleaned up notes
+
+  [ Ubuntu ]
+  * adjust for 20.04
+
+  [ Jason Rhinelander ]
+  * Compilation fix + autoize
+  * Add RPC endpoint to access known names
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Thu, 01 Oct 2020 20:48:09 -0300
+
 loki (8.1.0~pre1-1~ubuntu1804) bionic; urgency=medium
 
   [ Doyle ]
