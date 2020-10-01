@@ -84,8 +84,7 @@ namespace rpc {
     STATUS_FAILED = "FAILED",
     STATUS_BUSY = "BUSY",
     STATUS_NOT_MINING = "NOT MINING",
-    STATUS_TX_LONG_POLL_TIMED_OUT = "Long polling client timed out before txpool had an update",
-    STATUS_TX_LONG_POLL_MAX_CONNECTIONS = "Daemon maxed out long polling connections";
+    STATUS_TX_LONG_POLL_TIMED_OUT = "Long polling client timed out before txpool had an update";
 
 
   namespace {

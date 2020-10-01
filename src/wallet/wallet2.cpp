@@ -2999,12 +2999,9 @@ bool wallet2::long_poll_pool_state()
     throw;
   }
 
-  bool maxed_out_connections = res.status == rpc::STATUS_TX_LONG_POLL_MAX_CONNECTIONS;
-  bool timed_out             = res.status == rpc::STATUS_TX_LONG_POLL_TIMED_OUT;
-  if (maxed_out_connections || timed_out)
+  if (res.status == rpc::STATUS_TX_LONG_POLL_TIMED_OUT)
   {
-    MINFO("Long poll " << (maxed_out_connections ? "replied with max connections" : "replied with no pool change"));
-    if (maxed_out_connections) std::this_thread::sleep_for(error_sleep);
+    MINFO("Long poll replied with no pool change");
     return false;
   }
 
