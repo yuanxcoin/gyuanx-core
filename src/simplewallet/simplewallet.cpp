@@ -7084,13 +7084,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         continue;
       }
 
-      std::unordered_map<std::string,tools::wallet2::lns_detail>::const_iterator got = cache.find (entry.name_hash);
-
-      if ( got != cache.end() )
-      {
-        name = got->second.name;
-        value = got->second.value;
-      }
+      auto got = cache.find(entry.name_hash);
 
       auto writer = tools::msg_writer();
       writer
