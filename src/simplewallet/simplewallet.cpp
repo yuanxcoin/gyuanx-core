@@ -884,8 +884,8 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
   const auto base_fee = m_wallet->get_base_fees();
   const uint64_t typical_size = 2500, typical_outs = 2;
   message_writer() << (boost::format(tr("Current base fee is %s %s per byte + %s %s per output")) %
-          print_money(base_fee.first) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first) % cryptonote::get_unit() %
+          print_money(base_fee.second) % cryptonote::get_unit()).str();
 
   std::vector<uint64_t> fees;
   std::ostringstream typical_fees;
@@ -904,13 +904,13 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
 
     if (fixed)
       message_writer() << (boost::format(tr("Current blink fee is %s %s per byte + %s %s per output + %s %s")) %
-          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(fixed) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first * pct / 100) % cryptonote::get_unit() %
+          print_money(base_fee.second * pct / 100) % cryptonote::get_unit() %
+          print_money(fixed) % cryptonote::get_unit()).str();
     else
       message_writer() << (boost::format(tr("Current blink fee is %s %s per byte + %s %s per output")) %
-          print_money(base_fee.first * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point()) %
-          print_money(base_fee.second * pct / 100) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
+          print_money(base_fee.first * pct / 100) % cryptonote::get_unit() %
+          print_money(base_fee.second * pct / 100) % cryptonote::get_unit()).str();
 
     typical_fees << ", " << print_money(typical_blink_fee) << " (blink)";
   }
@@ -2317,34 +2317,6 @@ bool simple_wallet::set_ask_password(const std::vector<std::string> &args/* = st
   return true;
 }
 
-bool simple_wallet::set_unit(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
-{
-  const std::string &unit = args[1];
-  unsigned int decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
-
-  if (unit == "loki")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
-  else if (unit == "megarok")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 3;
-  else if (unit == "kilorok")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 6;
-  else if (unit == "rok")
-    decimal_point = 0;
-  else
-  {
-    fail_msg_writer() << tr("invalid unit");
-    return true;
-  }
-
-  const auto pwd_container = get_and_verify_password();
-  if (pwd_container)
-  {
-    cryptonote::set_default_decimal_point(decimal_point);
-    m_wallet->rewrite(m_wallet_file, pwd_container->password());
-  }
-  return true;
-}
-
 bool simple_wallet::set_min_output_count(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   uint32_t count;
@@ -2793,8 +2765,6 @@ simple_wallet::simple_wallet()
  ask-password <never|action|decrypt>
    action: ask the password before many actions such as transfer, etc
    decrypt: same as action, but keeps the spend key encrypted in memory when not needed
- unit <loki|megarok|kilorok|rok>
-   Set the default loki (sub-)unit.
  min-outputs-count [n]
    Try to keep at least that many outputs of value at least min-outputs-value.
  min-outputs-value [n]
@@ -3240,7 +3210,6 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     success_msg_writer() << "refresh-type = " << get_refresh_type_name(m_wallet->get_refresh_type());
     success_msg_writer() << "priority = " << priority<< " (" << priority_string << ")";
     success_msg_writer() << "ask-password = " << m_wallet->ask_password() << " (" << ask_password_string << ")";
-    success_msg_writer() << "unit = " << cryptonote::get_unit(cryptonote::get_default_decimal_point());
     success_msg_writer() << "min-outputs-count = " << m_wallet->get_min_output_count();
     success_msg_writer() << "min-outputs-value = " << cryptonote::print_money(m_wallet->get_min_output_value());
     success_msg_writer() << "merge-destinations = " << m_wallet->merge_destinations();
@@ -3300,7 +3269,6 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     CHECK_SIMPLE_VARIABLE("refresh-type", set_refresh_type, tr("full (slowest, no assumptions); optimize-coinbase (fast, assumes the whole coinbase is paid to a single address); no-coinbase (fastest, assumes we receive no coinbase transaction), default (same as optimize-coinbase)"));
     CHECK_SIMPLE_VARIABLE("priority", set_default_priority, tr("0-5 or one of ") << join_priority_strings(", "));
     CHECK_SIMPLE_VARIABLE("ask-password", set_ask_password, tr("0|1|2 (or never|action|decrypt)"));
-    CHECK_SIMPLE_VARIABLE("unit", set_unit, tr("loki, megarok, kilorok, rok"));
     CHECK_SIMPLE_VARIABLE("min-outputs-count", set_min_output_count, tr("unsigned integer"));
     CHECK_SIMPLE_VARIABLE("min-outputs-value", set_min_output_value, tr("amount"));
     CHECK_SIMPLE_VARIABLE("merge-destinations", set_merge_destinations, tr("0 or 1"));
@@ -5036,7 +5004,7 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
   {
     m_in_manual_refresh.store(true, std::memory_order_relaxed);
     LOKI_DEFER { m_in_manual_refresh.store(false, std::memory_order_relaxed); };
-    m_wallet->refresh(m_wallet->is_trusted_daemon(), start_height, fetched_blocks, received_money);
+    m_wallet->refresh(m_wallet->is_trusted_daemon(), start_height, fetched_blocks, received_money, true /*check_pool*/);
 
     if (reset == ResetSoftKeepKI)
     {
@@ -6555,6 +6523,18 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
 
     if (!confirm_and_send_tx(dsts, ptx_vector, priority == tools::tx_priority_blink))
       return false;
+
+
+    //Save the LNS record to the wallet cache
+    std::string name_hash_str = lns::name_to_base64_hash(name);
+    tools::wallet2::lns_detail detail = {
+      type,
+      name,
+      name_hash_str,
+      value,
+      owner.size() ? owner : m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}),
+      backup_owner.size() ? backup_owner : ""};
+    m_wallet->set_lns_cache_record(detail);
   }
   catch (const std::exception &e)
   {
@@ -6751,6 +6731,18 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     if (!confirm_and_send_tx(dsts, ptx_vector, false /*blink*/))
       return false;
 
+    // Save the updated LNS record to the wallet cache
+    std::string name_hash_str = lns::name_to_base64_hash(name);
+    m_wallet->delete_lns_cache_record(name_hash_str);
+    tools::wallet2::lns_detail detail = {
+      type,
+      name,
+      name_hash_str,
+      value,
+      owner.size() ? owner : m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0}),
+      backup_owner.size() ? backup_owner : ""};
+    m_wallet->set_lns_cache_record(detail);
+
   }
   catch (const std::exception &e)
   {
@@ -6909,7 +6901,6 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
     return true;
   }
 
-
   rpc::LNS_NAMES_TO_OWNERS::request request = {};
   for (auto& name : args)
   {
@@ -6934,6 +6925,8 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       return false;
     }
 
+    std::unordered_map<std::string, tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
+
     // Print any skipped (i.e. not registered) results:
     for (size_t i = last_index + 1; i < mapping.entry_index; i++)
       fail_msg_writer() << args[i] << " not found\n";
@@ -6951,6 +6944,8 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       return false;
     }
 
+    std::unordered_map<std::string,tools::wallet2::lns_detail>::const_iterator got = cache.find (lns::name_to_base64_hash(name));
+
     auto writer = tools::msg_writer();
     writer
       << "Name: " << name
@@ -6963,10 +6958,22 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
       << "\n    Last updated height: " << mapping.update_height;
     if (mapping.expiration_height) writer
       << "\n    Expiration height: " << *mapping.expiration_height;
+    if ( got != cache.end() ) writer
+      << "\n    Value: " << got->second.value;
     writer
       << "\n    Encrypted value: " << enc_hex;
     writer
       << "\n";
+
+    tools::wallet2::lns_detail detail = 
+    {
+      static_cast<lns::mapping_type>(mapping.type),
+      name,
+      request.entries[0].name_hash,
+      value.to_readable_value(m_wallet->nettype(), static_cast<lns::mapping_type>(mapping.type)),
+      mapping.owner,
+      mapping.backup_owner.value_or(NULL_STR)};
+    m_wallet->set_lns_cache_record(detail);
   }
   for (size_t i = last_index + 1; i < args.size(); i++)
     fail_msg_writer() << args[i] << " not found\n";
@@ -6982,10 +6989,13 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
   std::vector<std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry>> rpc_results;
   std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::request> requests(1);
 
+  std::unordered_map<std::string, tools::wallet2::lns_detail> cache = m_wallet->get_lns_cache();
+
   if (args.size() == 0)
   {
     for (uint32_t index = 0; index < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++index)
     {
+
       if (requests.back().entries.size() >= cryptonote::rpc::LNS_OWNERS_TO_NAMES::MAX_REQUEST_ENTRIES)
         requests.emplace_back();
       requests.back().entries.push_back(m_wallet->get_subaddress_as_str({m_current_subaddress_account, index}));
@@ -7025,6 +7035,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
     rpc_results.emplace_back(std::move(result));
   }
 
+
   for (size_t i = 0; i < rpc_results.size(); i++)
   {
     auto const &rpc = rpc_results[i];
@@ -7041,9 +7052,14 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         continue;
       }
 
+      auto got = cache.find(entry.name_hash);
+
       auto writer = tools::msg_writer();
       writer
-        << "Name (hashed): " << entry.name_hash
+        << "Name (hashed): " << entry.name_hash;
+      if ( got != cache.end() ) writer
+        << "\n    Name: " << got->second.name;
+      writer
         << "\n    Type: " << entry.type
         << "\n    Owner: " << *owner;
       if (entry.backup_owner) writer
@@ -7052,6 +7068,8 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         << "\n    Last updated height: " << entry.update_height;
       if (entry.expiration_height) writer
         << "\n    Expiration height: " << *entry.expiration_height;
+      if ( got != cache.end() ) writer
+        << "\n    Value: " << got->second.value;
       writer
         << "\n    Encrypted value: " << entry.encrypted_value;
     }
@@ -8873,7 +8891,7 @@ void simple_wallet::wallet_idle_thread()
 #ifndef _WIN32
       m_inactivity_checker.do_call([this] { check_inactivity(); });
 #endif
-      m_refresh_checker.do_call([this] { check_refresh(); });
+      m_refresh_checker.do_call([this] { check_refresh(false /*long_poll_trigger*/); });
       m_mms_checker.do_call([this] { check_mms(); });
 
       if (!m_idle_run.load(std::memory_order_relaxed))
@@ -8902,7 +8920,7 @@ bool simple_wallet::check_inactivity()
     return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::check_refresh()
+bool simple_wallet::check_refresh(bool long_poll_trigger)
 {
     // auto refresh
     if (m_auto_refresh_enabled)
@@ -8913,7 +8931,7 @@ bool simple_wallet::check_refresh()
         uint64_t fetched_blocks;
         bool received_money;
         if (try_connect_to_daemon(true))
-          m_wallet->refresh(m_wallet->is_trusted_daemon(), 0, fetched_blocks, received_money, false /*don't check pool in background*/);
+          m_wallet->refresh(m_wallet->is_trusted_daemon(), 0, fetched_blocks, received_money, long_poll_trigger /*check pool*/);
       }
       catch(...) {}
       m_auto_refresh_refreshing = false;
@@ -8986,7 +9004,7 @@ bool simple_wallet::run()
       try
       {
         if (m_auto_refresh_enabled && m_wallet->long_poll_pool_state())
-          m_idle_cond.notify_one();
+          check_refresh(true /*long_poll_trigger*/);
       }
       catch (...)
       {

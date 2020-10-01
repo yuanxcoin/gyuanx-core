@@ -2999,12 +2999,9 @@ bool wallet2::long_poll_pool_state()
     throw;
   }
 
-  bool maxed_out_connections = res.status == rpc::STATUS_TX_LONG_POLL_MAX_CONNECTIONS;
-  bool timed_out             = res.status == rpc::STATUS_TX_LONG_POLL_TIMED_OUT;
-  if (maxed_out_connections || timed_out)
+  if (res.status == rpc::STATUS_TX_LONG_POLL_TIMED_OUT)
   {
-    MINFO("Long poll " << (maxed_out_connections ? "replied with max connections" : "replied with no pool change"));
-    if (maxed_out_connections) std::this_thread::sleep_for(error_sleep);
+    MINFO("Long poll replied with no pool change");
     return false;
   }
 
@@ -3016,9 +3013,10 @@ bool wallet2::long_poll_pool_state()
     checksum ^= hash;
   {
     std::lock_guard lock{m_long_poll_tx_pool_checksum_mutex};
-    m_long_poll_tx_pool_checksum = std::move(checksum);
+    m_long_poll_tx_pool_checksum = checksum;
   }
-  return true;
+
+  return checksum != crypto::null_hash;
 }
 
 void wallet2::cancel_long_poll()
@@ -3070,9 +3068,15 @@ std::vector<wallet2::get_pool_state_tx> wallet2::get_pool_state(bool refreshed)
   MTRACE("get_pool_state: take hashes from cache");
   std::vector<crypto::hash> tx_hashes;
   {
-    // get the pool state
+    // NOTE: Only request blinked transactions, normal transactions will appear
+    // in the wallet when it arrives in a block. This is to prevent pulling down
+    // TX's that are awaiting blink approval being cached in the wallet as
+    // non-blink and external applications failing to respect this.
+    cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::request req{};
+    req.blinked_txs_only = true;
+
     cryptonote::rpc::GET_TRANSACTION_POOL_HASHES_BIN::response res{};
-    bool r = invoke_http<rpc::GET_TRANSACTION_POOL_HASHES_BIN>({}, res);
+    bool r = invoke_http<rpc::GET_TRANSACTION_POOL_HASHES_BIN>(req, res);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status == rpc::STATUS_BUSY, error::daemon_busy, "get_transaction_pool_hashes.bin");
     THROW_WALLET_EXCEPTION_IF(res.status != rpc::STATUS_OK, error::get_tx_pool_error);
@@ -3489,7 +3493,9 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   // since that might cause a password prompt, which would introduce a data
   // leak allowing a passive adversary with traffic analysis capability to
   // infer when we get an incoming output
-  std::vector<get_pool_state_tx> process_pool_txs = get_pool_state(true);
+  std::vector<get_pool_state_tx> process_pool_txs;
+  if (check_pool)
+    process_pool_txs = get_pool_state(true /*refreshed*/);
 
   bool first = true, last = false;
   while(m_run.load(std::memory_order_relaxed))
@@ -3984,7 +3990,7 @@ std::optional<wallet2::keys_file_data> wallet2::get_keys_file_data(const epee::w
   value2.SetUint64(m_min_output_value);
   json.AddMember("min_output_value", value2, json.GetAllocator());
 
-  value2.SetInt(cryptonote::get_default_decimal_point());
+  value2.SetInt(CRYPTONOTE_DISPLAY_DECIMAL_POINT);
   json.AddMember("default_decimal_point", value2, json.GetAllocator());
 
   value2.SetInt(m_merge_destinations ? 1 :0);
@@ -4175,7 +4181,6 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_refresh_from_block_height = 0;
     m_confirm_non_default_ring_size = true;
     m_ask_password = AskPasswordToDecrypt;
-    cryptonote::set_default_decimal_point(CRYPTONOTE_DISPLAY_DECIMAL_POINT);
     m_min_output_count = 0;
     m_min_output_value = 0;
     m_merge_destinations = false;
@@ -4317,8 +4322,6 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
     m_confirm_non_default_ring_size = field_confirm_non_default_ring_size;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, ask_password, AskPasswordType, Int, false, AskPasswordToDecrypt);
     m_ask_password = field_ask_password;
-    GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, default_decimal_point, int, Int, false, CRYPTONOTE_DISPLAY_DECIMAL_POINT);
-    cryptonote::set_default_decimal_point(field_default_decimal_point);
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, min_output_count, uint32_t, Uint, false, 0);
     m_min_output_count = field_min_output_count;
     GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, min_output_value, uint64_t, Uint64, false, 0);
@@ -12990,6 +12993,21 @@ uint64_t wallet2::get_approximate_blockchain_height() const
   uint64_t approx_blockchain_height = netconf.HEIGHT_ESTIMATE_HEIGHT + (since_ts > 0 ? (uint64_t)since_ts / tools::to_seconds(TARGET_BLOCK_TIME) : 0) - BLOCKS_EXPECTED_IN_DAYS(7); // subtract a week's worth of blocks to be conservative
   LOG_PRINT_L2("Calculated blockchain height: " << approx_blockchain_height);
   return approx_blockchain_height;
+}
+
+void wallet2::set_lns_cache_record(const wallet2::lns_detail& detail)
+{
+  lns_records_cache[detail.hashed_name] = detail;
+}
+
+void wallet2::delete_lns_cache_record(std::string hashed_name)
+{
+  lns_records_cache.erase(hashed_name);
+}
+
+std::unordered_map<std::string, wallet2::lns_detail> wallet2::get_lns_cache()
+{
+  return lns_records_cache;
 }
 
 void wallet2::set_tx_note(const crypto::hash &txid, const std::string &note)

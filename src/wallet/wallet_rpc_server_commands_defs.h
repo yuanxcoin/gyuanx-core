@@ -2361,6 +2361,30 @@ This command is only required if the open wallet is one of the owners of a LNS r
   };
 
   LOKI_RPC_DOC_INTROSPECT
+  // Returns a list of known, plain-text LNS names that this wallet knows about.
+  struct LNS_KNOWN_NAMES : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("lns_known_names"); }
+
+    struct known_name
+    {
+      std::string type; // The mapping type, "session" or "lokinet".
+      std::string hashed; // The hashed name (in base64)
+      std::string name; // The plaintext name
+
+      KV_MAP_SERIALIZABLE
+    };
+    struct request : EMPTY {};
+
+    struct response
+    {
+      std::vector<known_name> known_names; // List of (unhashed) name info known to this wallet
+
+      KV_MAP_SERIALIZABLE
+    };
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
   // Takes a LNS encrypted value and encrypts the mapping value using the LNS name.
   struct LNS_ENCRYPT_VALUE : RPC_COMMAND
   {
@@ -2504,6 +2528,7 @@ This command is only required if the open wallet is one of the owners of a LNS r
     LNS_UPDATE_MAPPING,
     LNS_MAKE_UPDATE_SIGNATURE,
     LNS_HASH_NAME,
+    LNS_KNOWN_NAMES,
     LNS_DECRYPT_VALUE,
     LNS_ENCRYPT_VALUE
   >;

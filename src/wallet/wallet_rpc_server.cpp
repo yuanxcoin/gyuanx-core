@@ -3069,6 +3069,17 @@ namespace {
     if (ptx_vector.empty())
       throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Failed to create LNS transaction: " + reason};
 
+    //Save the LNS record to the wallet cache
+    std::string name_hash_str = lns::name_to_base64_hash(req.name);
+    tools::wallet2::lns_detail detail = {
+      lns::mapping_type::session,
+      req.name,
+      name_hash_str,
+      req.value,
+      req.owner.size() ? req.owner : m_wallet->get_subaddress_as_str({req.account_index, 0}),
+      req.backup_owner.size() ? req.backup_owner : ""};
+    m_wallet->set_lns_cache_record(detail);
+
     fill_response(         ptx_vector,
                            req.get_tx_key,
                            res.tx_key,
@@ -3138,6 +3149,18 @@ namespace {
     if (ptx_vector.empty())
       throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Failed to create LNS update transaction: " + reason};
 
+    // Save the updated LNS record to the wallet cache
+    std::string name_hash_str = lns::name_to_base64_hash(req.name);
+    m_wallet->delete_lns_cache_record(name_hash_str);
+    tools::wallet2::lns_detail detail = {
+      lns::mapping_type::session,
+      req.name,
+      name_hash_str,
+      req.value,
+      req.owner.size() ? req.owner : m_wallet->get_subaddress_as_str({req.account_index, 0}),
+      req.backup_owner.size() ? req.backup_owner : ""};
+    m_wallet->set_lns_cache_record(detail);
+
     fill_response(         ptx_vector,
                            req.get_tx_key,
                            res.tx_key,
@@ -3199,6 +3222,27 @@ namespace {
       throw wallet_rpc_error{error_code::LNS_BAD_NAME, "Bad lns name given=" + reason};
 
     res.name = lns::name_to_base64_hash(req.name);
+    return res;
+  }
+
+  LNS_KNOWN_NAMES::response wallet_rpc_server::invoke(LNS_KNOWN_NAMES::request&& req)
+  {
+    require_open();
+    LNS_KNOWN_NAMES::response res{};
+
+    auto cache = m_wallet->get_lns_cache();
+    res.known_names.reserve(cache.size());
+    for (auto& [name, details] : m_wallet->get_lns_cache())
+    {
+      auto& entry = res.known_names.emplace_back();
+      auto type = details.type;
+      if (type > lns::mapping_type::lokinet && type <= lns::mapping_type::lokinet_10years)
+        type = lns::mapping_type::lokinet;
+      entry.type = lns::mapping_type_str(type);
+      entry.hashed = details.hashed_name;
+      entry.name = details.name;
+    }
+
     return res;
   }
 

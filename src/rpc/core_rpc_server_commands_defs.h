@@ -84,8 +84,7 @@ namespace rpc {
     STATUS_FAILED = "FAILED",
     STATUS_BUSY = "BUSY",
     STATUS_NOT_MINING = "NOT MINING",
-    STATUS_TX_LONG_POLL_TIMED_OUT = "Long polling client timed out before txpool had an update",
-    STATUS_TX_LONG_POLL_MAX_CONNECTIONS = "Daemon maxed out long polling connections";
+    STATUS_TX_LONG_POLL_TIMED_OUT = "Long polling client timed out before txpool had an update";
 
 
   namespace {
@@ -1145,6 +1144,7 @@ namespace rpc {
 
     struct request
     {
+      bool         blinked_txs_only; // Optional: If true only transactions that were sent via blink and approved are queried.
       bool         long_poll;        // Optional: If true, this call is blocking until timeout OR tx pool has changed since the last query. TX pool change is detected by comparing the hash of all the hashes in the tx pool.  Ignored when using LMQ RPC.
       crypto::hash tx_pool_checksum; // Optional: If `long_poll` is true the caller must pass the hashes of all their known tx pool hashes, XOR'ed together.  Ignored when using LMQ RPC.
       KV_MAP_SERIALIZABLE

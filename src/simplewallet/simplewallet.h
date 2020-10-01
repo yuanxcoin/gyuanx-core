@@ -137,7 +137,6 @@ namespace cryptonote
     bool set_refresh_type(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_confirm_missing_payment_id(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_ask_password(const std::vector<std::string> &args = std::vector<std::string>());
-    bool set_unit(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_min_output_count(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_min_output_value(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_merge_destinations(const std::vector<std::string> &args = std::vector<std::string>());
@@ -334,7 +333,7 @@ namespace cryptonote
 
     // idle thread workers
     bool check_inactivity();
-    bool check_refresh();
+    bool check_refresh(bool long_poll_trigger);
     bool check_mms();
 
     //----------------- i_wallet2_callback ---------------------
