@@ -1,3 +1,21 @@
+loki (8.1.0~pre1-1~ubuntu1804) bionic; urgency=medium
+
+  [ Doyle ]
+  * HF16: Set min storage server version to 2.0.7
+
+  [ Jason Rhinelander ]
+  * Rename ufw name to match the package name
+  * Fix config file parsing to recognize hidden options (#1293)
+
+  [ Doyle ]
+  * HF16: Set min lokinet version to 0.8.0
+  * Blink: Remove deprecated bool blink in wallet RPC interface (#1294)
+
+  [ Jason Rhinelander ]
+  * Bump version to 8.1.0 and set HF16/17 fork times (#1295)
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Wed, 30 Sep 2020 22:55:16 -0300
+
 loki (8.0.1-2~ubuntu1804) bionic; urgency=medium
 
   [ Doyle ]
