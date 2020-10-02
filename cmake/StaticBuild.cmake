@@ -363,6 +363,7 @@ if (NOT WIN32)
 
 
 
+ if(FALSE) # not working reliably
   build_external(readline
     DEPENDS ncurses_external
     CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --with-curses
@@ -376,6 +377,7 @@ if (NOT WIN32)
   set_target_properties(readline PROPERTIES
     INTERFACE_LINK_LIBRARIES ncurses_tinfo
     INTERFACE_COMPILE_DEFINITIONS HAVE_READLINE)
+ endif()
 endif()
 
 
