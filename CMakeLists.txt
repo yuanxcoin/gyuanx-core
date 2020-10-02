@@ -63,7 +63,7 @@ set(LOKI_RELEASE_CODENAME "Salty Saga")
 
 # String value to append to the full version string; this is intended to easily identify whether a
 # binary was build from the release or development branches.  This should be permanently set to an
-# empty string on `master`, "-dev" on the `dev` branch, and can be set externally (via cmake
+# empty string on `stable`, "-dev" on the `dev` branch, and can be set externally (via cmake
 # arguments) where it makes sense to take some other branch release with an extra value.
 if(NOT DEFINED LOKI_RELEASE_SUFFIX)
   set(LOKI_RELEASE_SUFFIX "-dev")
