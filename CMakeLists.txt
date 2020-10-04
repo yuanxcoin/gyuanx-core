@@ -981,11 +981,16 @@ add_custom_target(strip_binaries ${strip_binaries} DEPENDS ${loki_exec_tgts})
 add_custom_target(strip_binaries_all ${strip_binaries_all} DEPENDS ${loki_exec_tgts_all})
 
 execute_process(COMMAND tar --version RESULT_VARIABLE tar_exit_code OUTPUT_VARIABLE tar_vers)
-set(git_tag "unknown")
+set(git_tag "-unknown")
 if(GIT_FOUND)
-  execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=9 HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE commithash OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(NOT ret)
-    set(git_tag ${commithash})
+  execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --abbrev-ref HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE branch OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT ret AND branch STREQUAL "stable")
+    set(git_tag "") # No tag if we're building the stable branch
+  else()
+    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=9 HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE commithash OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT ret)
+      set(git_tag "-${commithash}")
+    endif()
   endif()
 endif()
 
@@ -1005,7 +1010,7 @@ elseif(tar_os STREQUAL "Windows")
   endif()
   set(default_archive create_zip) # .tar.xz files are too scary for Windows users
 endif()
-set(tar_dir "loki-${tar_os}-${PROJECT_VERSION}${LOKI_RELEASE_SUFFIX}-${git_tag}")
+set(tar_dir "loki-${tar_os}-${PROJECT_VERSION}${LOKI_RELEASE_SUFFIX}${git_tag}")
 add_custom_target(create_tarxz
   COMMAND ${CMAKE_COMMAND} -E rename bin "${tar_dir}"
   COMMAND ${CMAKE_COMMAND} -E tar cvJ "${tar_dir}.tar.xz" -- "${tar_dir}"
