@@ -4,13 +4,16 @@ local default_deps_base='libsystemd-dev libboost-filesystem-dev libboost-thread-
     'pkg-config libsqlite3-dev qttools5-dev libcurl4-openssl-dev';
 local default_deps='g++ ' + default_deps_base; // g++ sometimes needs replacement
 
-local gtest_filter='-AddressFromURL.Failure:DNSResolver.DNSSEC*:is_hdd.linux_os_root';
+local gtest_filter='-AddressFromURL.Failure:DNSResolver.DNSSEC*';
 
 local submodules = {
     name: 'submodules',
     image: 'drone/git',
-    commands: ['git fetch --tags', 'git submodule update --init --recursive']
+    commands: ['git fetch --tags', 'git submodule update --init --recursive --depth=1']
 };
+
+local apt_get_quiet = 'apt-get -o=Dpkg::Use-Pty=0 -q';
+
 
 // Regular build on a debian-like system:
 local debian_pipeline(name, image,
@@ -30,8 +33,8 @@ local debian_pipeline(name, image,
     type: 'docker',
     name: name,
     platform: { arch: arch },
-    trigger: { branch: { exclude: ['debian/*', 'ubuntu/*'] } },
-    steps: [submodules,
+    steps: [
+        submodules,
         {
             name: 'build',
             image: image,
@@ -39,10 +42,10 @@ local debian_pipeline(name, image,
             environment: { SSH_KEY: { from_secret: "SSH_KEY" }, GTEST_FILTER: gtest_filter },
             commands: [
                 'echo "man-db man-db/auto-update boolean false" | debconf-set-selections',
-                'apt-get update',
-                'apt-get install -y eatmydata',
-                'eatmydata apt-get dist-upgrade -y',
-                'eatmydata apt-get install -y --no-install-recommends cmake git ca-certificates ninja-build ccache ' + deps,
+                apt_get_quiet + ' update',
+                apt_get_quiet + ' install -y eatmydata',
+                'eatmydata ' + apt_get_quiet + ' dist-upgrade -y',
+                'eatmydata ' + apt_get_quiet + ' install -y --no-install-recommends cmake git ca-certificates ninja-build ccache ' + deps,
                 'mkdir build',
                 'cd build',
                 'cmake .. -G Ninja -DCMAKE_CXX_FLAGS=-fdiagnostics-color=always -DCMAKE_BUILD_TYPE='+build_type+' ' +
@@ -69,51 +72,6 @@ local debian_pipeline(name, image,
         }
     ],
 }; 
-
-// Builds a snapshot .deb on a debian-like system by merging into the debian/* or ubuntu/* branch
-local deb_builder(image, distro, distro_branch, arch='amd64', imaginary_repo=false) = {
-    kind: 'pipeline',
-    type: 'docker',
-    name: 'DEB (' + distro + (if arch == 'amd64' then '' else '/' + arch) + ')',
-    platform: { arch: arch },
-    environment: { distro_branch: distro_branch, distro: distro },
-    steps: [submodules,
-        {
-            name: 'build',
-            image: image,
-            failure: 'ignore',
-            environment: { SSH_KEY: { from_secret: "SSH_KEY" } },
-            commands: [
-                'echo "man-db man-db/auto-update boolean false" | debconf-set-selections',
-                'apt-get update',
-                'apt-get install -y eatmydata',
-                'eatmydata apt-get install -y git devscripts equivs ccache git-buildpackage python3-dev' + (if imaginary_repo then ' gpg' else'')
-                ] + (if imaginary_repo then [ // Some distros need the imaginary.stream repo for backported sodium, etc.
-                    'echo deb https://deb.imaginary.stream $${distro} main >/etc/apt/sources.list.d/imaginary.stream.list',
-                    'curl -s https://deb.imaginary.stream/public.gpg | apt-key add -',
-                    'eatmydata apt-get update'
-                ] else []) + [
-                |||
-                    # Look for the debian branch in this repo first, try upstream if that fails.
-                    if ! git checkout $${distro_branch}; then
-                        git remote add --fetch upstream https://github.com/loki-project/loki-network.git &&
-                        git checkout $${distro_branch}
-                    fi
-                |||,
-                'git merge ${DRONE_COMMIT}',
-                'export DEBEMAIL="${DRONE_COMMIT_AUTHOR_EMAIL}" DEBFULLNAME="${DRONE_COMMIT_AUTHOR_NAME}"',
-                'gbp dch -S -s "HEAD^" --spawn-editor=never -U low',
-                'eatmydata mk-build-deps --install --remove --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"',
-                'export DEB_BUILD_OPTIONS="parallel=$$(nproc)"',
-                'grep -q lib debian/lokinet-bin.install || echo "/usr/lib/lib*.so*" >>debian/lokinet-bin.install',
-                'debuild -e CCACHE_DIR -b',
-                'pwd',
-                'find ./contrib/ci',
-                './contrib/ci/drone-debs-upload.sh ' + distro,
-            ]
-        }
-    ]
-};
 
 // Macos build
 local mac_builder(name,
@@ -195,13 +153,7 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
                     cmake_extra='-DCMAKE_TOOLCHAIN_FILE=../cmake/64-bit-toolchain.cmake -DBUILD_STATIC_DEPS=ON',
                     build_tests=false, lto=false, test_lokid=false, extra_cmds=[
                         'ninja strip_binaries', 'ninja create_zip', '../utils/build_scripts/drone-static-upload.sh']),
-/*
-    // Deb builds:
-    deb_builder("debian:sid", "sid", "debian/sid"),
-    deb_builder("debian:buster", "buster", "debian/buster", imaginary_repo=true),
-    deb_builder("ubuntu:focal", "focal", "ubuntu/focal"),
-    deb_builder("debian:sid", "sid", "debian/sid", arch='arm64'),
-*/
+
     // Macos builds:
     mac_builder('macOS (Release)', run_tests=true),
     mac_builder('macOS (Debug)', build_type='Debug', cmake_extra='-DBUILD_DEBUG_UTILS=ON'),
