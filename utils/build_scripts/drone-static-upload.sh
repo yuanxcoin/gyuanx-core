@@ -19,7 +19,9 @@ set -o xtrace  # Don't start tracing until *after* we write the ssh key
 
 chmod 600 ssh_key
 
-upload_to="builds.lokinet.dev/${DRONE_REPO// /_}/${DRONE_BRANCH// /_}"
+branch_or_tag=${DRONE_BRANCH:-${DRONE_TAG:-unknown}}
+
+upload_to="builds.lokinet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
 
 filename=
 for f in loki-*.tar.xz loki-*.zip; do
