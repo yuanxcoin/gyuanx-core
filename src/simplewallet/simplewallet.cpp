@@ -6466,17 +6466,15 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
   std::string const &name  = args[0];
   std::string const &value = args[1];
 
-  lns::mapping_type type;
-  if (auto t = guess_lns_type(*m_wallet, typestr, name, value))
-    type = *t;
-  else return false;
+  std::optional<lns::mapping_type> type = guess_lns_type(*m_wallet, typestr, name, value);
+  if (!type) return false;
 
   SCOPED_WALLET_UNLOCK();
   std::string reason;
   std::vector<tools::wallet2::pending_tx> ptx_vector;
   try
   {
-    ptx_vector = m_wallet->lns_create_buy_mapping_tx(type,
+    ptx_vector = m_wallet->lns_create_buy_mapping_tx(*type,
                                                      owner.size() ? &owner : nullptr,
                                                      backup_owner.size() ? &backup_owner : nullptr,
                                                      name,
@@ -6498,15 +6496,15 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
     dsts.push_back(info);
 
     std::cout << std::endl << tr("Buying Loki Name System Record") << std::endl << std::endl;
-    if (type == lns::mapping_type::session)
+    if (*type == lns::mapping_type::session)
       std::cout << boost::format(tr("Session Name: %s")) % name << std::endl;
-    else if (lns::is_lokinet_type(type))
+    else if (lns::is_lokinet_type(*type))
     {
       std::cout << boost::format(tr("Lokinet Name: %s")) % name << std::endl;
       int years = 
-          type == lns::mapping_type::lokinet_10years ? 10 :
-          type == lns::mapping_type::lokinet_5years ? 5 :
-          type == lns::mapping_type::lokinet_2years ? 2 :
+          *type == lns::mapping_type::lokinet_10years ? 10 :
+          *type == lns::mapping_type::lokinet_5years ? 5 :
+          *type == lns::mapping_type::lokinet_2years ? 2 :
           1;
       int blocks = BLOCKS_EXPECTED_IN_DAYS(years * lns::REGISTRATION_YEAR_DAYS);
       std::cout << boost::format(tr("Registration: %d years (%d blocks)")) % years % blocks << "\n";
@@ -6528,7 +6526,7 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
     //Save the LNS record to the wallet cache
     std::string name_hash_str = lns::name_to_base64_hash(name);
     tools::wallet2::lns_detail detail = {
-      type,
+      *type,
       name,
       name_hash_str,
       value,
