@@ -376,7 +376,6 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
       std::to_string(daemon_port > 0 ? daemon_port : get_config(nettype).RPC_DEFAULT_PORT);
   }
 
-  std::string default_protocol = "http://";
   // Deprecated --daemon-ssl option: prepend https:// if there is no protocol on the daemon address
   if (command_line::get_arg(vm, opts.daemon_ssl) == "enabled") {
     THROW_WALLET_EXCEPTION_IF(tools::starts_with(daemon_address, "http://"), tools::error::wallet_internal_error,
