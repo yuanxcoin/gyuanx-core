@@ -370,23 +370,18 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
   if (command_line::is_arg_defaulted(vm, opts.daemon_host) && command_line::is_arg_defaulted(vm, opts.daemon_port) && command_line::is_arg_defaulted(vm, opts.daemon_address))
     daemon_address = tools::wallet2::get_default_daemon_address();
 
-  std::string default_protocol = "http://";
-  // Deprecated --daemon-ssl option: prepend https:// if there is no protocol on the daemon address
-  if (command_line::get_arg(vm, opts.daemon_ssl) == "enabled") {
-    default_protocol = "https://";
-    THROW_WALLET_EXCEPTION_IF(tools::starts_with(daemon_address, "http://"), tools::error::wallet_internal_error,
-        "Deprecated --daemon-ssl=enabled option conflicts with http://... daemon URL");
-  }
-
   if (daemon_address.empty())
   {
     daemon_address = (daemon_host.empty() ? "localhost" : daemon_host) + ':' +
       std::to_string(daemon_port > 0 ? daemon_port : get_config(nettype).RPC_DEFAULT_PORT);
   }
 
-  if (!std::regex_search(daemon_address, protocol_re))
-  {
-    daemon_address.insert(0, default_protocol);
+  // Deprecated --daemon-ssl option: prepend https:// if there is no protocol on the daemon address
+  if (command_line::get_arg(vm, opts.daemon_ssl) == "enabled") {
+    THROW_WALLET_EXCEPTION_IF(tools::starts_with(daemon_address, "http://"), tools::error::wallet_internal_error,
+        "Deprecated --daemon-ssl=enabled option conflicts with http://... daemon URL");
+    if (!std::regex_search(daemon_address, protocol_re))
+      daemon_address.insert(0, "https://"sv);
   }
 
   std::string proxy;
@@ -1222,9 +1217,13 @@ std::string wallet2::get_default_daemon_address() {
 //----------------------------------------------------------------------------------------------------
 bool wallet2::set_daemon(std::string daemon_address, std::optional<tools::login> daemon_login, std::string proxy, bool trusted_daemon)
 {
-  // If we're given a raw address, prepend http
+  // If we're given a raw address, prepend http, and (possibly) append the default port
   if (!tools::starts_with(daemon_address, "http://") && !tools::starts_with(daemon_address, "https://"))
+  {
+    if (auto pos = daemon_address.find(':'); pos == std::string::npos)
+      daemon_address += ":" + std::to_string(cryptonote::get_config(m_nettype).RPC_DEFAULT_PORT);
     daemon_address.insert(0, "http://"sv);
+  }
 
   bool localhost = false;
   try {
