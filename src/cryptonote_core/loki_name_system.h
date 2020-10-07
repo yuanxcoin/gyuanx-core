@@ -105,17 +105,17 @@ struct mapping_value
 };
 inline std::ostream &operator<<(std::ostream &os, mapping_value const &v) { return os << lokimq::to_hex(v.to_view()); }
 
-inline char const *mapping_type_str(mapping_type type)
+inline std::string_view mapping_type_str(mapping_type type)
 {
   switch(type)
   {
-    case mapping_type::lokinet:         return "lokinet"; // general type stored in the database; 1 year when in a purchase tx
-    case mapping_type::lokinet_2years:  return "lokinet_2years";  // Only used in a buy tx, not in the DB
-    case mapping_type::lokinet_5years:  return "lokinet_5years";  // "
-    case mapping_type::lokinet_10years: return "lokinet_10years"; // "
-    case mapping_type::session:         return "session";
-    case mapping_type::wallet:          return "wallet";
-    default: assert(false);             return "xx_unhandled_type";
+    case mapping_type::lokinet:         return "lokinet"sv; // general type stored in the database; 1 year when in a purchase tx
+    case mapping_type::lokinet_2years:  return "lokinet_2years"sv;  // Only used in a buy tx, not in the DB
+    case mapping_type::lokinet_5years:  return "lokinet_5years"sv;  // "
+    case mapping_type::lokinet_10years: return "lokinet_10years"sv; // "
+    case mapping_type::session:         return "session"sv;
+    case mapping_type::wallet:          return "wallet"sv;
+    default: assert(false);             return "xx_unhandled_type"sv;
   }
 }
 inline std::ostream &operator<<(std::ostream &os, mapping_type type) { return os << mapping_type_str(type); }
