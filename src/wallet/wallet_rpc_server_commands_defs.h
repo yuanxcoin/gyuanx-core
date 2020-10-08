@@ -2361,24 +2361,39 @@ This command is only required if the open wallet is one of the owners of a LNS r
   };
 
   LOKI_RPC_DOC_INTROSPECT
-  // Returns a list of known, plain-text LNS names that this wallet knows about.
+  // Returns a list of known, plain-text LNS names along with record details for names that this
+  // wallet knows about.  This can optionally decrypt the LNS value as well, or else just return the
+  // encrypted value.
   struct LNS_KNOWN_NAMES : RPC_COMMAND
   {
     static constexpr auto names() { return NAMES("lns_known_names"); }
 
-    struct known_name
+    struct known_record
     {
-      std::string type; // The mapping type, "session" or "lokinet".
-      std::string hashed; // The hashed name (in base64)
-      std::string name; // The plaintext name
+      std::string type;                          // The mapping type, "session" or "lokinet".
+      std::string hashed;                        // The hashed name (in base64)
+      std::string name;                          // The plaintext name
+      std::string owner;                         // The public key that purchased the Loki Name Service entry.
+      std::optional<std::string> backup_owner;   // The backup public key or wallet that the owner specified when purchasing the Loki Name Service entry. Omitted if no backup owner.
+      std::string encrypted_value;               // The encrypted value that the name maps to, in hex.
+      std::optional<std::string> value;          // Decrypted value that that name maps to.  Only provided if `decrypt: true` was specified in the request.
+      uint64_t update_height;                    // The last height that this Loki Name Service entry was updated on the Blockchain.
+      std::optional<uint64_t> expiration_height; // For records that expire, this will be set to the expiration block height.
+      std::optional<bool> expired;               // Indicates whether the record has expired. Only included in the response if "include_expired" is specified in the request.
+      std::string txid;                          // The txid of the mapping's most recent update or purchase.
 
       KV_MAP_SERIALIZABLE
     };
-    struct request : EMPTY {};
+    struct request {
+      bool decrypt;         // If true (default false) then also decrypt and include the `value` field
+      bool include_expired; // If true (default false) then also include expired records
+
+      KV_MAP_SERIALIZABLE
+    };
 
     struct response
     {
-      std::vector<known_name> known_names; // List of (unhashed) name info known to this wallet
+      std::vector<known_record> known_names; // List of records known to this wallet
 
       KV_MAP_SERIALIZABLE
     };
