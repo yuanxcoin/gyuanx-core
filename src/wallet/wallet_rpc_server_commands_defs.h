@@ -2541,6 +2541,7 @@ This command is only required if the open wallet is one of the owners of a LNS r
     SET_LOG_CATEGORIES,
     LNS_BUY_MAPPING,
     LNS_UPDATE_MAPPING,
+    LNS_RENEW_MAPPING,
     LNS_MAKE_UPDATE_SIGNATURE,
     LNS_HASH_NAME,
     LNS_KNOWN_NAMES,
