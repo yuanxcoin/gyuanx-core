@@ -2463,6 +2463,7 @@ namespace rpc {
     struct request
     {
       std::vector<std::string> entries; // The owner's public key to find all Loki Name Service entries for.
+      bool include_expired;             // Optional: if provided and true, include entries in the results even if they are expired
 
       KV_MAP_SERIALIZABLE
     };

@@ -3414,7 +3414,9 @@ namespace cryptonote { namespace rpc {
     }
 
     lns::name_system_db &db = m_core.get_blockchain_storage().name_system_db();
-    auto height = m_core.get_current_blockchain_height();
+    std::optional<uint64_t> height;
+    if (!req.include_expired) height = m_core.get_current_blockchain_height();
+
     std::vector<lns::mapping_record> records = db.get_mappings_by_owners(owners, height);
     for (auto &record : records)
     {
