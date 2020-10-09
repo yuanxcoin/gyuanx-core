@@ -3081,10 +3081,7 @@ namespace {
     tools::wallet2::lns_detail detail = {
       *type,
       req.name,
-      name_hash_str,
-      req.value,
-      req.owner.size() ? req.owner : m_wallet->get_subaddress_as_str({req.account_index, 0}),
-      req.backup_owner.size() ? req.backup_owner : ""};
+      name_hash_str};
     m_wallet->set_lns_cache_record(detail);
 
     fill_response(         ptx_vector,
@@ -3170,10 +3167,7 @@ namespace {
     tools::wallet2::lns_detail detail = {
       *type,
       req.name,
-      name_hash_str,
-      req.value,
-      req.owner.size() ? req.owner : m_wallet->get_subaddress_as_str({req.account_index, 0}),
-      req.backup_owner.size() ? req.backup_owner : ""};
+      name_hash_str};
     m_wallet->set_lns_cache_record(detail);
 
     fill_response(         ptx_vector,
