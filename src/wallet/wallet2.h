@@ -802,9 +802,6 @@ private:
       lns::mapping_type type;
       std::string name;
       std::string hashed_name;
-      std::string value;
-      std::string owner;
-      std::string backup_owner;
     };
     std::unordered_map<std::string, lns_detail> lns_records_cache;
 
@@ -1687,18 +1684,21 @@ BOOST_CLASS_VERSION(tools::wallet2::unconfirmed_transfer_details, 9)
 BOOST_CLASS_VERSION(tools::wallet2::confirmed_transfer_details, 8)
 BOOST_CLASS_VERSION(tools::wallet2::address_book_row, 18)
 BOOST_CLASS_VERSION(tools::wallet2::reserve_proof_entry, 0)
+BOOST_CLASS_VERSION(tools::wallet2::lns_detail, 1)
 
 namespace boost::serialization
 {
     template <class Archive>
-    inline void serialize(Archive &a, tools::wallet2::lns_detail &x, const boost::serialization::version_type ver)
+    void serialize(Archive &a, tools::wallet2::lns_detail &x, const unsigned int ver)
     {
       a & x.type;
       a & x.name;
       a & x.hashed_name;
-      a & x.value;
-      a & x.owner;
-      a & x.backup_owner;
+      if (ver < 1)
+      { // Old fields, no longer used:
+        std::string value, owner, backup_owner;
+        a & value & owner & backup_owner;
+      }
     }
 
     template <class Archive>

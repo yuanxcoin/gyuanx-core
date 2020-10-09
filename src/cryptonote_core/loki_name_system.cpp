@@ -2237,9 +2237,9 @@ std::vector<mapping_record> name_system_db::get_mappings_by_owners(std::vector<g
   std::vector<std::variant<blob_view, uint64_t>> bind;
   // Generate string statement
   {
-    constexpr auto SQL_WHERE_OWNER = R"(WHERE "o1"."address" IN ()"sv;
+    constexpr auto SQL_WHERE_OWNER = R"(WHERE ("o1"."address" IN ()"sv;
     constexpr auto SQL_OR_BACKUP_OWNER  = R"() OR "o2"."address" IN ()"sv;
-    constexpr auto SQL_SUFFIX  = ")"sv;
+    constexpr auto SQL_SUFFIX  = "))"sv;
 
     std::string placeholders;
     placeholders.reserve(3*owners.size());
