@@ -2744,9 +2744,9 @@ namespace cryptonote { namespace rpc {
       else height--;
     }
 
-    if (add_curr_pulse)
+    if (uint8_t hf_version; add_curr_pulse
+        && (hf_version = m_core.get_hard_fork_version(curr_height)) >= network_version_16_pulse)
     {
-      uint8_t hf_version = m_core.get_hard_fork_version(curr_height);
       auto entropy = service_nodes::get_pulse_entropy_for_next_block(m_core.get_blockchain_storage().get_db());
       auto& sn_list = m_core.get_service_node_list();
       auto quorum = generate_pulse_quorum(m_core.get_nettype(), sn_list.get_block_leader().key, hf_version, sn_list.active_service_nodes_infos(), entropy, 0);
