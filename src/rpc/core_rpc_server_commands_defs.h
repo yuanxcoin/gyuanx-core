@@ -1822,7 +1822,7 @@ namespace rpc {
 
 
   LOKI_RPC_DOC_INTROSPECT
-  // Get the quorum state which is the list of public keys of the nodes who are voting, and the list of public keys of the nodes who are being tested.
+  // Accesses the list of public keys of the nodes who are participating or being tested in a quorum.
   struct GET_QUORUM_STATE : PUBLIC
   {
     static constexpr auto names() { return NAMES("get_quorum_state"); }
@@ -1832,17 +1832,17 @@ namespace rpc {
     static constexpr uint8_t ALL_QUORUMS_SENTINEL_VALUE = 255;
     struct request
     {
-      uint64_t start_height; // (Optional): Start height, omit both start and end height to request the latest quorum
+      uint64_t start_height; // (Optional): Start height, omit both start and end height to request the latest quorum. Note that "latest" means different heights for different types of quorums as not all quorums exist at every block heights.
       uint64_t end_height;   // (Optional): End height, omit both start and end height to request the latest quorum
-      uint8_t  quorum_type;  // (Optional): Set value to request a specific quorum, 0 = Obligation, 1 = Checkpointing, 255 = all quorums, default is all quorums;
+      uint8_t  quorum_type;  // (Optional): Set value to request a specific quorum, 0 = Obligation, 1 = Checkpointing, 2 = Blink, 3 = Pulse, 255 = all quorums, default is all quorums. For Pulse quorums, requesting the blockchain height (or latest) returns the primary pulse quorum responsible for the next block; for heights with blocks this returns the actual quorum, which may be a backup quorum if the primary quorum did not produce in time.
 
       KV_MAP_SERIALIZABLE
     };
 
     struct quorum_t
     {
-      std::vector<std::string> validators; // Public key of the service node
-      std::vector<std::string> workers; // Public key of the service node
+      std::vector<std::string> validators; // List of service node public keys in the quorum. For obligations quorums these are the testing nodes; for checkpoint and blink these are the participating nodes (there are no workers); for Pulse blink quorums these are the block signers.
+      std::vector<std::string> workers; // Public key of the quorum workers. For obligations quorums these are the nodes being tested; for Pulse quorums this is the block producer. Checkpoint and Blink quorums do not populate this field.
 
       KV_MAP_SERIALIZABLE
 
