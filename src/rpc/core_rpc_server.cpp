@@ -2660,13 +2660,13 @@ namespace cryptonote { namespace rpc {
       latest = true;
       // Our start block for the latest quorum of each type depends on the type being requested:
       // obligations: top block
-      // checkpoint: last block with height divisible by 4
-      // blink: last block with height divisible by 5
+      // checkpoint: last block with height divisible by CHECKPOINT_INTERVAL (=4)
+      // blink: last block with height divisible by BLINK_QUORUM_INTERVAL (=5)
       // pulse: current height (i.e. top block height + 1)
       uint64_t top_height = curr_height - 1;
       latest_ob = top_height;
-      latest_cp = std::min(start, top_height - top_height % 4);
-      latest_bl = std::min(start, top_height - top_height % 5);
+      latest_cp = std::min(start, top_height - top_height % service_nodes::CHECKPOINT_INTERVAL);
+      latest_bl = std::min(start, top_height - top_height % service_nodes::BLINK_QUORUM_INTERVAL);
       if (requested_type(service_nodes::quorum_type::checkpointing))
         start = std::min(start, latest_cp);
       if (requested_type(service_nodes::quorum_type::blink))
