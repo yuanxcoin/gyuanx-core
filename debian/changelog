@@ -1,3 +1,56 @@
+loki (8.1.1-1~ubuntu1804) bionic; urgency=medium
+
+  [ Jason Rhinelander ]
+  * Disable readline in static build
+  * Delay HF16 to 12 October
+  * Small tweaks to build system
+
+  [ Doyle ]
+  * LNS: Don't overwrite err message on validation fail
+
+  [ Jason Rhinelander ]
+  * Properly append default port to --daemon-address
+
+  [ Doyle ]
+  * args: Coerce rpc port to number instead of string (#1303)
+
+  [ Jason Rhinelander ]
+  * Remove unused variable
+  * Close established HTTP requests when trying to shut down (#1308)
+  * Fix LNS cache storage via RPC wallet (#1307)
+
+  [ Doyle ]
+  * get_block_template: Allow unaccounted dust in construct_miner_tx (#1306)
+
+  [ Jason Rhinelander ]
+  * wallet RPC: make lns_known_names return record with optional decryption
+  * Fix unwired lns_renew_mapping endpoint
+  * Fix precedence bug causing expired entries to be returned
+  * LNS_OWNERS_TO_NAMES rpc fixes
+  * Don't cache decrypted LNS values
+  * RPC: get latest quorum improvements/fixes
+  * Don't include current pulse quorum before HF16
+  * Use constants for checkpoint/blink interval lengths
+  * Bump version (mainly wallet-related fixes) (#1312)
+
+  [ Doyle ]
+  * Pulse: Use the latest round when querying quorums via rpc
+
+  [ Jason Rhinelander ]
+  * Fix release suffix for stable
+
+  [ Doyle ]
+  * Pulse: Remigrate the sort key to 0
+  * Pulse: Grace period for mainnet SNs until 646151 to upgrade to hotfix
+
+  [ Jason Rhinelander ]
+  * trace message display fix
+
+  [ Doyle ]
+  * Pulse: Drop difficulty to 1,000,000 for PoW at the fork height
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Mon, 12 Oct 2020 04:21:25 -0300
+
 loki (8.1.0-2~ubuntu1804) bionic; urgency=medium
 
   * Remove -dev suffix for stable branch
