@@ -523,7 +523,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
         // marked an error, just ignored.
 
         print_err = false;
-        MTRACE(log_prefix(context) << "Received valid message from the past (round " << msg.round << "), ignoring");
+        MTRACE(log_prefix(context) << "Received valid message from the past (round " << +msg.round  << "), ignoring");
         break;
       } // else: Message has unknown origins, it is not something we know how to validate.
     }
