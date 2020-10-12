@@ -161,6 +161,7 @@ namespace service_nodes
       v3_quorumnet,
       v4_noproofs,
       v5_pulse_recomm_credit,
+      v6_reassign_sort_keys,
       _count
     };
 
