@@ -99,6 +99,11 @@ struct timings
   pulse::time_point miner_fallback_timestamp;
 };
 
+// Calculate the current Pulse round active depending on the 'time' elapsed since round 0 started for a block.
+// r0_timestamp: The timestamp that round 0 starts at for the desired block (this timestamp can be calculated via 'pulse::get_round_timings').
+// round: (Optional) Set to the round that is currently active when the function returns true.
+// return: False when enough 'time' has elapsed such that Pulse round has overflowed 255 and Pulse blocks are no longer possible to generate.
+bool convert_time_to_round(pulse::time_point const &time, pulse::time_point const &r0_timestamp, uint8_t *round);
 bool get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t height, uint64_t prev_timestamp, pulse::timings &times);
 
 } // namespace pulse

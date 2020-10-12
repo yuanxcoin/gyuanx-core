@@ -370,23 +370,18 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
   if (command_line::is_arg_defaulted(vm, opts.daemon_host) && command_line::is_arg_defaulted(vm, opts.daemon_port) && command_line::is_arg_defaulted(vm, opts.daemon_address))
     daemon_address = tools::wallet2::get_default_daemon_address();
 
-  std::string default_protocol = "http://";
-  // Deprecated --daemon-ssl option: prepend https:// if there is no protocol on the daemon address
-  if (command_line::get_arg(vm, opts.daemon_ssl) == "enabled") {
-    default_protocol = "https://";
-    THROW_WALLET_EXCEPTION_IF(tools::starts_with(daemon_address, "http://"), tools::error::wallet_internal_error,
-        "Deprecated --daemon-ssl=enabled option conflicts with http://... daemon URL");
-  }
-
   if (daemon_address.empty())
   {
     daemon_address = (daemon_host.empty() ? "localhost" : daemon_host) + ':' +
       std::to_string(daemon_port > 0 ? daemon_port : get_config(nettype).RPC_DEFAULT_PORT);
   }
 
-  if (!std::regex_search(daemon_address, protocol_re))
-  {
-    daemon_address.insert(0, default_protocol);
+  // Deprecated --daemon-ssl option: prepend https:// if there is no protocol on the daemon address
+  if (command_line::get_arg(vm, opts.daemon_ssl) == "enabled") {
+    THROW_WALLET_EXCEPTION_IF(tools::starts_with(daemon_address, "http://"), tools::error::wallet_internal_error,
+        "Deprecated --daemon-ssl=enabled option conflicts with http://... daemon URL");
+    if (!std::regex_search(daemon_address, protocol_re))
+      daemon_address.insert(0, "https://"sv);
   }
 
   std::string proxy;
@@ -1222,9 +1217,13 @@ std::string wallet2::get_default_daemon_address() {
 //----------------------------------------------------------------------------------------------------
 bool wallet2::set_daemon(std::string daemon_address, std::optional<tools::login> daemon_login, std::string proxy, bool trusted_daemon)
 {
-  // If we're given a raw address, prepend http
+  // If we're given a raw address, prepend http, and (possibly) append the default port
   if (!tools::starts_with(daemon_address, "http://") && !tools::starts_with(daemon_address, "https://"))
+  {
+    if (auto pos = daemon_address.find(':'); pos == std::string::npos)
+      daemon_address += ":" + std::to_string(cryptonote::get_config(m_nettype).RPC_DEFAULT_PORT);
     daemon_address.insert(0, "http://"sv);
+  }
 
   bool localhost = false;
   try {
@@ -8837,28 +8836,19 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_buy_mapping_tx(lns::mapping
   return result;
 }
 
-std::vector<wallet2::pending_tx> wallet2::lns_create_buy_mapping_tx(std::string const &type,
-                                                                    std::string const *owner,
-                                                                    std::string const *backup_owner,
-                                                                    std::string const &name,
-                                                                    std::string const &value,
-                                                                    std::string *reason,
-                                                                    uint32_t priority,
-                                                                    uint32_t account_index,
-                                                                    std::set<uint32_t> subaddr_indices)
+std::optional<lns::mapping_type> wallet2::lns_validate_type(std::string_view type, lns::lns_tx_type lns_action, std::string *reason)
 {
   std::optional<uint8_t> hf_version = get_hard_fork_version();
   if (!hf_version)
   {
     if (reason) *reason = ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
-    return {};
+    return std::nullopt;
   }
   lns::mapping_type mapping_type;
-  if (!lns::validate_mapping_type(type, *hf_version, lns::lns_tx_type::buy, &mapping_type, reason))
-    return {};
+  if (!lns::validate_mapping_type(type, *hf_version, lns_action, &mapping_type, reason))
+    return std::nullopt;
 
-  std::vector<wallet2::pending_tx> result = lns_create_buy_mapping_tx(mapping_type, owner, backup_owner, name, value, reason, priority, account_index, subaddr_indices);
-  return result;
+  return mapping_type;
 }
 
 std::vector<wallet2::pending_tx> wallet2::lns_create_renewal_tx(
@@ -8901,29 +8891,6 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_renewal_tx(
                                       subaddr_indices,
                                       tx_params);
   return result;
-}
-
-std::vector<wallet2::pending_tx> wallet2::lns_create_renewal_tx(
-    std::string const &type,
-    std::string const &name,
-    std::string *reason,
-    uint32_t priority,
-    uint32_t account_index,
-    std::set<uint32_t> subaddr_indices,
-    std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response
-    )
-{
-  lns::mapping_type mapping_type = lns::mapping_type::session;
-  std::optional<uint8_t> hf_version = get_hard_fork_version();
-  if (!hf_version)
-  {
-    if (reason) *reason = ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
-    return {};
-  }
-  if (!lns::validate_mapping_type(type, *hf_version, lns::lns_tx_type::renew, &mapping_type, reason))
-    return {};
-
-  return lns_create_renewal_tx(mapping_type, name, reason, priority, account_index, subaddr_indices, response);
 }
 
 
@@ -8983,32 +8950,6 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(lns::mapp
                                       account_index,
                                       subaddr_indices,
                                       tx_params);
-  return result;
-}
-
-std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(std::string const &type,
-                                                                       std::string const &name,
-                                                                       std::string const *value,
-                                                                       std::string const *owner,
-                                                                       std::string const *backup_owner,
-                                                                       std::string const *signature,
-                                                                       std::string *reason,
-                                                                       uint32_t priority,
-                                                                       uint32_t account_index,
-                                                                       std::set<uint32_t> subaddr_indices,
-                                                                       std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response)
-{
-  lns::mapping_type mapping_type = lns::mapping_type::session;
-  std::optional<uint8_t> hf_version = get_hard_fork_version();
-  if (!hf_version)
-  {
-    if (reason) *reason = ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
-    return {};
-  }
-  if (!lns::validate_mapping_type(type, *hf_version, lns::lns_tx_type::update, &mapping_type, reason))
-    return {};
-
-  std::vector<wallet2::pending_tx> result = lns_create_update_mapping_tx(mapping_type, name, value, owner, backup_owner, signature, reason, priority, account_index, subaddr_indices, response);
   return result;
 }
 

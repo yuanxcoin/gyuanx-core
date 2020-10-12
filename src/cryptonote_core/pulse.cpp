@@ -722,6 +722,15 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     cryptonote::quorumnet_pulse_relay_message_to_quorum(quorumnet_state, msg, context.prepare_for_round.quorum, context.prepare_for_round.participant == sn_type::producer);
 }
 
+// TODO(doyle): Update pulse::perpare_for_round with this function after the hard fork and sanity check it on testnet.
+bool pulse::convert_time_to_round(pulse::time_point const &time, pulse::time_point const &r0_timestamp, uint8_t *round)
+{
+  auto const time_since_round_started = time <= r0_timestamp ? std::chrono::seconds(0) : (time - r0_timestamp);
+  size_t result_usize                 = time_since_round_started / service_nodes::PULSE_ROUND_TIME;
+  if (round) *round = static_cast<uint8_t>(result_usize);
+  return result_usize <= 255;
+}
+
 bool pulse::get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t block_height, uint64_t prev_timestamp, pulse::timings &times)
 {
   times = {};

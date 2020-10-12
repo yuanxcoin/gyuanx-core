@@ -39,6 +39,7 @@
 #include <type_traits>
 #include <variant>
 #include <lokimq/base64.h>
+#include "crypto/crypto.h"
 #include "cryptonote_basic/tx_extra.h"
 #include "cryptonote_core/loki_name_system.h"
 #include "cryptonote_core/pulse.h"
@@ -2644,12 +2645,33 @@ namespace cryptonote { namespace rpc {
       throw rpc_error{ERROR_WRONG_PARAM,
         "Quorum type specifies an invalid value: " + std::to_string(req.quorum_type)};
 
+    auto requested_type = [&req](service_nodes::quorum_type type) {
+      return req.quorum_type == GET_QUORUM_STATE::ALL_QUORUMS_SENTINEL_VALUE ||
+        req.quorum_type == static_cast<uint8_t>(type);
+    };
+
+    bool latest = false;
+    uint64_t latest_ob = 0, latest_cp = 0, latest_bl = 0;
     uint64_t start = req.start_height, end = req.end_height;
+    uint64_t curr_height = m_core.get_blockchain_storage().get_current_blockchain_height();
     if (start == GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE &&
         end == GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE)
     {
-      start = m_core.get_blockchain_storage().get_current_blockchain_height() - 1;
-      end   = start + 1;
+      latest = true;
+      // Our start block for the latest quorum of each type depends on the type being requested:
+      // obligations: top block
+      // checkpoint: last block with height divisible by CHECKPOINT_INTERVAL (=4)
+      // blink: last block with height divisible by BLINK_QUORUM_INTERVAL (=5)
+      // pulse: current height (i.e. top block height + 1)
+      uint64_t top_height = curr_height - 1;
+      latest_ob = top_height;
+      latest_cp = std::min(start, top_height - top_height % service_nodes::CHECKPOINT_INTERVAL);
+      latest_bl = std::min(start, top_height - top_height % service_nodes::BLINK_QUORUM_INTERVAL);
+      if (requested_type(service_nodes::quorum_type::checkpointing))
+        start = std::min(start, latest_cp);
+      if (requested_type(service_nodes::quorum_type::blink))
+        start = std::min(start, latest_bl);
+      end = curr_height;
     }
     else if (start == GET_QUORUM_STATE::HEIGHT_SENTINEL_VALUE)
     {
@@ -2663,16 +2685,14 @@ namespace cryptonote { namespace rpc {
     else
     {
       if (end > start) end++;
-      else
-      {
-        if (end != 0)
-          end--;
-      }
+      else if (end != 0) end--;
     }
 
-    uint64_t curr_height = m_core.get_blockchain_storage().get_current_blockchain_height();
     start                = std::min(curr_height, start);
-    end                  = std::min(curr_height, end);
+    // We can also provide the pulse quorum for the current block being produced, so if asked for
+    // that make a note.
+    bool add_curr_pulse = (latest || end > curr_height) && requested_type(service_nodes::quorum_type::pulse);
+    end = std::min(curr_height, end);
 
     uint64_t count       = (start > end) ? start - end : end - start;
     if (!context.admin && count > GET_QUORUM_STATE::MAX_COUNT)
@@ -2700,18 +2720,21 @@ namespace cryptonote { namespace rpc {
         for (int quorum_int = (int)start_quorum_iterator; quorum_int <= (int)end_quorum_iterator; quorum_int++)
         {
           auto type = static_cast<service_nodes::quorum_type>(quorum_int);
+          if (latest)
+          { // Latest quorum requested, so skip if this is isn't the latest height for *this* quorum type
+            if (type == service_nodes::quorum_type::obligations && height != latest_ob) continue;
+            if (type == service_nodes::quorum_type::checkpointing && height != latest_cp) continue;
+            if (type == service_nodes::quorum_type::blink && height != latest_bl) continue;
+            if (type == service_nodes::quorum_type::pulse) continue;
+          }
           if (std::shared_ptr<const service_nodes::quorum> quorum = m_core.get_quorum(type, height, true /*include_old*/))
           {
-            GET_QUORUM_STATE::quorum_for_height entry = {};
+            auto& entry = res.quorums.emplace_back();
             entry.height                                          = height;
             entry.quorum_type                                     = static_cast<uint8_t>(quorum_int);
+            entry.quorum.validators = hexify(quorum->validators);
+            entry.quorum.workers = hexify(quorum->workers);
 
-            entry.quorum.validators.reserve(quorum->validators.size());
-            entry.quorum.workers.reserve(quorum->workers.size());
-            for (crypto::public_key const &key : quorum->validators) entry.quorum.validators.push_back(epee::string_tools::pod_to_hex(key));
-            for (crypto::public_key const &key : quorum->workers)    entry.quorum.workers.push_back(epee::string_tools::pod_to_hex(key));
-
-            res.quorums.push_back(entry);
             at_least_one_succeeded = true;
           }
         }
@@ -2719,6 +2742,34 @@ namespace cryptonote { namespace rpc {
 
       if (end >= start) height++;
       else height--;
+    }
+
+    if (uint8_t hf_version; add_curr_pulse
+        && (hf_version = m_core.get_hard_fork_version(curr_height)) >= network_version_16_pulse)
+    {
+      cryptonote::Blockchain const &blockchain   = m_core.get_blockchain_storage();
+      cryptonote::block_header const &top_header = blockchain.get_db().get_block_header_from_height(curr_height - 1);
+
+      pulse::timings next_timings = {};
+      uint8_t pulse_round         = 0;
+      if (pulse::get_round_timings(blockchain, curr_height, top_header.timestamp, next_timings) &&
+          pulse::convert_time_to_round(pulse::clock::now(), next_timings.r0_timestamp, &pulse_round))
+      {
+        auto entropy = service_nodes::get_pulse_entropy_for_next_block(blockchain.get_db(), pulse_round);
+        auto& sn_list = m_core.get_service_node_list();
+        auto quorum = generate_pulse_quorum(m_core.get_nettype(), sn_list.get_block_leader().key, hf_version, sn_list.active_service_nodes_infos(), entropy, pulse_round);
+        if (verify_pulse_quorum_sizes(quorum))
+        {
+          auto& entry = res.quorums.emplace_back();
+          entry.height = curr_height;
+          entry.quorum_type = static_cast<uint8_t>(service_nodes::quorum_type::pulse);
+
+          entry.quorum.validators = hexify(quorum.validators);
+          entry.quorum.workers = hexify(quorum.workers);
+
+          at_least_one_succeeded = true;
+        }
+      }
     }
 
     if (!at_least_one_succeeded)
@@ -3414,7 +3465,9 @@ namespace cryptonote { namespace rpc {
     }
 
     lns::name_system_db &db = m_core.get_blockchain_storage().name_system_db();
-    auto height = m_core.get_current_blockchain_height();
+    std::optional<uint64_t> height;
+    if (!req.include_expired) height = m_core.get_current_blockchain_height();
+
     std::vector<lns::mapping_record> records = db.get_mappings_by_owners(owners, height);
     for (auto &record : records)
     {
