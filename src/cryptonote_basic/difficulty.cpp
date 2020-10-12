@@ -166,6 +166,7 @@ namespace cryptonote {
   difficulty_calc_mode difficulty_mode(cryptonote::network_type nettype, uint8_t hf_version, uint64_t height)
   {
     static const uint64_t hf12_height = cryptonote::HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_12_checkpointing);
+    static const uint64_t hf16_height = cryptonote::HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_16_pulse);
     auto result = difficulty_calc_mode::normal;
 
     if (hf_version <= cryptonote::network_version_9_service_nodes)
@@ -178,6 +179,10 @@ namespace cryptonote {
              height < hf12_height + (DIFFICULTY_WINDOW + 1))
     {
       result = difficulty_calc_mode::hf12_override;
+    }
+    else if (nettype == MAINNET && height >= hf16_height && height < hf16_height + (DIFFICULTY_WINDOW + 1))
+    {
+      result = difficulty_calc_mode::hf16_override;
     }
 
     return result;
@@ -248,6 +253,8 @@ namespace cryptonote {
     // prevent too-long blocks right after the fork.
     if (mode == difficulty_calc_mode::hf12_override)
       return std::min(next_difficulty, 30'000'000 * uint64_t(target_seconds));
+    else if (mode == difficulty_calc_mode::hf16_override)
+      return std::min(next_difficulty, PULSE_FIXED_DIFFICULTY);
 
     return next_difficulty;
   }

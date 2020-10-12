@@ -161,6 +161,7 @@ namespace service_nodes
       v3_quorumnet,
       v4_noproofs,
       v5_pulse_recomm_credit,
+      v6_reassign_sort_keys,
       _count
     };
 
@@ -687,6 +688,9 @@ namespace service_nodes
   // The pulse entropy is generated for the next block after the top_block passed in.
   std::vector<crypto::hash> get_pulse_entropy_for_next_block(cryptonote::BlockchainDB const &db, cryptonote::block const &top_block, uint8_t pulse_round);
   std::vector<crypto::hash> get_pulse_entropy_for_next_block(cryptonote::BlockchainDB const &db, crypto::hash const &top_hash, uint8_t pulse_round);
+  // Same as above, but uses the current blockchain top block and defaults to round 0 if not
+  // specified.
+  std::vector<crypto::hash> get_pulse_entropy_for_next_block(cryptonote::BlockchainDB const &db, uint8_t pulse_round = 0);
 
   payout service_node_info_to_payout(crypto::public_key const &key, service_node_info const &info);
 

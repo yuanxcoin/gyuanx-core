@@ -1768,6 +1768,12 @@ namespace service_nodes
     return get_pulse_entropy_for_next_block(db, top_block, pulse_round);
   }
 
+  std::vector<crypto::hash> get_pulse_entropy_for_next_block(cryptonote::BlockchainDB const &db,
+                                                             uint8_t pulse_round)
+  {
+    return get_pulse_entropy_for_next_block(db, db.get_top_block(), pulse_round);
+  }
+
   service_nodes::quorum generate_pulse_quorum(cryptonote::network_type nettype,
                                               crypto::public_key const &block_leader,
                                               uint8_t hf_version,
@@ -3118,6 +3124,11 @@ namespace service_nodes
 
         info.pulse_sorter.last_height_validating_in_quorum = info.last_reward_block_height;
         info.version = version_t::v5_pulse_recomm_credit;
+      }
+      if (info.version < version_t::v6_reassign_sort_keys)
+      {
+        info.pulse_sorter = {};
+        info.version      = version_t::v6_reassign_sort_keys;
       }
       // Make sure we handled any future state version upgrades:
       assert(info.version == tools::enum_top<decltype(info.version)>);

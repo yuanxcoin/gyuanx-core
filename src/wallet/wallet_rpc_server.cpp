@@ -39,7 +39,7 @@
 #include <chrono>
 #include <exception>
 
-#include "wallet/wallet_rpc_server_error_codes.h"
+#include "wallet_rpc_server_error_codes.h"
 #include "wallet_rpc_server.h"
 #include "wallet/wallet_args.h"
 #include "common/command_line.h"
@@ -311,8 +311,10 @@ namespace tools
       res.writeHeader("Content-Type", "application/json");
       for (const auto& [name, value] : extra_headers)
         res.writeHeader(name, value);
+      if (closing()) res.writeHeader("Connection", "close");
 
       res.end(result);
+      if (closing()) res.close();
     });
   }
 
@@ -415,6 +417,7 @@ namespace tools
     // Stopped: close the sockets, cancel the long poll, and rejoin the threads
     for (auto* s : m_listen_socks)
       us_listen_socket_close(/*ssl=*/false, s);
+    m_closing = true;
 
     stop_long_poll_thread();
 
@@ -3057,7 +3060,11 @@ namespace {
     LNS_BUY_MAPPING::response res{};
 
     std::string reason;
-    std::vector<wallet2::pending_tx> ptx_vector = m_wallet->lns_create_buy_mapping_tx(req.type,
+    auto type = m_wallet->lns_validate_type(req.type, lns::lns_tx_type::buy, &reason);
+    if (!type)
+      throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Invalid LNS buy type: " + reason};
+
+    std::vector<wallet2::pending_tx> ptx_vector = m_wallet->lns_create_buy_mapping_tx(*type,
                                                                                       req.owner.size() ? &req.owner : nullptr,
                                                                                       req.backup_owner.size() ? &req.backup_owner : nullptr,
                                                                                       req.name,
@@ -3072,12 +3079,9 @@ namespace {
     //Save the LNS record to the wallet cache
     std::string name_hash_str = lns::name_to_base64_hash(req.name);
     tools::wallet2::lns_detail detail = {
-      lns::mapping_type::session,
+      *type,
       req.name,
-      name_hash_str,
-      req.value,
-      req.owner.size() ? req.owner : m_wallet->get_subaddress_as_str({req.account_index, 0}),
-      req.backup_owner.size() ? req.backup_owner : ""};
+      name_hash_str};
     m_wallet->set_lns_cache_record(detail);
 
     fill_response(         ptx_vector,
@@ -3104,11 +3108,15 @@ namespace {
     LNS_RENEW_MAPPING::response res{};
 
     std::string reason;
+    auto type = m_wallet->lns_validate_type(req.type, lns::lns_tx_type::renew, &reason);
+    if (!type)
+      throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Invalid LNS renewal type: " + reason};
+
     std::vector<wallet2::pending_tx> ptx_vector = m_wallet->lns_create_renewal_tx(
-        req.type, req.name, &reason, req.priority, req.account_index, req.subaddr_indices);
+        *type, req.name, &reason, req.priority, req.account_index, req.subaddr_indices);
 
     if (ptx_vector.empty())
-      throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Failed to create LNS transaction: " + reason};
+      throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Failed to create LNS renewal transaction: " + reason};
 
     fill_response(         ptx_vector,
                            req.get_tx_key,
@@ -3134,8 +3142,12 @@ namespace {
     LNS_UPDATE_MAPPING::response res{};
 
     std::string reason;
+    auto type = m_wallet->lns_validate_type(req.type, lns::lns_tx_type::update, &reason);
+    if (!type)
+      throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Invalid LNS update type: " + reason};
+
     std::vector<wallet2::pending_tx> ptx_vector =
-        m_wallet->lns_create_update_mapping_tx(req.type,
+        m_wallet->lns_create_update_mapping_tx(*type,
                                                req.name,
                                                req.value.empty()        ? nullptr : &req.value,
                                                req.owner.empty()        ? nullptr : &req.owner,
@@ -3153,12 +3165,9 @@ namespace {
     std::string name_hash_str = lns::name_to_base64_hash(req.name);
     m_wallet->delete_lns_cache_record(name_hash_str);
     tools::wallet2::lns_detail detail = {
-      lns::mapping_type::session,
+      *type,
       req.name,
-      name_hash_str,
-      req.value,
-      req.owner.size() ? req.owner : m_wallet->get_subaddress_as_str({req.account_index, 0}),
-      req.backup_owner.size() ? req.backup_owner : ""};
+      name_hash_str};
     m_wallet->set_lns_cache_record(detail);
 
     fill_response(         ptx_vector,
@@ -3230,18 +3239,89 @@ namespace {
     require_open();
     LNS_KNOWN_NAMES::response res{};
 
+    std::vector<lns::mapping_type> entry_types;
     auto cache = m_wallet->get_lns_cache();
     res.known_names.reserve(cache.size());
+    entry_types.reserve(cache.size());
     for (auto& [name, details] : m_wallet->get_lns_cache())
     {
       auto& entry = res.known_names.emplace_back();
-      auto type = details.type;
+      auto& type = entry_types.emplace_back(details.type);
       if (type > lns::mapping_type::lokinet && type <= lns::mapping_type::lokinet_10years)
         type = lns::mapping_type::lokinet;
       entry.type = lns::mapping_type_str(type);
       entry.hashed = details.hashed_name;
       entry.name = details.name;
     }
+
+    auto nettype = m_wallet->nettype();
+    rpc::LNS_NAMES_TO_OWNERS::request lookup_req{};
+    lookup_req.include_expired = req.include_expired;
+
+    uint64_t curr_height = req.include_expired ? m_wallet->get_blockchain_current_height() : 0;
+
+    // Query lokid for the full record info
+    for (auto it = res.known_names.begin(); it != res.known_names.end(); )
+    {
+      const size_t num_entries = std::distance(it, res.known_names.end());
+      const auto end = num_entries < rpc::LNS_NAMES_TO_OWNERS::MAX_REQUEST_ENTRIES
+          ? res.known_names.end()
+          : it + rpc::LNS_NAMES_TO_OWNERS::MAX_REQUEST_ENTRIES;
+      lookup_req.entries.clear();
+      lookup_req.entries.reserve(std::distance(it, end));
+      for (auto it2 = it; it2 != end; it2++)
+      {
+        auto& e = lookup_req.entries.emplace_back();
+        e.name_hash = it2->hashed;
+        e.types.push_back(static_cast<uint16_t>(entry_types[std::distance(res.known_names.begin(), it2)]));
+      }
+
+      if (auto [success, records] = m_wallet->lns_names_to_owners(lookup_req); success)
+      {
+        size_t type_offset = std::distance(res.known_names.begin(), it);
+        for (auto& rec : records)
+        {
+          if (rec.entry_index >= num_entries)
+          {
+            MWARNING("Got back invalid entry_index " << rec.entry_index << " for a request for " << num_entries << " entries");
+            continue;
+          }
+
+          auto& res_e = *(it + rec.entry_index);
+          res_e.owner = std::move(rec.owner);
+          res_e.backup_owner = std::move(rec.backup_owner);
+          res_e.encrypted_value = std::move(rec.encrypted_value);
+          res_e.update_height = rec.update_height;
+          res_e.expiration_height = rec.expiration_height;
+          if (req.include_expired && res_e.expiration_height)
+            res_e.expired = *res_e.expiration_height < curr_height;
+          res_e.txid = std::move(rec.txid);
+
+          if (req.decrypt && !res_e.encrypted_value.empty() && lokimq::is_hex(res_e.encrypted_value))
+          {
+            lns::mapping_value value;
+            const auto type = entry_types[type_offset + rec.entry_index];
+            std::string errmsg;
+            if (lns::mapping_value::validate_encrypted(type, lokimq::from_hex(res_e.encrypted_value), &value, &errmsg)
+                && value.decrypt(res_e.name, type))
+              res_e.value = value.to_readable_value(nettype, type);
+            else
+              MWARNING("Failed to decrypt LNS value for " << res_e.name << (errmsg.empty() ? ""s : ": " + errmsg));
+          }
+        }
+      }
+
+      it = end;
+    }
+
+    // Erase anything we didn't get a response for (it will have update_height of 0)
+    res.known_names.erase(std::remove_if(res.known_names.begin(), res.known_names.end(),
+          [](const auto& n) { return n.update_height == 0; }),
+        res.known_names.end());
+
+    // Now sort whatever we got back
+    std::sort(res.known_names.begin(), res.known_names.end(),
+        [](const auto& a, const auto& b) { return std::make_pair(a.name, a.type) < std::make_pair(b.name, b.type); });
 
     return res;
   }
