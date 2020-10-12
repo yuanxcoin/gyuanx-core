@@ -2747,19 +2747,28 @@ namespace cryptonote { namespace rpc {
     if (uint8_t hf_version; add_curr_pulse
         && (hf_version = m_core.get_hard_fork_version(curr_height)) >= network_version_16_pulse)
     {
-      auto entropy = service_nodes::get_pulse_entropy_for_next_block(m_core.get_blockchain_storage().get_db());
-      auto& sn_list = m_core.get_service_node_list();
-      auto quorum = generate_pulse_quorum(m_core.get_nettype(), sn_list.get_block_leader().key, hf_version, sn_list.active_service_nodes_infos(), entropy, 0);
-      if (!quorum.validators.empty())
+      cryptonote::Blockchain const &blockchain   = m_core.get_blockchain_storage();
+      cryptonote::block_header const &top_header = blockchain.get_db().get_block_header_from_height(curr_height - 1);
+
+      pulse::timings next_timings = {};
+      uint8_t pulse_round         = 0;
+      if (pulse::get_round_timings(blockchain, curr_height, top_header.timestamp, next_timings) &&
+          pulse::convert_time_to_round(pulse::clock::now(), next_timings.r0_timestamp, &pulse_round))
       {
-        auto& entry = res.quorums.emplace_back();
-        entry.height = curr_height;
-        entry.quorum_type = static_cast<uint8_t>(service_nodes::quorum_type::pulse);
+        auto entropy = service_nodes::get_pulse_entropy_for_next_block(blockchain.get_db(), pulse_round);
+        auto& sn_list = m_core.get_service_node_list();
+        auto quorum = generate_pulse_quorum(m_core.get_nettype(), sn_list.get_block_leader().key, hf_version, sn_list.active_service_nodes_infos(), entropy, pulse_round);
+        if (verify_pulse_quorum_sizes(quorum))
+        {
+          auto& entry = res.quorums.emplace_back();
+          entry.height = curr_height;
+          entry.quorum_type = static_cast<uint8_t>(service_nodes::quorum_type::pulse);
 
-        entry.quorum.validators = hexify(quorum.validators);
-        entry.quorum.workers = hexify(quorum.workers);
+          entry.quorum.validators = hexify(quorum.validators);
+          entry.quorum.workers = hexify(quorum.workers);
 
-        at_least_one_succeeded = true;
+          at_least_one_succeeded = true;
+        }
       }
     }
 
