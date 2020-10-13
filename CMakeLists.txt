@@ -56,6 +56,9 @@ endif()
 cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
+# Has to be set before `project()`, and ignored on non-macos:
+set(CMAKE_OSX_DEPLOYMENT_TARGET 10.14 CACHE STRING "macOS deployment target (Apple clang only)")
+
 project(loki
     VERSION 8.1.1
     LANGUAGES CXX C)
