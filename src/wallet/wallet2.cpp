@@ -13419,6 +13419,15 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
           error::wallet_internal_error, "Key image out of validity domain: input " + std::to_string(n + offset) + "/"
           + std::to_string(signed_key_images.size()) + ", key image " + key_image_str);
 
+      // TODO(loki): This can fail in a worse-case scenario. We re-sort blinks
+      // when they arrive out of order (i.e. blink is confirmed in mempool and
+      // gets inserted into m_transfers in a different order from the order they
+      // are committed to the blockchain).
+
+      // If a watch only wallet sees a blink and the main wallet doesn't, then
+      // for that block, export_key_images will fail temporarily until the
+      // block is commited and the wallets sorts its transfers into a finalized
+      // canonical ordering.
       THROW_WALLET_EXCEPTION_IF(!crypto::check_ring_signature((const crypto::hash&)key_image, key_image, pkeys, &signature),
           error::signature_check_failed, std::to_string(n + offset) + "/"
           + std::to_string(signed_key_images.size()) + ", key image " + key_image_str
