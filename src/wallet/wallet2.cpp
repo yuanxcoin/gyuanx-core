@@ -1873,7 +1873,12 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   using unlock_time_t = uint64_t;
   std::unordered_map<crypto::public_key, unlock_time_t> pk_to_unlock_times;
   std::vector<size_t> outs;
-  bool blink_got_mined = false;
+
+  // NOTE: The earliest index that we detected a TX, where we previously had
+  // it as a blink sitting in the mempool was confirmed in this block.
+  auto constexpr NO_BLINK_MINED_INDEX           = std::numeric_limits<int64_t>::max();
+  auto earliest_blink_got_mined_transfers_index = NO_BLINK_MINED_INDEX;
+
   while (!tx.vout.empty())
   {
     // if tx.vout is not empty, we loop through all tx pubkeys
@@ -2129,7 +2134,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
           if (transfer.m_unmined_blink)
           {
-            blink_got_mined = true;
+            earliest_blink_got_mined_transfers_index = std::min(earliest_blink_got_mined_transfers_index, static_cast<int64_t>(kit->second) /*index in m_transfers*/);
             THROW_WALLET_EXCEPTION_IF(transfer.amount() != tx_scan_info[o].amount, error::wallet_internal_error, "A blink should credit the amount exactly as we recorded it when it arrived in the mempool");
             THROW_WALLET_EXCEPTION_IF(transfer.m_spent, error::wallet_internal_error, "Blink can not be spent before it is mined, this should never happen");
 
@@ -2396,7 +2401,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 
   // create payment_details for each incoming transfer to a subaddress index
   crypto::hash payment_id = null_hash;
-  if (tx_money_got_in_outs.size() > 0 || blink_got_mined)
+  if (tx_money_got_in_outs.size() > 0 || earliest_blink_got_mined_transfers_index != NO_BLINK_MINED_INDEX)
   {
     tx_extra_nonce extra_nonce;
     if (find_tx_extra_field_by_type(tx_extra_fields, extra_nonce))
@@ -2492,7 +2497,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
       notify = false;
   }
 
-  if (blink_got_mined) {
+  if (earliest_blink_got_mined_transfers_index != NO_BLINK_MINED_INDEX) {
     // If a blink tx that we already knew about moved from the mempool into a block then we have to
     // go back and fix up the heights in the payment_details because they'll have been set to 0 from
     // the initial blink.
@@ -2505,6 +2510,27 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         pd.m_block_height = height;
         pd.m_unmined_blink = false;
       }
+    }
+
+    // All transfers from the earliest confirmed blink iterator needs to be
+    // re-sorted since the blink was confirmed in the mempool and inserted
+    // into our transfers container, but, it now has a output index assigned to
+    // it, so it should be sorted via its real index. (Code that
+    // uses m_transfers expects this)
+    std::sort(m_transfers.begin() + earliest_blink_got_mined_transfers_index,
+              m_transfers.end(),
+              [](transfer_details const &a, transfer_details const &b) {
+                return a.m_global_output_index < b.m_global_output_index;
+              });
+
+    // Update the weak indices the wallet holds into the transfers container
+    size_t real_transfers_index = earliest_blink_got_mined_transfers_index;
+    for (auto it = m_transfers.begin() + earliest_blink_got_mined_transfers_index;
+         it != m_transfers.end();
+         it++, real_transfers_index++)
+    {
+      m_key_images[it->m_key_image]    = real_transfers_index;
+      m_pub_keys[it->get_public_key()] = real_transfers_index;
     }
   }
 
