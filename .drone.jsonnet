@@ -157,6 +157,6 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
     // Macos builds:
     mac_builder('macOS (Release)', run_tests=true),
     mac_builder('macOS (Debug)', build_type='Debug', cmake_extra='-DBUILD_DEBUG_UTILS=ON'),
-    mac_builder('macOS (Static)', cmake_extra='-DBUILD_STATIC_DEPS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14',
+    mac_builder('macOS (Static)', cmake_extra='-DBUILD_STATIC_DEPS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DARCH=core2',
                 build_tests=false, extra_cmds=static_check_and_upload),
 ]
