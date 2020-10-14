@@ -305,6 +305,11 @@ if(APPLE AND BOOST_VERSION VERSION_LESS 1.74.0)
   set(boost_patch_commands PATCH_COMMAND patch -p1 -d tools/build -i ${PROJECT_SOURCE_DIR}/utils/build_scripts/boostorg-build-pr560-macos-build-fix.patch)
 endif()
 
+set(boost_buildflags "cxxflags=-fPIC")
+if(APPLE)
+  set(boost_buildflags "cxxflags=\"-fPIC -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}\"" "cflags=-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+
 build_external(boost
   #  PATCH_COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam tools/build/src/user-config.jam
   ${boost_patch_commands}
@@ -315,7 +320,7 @@ build_external(boost
   BUILD_COMMAND true
   INSTALL_COMMAND
     ./b2 -d0 variant=release link=static runtime-link=static optimization=speed ${boost_extra}
-      threading=multi threadapi=${boost_threadapi} cxxflags=-fPIC cxxstd=14 visibility=global
+      threading=multi threadapi=${boost_threadapi} ${boost_buildflags} cxxstd=14 visibility=global
       --disable-icu --user-config=${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam
       install
   BUILD_BYPRODUCTS
