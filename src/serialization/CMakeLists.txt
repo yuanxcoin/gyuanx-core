@@ -31,6 +31,8 @@ add_library(serialization
   json_object.cpp
   )
 target_link_libraries(serialization
+  PUBLIC
+    common
   PRIVATE
     cryptonote_core
     cryptonote_protocol

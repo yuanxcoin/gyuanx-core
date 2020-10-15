@@ -59,14 +59,14 @@ bool tx_sanity_check(const cryptonote::blobdata &tx_blob, uint64_t rct_outs_avai
 
   for (const auto& txin : tx.vin)
   {
-    if (!std::holds_alternative<cryptonote::txin_to_key>(txin))
+    auto* in_to_key = std::get_if<cryptonote::txin_to_key>(&txin);
+    if (!in_to_key)
       continue;
-    auto& in_to_key = std::get<cryptonote::txin_to_key>(txin);
-    if (in_to_key.amount != 0)
+    if (in_to_key->amount != 0)
       continue;
-    for (uint64_t offset : cryptonote::relative_output_offsets_to_absolute(in_to_key.key_offsets))
+    for (uint64_t offset : cryptonote::relative_output_offsets_to_absolute(in_to_key->key_offsets))
       rct_indices.insert(offset);
-    n_indices += in_to_key.key_offsets.size();
+    n_indices += in_to_key->key_offsets.size();
   }
 
   return tx_sanity_check(rct_indices, n_indices, rct_outs_available);

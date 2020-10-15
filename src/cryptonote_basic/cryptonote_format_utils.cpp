@@ -147,7 +147,7 @@ namespace cryptonote
           LOG_PRINT_L1("Unsupported output type in tx " << get_transaction_hash(tx));
           return false;
         }
-        rv.outPk[n].dest = rct::pk2rct(std::get<txout_to_key>(tx.vout[n].target).key);
+        rv.outPk[n].dest = rct::pk2rct(var::get<txout_to_key>(tx.vout[n].target).key);
       }
 
       if (!base_only)
@@ -471,7 +471,7 @@ namespace cryptonote
     weight += extra;
 
     // calculate deterministic CLSAG/MLSAG data size
-    const size_t ring_size = std::get<cryptonote::txin_to_key>(tx.vin[0]).key_offsets.size();
+    const size_t ring_size = var::get<cryptonote::txin_to_key>(tx.vin[0]).key_offsets.size();
     if (tx.rct_signatures.type == rct::RCTTypeCLSAG)
       extra = tx.vin.size() * (ring_size + 2) * 32;
     else
@@ -926,7 +926,7 @@ namespace cryptonote
         CHECK_AND_NO_ASSERT_MES(0 < out.amount, false, "zero amount output in transaction id=" << get_transaction_hash(tx));
       }
 
-      if(!check_key(std::get<txout_to_key>(out.target).key))
+      if(!check_key(var::get<txout_to_key>(out.target).key))
         return false;
     }
     return true;
@@ -1039,7 +1039,7 @@ namespace cryptonote
     for(const tx_out& o:  tx.vout)
     {
       CHECK_AND_ASSERT_MES(std::holds_alternative<txout_to_key>(o.target), false, "wrong type id in transaction out" );
-      if(is_out_to_acc(acc, std::get<txout_to_key>(o.target), tx_pub_key, additional_tx_pub_keys, i))
+      if(is_out_to_acc(acc, var::get<txout_to_key>(o.target), tx_pub_key, additional_tx_pub_keys, i))
       {
         outs.push_back(i);
         money_transfered += o.amount;
@@ -1194,7 +1194,7 @@ namespace cryptonote
       const size_t outputs = t.vout.size();
       size_t mixin = 0;
       if (t.vin.size() > 0 && std::holds_alternative<txin_to_key>(t.vin[0]))
-        mixin = std::get<txin_to_key>(t.vin[0]).key_offsets.size() - 1;
+        mixin = var::get<txin_to_key>(t.vin[0]).key_offsets.size() - 1;
       try {
         tt.rct_signatures.p.serialize_rctsig_prunable(ba, t.rct_signatures.type, inputs, outputs, mixin);
       } catch (const std::exception& e) {

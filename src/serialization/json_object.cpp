@@ -312,7 +312,7 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::txin_v& txin, rapid
       insert_into_json_object(val, doc, "to_scripthash", input);
     }
   };
-  std::visit(add_input{doc, val}, txin);
+  var::visit(add_input{doc, val}, txin);
 }
 
 
@@ -511,7 +511,7 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::tx_out& txout, rapi
 
   insert_into_json_object(val, doc, "amount", txout.amount);
 
-  std::visit([&doc, &val](const auto& output) {
+  var::visit([&doc, &val](const auto& output) {
       using T = std::decay_t<decltype(output)>;
       rapidjson::Value jv;
       toJsonValue(doc, output, jv);

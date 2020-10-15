@@ -128,7 +128,7 @@ namespace epee
       size_t size = read_varint();
       CHECK_AND_ASSERT_THROW_MES(size <= m_count, "Size sanity check failed");
       storage_entry se{std::in_place_type<array_entry>, std::in_place_type<array_t<T>>};
-      auto& arr = std::get<array_t<T>>(std::get<array_entry>(se));
+      auto& arr = var::get<array_t<T>>(var::get<array_entry>(se));
       if constexpr (!std::is_same_v<T, bool>) // bool uses a std::deque instead of vector because
         arr.reserve(size);                    // std::vector<bool> is broken by design
 
@@ -183,7 +183,7 @@ namespace epee
     storage_entry throwable_buffer_reader::read_se()
     {
       storage_entry e{std::in_place_type<T>};
-      read(std::get<T>(e));
+      read(var::get<T>(e));
       return e;
     }
 

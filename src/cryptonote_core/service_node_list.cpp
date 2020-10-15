@@ -519,7 +519,7 @@ namespace service_nodes
           }
 
           // Stealth address public key should match the public key referenced in the TX only if valid information is given.
-          const auto& out_to_key = std::get<cryptonote::txout_to_key>(tx.vout[output_index].target);
+          const auto& out_to_key = var::get<cryptonote::txout_to_key>(tx.vout[output_index].target);
           if (out_to_key.key != ephemeral_pub_key)
           {
             LOG_PRINT_L1("TX: Derived TX ephemeral key did not match tx stored key on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx) << " for output: " << output_index);
@@ -1354,7 +1354,7 @@ namespace service_nodes
                                                                          height,
                                                                          hash,
                                                                          block.signatures,
-                                                                         block) == false;
+                                                                         &block) == false;
         }
 
         // NOTE: Check alt pulse quorums
@@ -1369,7 +1369,7 @@ namespace service_nodes
                                                         height,
                                                         hash,
                                                         block.signatures,
-                                                        block))
+                                                        &block))
             {
               failed_quorum_verify = false;
               break;
@@ -1397,7 +1397,7 @@ namespace service_nodes
                                                                   cryptonote::get_block_height(block),
                                                                   cryptonote::get_block_hash(block),
                                                                   block.signatures,
-                                                                  block);
+                                                                  &block);
       }
 
       if (quorum_verified)
@@ -2354,7 +2354,7 @@ namespace service_nodes
     r = crypto::derive_public_key(derivation, output_index, receiver.m_spend_public_key, out_eph_public_key);
     CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << output_index << ", "<< receiver.m_spend_public_key << ")");
 
-    if (std::get<cryptonote::txout_to_key>(output.target).key != out_eph_public_key)
+    if (var::get<cryptonote::txout_to_key>(output.target).key != out_eph_public_key)
     {
       MGINFO_RED("Invalid service node reward at output: " << output_index << ", output key, specifies wrong key");
       return false;

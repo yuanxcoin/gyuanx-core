@@ -486,7 +486,7 @@ namespace cryptonote
     assert((bool) blink_ptr);
     std::unique_lock lock{m_transactions_lock};
     auto &blink = *blink_ptr;
-    auto &tx = std::get<transaction>(blink.tx); // will throw if just a hash w/o a transaction
+    auto &tx = var::get<transaction>(blink.tx); // will throw if just a hash w/o a transaction
     auto txhash = get_transaction_hash(tx);
 
     {
@@ -1622,7 +1622,7 @@ namespace cryptonote
             }
             for (const auto& tx : txs) {
               for (const auto& in : tx.vin) {
-                if (std::holds_alternative<txin_to_key>(in) && key_image_conflicts.erase(std::get<txin_to_key>(in).k_image)) {
+                if (auto* ttk = std::get_if<txin_to_key>(&in); ttk && key_image_conflicts.erase(ttk->k_image)) {
                   earliest = std::min(earliest, block_height);
                   if (key_image_conflicts.empty())
                     goto end;

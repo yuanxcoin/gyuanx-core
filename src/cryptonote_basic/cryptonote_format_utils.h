@@ -79,7 +79,7 @@ namespace cryptonote
       if (!std::holds_alternative<T>(f)) continue;
       if (skip_fields == 0)
       {
-        field = std::get<T>(f);
+        field = var::get<T>(f);
         return true;
       }
       skip_fields--;
@@ -310,7 +310,7 @@ namespace cryptonote
 #define CHECKED_GET_SPECIFIC_VARIANT(variant_var, specific_type, variable_name, fail_return_val) \
   CHECK_AND_ASSERT_MES(std::holds_alternative<specific_type>(variant_var), fail_return_val, \
           "wrong variant type: " << tools::type_name(tools::variant_type(variant_var)) << ", expected " << tools::type_name<specific_type>()); \
-  auto& variable_name = std::get<specific_type>(variant_var);
+  auto& variable_name = var::get<specific_type>(variant_var);
 
   // Provide an inline header implementation of this function because device_default needs it (but
   // it doesn't link to us, rather we link to it).

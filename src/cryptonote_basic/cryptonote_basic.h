@@ -358,7 +358,7 @@ namespace cryptonote
             ar.tag("rctsig_prunable");
             auto obj = ar.begin_object();
             rct_signatures.p.serialize_rctsig_prunable(ar, rct_signatures.type, vin.size(), vout.size(),
-                vin.size() > 0 && std::holds_alternative<txin_to_key>(vin[0]) ? std::get<txin_to_key>(vin[0]).key_offsets.size() - 1 : 0);
+                vin.size() > 0 && std::holds_alternative<txin_to_key>(vin[0]) ? var::get<txin_to_key>(vin[0]).key_offsets.size() - 1 : 0);
           }
         }
       }
@@ -425,7 +425,7 @@ namespace cryptonote
   size_t transaction::get_signature_size(const txin_v& tx_in)
   {
     if (std::holds_alternative<txin_to_key>(tx_in))
-      return std::get<txin_to_key>(tx_in).key_offsets.size();
+      return var::get<txin_to_key>(tx_in).key_offsets.size();
     return 0;
   }
 
