@@ -307,7 +307,7 @@ endif()
 
 set(boost_buildflags "cxxflags=-fPIC")
 if(APPLE)
-  set(boost_buildflags "cxxflags=\"-fPIC -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}\"" "cflags=-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  set(boost_buildflags "cxxflags=-fPIC -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}" "cflags=-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
 endif()
 
 build_external(boost
