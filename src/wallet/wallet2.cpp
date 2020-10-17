@@ -29,6 +29,7 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+#include <iterator>
 #include <numeric>
 #include <tuple>
 #include <optional>
@@ -9335,7 +9336,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
 
     // generate output indices to request
     rpc::GET_OUTPUTS_BIN::request req{};
-    rpc::GET_OUTPUTS_BIN::response daemon_resp{};
+    decltype(req.outputs) get_outputs;
 
     std::unique_ptr<gamma_picker> gamma;
     if (has_rct_distribution)
@@ -9350,7 +9351,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       std::unordered_set<uint64_t> seen_indices;
       // request more for rct in base recent (locked) coinbases are picked, since they're locked for longer
       size_t requested_outputs_count = base_requested_outputs_count + (td.is_rct() ? CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW - CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE : 0);
-      size_t start = req.outputs.size();
+      size_t start = get_outputs.size();
       bool use_histogram = amount != 0 || !has_rct_distribution;
 
       const bool output_is_pre_fork = td.m_block_height < segregation_fork_height;
@@ -9466,7 +9467,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
             if (out < num_outs)
             {
               MINFO("Using it");
-              req.outputs.push_back({amount, out});
+              get_outputs.push_back({amount, out});
               ++num_found;
               seen_indices.emplace(out);
               if (out == td.m_global_output_index)
@@ -9488,12 +9489,12 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       if (num_outs <= requested_outputs_count)
       {
         for (uint64_t i = 0; i < num_outs; i++)
-          req.outputs.push_back({amount, i});
+          get_outputs.push_back({amount, i});
         // duplicate to make up shortfall: this will be caught after the RPC call,
         // so we can also output the amounts for which we can't reach the required
         // mixin after checking the actual unlockedness
         for (uint64_t i = num_outs; i < requested_outputs_count; ++i)
-          req.outputs.push_back({amount, num_outs - 1});
+          get_outputs.push_back({amount, num_outs - 1});
       }
       else
       {
@@ -9502,7 +9503,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
         {
           num_found = 1;
           seen_indices.emplace(td.m_global_output_index);
-          req.outputs.push_back({amount, td.m_global_output_index});
+          get_outputs.push_back({amount, td.m_global_output_index});
           LOG_PRINT_L1("Selecting real output: " << td.m_global_output_index << " for " << print_money(amount));
         }
 
@@ -9614,7 +9615,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
           seen_indices.emplace(i);
 
           picks[type].insert(i);
-          req.outputs.push_back({amount, i});
+          get_outputs.push_back({amount, i});
           ++num_found;
           MDEBUG("picked " << i << ", " << num_found << " now picked");
         }
@@ -9635,20 +9636,20 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
         // we'll error out later
         while (num_found < requested_outputs_count)
         {
-          req.outputs.push_back({amount, 0});
+          get_outputs.push_back({amount, 0});
           ++num_found;
         }
       }
 
       // sort the subsection, to ensure the daemon doesn't know which output is ours
-      std::sort(req.outputs.begin() + start, req.outputs.end(),
+      std::sort(get_outputs.begin() + start, get_outputs.end(),
           [](const auto& a, const auto& b) { return a.index < b.index; });
     }
 
     if (ELPP->vRegistry()->allowed(el::Level::Debug, LOKI_DEFAULT_LOG_CATEGORY))
     {
       std::map<uint64_t, std::set<uint64_t>> outs;
-      for (const auto &i: req.outputs)
+      for (const auto &i: get_outputs)
         outs[i.amount].insert(i.index);
       if (LOG_ENABLED(Debug))
       {
@@ -9662,15 +9663,33 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       }
     }
 
-    // get the keys for those
     req.get_txid = false;
-    bool r = invoke_http<rpc::GET_OUTPUTS_BIN>(req, daemon_resp);
-    THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_outs.bin");
-    THROW_WALLET_EXCEPTION_IF(daemon_resp.status == rpc::STATUS_BUSY, error::daemon_busy, "get_outs.bin");
-    THROW_WALLET_EXCEPTION_IF(daemon_resp.status != rpc::STATUS_OK, error::get_outs_error, get_rpc_status(daemon_resp.status));
-    THROW_WALLET_EXCEPTION_IF(daemon_resp.outs.size() != req.outputs.size(), error::wallet_internal_error,
-      "daemon returned wrong response for get_outs.bin, wrong amounts count = " +
-      std::to_string(daemon_resp.outs.size()) + ", expected " +  std::to_string(req.outputs.size()));
+
+    // Split out requests into MAX_COUNT if we are requesting more than that; otherwise we run into
+    // problems when using a public node (which only allows MAX_COUNT per request).
+    std::vector<rpc::GET_OUTPUTS_BIN::outkey> got_outs;
+    got_outs.reserve(get_outputs.size());
+    for (auto it = get_outputs.begin(); it != get_outputs.end(); )
+    {
+      auto count = std::min<size_t>(std::distance(it, get_outputs.end()), rpc::GET_OUTPUTS_BIN::MAX_COUNT);
+      req.outputs.clear();
+      req.outputs.reserve(count);
+      req.outputs.insert(req.outputs.end(), it, it + count);
+      // get the keys for those
+      rpc::GET_OUTPUTS_BIN::response daemon_resp{};
+      bool r = invoke_http<rpc::GET_OUTPUTS_BIN>(req, daemon_resp);
+      THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_outs.bin");
+      THROW_WALLET_EXCEPTION_IF(daemon_resp.status == rpc::STATUS_BUSY, error::daemon_busy, "get_outs.bin");
+      THROW_WALLET_EXCEPTION_IF(daemon_resp.status != rpc::STATUS_OK, error::get_outs_error, get_rpc_status(daemon_resp.status));
+      THROW_WALLET_EXCEPTION_IF(daemon_resp.outs.size() != req.outputs.size(), error::wallet_internal_error,
+        "daemon returned wrong response for get_outs.bin, wrong amounts count = " +
+        std::to_string(daemon_resp.outs.size()) + ", expected " +  std::to_string(req.outputs.size()));
+
+      for (auto& out : daemon_resp.outs)
+        got_outs.push_back(std::move(out));
+
+      it += count;
+    }
 
     std::unordered_map<uint64_t, uint64_t> scanty_outs;
     size_t base = 0;
@@ -9709,9 +9728,9 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       for (size_t n = 0; n < requested_outputs_count; ++n)
       {
         size_t i = base + n;
-        if (req.outputs[i].index == td.m_global_output_index)
-          if (daemon_resp.outs[i].key == std::get<txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key)
-            if (daemon_resp.outs[i].mask == mask)
+        if (get_outputs[i].index == td.m_global_output_index)
+          if (got_outs[i].key == std::get<txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key)
+            if (got_outs[i].mask == mask)
             {
               real_out_found = true;
               break;
@@ -9739,10 +9758,10 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
                 for (size_t o = 0; o < requested_outputs_count; ++o)
                 {
                   size_t i = base + o;
-                  if (req.outputs[i].index == out)
+                  if (get_outputs[i].index == out)
                   {
-                    LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << req.outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key << " (from existing ring)");
-                    tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, td.m_global_output_index, daemon_resp.outs[i].unlocked);
+                    LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << get_outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << got_outs[i].unlocked << ", key " << got_outs[i].key << " (from existing ring)");
+                    tx_add_fake_output(outs, get_outputs[i].index, got_outs[i].key, got_outs[i].mask, td.m_global_output_index, got_outs[i].unlocked);
                     found = true;
                     break;
                   }
@@ -9766,8 +9785,8 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       for (size_t o = 0; o < requested_outputs_count && outs.back().size() < fake_outputs_count + 1; ++o)
       {
         size_t i = base + order[o];
-        LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << req.outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << daemon_resp.outs[i].unlocked << ", key " << daemon_resp.outs[i].key);
-        tx_add_fake_output(outs, req.outputs[i].index, daemon_resp.outs[i].key, daemon_resp.outs[i].mask, td.m_global_output_index, daemon_resp.outs[i].unlocked);
+        LOG_PRINT_L2("Index " << i << "/" << requested_outputs_count << ": idx " << get_outputs[i].index << " (real " << td.m_global_output_index << "), unlocked " << got_outs[i].unlocked << ", key " << got_outs[i].key);
+        tx_add_fake_output(outs, get_outputs[i].index, got_outs[i].key, got_outs[i].mask, td.m_global_output_index, got_outs[i].unlocked);
       }
       if (outs.back().size() < fake_outputs_count + 1)
       {
