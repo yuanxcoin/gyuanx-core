@@ -183,7 +183,6 @@ namespace cryptonote { namespace rpc {
       return regs;
     }
 
-    constexpr size_t MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT = 5000;
     constexpr uint64_t OUTPUT_HISTOGRAM_RECENT_CUTOFF_RESTRICTION = 3 * 86400; // 3 days max, the wallet requests 1.8 days
     constexpr uint64_t round_up(uint64_t value, uint64_t quantum) { return (value + quantum - 1) / quantum * quantum; }
 
@@ -625,7 +624,7 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_OUTPUTS_BIN>(req, res))
       return res;
 
-    if (!context.admin && req.outputs.size() > MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT)
+    if (!context.admin && req.outputs.size() > GET_OUTPUTS_BIN::MAX_COUNT)
       res.status = "Too many outs requested";
     else if (m_core.get_outs(req, res))
       res.status = STATUS_OK;
@@ -643,7 +642,7 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_OUTPUTS>(req, res))
       return res;
 
-    if (!context.admin && req.outputs.size() > MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT) {
+    if (!context.admin && req.outputs.size() > GET_OUTPUTS::MAX_COUNT) {
       res.status = "Too many outs requested";
       return res;
     }
