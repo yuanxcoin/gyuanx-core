@@ -9003,6 +9003,7 @@ bool simple_wallet::run()
       catch (...)
       {
       }
+      std::this_thread::sleep_for(25ms);
     }
   });
 
