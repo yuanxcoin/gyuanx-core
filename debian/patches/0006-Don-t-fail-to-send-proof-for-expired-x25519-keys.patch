@@ -1,0 +1,28 @@
+From: Jason Rhinelander <jason@imaginary.ca>
+Date: Sun, 18 Oct 2020 19:38:21 -0300
+Subject: Don't fail to send proof for expired x25519 keys
+
+We only flush the x25519 key occasionally, which can cause someone
+switching to use only ed25519 keys registration trouble since the node's
+primary pubkey will change, but ed25519/x25519 will be the same as the
+old registration.
+
+This fixes the uptime proof check to not complain if the found x25519
+pubkey belongs to a no-longer-registered SN.
+---
+ src/cryptonote_core/cryptonote_core.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/cryptonote_core/cryptonote_core.cpp b/src/cryptonote_core/cryptonote_core.cpp
+index d4703c7..ee98aed 100644
+--- a/src/cryptonote_core/cryptonote_core.cpp
++++ b/src/cryptonote_core/cryptonote_core.cpp
+@@ -2212,7 +2212,7 @@ namespace cryptonote
+           return;
+ 
+         auto pubkey = m_service_node_list.get_pubkey_from_x25519(m_service_keys.pub_x25519);
+-        if (pubkey != crypto::null_pkey && pubkey != m_service_keys.pub)
++        if (pubkey != crypto::null_pkey && pubkey != m_service_keys.pub && m_service_node_list.is_service_node(pubkey, false /*don't require active*/))
+         {
+           MGINFO_RED(
+               "Failed to submit uptime proof: another service node on the network is using the same ed/x25519 keys as "

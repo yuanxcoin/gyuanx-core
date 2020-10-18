@@ -1,3 +1,10 @@
+loki (8.1.1-2~ubuntu1804) bionic; urgency=medium
+
+  * update lib version
+  * Backport PR 1326 to debs
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Sun, 18 Oct 2020 19:53:27 -0300
+
 loki (8.1.1-1~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
