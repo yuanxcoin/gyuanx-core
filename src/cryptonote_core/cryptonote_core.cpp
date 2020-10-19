@@ -2229,11 +2229,13 @@ namespace cryptonote
 
           m_service_node_list.for_each_service_node_info_and_proof(sn_pks.begin(), sn_pks.end(), [&](auto& pk, auto& sni, auto& proof) {
             if (pk != m_service_keys.pub && proof.public_ip == m_sn_public_ip &&
-                (proof.storage_port == m_storage_port || proof.storage_port == m_storage_lmq_port))
+                (proof.quorumnet_port == m_quorumnet_port || proof.storage_port == m_storage_port || proof.storage_port == m_storage_lmq_port))
             MGINFO_RED(
-                "Another service node (" << pk << ") is broadcasting the same storage server "
-                "IP and port as this service node. This will lead to deregistration of one or both service nodes. "
-                "(This most likely means that service-node-public-ip and/or storage-server-port settings are wrong.)");
+                "Another service node (" << pk << ") is broadcasting the same public IP and ports as this service node (" <<
+                epee::string_tools::get_ip_string_from_int32(m_sn_public_ip) << ":" << proof.quorumnet_port << "[qnet], :" <<
+                proof.storage_port << "[SS-HTTP], :" << proof.storage_lmq_port << "[SS-LMQ]). "
+                "This will lead to deregistration of one or both service nodes if not corrected. "
+                "(Do both service nodes have the correct IP for the service-node-public-ip setting?)");
           });
         }
 
