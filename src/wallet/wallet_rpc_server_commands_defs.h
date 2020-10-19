@@ -2400,6 +2400,31 @@ This command is only required if the open wallet is one of the owners of a LNS r
   };
 
   LOKI_RPC_DOC_INTROSPECT
+  // Adds one or more names to the persistent LNS wallet cache of known names (i.e. for names that
+  // are owned by this wallet that aren't currently in the cache).
+  struct LNS_ADD_KNOWN_NAMES : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("lns_add_known_names"); }
+
+    struct record
+    {
+      std::string type; // The LNS type (mandatory); currently support values are: "session", "lokinet"
+      std::string name; // The (unhashed) name of the record
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct request
+    {
+      std::vector<record> names; // List of names to add to the cache
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    using response = EMPTY;
+  };
+
+  LOKI_RPC_DOC_INTROSPECT
   // Takes a LNS encrypted value and encrypts the mapping value using the LNS name.
   struct LNS_ENCRYPT_VALUE : RPC_COMMAND
   {
@@ -2545,6 +2570,7 @@ This command is only required if the open wallet is one of the owners of a LNS r
     LNS_MAKE_UPDATE_SIGNATURE,
     LNS_HASH_NAME,
     LNS_KNOWN_NAMES,
+    LNS_ADD_KNOWN_NAMES,
     LNS_DECRYPT_VALUE,
     LNS_ENCRYPT_VALUE
   >;
