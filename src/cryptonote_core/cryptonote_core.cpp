@@ -2220,6 +2220,23 @@ namespace cryptonote
           return;
         }
 
+        {
+          std::vector<crypto::public_key> sn_pks;
+          auto sns = m_service_node_list.get_service_node_list_state();
+          sn_pks.reserve(sns.size());
+          for (const auto& sni : sns)
+            sn_pks.push_back(sni.pubkey);
+
+          m_service_node_list.for_each_service_node_info_and_proof(sn_pks.begin(), sn_pks.end(), [&](auto& pk, auto& sni, auto& proof) {
+            if (pk != m_service_keys.pub && proof.public_ip == m_sn_public_ip &&
+                (proof.storage_port == m_storage_port || proof.storage_port == m_storage_lmq_port))
+            MGINFO_RED(
+                "Another service node (" << pk << ") is broadcasting the same storage server "
+                "IP and port as this service node. This will lead to deregistration of one or both service nodes. "
+                "(This most likely means that service-node-public-ip and/or storage-server-port settings are wrong.)");
+          });
+        }
+
         if (m_nettype != DEVNET)
         {
           if (!check_external_ping(m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, "the storage server"))
