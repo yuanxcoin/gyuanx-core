@@ -3326,6 +3326,30 @@ namespace {
     return res;
   }
 
+  LNS_ADD_KNOWN_NAMES::response wallet_rpc_server::invoke(LNS_ADD_KNOWN_NAMES::request&& req)
+  {
+    require_open();
+
+    std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+    if (!hf_version) throw wallet_rpc_error{error_code::HF_QUERY_FAILED, tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED};
+
+    std::string reason;
+    for (auto& rec : req.names)
+    {
+      lns::mapping_type type;
+      if (!lns::validate_mapping_type(rec.type, *hf_version, lns::lns_tx_type::lookup, &type, &reason))
+        throw wallet_rpc_error{error_code::WRONG_LNS_TYPE, "Invalid LNS type: " + reason};
+
+      auto name = tools::lowercase_ascii_string(rec.name);
+      if (!lns::validate_lns_name(type, name, &reason))
+        throw wallet_rpc_error{error_code::LNS_BAD_NAME, "Invalid LNS name '" + name + "': " + reason};
+
+      m_wallet->set_lns_cache_record({type, name, lns::name_to_base64_hash(name)});
+    }
+
+    return {};
+  }
+
   LNS_DECRYPT_VALUE::response wallet_rpc_server::invoke(LNS_DECRYPT_VALUE::request&& req)
   {
     require_open();
