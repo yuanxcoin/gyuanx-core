@@ -209,11 +209,10 @@ int main(int argc, char* argv[])
             coinbase = true;
             goto done;
           }
-          if (std::holds_alternative<cryptonote::txin_to_key>(tx.vin[ring]))
+          if (auto* txin = std::get_if<cryptonote::txin_to_key>(&tx.vin[ring]))
           {
-            const auto& txin = std::get<cryptonote::txin_to_key>(tx.vin[ring]);
-            const uint64_t amount = txin.amount;
-            auto absolute_offsets = cryptonote::relative_output_offsets_to_absolute(txin.key_offsets);
+            const uint64_t amount = txin->amount;
+            auto absolute_offsets = cryptonote::relative_output_offsets_to_absolute(txin->key_offsets);
             for (uint64_t offset: absolute_offsets)
             {
               const output_data_t od = db->get_output_key(amount, offset);
@@ -229,10 +228,9 @@ int main(int argc, char* argv[])
               bool found = false;
               for (size_t out = 0; out < b.miner_tx.vout.size(); ++out)
               {
-                if (std::holds_alternative<cryptonote::txout_to_key>(b.miner_tx.vout[out].target))
+                if (auto* txout = std::get_if<cryptonote::txout_to_key>(&b.miner_tx.vout[out].target))
                 {
-                  const auto& txout = std::get<cryptonote::txout_to_key>(b.miner_tx.vout[out].target);
-                  if (txout.key == od.pubkey)
+                  if (txout->key == od.pubkey)
                   {
                     found = true;
                     new_txids.push_back(cryptonote::get_transaction_hash(b.miner_tx));
@@ -263,10 +261,9 @@ int main(int argc, char* argv[])
                 }
                 for (size_t out = 0; out < tx2.vout.size(); ++out)
                 {
-                  if (std::holds_alternative<cryptonote::txout_to_key>(tx2.vout[out].target))
+                  if (auto* txout = std::get_if<cryptonote::txout_to_key>(&tx2.vout[out].target))
                   {
-                    const auto& txout = std::get<cryptonote::txout_to_key>(tx2.vout[out].target);
-                    if (txout.key == od.pubkey)
+                    if (txout->key == od.pubkey)
                     {
                       found = true;
                       new_txids.push_back(block_txid);

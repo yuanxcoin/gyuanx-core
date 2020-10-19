@@ -66,7 +66,7 @@ namespace
             {
                 cryptonote::tx_out const& tx_out_entry = source.vout[output_index];
                 source_amount += tx_out_entry.amount;
-                auto const& key = std::get<cryptonote::txout_to_key>(tx_out_entry.target);
+                auto const& key = var::get<cryptonote::txout_to_key>(tx_out_entry.target);
 
                 actual_sources.push_back(
                     {{}, 0, key_field.pub_key, {}, static_cast<size_t>(output_index), tx_out_entry.amount, rct, rct::identity()}

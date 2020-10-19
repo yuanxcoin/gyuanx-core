@@ -36,7 +36,7 @@
  */
 #pragma once
 
-#include <variant>
+#include <lokimq/variant.h>
 #include "serialization.h"
 #include "common/meta.h"
 
@@ -115,7 +115,7 @@ void read_variant(Archive& ar, std::variant<T...>& v)
 template <class Archive, typename... T>
 void write_variant(Archive& ar, std::variant<T...>& v)
 {
-  return std::visit([&ar](auto& rv) {
+  return var::visit([&ar](auto& rv) {
       using Type = std::decay_t<decltype(rv)>;
       auto obj = ar.begin_object();
       ar.write_variant_tag(variant_serialization_tag<Type, typename Archive::variant_tag_type>);

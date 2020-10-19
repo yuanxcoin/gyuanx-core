@@ -4,7 +4,7 @@
 #include <exception>
 #include <lokimq/base64.h>
 #include <boost/endian/conversion.hpp>
-#include <variant>
+#include <lokimq/variant.h>
 #include "common/string_util.h"
 #include "net/jsonrpc_structs.h" // epee
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -477,7 +477,7 @@ namespace cryptonote::rpc {
 
     res.onAborted([data] { data->aborted = true; });
     res.onData([data=std::move(data)](std::string_view d, bool done) mutable {
-      std::get<std::string>(data->request.body) += d;
+      var::get<std::string>(data->request.body) += d;
       if (!done)
         return;
 
@@ -512,7 +512,7 @@ namespace cryptonote::rpc {
       else
         body = (buffer += d);
 
-      auto& [ps, st_entry] = std::get<jsonrpc_params>(data->request.body = jsonrpc_params{});
+      auto& [ps, st_entry] = var::get<jsonrpc_params>(data->request.body = jsonrpc_params{});
       if(!ps.load_from_json(body))
         return data->jsonrpc_error_response(data->res, -32700, "Parse error");
 

@@ -97,11 +97,8 @@ struct tx_data_t
       vin.reserve(tx.vin.size());
       for (size_t ring = 0; ring < tx.vin.size(); ++ring)
       {
-        if (std::holds_alternative<cryptonote::txin_to_key>(tx.vin[ring]))
-        {
-          const cryptonote::txin_to_key &txin = std::get<cryptonote::txin_to_key>(tx.vin[ring]);
-          vin.push_back(std::make_pair(txin.amount, cryptonote::relative_output_offsets_to_absolute(txin.key_offsets)));
-        }
+        if (const auto* txin = std::get_if<cryptonote::txin_to_key>(&tx.vin[ring]))
+          vin.push_back(std::make_pair(txin->amount, cryptonote::relative_output_offsets_to_absolute(txin->key_offsets)));
         else
         {
           LOG_PRINT_L0("Bad vin type in txid " << get_transaction_hash(tx));
@@ -112,10 +109,9 @@ struct tx_data_t
     vout.reserve(tx.vout.size());
     for (size_t out = 0; out < tx.vout.size(); ++out)
     {
-      if (std::holds_alternative<cryptonote::txout_to_key>(tx.vout[out].target))
+      if (const auto* txout = std::get_if<cryptonote::txout_to_key>(&tx.vout[out].target))
       {
-        const auto &txout = std::get<cryptonote::txout_to_key>(tx.vout[out].target);
-        vout.push_back(txout.key);
+        vout.push_back(txout->key);
       }
       else
       {
@@ -295,10 +291,9 @@ static bool get_output_txid(ancestry_state_t &state, BlockchainDB *db, uint64_t 
 
   for (size_t out = 0; out < b.miner_tx.vout.size(); ++out)
   {
-    if (std::holds_alternative<cryptonote::txout_to_key>(b.miner_tx.vout[out].target))
+    if (const auto* txout = std::get_if<cryptonote::txout_to_key>(&b.miner_tx.vout[out].target))
     {
-      const auto &txout = std::get<cryptonote::txout_to_key>(b.miner_tx.vout[out].target);
-      if (txout.key == od.pubkey)
+      if (txout->key == od.pubkey)
       {
         txid = cryptonote::get_transaction_hash(b.miner_tx);
         if (opt_cache_outputs)

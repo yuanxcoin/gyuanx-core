@@ -70,7 +70,7 @@ namespace epee
       {
         auto* array = st.template make_array<T>(value_name, parent_section);
         CHECK_AND_ASSERT_THROW_MES(array, "failed to insert " + std::string{typeid(T).name()} + " array");
-        std::get<array_t<T>>(*array).push_back(std::move(value));
+        var::get<array_t<T>>(*array).push_back(std::move(value));
         return array;
       }
 
@@ -203,7 +203,7 @@ namespace epee
             {
               //mean array of sections
               array = make_array_and_insert(stg, name, section{}, current_section);
-              run_handler(&std::get<array_t<section>>(*array).back(), it, buf_end, stg, recursion + 1);
+              run_handler(&var::get<array_t<section>>(*array).back(), it, buf_end, stg, recursion + 1);
               state = match_state_array_after_value;
               array_md = array_mode_sections;
             }else if(*it == '"')

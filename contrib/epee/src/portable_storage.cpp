@@ -1,12 +1,13 @@
 #include "storages/portable_storage_to_json.h"
 #include "storages/portable_storage.h"
+#include <lokimq/variant.h>
 
 namespace epee {
   namespace serialization {
 
     void dump_as_json(std::ostream& strm, const array_entry& ae, size_t indent, bool pretty)
     {
-      std::visit([&](const auto& a) {
+      var::visit([&](const auto& a) {
           strm << '[';
           for (auto it = a.begin(); it != a.end(); ++it)
           {
@@ -19,7 +20,7 @@ namespace epee {
 
     void dump_as_json(std::ostream& strm, const storage_entry& se, size_t indent, bool pretty)
     {
-      std::visit([&](const auto& v) {
+      var::visit([&](const auto& v) {
           dump_as_json(strm, v, indent, pretty);
         }, se);
     }
@@ -162,7 +163,7 @@ namespace epee {
         else
           return nullptr;
       }
-      return &std::get<section>(*pentry);
+      return &var::get<section>(*pentry);
       CATCH_ENTRY("portable_storage::open_section", nullptr);
     }
 
@@ -196,7 +197,7 @@ namespace epee {
       TRY_ENTRY();
       storage_entry* pse = insert_new_entry_get_storage_entry(pentry_name, psection, section());
       if(!pse) return nullptr;
-      return &std::get<section>(*pse);
+      return &var::get<section>(*pse);
       CATCH_ENTRY("portable_storage::insert_new_section", nullptr);
     }
   }

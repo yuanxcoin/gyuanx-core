@@ -179,7 +179,7 @@ bool gen_simple_chain_split_1::check_split_not_switched(cryptonote::core& c, siz
   CHECK_EQ(c.get_current_blockchain_height(), 29);
   
   CHECK_EQ(c.get_blockchain_total_transactions(), 29);
-  CHECK_EQ(c.get_tail_id(), get_block_hash(std::get<cryptonote::block>(events[28])));
+  CHECK_EQ(c.get_tail_id(), get_block_hash(var::get<cryptonote::block>(events[28])));
   CHECK_EQ(c.get_alternative_blocks_count(), 2);
   return true;
 }
@@ -190,7 +190,7 @@ bool gen_simple_chain_split_1::check_split_not_switched2(cryptonote::core& c, si
   //check height
   CHECK_EQ(c.get_current_blockchain_height(), 29);
   CHECK_EQ(c.get_blockchain_total_transactions(), 29);
-  CHECK_EQ(c.get_tail_id(), get_block_hash(std::get<cryptonote::block>(events[28])));
+  CHECK_EQ(c.get_tail_id(), get_block_hash(var::get<cryptonote::block>(events[28])));
   CHECK_EQ(c.get_alternative_blocks_count(), 3);
   return true;
 }
@@ -202,7 +202,7 @@ bool gen_simple_chain_split_1::check_split_switched(cryptonote::core& c, size_t 
   //check height
   CHECK_EQ(c.get_current_blockchain_height(), 30);
   CHECK_EQ(c.get_blockchain_total_transactions(), 30);
-  CHECK_EQ(c.get_tail_id(), get_block_hash(std::get<cryptonote::block>(events[34])));
+  CHECK_EQ(c.get_tail_id(), get_block_hash(var::get<cryptonote::block>(events[34])));
   CHECK_EQ(c.get_alternative_blocks_count(), 3);
   return true;
 }
@@ -213,7 +213,7 @@ bool gen_simple_chain_split_1::check_split_not_switched_back(cryptonote::core& c
   //check height
   CHECK_EQ(c.get_current_blockchain_height(), 34);
   CHECK_EQ(c.get_blockchain_total_transactions(), 34);
-  CHECK_EQ(c.get_tail_id(), get_block_hash(std::get<cryptonote::block>(events[39])));
+  CHECK_EQ(c.get_tail_id(), get_block_hash(var::get<cryptonote::block>(events[39])));
   CHECK_EQ(c.get_alternative_blocks_count(), 8);
 
   return true;
@@ -226,7 +226,7 @@ bool gen_simple_chain_split_1::check_split_switched_back_1(cryptonote::core& c, 
   //check height
   CHECK_EQ(c.get_current_blockchain_height(), 35);
   CHECK_EQ(c.get_blockchain_total_transactions(), 35);
-  CHECK_EQ(c.get_tail_id(), get_block_hash(std::get<cryptonote::block>(events[46])));
+  CHECK_EQ(c.get_tail_id(), get_block_hash(var::get<cryptonote::block>(events[46])));
   CHECK_EQ(c.get_alternative_blocks_count(), 8);
 
   return true;
@@ -238,7 +238,7 @@ bool gen_simple_chain_split_1::check_split_switched_back_2(cryptonote::core& c, 
   //check height
   CHECK_EQ(c.get_current_blockchain_height(), 36);
   CHECK_EQ(c.get_blockchain_total_transactions(), 36);
-  CHECK_EQ(c.get_tail_id(), get_block_hash(std::get<cryptonote::block>(events[48])));
+  CHECK_EQ(c.get_tail_id(), get_block_hash(var::get<cryptonote::block>(events[48])));
   CHECK_EQ(c.get_alternative_blocks_count(), 8);
   return true;
 }

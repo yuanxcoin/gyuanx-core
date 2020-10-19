@@ -65,6 +65,7 @@ target_link_libraries(epee
   PUBLIC
     easylogging
   PRIVATE
+    lokimq::lokimq
     Boost::filesystem
     Boost::thread
     extra)

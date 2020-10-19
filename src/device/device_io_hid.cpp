@@ -117,9 +117,9 @@ namespace hw {
 
       MDEBUG( "Looking for " <<
               (select_any ? "any HID Device" : "HID Device with") <<
-              (interface_number ? (" interface_number " + std::to_string(interface_number.value())) : "") <<
+              (interface_number ? (" interface_number " + std::to_string(*interface_number)) : "") <<
               ((interface_number && usage_page) ? " or" : "") <<
-              (usage_page ? (" usage_page " + std::to_string(usage_page.value())) : ""));
+              (usage_page ? (" usage_page " + std::to_string(*usage_page)) : ""));
 
       hid_device_info *result = nullptr;
       for (; devices_list != nullptr; devices_list = devices_list->next) {
@@ -138,9 +138,9 @@ namespace hw {
 
         if (select_any) {
           result = devices_list;
-        } else if (interface_number && devices_list->interface_number == interface_number.value()) {
+        } else if (interface_number && devices_list->interface_number == *interface_number) {
           result = devices_list;
-        } else if (usage_page && devices_list->usage_page == usage_page.value()) {
+        } else if (usage_page && devices_list->usage_page == *usage_page) {
           result = devices_list;
         }
       }
