@@ -2212,7 +2212,7 @@ namespace cryptonote
           return;
 
         auto pubkey = m_service_node_list.get_pubkey_from_x25519(m_service_keys.pub_x25519);
-        if (pubkey != crypto::null_pkey && pubkey != m_service_keys.pub)
+        if (pubkey != crypto::null_pkey && pubkey != m_service_keys.pub && m_service_node_list.is_service_node(pubkey, false /*don't require active*/))
         {
           MGINFO_RED(
               "Failed to submit uptime proof: another service node on the network is using the same ed/x25519 keys as "
