@@ -104,10 +104,12 @@ add_library(uSockets STATIC EXCLUDE_FROM_ALL ${usockets_src})
 target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL=1)
 target_include_directories(uSockets PRIVATE uWebSockets/uSockets/src)
 
-# On Windows uSockets uses libuv for its event loop:
-if (WIN32)
+# On Windows uSockets uses libuv for its event loop; on Mac kqueue is the default, but that seems to
+# not be reliable on older macos versions (like 10.12), so we use libuv on macos as well.
+if (WIN32 OR APPLE)
   add_subdirectory(libuv EXCLUDE_FROM_ALL)
   target_link_libraries(uSockets uv_a)
+  target_compile_definitions(uSockets PUBLIC LIBUS_USE_LIBUV)
 endif()
 
 
