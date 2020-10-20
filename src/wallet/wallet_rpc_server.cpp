@@ -386,7 +386,7 @@ namespace tools
     // while we inject a wallet refresh into the uWS loop).
     while (!m_stop.load(std::memory_order_relaxed))
     {
-      bool refresh_now = !refreshing && (
+      bool refresh_now = !refreshing && m_wallet && (
           (m_auto_refresh_period > 0s && std::chrono::steady_clock::now() > m_last_auto_refresh_time + m_auto_refresh_period)
           || m_long_poll_new_changes);
 
