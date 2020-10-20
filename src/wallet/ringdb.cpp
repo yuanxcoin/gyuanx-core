@@ -277,7 +277,7 @@ bool ringdb::add_rings(const crypto::chacha_key &chacha_key, const cryptonote::t
   {
     if (!std::holds_alternative<cryptonote::txin_to_key>(in))
       continue;
-    const auto &txin = std::get<cryptonote::txin_to_key>(in);
+    const auto &txin = var::get<cryptonote::txin_to_key>(in);
     const uint32_t ring_size = txin.key_offsets.size();
     if (ring_size == 1)
       continue;
@@ -336,7 +336,7 @@ bool ringdb::remove_rings(const crypto::chacha_key &chacha_key, const cryptonote
   {
     if (!std::holds_alternative<cryptonote::txin_to_key>(in))
       continue;
-    const auto &txin = std::get<cryptonote::txin_to_key>(in);
+    const auto &txin = var::get<cryptonote::txin_to_key>(in);
     const uint32_t ring_size = txin.key_offsets.size();
     if (ring_size == 1)
       continue;

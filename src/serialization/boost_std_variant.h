@@ -5,7 +5,7 @@
 // interchangeable).
 //
 
-#include <variant>
+#include <lokimq/variant.h>
 
 #include <boost/archive/archive_exception.hpp>
 
@@ -19,7 +19,7 @@ template <class Archive, typename... T>
 void save(Archive& ar, std::variant<T...> const& v, unsigned int /*version*/) {
     int index = static_cast<int>(v.index());
     ar << boost::serialization::make_nvp("which", index);
-    std::visit([&ar](const auto& v) { ar << boost::serialization::make_nvp("value", v); }, v);
+    var::visit([&ar](const auto& v) { ar << boost::serialization::make_nvp("value", v); }, v);
 }
 
 template <class Archive, typename Variant, typename T, typename... More>
@@ -28,7 +28,7 @@ void load_variant_impl(Archive& ar, int index, Variant& v) {
         T value;
         ar >> boost::serialization::make_nvp("value", value);
         v = value;
-        ar.reset_object_address(&std::get<T>(v), &value);
+        ar.reset_object_address(&var::get<T>(v), &value);
     }
     else if constexpr (sizeof...(More) > 0) {
         return load_variant_impl<Archive, Variant, More...>(ar, index - 1, v);

@@ -32,10 +32,6 @@
 #if defined(__x86_64__) || defined(__i386__) || defined(_M_X86) || defined(_M_X64)
 
 #ifdef __GNUC__
-#  ifndef __clang__
-     // Force on aes support; we do a cpuid check at runtime before it actually gets invoked.
-#    pragma GCC target ("aes,sse2")
-#  endif
 #  include <x86intrin.h>
 #endif
 

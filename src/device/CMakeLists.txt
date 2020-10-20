@@ -35,6 +35,7 @@ add_library(device
 
 target_link_libraries(device
   PUBLIC
+    common
     cncrypto
     ringct_basic
     OpenSSL::Crypto

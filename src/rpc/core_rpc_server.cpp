@@ -87,7 +87,7 @@ namespace cryptonote { namespace rpc {
             throw parse_error{"Failed to parse JSON parameters"};
         } else {
           // This is nasty.  TODO: get rid of epee's horrible serialization code.
-          auto& epee_stuff = std::get<jsonrpc_params>(request.body);
+          auto& epee_stuff = var::get<jsonrpc_params>(request.body);
           auto& storage_entry = epee_stuff.second;
           // Epee nomenclature translactions:
           //
@@ -183,7 +183,6 @@ namespace cryptonote { namespace rpc {
       return regs;
     }
 
-    constexpr size_t MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT = 5000;
     constexpr uint64_t OUTPUT_HISTOGRAM_RECENT_CUTOFF_RESTRICTION = 3 * 86400; // 3 days max, the wallet requests 1.8 days
     constexpr uint64_t round_up(uint64_t value, uint64_t quantum) { return (value + quantum - 1) / quantum * quantum; }
 
@@ -625,7 +624,7 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_OUTPUTS_BIN>(req, res))
       return res;
 
-    if (!context.admin && req.outputs.size() > MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT)
+    if (!context.admin && req.outputs.size() > GET_OUTPUTS_BIN::MAX_COUNT)
       res.status = "Too many outs requested";
     else if (m_core.get_outs(req, res))
       res.status = STATUS_OK;
@@ -643,7 +642,7 @@ namespace cryptonote { namespace rpc {
     if (use_bootstrap_daemon_if_necessary<GET_OUTPUTS>(req, res))
       return res;
 
-    if (!context.admin && req.outputs.size() > MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT) {
+    if (!context.admin && req.outputs.size() > GET_OUTPUTS::MAX_COUNT) {
       res.status = "Too many outs requested";
       return res;
     }
@@ -822,7 +821,7 @@ namespace cryptonote { namespace rpc {
         return false;
       extra_extractor visitor{e, nettype};
       for (const auto& extra : extras)
-        std::visit(visitor, extra);
+        var::visit(visitor, extra);
       return true;
     }
   }
@@ -1936,7 +1935,7 @@ namespace cryptonote { namespace rpc {
         throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by hash. Hash = " + hash + '.'};
       if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
-      uint64_t block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
+      uint64_t block_height = var::get<txin_gen>(blk.miner_tx.vin.front()).height;
       fill_block_header_response(blk, orphan, block_height, block_hash, block_header, req.fill_pow_hash && admin, req.get_tx_hashes);
     };
 
@@ -1971,7 +1970,7 @@ namespace cryptonote { namespace rpc {
           "Internal error: can't get block by height. Height = " + std::to_string(h) + "."};
       if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
-      uint64_t block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
+      uint64_t block_height = var::get<txin_gen>(blk.miner_tx.vin.front()).height;
       if (block_height != h)
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong height"};
       res.headers.push_back(block_header_response());
@@ -2032,7 +2031,7 @@ namespace cryptonote { namespace rpc {
         throw rpc_error{ERROR_INTERNAL, "Internal error: can't get block by hash. Hash = " + req.hash + '.'};
       if (blk.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(blk.miner_tx.vin.front()))
         throw rpc_error{ERROR_INTERNAL, "Internal error: coinbase transaction in the block has the wrong type"};
-      block_height = std::get<txin_gen>(blk.miner_tx.vin.front()).height;
+      block_height = var::get<txin_gen>(blk.miner_tx.vin.front()).height;
     }
     else
     {

@@ -155,8 +155,8 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
                         'ninja strip_binaries', 'ninja create_zip', '../utils/build_scripts/drone-static-upload.sh']),
 
     // Macos builds:
+    mac_builder('macOS (Static)', cmake_extra='-DBUILD_STATIC_DEPS=ON -DARCH=core2 -DARCH_ID=amd64',
+                build_tests=false, extra_cmds=static_check_and_upload, lto=true),
     mac_builder('macOS (Release)', run_tests=true),
     mac_builder('macOS (Debug)', build_type='Debug', cmake_extra='-DBUILD_DEBUG_UTILS=ON'),
-    mac_builder('macOS (Static)', cmake_extra='-DBUILD_STATIC_DEPS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14',
-                build_tests=false, extra_cmds=static_check_and_upload),
 ]

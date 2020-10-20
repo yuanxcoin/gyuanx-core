@@ -2212,12 +2212,31 @@ namespace cryptonote
           return;
 
         auto pubkey = m_service_node_list.get_pubkey_from_x25519(m_service_keys.pub_x25519);
-        if (pubkey != crypto::null_pkey && pubkey != m_service_keys.pub)
+        if (pubkey != crypto::null_pkey && pubkey != m_service_keys.pub && m_service_node_list.is_service_node(pubkey, false /*don't require active*/))
         {
           MGINFO_RED(
               "Failed to submit uptime proof: another service node on the network is using the same ed/x25519 keys as "
               "this service node. This typically means both have the same 'key_ed25519' private key file.");
           return;
+        }
+
+        {
+          std::vector<crypto::public_key> sn_pks;
+          auto sns = m_service_node_list.get_service_node_list_state();
+          sn_pks.reserve(sns.size());
+          for (const auto& sni : sns)
+            sn_pks.push_back(sni.pubkey);
+
+          m_service_node_list.for_each_service_node_info_and_proof(sn_pks.begin(), sn_pks.end(), [&](auto& pk, auto& sni, auto& proof) {
+            if (pk != m_service_keys.pub && proof.public_ip == m_sn_public_ip &&
+                (proof.quorumnet_port == m_quorumnet_port || proof.storage_port == m_storage_port || proof.storage_port == m_storage_lmq_port))
+            MGINFO_RED(
+                "Another service node (" << pk << ") is broadcasting the same public IP and ports as this service node (" <<
+                epee::string_tools::get_ip_string_from_int32(m_sn_public_ip) << ":" << proof.quorumnet_port << "[qnet], :" <<
+                proof.storage_port << "[SS-HTTP], :" << proof.storage_lmq_port << "[SS-LMQ]). "
+                "This will lead to deregistration of one or both service nodes if not corrected. "
+                "(Do both service nodes have the correct IP for the service-node-public-ip setting?)");
+          });
         }
 
         if (m_nettype != DEVNET)

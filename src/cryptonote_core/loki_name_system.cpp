@@ -229,7 +229,7 @@ bool bind(sql_compiled_statement& s, int index, blob_view blob)
 // Binds a variant of bindable types; calls one of the above according to the contained type
 template <typename... T>
 bool bind(sql_compiled_statement& s, int index, const std::variant<T...>& v) {
-  return std::visit([&](const auto& val) { return lns::bind(s, index, val); }, v);
+  return var::visit([&](const auto& val) { return lns::bind(s, index, val); }, v);
 }
 
 template <typename T> constexpr bool is_int_enum_impl() {
