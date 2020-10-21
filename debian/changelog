@@ -1,3 +1,37 @@
+loki (8.1.2-1~ubuntu1804) bionic; urgency=medium
+
+  [ Jason Rhinelander ]
+  * Windows build: do a generic build
+
+  [ Doyle ]
+  * wallet: Re-sort pooled blink outputs when confirmed
+  * wallet: Add export key images pathological case explanation todo
+
+  [ Jason Rhinelander ]
+  * MacOS 10.14 compatibility
+  * Set march to core2 for maximum mac compatibility
+  * Set -maes in CMake rather than source file
+  * Build with -DARCH_ID to make randomx happy
+  * Apply macosx target BS to static deps
+  * fix boost macosx target
+  * Fix boost flags, enable LTO
+  * Update cpr to fix Post content-length issue
+  * Fix wallet2 "failed to get random outs" error
+  * Avoid buys loop in long poll thread
+  * Significantly reduce cli wallet sweep RPC request count
+  * Target macos 10.12
+  * Don't fail to send proof for expired x25519 keys
+  * Add a check for duplicate storage server broadcasts
+  * Also check quorumnet_port, and show IP/ports in message
+  * Add wallet rpc endpoint to record a known name
+  * 8.1.2 version bump
+  * Update lokimq to 1.2.1
+  * 8.1.2 release
+  * macos: switch to libuv for uSockets loop
+  * Don't start refresh until we have a wallet
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Tue, 20 Oct 2020 21:56:56 -0300
+
 loki (8.1.1-2~ubuntu1804) bionic; urgency=medium
 
   * update lib version
