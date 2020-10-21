@@ -1278,9 +1278,9 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
   LOG_PRINT_L3("Blockchain::" << __func__);
   CHECK_AND_ASSERT_MES(b.miner_tx.vin.size() == 1, false, "coinbase transaction in the block has no inputs");
   CHECK_AND_ASSERT_MES(std::holds_alternative<txin_gen>(b.miner_tx.vin[0]), false, "coinbase transaction in the block has the wrong type");
-  if (std::get<txin_gen>(b.miner_tx.vin[0]).height != height)
+  if (var::get<txin_gen>(b.miner_tx.vin[0]).height != height)
   {
-    MWARNING("The miner transaction in block has invalid height: " << std::get<txin_gen>(b.miner_tx.vin[0]).height << ", expected: " << height);
+    MWARNING("The miner transaction in block has invalid height: " << var::get<txin_gen>(b.miner_tx.vin[0]).height << ", expected: " << height);
     return false;
   }
   MDEBUG("Miner tx hash: " << get_transaction_hash(b.miner_tx));
@@ -1384,7 +1384,7 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
                 m_db->height(),
                 cryptonote::get_config(m_nettype).governance_wallet_address(version),
                 b.miner_tx.vout.size() - 1,
-                std::get<txout_to_key>(b.miner_tx.vout.back().target).key,
+                var::get<txout_to_key>(b.miner_tx.vout.back().target).key,
                 m_nettype))
     {
       MERROR("Governance reward public key incorrect.");
@@ -2940,7 +2940,7 @@ bool Blockchain::check_for_double_spend(const transaction& tx, key_images_contai
 
   for (const txin_v& in : tx.vin)
   {
-    if (!std::visit(add_transaction_input_visitor, in))
+    if (!var::visit(add_transaction_input_visitor, in))
     {
       LOG_ERROR("Double spend detected!");
       return false;
@@ -2995,7 +2995,7 @@ void Blockchain::on_new_tx_from_block(const cryptonote::transaction &tx)
     {
       size_t ring_size = 0;
       if (!tx.vin.empty() && std::holds_alternative<txin_to_key>(tx.vin[0]))
-        ring_size = std::get<txin_to_key>(tx.vin[0]).key_offsets.size();
+        ring_size = var::get<txin_to_key>(tx.vin[0]).key_offsets.size();
       MINFO("HASH: " << "-" << " I/M/O: " << tx.vin.size() << "/" << ring_size << "/" << tx.vout.size() << " H: " << 0 << " chcktx: " << a);
     }
   }
@@ -3032,7 +3032,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, uint64_t& max_used_block_heigh
   {
     size_t ring_size = 0;
     if (!tx.vin.empty() && std::holds_alternative<txin_to_key>(tx.vin[0]))
-      ring_size = std::get<txin_to_key>(tx.vin[0]).key_offsets.size();
+      ring_size = var::get<txin_to_key>(tx.vin[0]).key_offsets.size();
     MINFO("HASH: " <<  get_transaction_hash(tx) << " I/M/O: " << tx.vin.size() << "/" << ring_size << "/" << tx.vout.size() <<
         " H: " << max_used_block_height << " ms: " << a + m_fake_scan_time << " B: " << get_object_blobsize(tx) << " W: " << get_transaction_weight(tx));
   }
@@ -3057,11 +3057,9 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
     }
 
     // from hardfork v4, forbid invalid pubkeys NOTE(loki): We started from hf7 so always execute branch
-    if (auto* out_to_key = std::get_if<txout_to_key>(&o.target)) {
-      if (!crypto::check_key(out_to_key->key)) {
-        tvc.m_invalid_output = true;
-        return false;
-      }
+    if (auto* out_to_key = std::get_if<txout_to_key>(&o.target); out_to_key && !crypto::check_key(out_to_key->key)) {
+      tvc.m_invalid_output = true;
+      return false;
     }
   }
 
@@ -3203,7 +3201,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
     CHECK_AND_ASSERT_MES(rv.p.CLSAGs.size() == tx.vin.size(), false, "Bad CLSAGs size");
     for (size_t n = 0; n < tx.vin.size(); ++n)
     {
-      rv.p.CLSAGs[n].I = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
+      rv.p.CLSAGs[n].I = rct::ki2rct(var::get<txin_to_key>(tx.vin[n]).k_image);
     }
   }
   else
@@ -3217,7 +3215,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
     rv.p.MGs.resize(1);
     rv.p.MGs[0].II.resize(tx.vin.size());
     for (size_t n = 0; n < tx.vin.size(); ++n)
-      rv.p.MGs[0].II[n] = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
+      rv.p.MGs[0].II[n] = rct::ki2rct(var::get<txin_to_key>(tx.vin[n]).k_image);
   }
   else if (tools::equals_any(rv.type, rct::RCTTypeSimple, rct::RCTTypeBulletproof, rct::RCTTypeBulletproof2))
   {
@@ -3225,7 +3223,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
     for (size_t n = 0; n < tx.vin.size(); ++n)
     {
       rv.p.MGs[n].II.resize(1);
-      rv.p.MGs[n].II[0] = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
+      rv.p.MGs[n].II[0] = rct::ki2rct(var::get<txin_to_key>(tx.vin[n]).k_image);
     }
   }
   else if (rv.type == rct::RCTTypeCLSAG)
@@ -3235,7 +3233,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       CHECK_AND_ASSERT_MES(rv.p.CLSAGs.size() == tx.vin.size(), false, "Bad CLSAGs size");
       for (size_t n = 0; n < tx.vin.size(); ++n)
       {
-        rv.p.CLSAGs[n].I = rct::ki2rct(std::get<txin_to_key>(tx.vin[n]).k_image);
+        rv.p.CLSAGs[n].I = rct::ki2rct(var::get<txin_to_key>(tx.vin[n]).k_image);
       }
     }
   }
@@ -3303,7 +3301,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       //
       // make sure output being spent is of type txin_to_key, rather than e.g.  txin_gen, which is only used for miner transactions
       CHECK_AND_ASSERT_MES(std::holds_alternative<txin_to_key>(txin), false, "wrong type id in tx input at Blockchain::check_tx_inputs");
-      const txin_to_key& in_to_key = std::get<txin_to_key>(txin);
+      const txin_to_key& in_to_key = var::get<txin_to_key>(txin);
       {
         // make sure tx output has key offset(s) (is signed to be used)
         CHECK_AND_ASSERT_MES(in_to_key.key_offsets.size(), false, "empty in_to_key.key_offsets in transaction with id " << get_transaction_hash(tx));
@@ -3451,9 +3449,9 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       {
         bool error;
         if (rv.type == rct::RCTTypeCLSAG)
-          error = memcmp(&std::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.CLSAGs[n].I, 32);
+          error = memcmp(&var::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.CLSAGs[n].I, 32);
         else
-          error = rv.p.MGs[n].II.empty() || memcmp(&std::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.MGs[n].II[0], 32);
+          error = rv.p.MGs[n].II.empty() || memcmp(&var::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.MGs[n].II[0], 32);
         if (error)
         {
           MERROR_VER("Failed to check ringct signatures: mismatched key image");
@@ -3513,7 +3511,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       }
       for (size_t n = 0; n < tx.vin.size(); ++n)
       {
-        if (memcmp(&std::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.MGs[0].II[n], 32))
+        if (memcmp(&var::get<txin_to_key>(tx.vin[n]).k_image, &rv.p.MGs[0].II[n], 32))
         {
           MERROR_VER("Failed to check ringct signatures: mismatched II/vin sizes");
           return false;
@@ -5247,7 +5245,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
       // get all amounts from tx.vin(s)
       for (const auto &txin : tx.vin)
       {
-        const auto& in_to_key = std::get<txin_to_key>(txin);
+        const auto& in_to_key = var::get<txin_to_key>(txin);
 
         // check for duplicate
         auto it = its->second.find(in_to_key.k_image);
@@ -5275,7 +5273,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
       // add new absolute_offsets to offset_map
       for (const auto &txin : tx.vin)
       {
-        const auto& in_to_key = std::get<txin_to_key>(txin);
+        const auto& in_to_key = var::get<txin_to_key>(txin);
         // no need to check for duplicate here.
         auto absolute_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
         for (const auto & offset : absolute_offsets)
@@ -5341,7 +5339,7 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
 
       for (const auto &txin : tx.vin)
       {
-        const txin_to_key &in_to_key = std::get<txin_to_key>(txin);
+        const txin_to_key &in_to_key = var::get<txin_to_key>(txin);
         auto needed_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
 
         std::vector<output_data_t> outputs;

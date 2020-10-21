@@ -114,7 +114,7 @@ static void print_extra_fields(const std::vector<cryptonote::tx_extra_field> &fi
   for (size_t n = 0; n < fields.size(); ++n)
   {
     std::cout << "- " << n << ": ";
-    std::visit(extra_printer{}, fields[n]);
+    var::visit(extra_printer{}, fields[n]);
     std::cout << "\n";
   }
 }

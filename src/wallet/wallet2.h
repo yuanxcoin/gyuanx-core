@@ -805,9 +805,9 @@ private:
     };
     std::unordered_map<std::string, lns_detail> lns_records_cache;
 
-    void set_lns_cache_record(const wallet2::lns_detail& detail);
+    void set_lns_cache_record(wallet2::lns_detail detail);
 
-    void delete_lns_cache_record(std::string name);
+    void delete_lns_cache_record(const std::string& name);
 
     std::unordered_map<std::string, lns_detail> get_lns_cache();
 
@@ -880,7 +880,7 @@ private:
         {
           const transfer_details &td = m_transfers[i];
           const cryptonote::tx_out &out = td.m_tx.vout[td.m_internal_output_index];
-          const cryptonote::txout_to_key &o = std::get<cryptonote::txout_to_key>(out.target);
+          const cryptonote::txout_to_key &o = var::get<cryptonote::txout_to_key>(out.target);
           m_pub_keys.emplace(o.key, i);
         }
         return;

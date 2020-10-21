@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include <variant>
+#include <lokimq/variant.h>
 #include <array>
 #include <typeinfo>
 #ifdef __GNUG__
@@ -47,7 +47,11 @@ const std::type_info& variant_type(const std::variant<T...>& v) {
     const size_t index = v.index();
     if (index != std::variant_npos)
         return *std::array<const std::type_info*, sizeof...(T)>{{&typeid(T)...}}[index];
+#ifndef BROKEN_APPLE_VARIANT
     throw std::bad_variant_access{};
+#else
+    throw std::runtime_error{"Bad variant access"};
+#endif
 }
 
 /// Converts a std::type_info (typically from a typeid(T) call) into a human-readable name.  For GCC

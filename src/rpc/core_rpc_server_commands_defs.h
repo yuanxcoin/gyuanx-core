@@ -448,6 +448,9 @@ namespace rpc {
   {
     static constexpr auto names() { return NAMES("get_outs.bin"); }
 
+    /// Maximum outputs that may be requested in a single request (unless admin)
+    static constexpr size_t MAX_COUNT = 5000;
+
     struct request
     {
       std::vector<get_outputs_out> outputs; // Array of structure `get_outputs_out`.
@@ -481,6 +484,9 @@ namespace rpc {
   struct GET_OUTPUTS : PUBLIC, LEGACY
   {
     static constexpr auto names() { return NAMES("get_outs"); }
+
+    /// Maximum outputs that may be requested in a single request (unless admin)
+    static constexpr size_t MAX_COUNT = 5000;
 
     struct request
     {

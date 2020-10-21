@@ -63,6 +63,21 @@ target_link_libraries(cncrypto
   PRIVATE
     extra)
 
+if (CMAKE_CXX_COMPILER_ID MATCHES Clang OR CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+  # If we're compiling for x86/amd64 then we need to force on -maes -msse2 for the hard intel code:
+  # it has a run-time check to not actually call it if not supported by the running CPU.
+  # Unfortunately CMake sucks for actually reliably giving us the target architecture, so we'll just
+  # try to compile with these flags if the compiler accepts them.
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag(-msse2 COMPILER_SUPPORTS_SSE2)
+  if(COMPILER_SUPPORTS_SSE2)
+    check_cxx_compiler_flag(-maes COMPILER_SUPPORTS_AES)
+    if(COMPILER_SUPPORTS_AES)
+      set_source_files_properties(cn_heavy_hash_hard_intel.cpp PROPERTIES COMPILE_FLAGS "-maes -msse2")
+    endif()
+  endif()
+endif()
+
 # Because of the way Qt works on android with JNI, the code does not live in the main android thread
 # So this code runs with a 1 MB default stack size. 
 # This will force the use of the heap for the allocation of the scratchpad

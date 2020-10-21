@@ -5442,6 +5442,54 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
     fail_msg_writer() << tr("failed to get blockchain height: ") << err;
     return false;
   }
+
+  std::vector<rpc::GET_OUTPUTS_BIN::outkey> all_outs;
+  {
+    std::vector<rpc::get_outputs_out> outputs;
+    for (const auto& ptx : ptx_vector)
+      for (const auto& txin : ptx.tx.vin)
+        if (auto* in_key = std::get_if<txin_to_key>(&txin))
+          for (uint64_t index : cryptonote::relative_output_offsets_to_absolute(in_key->key_offsets))
+            outputs.push_back({in_key->amount, index});
+
+    all_outs.reserve(outputs.size());
+    rpc::GET_OUTPUTS_BIN::request req{};
+    req.get_txid = true;
+
+    // Request MAX_COUNT outputs at a time (any more and we would fail when using a public RPC
+    // server)
+    for (auto it = outputs.begin(); it != outputs.end(); )
+    {
+      auto count = std::min<size_t>(std::distance(it, outputs.end()), rpc::GET_OUTPUTS_BIN::MAX_COUNT);
+      req.outputs.clear();
+      req.outputs.reserve(count);
+      req.outputs.insert(req.outputs.end(), it, it + count);
+
+      rpc::GET_OUTPUTS_BIN::response res{};
+      bool r = m_wallet->invoke_http<rpc::GET_OUTPUTS_BIN>(req, res);
+
+      err = interpret_rpc_response(r, res.status);
+      if (!err.empty())
+      {
+        fail_msg_writer() << tr("failed to get output: ") << err;
+        return false;
+      }
+
+      for (auto& out : res.outs)
+        all_outs.push_back(std::move(out));
+
+      it += count;
+    }
+
+    if (all_outs.size() != outputs.size())
+    {
+      fail_msg_writer() << tr("Failed to get output: ") << "wrong number of outputs returned (expected "
+        << outputs.size() << " but got " << all_outs.size() << ")";
+    }
+  }
+
+  auto out_it = all_outs.begin();
+
   // for each transaction
   for (size_t n = 0; n < ptx_vector.size(); ++n)
   {
@@ -5456,7 +5504,7 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
     {
       if (!std::holds_alternative<cryptonote::txin_to_key>(tx.vin[i]))
         continue;
-      const cryptonote::txin_to_key& in_key = std::get<cryptonote::txin_to_key>(tx.vin[i]);
+      const cryptonote::txin_to_key& in_key = var::get<cryptonote::txin_to_key>(tx.vin[i]);
       const wallet::transfer_details &td = m_wallet->get_transfer_details(construction_data.selected_transfers[i]);
       const cryptonote::tx_source_entry *sptr = NULL;
       for (const auto &src: construction_data.sources)
@@ -5471,43 +5519,32 @@ bool simple_wallet::process_ring_members(const std::vector<tools::wallet2::pendi
 
       if (verbose)
         ostr << boost::format(tr("\nInput %llu/%llu (%s): amount=%s")) % (i + 1) % tx.vin.size() % epee::string_tools::pod_to_hex(in_key.k_image) % print_money(source.amount);
+
       // convert relative offsets of ring member keys into absolute offsets (indices) associated with the amount
       std::vector<uint64_t> absolute_offsets = cryptonote::relative_output_offsets_to_absolute(in_key.key_offsets);
-      // get block heights from which those ring member keys originated
-      rpc::GET_OUTPUTS_BIN::request req{};
-      req.get_txid = true;
-      req.outputs.resize(absolute_offsets.size());
-      for (size_t j = 0; j < absolute_offsets.size(); ++j)
-      {
-        req.outputs[j].amount = in_key.amount;
-        req.outputs[j].index = absolute_offsets[j];
-      }
-      rpc::GET_OUTPUTS_BIN::response res{};
-      bool r = m_wallet->invoke_http<rpc::GET_OUTPUTS_BIN>(req, res);
-      err = interpret_rpc_response(r, res.status);
-      if (!err.empty())
-      {
-        fail_msg_writer() << tr("failed to get output: ") << err;
-        return false;
-      }
+
+      spent_key_height[i] = (out_it + source.real_output)->height;
+      spent_key_txid  [i] = (out_it + source.real_output)->txid;
+
+      auto out_begin = out_it;
+      out_it += absolute_offsets.size();
+      auto out_end = out_it;
+
+      std::vector<uint64_t> heights;
+      heights.reserve(absolute_offsets.size());
       // make sure that returned block heights are less than blockchain height
-      for (auto& res_out : res.outs)
+      for (auto it = out_begin; it != out_end; ++it)
       {
-        if (res_out.height >= blockchain_height)
+        if (it->height >= blockchain_height)
         {
           fail_msg_writer() << tr("output key's originating block height shouldn't be higher than the blockchain height");
           return false;
         }
+        heights.push_back(it->height);
       }
+
       if (verbose)
         ostr << tr("\nOriginating block heights: ");
-      spent_key_height[i] = res.outs[source.real_output].height;
-      spent_key_txid  [i] = res.outs[source.real_output].txid;
-      std::vector<uint64_t> heights(absolute_offsets.size(), 0);
-      for (size_t j = 0; j < absolute_offsets.size(); ++j)
-      {
-        heights[j] = res.outs[j].height;
-      }
       std::pair<std::string, std::string> ring_str = show_outputs_line(heights, blockchain_height, source.real_output);
       if (verbose)
         ostr << ring_str.first << tr("\n|") << ring_str.second << tr("|\n");
@@ -9003,6 +9040,7 @@ bool simple_wallet::run()
       catch (...)
       {
       }
+      std::this_thread::sleep_for(25ms);
     }
   });
 

@@ -109,7 +109,7 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
   {
     if (std::holds_alternative<txin_to_key>(tx_input))
     {
-      add_spent_key(std::get<txin_to_key>(tx_input).k_image);
+      add_spent_key(var::get<txin_to_key>(tx_input).k_image);
     }
     else if (std::holds_alternative<txin_gen>(tx_input))
     {
@@ -123,7 +123,7 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
       {
         if (std::holds_alternative<txin_to_key>(tx_input))
         {
-          remove_spent_key(std::get<txin_to_key>(tx_input).k_image);
+          remove_spent_key(var::get<txin_to_key>(tx_input).k_image);
         }
       }
       return;
@@ -261,7 +261,7 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
   {
     if (std::holds_alternative<txin_to_key>(tx_input))
     {
-      remove_spent_key(std::get<txin_to_key>(tx_input).k_image);
+      remove_spent_key(var::get<txin_to_key>(tx_input).k_image);
     }
   }
 

@@ -836,7 +836,7 @@ namespace rpc
     {
       return false;
     }
-    header.height = std::get<txin_gen>(b.miner_tx.vin.front()).height;
+    header.height = var::get<txin_gen>(b.miner_tx.vin.front()).height;
 
     header.major_version = b.major_version;
     header.minor_version = b.minor_version;

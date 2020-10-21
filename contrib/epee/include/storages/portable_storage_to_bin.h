@@ -32,6 +32,7 @@
 #include "misc_language.h"
 #include "portable_storage_base.h"
 #include <boost/endian/conversion.hpp>
+#include <lokimq/variant.h>
 
 namespace epee
 {
@@ -93,7 +94,7 @@ namespace epee
 
     inline void pack_entry_to_buff(std::ostream& strm, const array_entry& ae)
     {
-      std::visit([&strm](const auto& arr) {
+      var::visit([&strm](const auto& arr) {
           using T = typename std::remove_const_t<std::remove_reference_t<decltype(arr)>>::value_type;
 
           constexpr uint8_t tag = SERIALIZE_FLAG_ARRAY | SERIALIZE_TYPE_TAG<T>;
@@ -108,7 +109,7 @@ namespace epee
 
     inline void pack_entry_to_buff(std::ostream& strm, const storage_entry& se)
     {
-      std::visit([&strm](const auto& v) {
+      var::visit([&strm](const auto& v) {
           using T = std::remove_const_t<std::remove_reference_t<decltype(v)>>;
 
           if constexpr (!std::is_same_v<T, array_entry>) // array_entries get a combined flag+value instead.

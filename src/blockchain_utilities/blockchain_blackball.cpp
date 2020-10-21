@@ -1418,11 +1418,10 @@ int main(int argc, char* argv[])
       std::cout << "\r" << start_idx << "/" << n_txes << "         \r" << std::flush;
       for (const auto &in: tx.vin)
       {
-        if (!std::holds_alternative<txin_to_key>(in))
+        const auto* txinp = std::get_if<txin_to_key>(&in);
+        if (!txinp || (opt_rct_only && txinp->amount != 0))
           continue;
-        const auto &txin = std::get<txin_to_key>(in);
-        if (opt_rct_only && txin.amount != 0)
-          continue;
+        auto& txin = *txinp;
 
         const std::vector<uint64_t> absolute = cryptonote::relative_output_offsets_to_absolute(txin.key_offsets);
         if (n == 0)

@@ -1340,7 +1340,7 @@ bool test_generator::construct_block(cryptonote::block &blk,
                                      const std::list<cryptonote::transaction> &tx_list /* = {}*/,
                                      const service_nodes::payout &block_leader)
 {
-  uint64_t height = std::get<cryptonote::txin_gen>(blk_prev.miner_tx.vin.front()).height + 1;
+  uint64_t height = var::get<cryptonote::txin_gen>(blk_prev.miner_tx.vin.front()).height + 1;
   crypto::hash prev_id = get_block_hash(blk_prev);
   // Keep difficulty unchanged
   uint64_t timestamp = blk_prev.timestamp + tools::to_seconds(TARGET_BLOCK_TIME);
@@ -1530,7 +1530,7 @@ bool init_output_indices(std::vector<output_index>& outs, std::vector<size_t>& o
 
                 if (std::holds_alternative<cryptonote::txout_to_key>(out.target)) {
 
-                    const auto height = std::get<cryptonote::txin_gen>(blk.miner_tx.vin.front()).height;
+                    const auto height = var::get<cryptonote::txin_gen>(blk.miner_tx.vin.front()).height;
 
                     output_index oi(out.target, out.amount, height, i, j, &blk, vtx[i]);
                     oi.unlock_time            = (tx.version < cryptonote::txversion::v3_per_output_unlock_times) ? tx.unlock_time : tx.output_unlock_times[j];
@@ -1541,12 +1541,12 @@ bool init_output_indices(std::vector<output_index>& outs, std::vector<size_t>& o
                     oi.set_rct(tx.version >= cryptonote::txversion::v2_ringct);
 
                     const auto gov_key          = cryptonote::get_deterministic_keypair_from_height(height);
-                    bool account_received_money = is_out_to_acc(from.get_keys(), std::get<cryptonote::txout_to_key>(out.target), gov_key.pub, {}, j);
+                    bool account_received_money = is_out_to_acc(from.get_keys(), var::get<cryptonote::txout_to_key>(out.target), gov_key.pub, {}, j);
                     if (account_received_money)
                       oi.deterministic_key_pair = true;
 
                     if (!account_received_money)
-                      account_received_money = is_out_to_acc(from.get_keys(), std::get<cryptonote::txout_to_key>(out.target), cryptonote::get_tx_pub_key_from_extra(tx), cryptonote::get_additional_tx_pub_keys_from_extra(tx), j);
+                      account_received_money = is_out_to_acc(from.get_keys(), var::get<cryptonote::txout_to_key>(out.target), cryptonote::get_tx_pub_key_from_extra(tx), cryptonote::get_additional_tx_pub_keys_from_extra(tx), j);
 
                     if (account_received_money)
                     {
@@ -1586,7 +1586,7 @@ bool init_spent_output_indices(std::vector<output_index>& outs,
         // construct key image for this output
         crypto::key_image img;
         cryptonote::keypair in_ephemeral;
-        crypto::public_key out_key = std::get<cryptonote::txout_to_key>(oi.out).key;
+        crypto::public_key out_key = var::get<cryptonote::txout_to_key>(oi.out).key;
         std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
         subaddresses[from.get_keys().m_account_address.m_spend_public_key] = {0,0};
 
@@ -1611,7 +1611,7 @@ bool init_spent_output_indices(std::vector<output_index>& outs,
             {
               if (std::holds_alternative<cryptonote::txin_to_key>(in))
               {
-                const auto &itk = std::get<cryptonote::txin_to_key>(in);
+                const auto &itk = var::get<cryptonote::txin_to_key>(in);
                 if (itk.k_image == img)
                 {
                   oi.spent = true;
@@ -1653,7 +1653,7 @@ static bool fill_output_entries(const std::vector<output_index>& out_indices, si
     if (append)
     {
       rct::key comm = oi.commitment();
-      const cryptonote::txout_to_key& otk = std::get<cryptonote::txout_to_key>(oi.out);
+      const cryptonote::txout_to_key& otk = var::get<cryptonote::txout_to_key>(oi.out);
       output_entries.push_back(cryptonote::tx_source_entry::output_entry(oi.idx, rct::ctkey({rct::pk2rct(otk.key), comm})));
     }
   }
@@ -1848,7 +1848,7 @@ void block_tracker::process(const cryptonote::block *blk, const cryptonote::tran
       continue;
     }
 
-    output_index oi(out.target, out.amount, std::get<cryptonote::txin_gen>(blk->miner_tx.vin.front()).height, i, j, blk, tx);
+    output_index oi(out.target, out.amount, var::get<cryptonote::txin_gen>(blk->miner_tx.vin.front()).height, i, j, blk, tx);
     oi.set_rct(tx->version == cryptonote::txversion::v2_ringct); oi.idx = m_outs[rct_amount].size();
     oi.unlock_time = tx->unlock_time;
     oi.is_coin_base = tx->vin.size() == 1 && std::holds_alternative<cryptonote::txin_gen>(tx->vin.back());
@@ -1901,7 +1901,7 @@ void block_tracker::get_fake_outs(size_t num_outs, uint64_t amount, uint64_t glo
       continue;
 
     rct::key comm = oi.commitment();
-    auto out = std::get<cryptonote::txout_to_key>(oi.out);
+    auto out = var::get<cryptonote::txout_to_key>(oi.out);
     auto item = std::make_tuple(oi.idx, out.key, comm);
     outs.push_back(item);
     used.insert(oi_idx);
@@ -1918,7 +1918,7 @@ std::string block_tracker::dump_data()
 
     for (const auto & oi : vct)
     {
-      auto out = std::get<cryptonote::txout_to_key>(oi.out);
+      auto out = var::get<cryptonote::txout_to_key>(oi.out);
 
       ss << "    idx: " << oi.idx
       << ", rct: " << oi.rct
@@ -1949,7 +1949,7 @@ std::string dump_data(const cryptonote::transaction &tx)
 
   for(auto & in : tx.vin){
     if (std::holds_alternative<cryptonote::txin_to_key>(in)){
-      auto tk = std::get<cryptonote::txin_to_key>(in);
+      auto tk = var::get<cryptonote::txin_to_key>(in);
       std::vector<uint64_t> full_off;
       int64_t last = -1;
 
@@ -1972,7 +1972,7 @@ std::string dump_data(const cryptonote::transaction &tx)
       ss << "]; ";
 
     } else if (std::holds_alternative<cryptonote::txin_gen>(in)){
-      ss << " h: " << std::get<cryptonote::txin_gen>(in).height << ", ";
+      ss << " h: " << var::get<cryptonote::txin_gen>(in).height << ", ";
     } else {
       ss << " ?, ";
     }
@@ -1992,13 +1992,13 @@ std::string dump_data(const cryptonote::transaction &tx)
 cryptonote::account_public_address get_address(const var_addr_t& inp)
 {
   if (std::holds_alternative<cryptonote::account_public_address>(inp)){
-    return std::get<cryptonote::account_public_address>(inp);
+    return var::get<cryptonote::account_public_address>(inp);
   } else if (std::holds_alternative<cryptonote::account_keys>(inp)){
-    return std::get<cryptonote::account_keys>(inp).m_account_address;
+    return var::get<cryptonote::account_keys>(inp).m_account_address;
   } else if (std::holds_alternative<cryptonote::account_base>(inp)){
-    return std::get<cryptonote::account_base>(inp).get_keys().m_account_address;
+    return var::get<cryptonote::account_base>(inp).get_keys().m_account_address;
   } else if (std::holds_alternative<cryptonote::tx_destination_entry>(inp)){
-    return std::get<cryptonote::tx_destination_entry>(inp).addr;
+    return var::get<cryptonote::tx_destination_entry>(inp).addr;
   } else {
     throw std::runtime_error("Unexpected type");
   }
@@ -2247,7 +2247,7 @@ bool extract_hard_forks(const std::vector<test_event_entry>& events, v_hardforks
   {
     if (std::holds_alternative<event_replay_settings>(ev))
     {
-      const auto & rep_settings = std::get<event_replay_settings>(ev);
+      const auto & rep_settings = var::get<event_replay_settings>(ev);
       if (rep_settings.hard_forks)
       {
         const auto & hf = *rep_settings.hard_forks;
@@ -2340,7 +2340,7 @@ cryptonote::block get_head_block(const std::vector<test_event_entry>& events)
     auto &ev = *it;
     if (std::holds_alternative<cryptonote::block>(ev))
     {
-      return std::get<cryptonote::block>(ev);
+      return var::get<cryptonote::block>(ev);
     }
   }
 
@@ -2354,27 +2354,27 @@ bool find_block_chain(const std::vector<test_event_entry> &events, std::vector<c
   {
     if (std::holds_alternative<cryptonote::block>(ev))
     {
-      const auto *blk                   = &std::get<cryptonote::block>(ev);
+      const auto *blk                   = &var::get<cryptonote::block>(ev);
       block_index[get_block_hash(*blk)] = blk;
     }
     else if (std::holds_alternative<loki_blockchain_addable<loki_block_with_checkpoint>>(ev))
     {
-      const auto *blk                        = &std::get<loki_blockchain_addable<loki_block_with_checkpoint>>(ev);
+      const auto *blk                        = &var::get<loki_blockchain_addable<loki_block_with_checkpoint>>(ev);
       block_index[get_block_hash(blk->data.block)] = &blk->data.block;
     }
     else if (std::holds_alternative<loki_blockchain_addable<cryptonote::block>>(ev))
     {
-      const auto *blk = &std::get<loki_blockchain_addable<cryptonote::block>>(ev);
+      const auto *blk = &var::get<loki_blockchain_addable<cryptonote::block>>(ev);
       block_index[get_block_hash(blk->data)] = &blk->data;
     }
     else if (std::holds_alternative<cryptonote::transaction>(ev))
     {
-      const auto &tx                = std::get<cryptonote::transaction>(ev);
+      const auto &tx                = var::get<cryptonote::transaction>(ev);
       mtx[get_transaction_hash(tx)] = &tx;
     }
     else if (std::holds_alternative<loki_blockchain_addable<loki_transaction>>(ev))
     {
-      const auto &entry                        = std::get<loki_blockchain_addable<loki_transaction>>(ev);
+      const auto &entry                        = var::get<loki_blockchain_addable<loki_transaction>>(ev);
       mtx[get_transaction_hash(entry.data.tx)] = &entry.data.tx;
     }
   }
@@ -2407,17 +2407,17 @@ bool find_block_chain(const std::vector<test_event_entry> &events, std::vector<c
     {
       if (std::holds_alternative<cryptonote::block>(ev))
       {
-        const auto *blk                   = &std::get<cryptonote::block>(ev);
+        const auto *blk                   = &var::get<cryptonote::block>(ev);
         block_index[get_block_hash(*blk)] = blk;
       }
       else if (std::holds_alternative<loki_blockchain_addable<loki_block_with_checkpoint>>(ev))
       {
-        const auto *blk = &std::get<loki_blockchain_addable<loki_block_with_checkpoint>>(ev);
+        const auto *blk = &var::get<loki_blockchain_addable<loki_block_with_checkpoint>>(ev);
         block_index[get_block_hash(blk->data.block)] = &blk->data.block;
       }
       else if (std::holds_alternative<loki_blockchain_addable<cryptonote::block>>(ev))
       {
-        const auto *blk = &std::get<loki_blockchain_addable<cryptonote::block>>(ev);
+        const auto *blk = &var::get<loki_blockchain_addable<cryptonote::block>>(ev);
         block_index[get_block_hash(blk->data)] = &blk->data;
       }
     }
@@ -2426,12 +2426,12 @@ bool find_block_chain(const std::vector<test_event_entry> &events, std::vector<c
     {
       if (std::holds_alternative<cryptonote::transaction>(ev))
       {
-        const auto &tx                = std::get<cryptonote::transaction>(ev);
+        const auto &tx                = var::get<cryptonote::transaction>(ev);
         mtx[get_transaction_hash(tx)] = &tx;
       }
       else if (std::holds_alternative<loki_blockchain_addable<loki_transaction>>(ev))
       {
-        const auto &entry                        = std::get<loki_blockchain_addable<loki_transaction>>(ev);
+        const auto &entry                        = var::get<loki_blockchain_addable<loki_transaction>>(ev);
         mtx[get_transaction_hash(entry.data.tx)] = &entry.data.tx;
       }
     }

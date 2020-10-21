@@ -165,6 +165,13 @@ if(CMAKE_CROSSCOMPILING)
   endif()
 endif()
 
+set(deps_CFLAGS "-O2 ${flto}")
+set(deps_CXXFLAGS "-O2 ${flto}")
+
+if(APPLE)
+  set(deps_CFLAGS "${deps_CFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  set(deps_CXXFLAGS "${deps_CXXFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
 
 # Builds a target; takes the target name (e.g. "readline") and builds it in an external project with
 # target name suffixed with `_external`.  Its upper-case value is used to get the download details
@@ -173,7 +180,7 @@ endif()
 set(build_def_DEPENDS "")
 set(build_def_PATCH_COMMAND "")
 set(build_def_CONFIGURE_COMMAND ./configure ${cross_host} --disable-shared --prefix=${DEPS_DESTDIR} --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-O2 ${flto}" "CXXFLAGS=-O2 ${flto}" ${cross_rc})
+    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}" ${cross_rc})
 set(build_def_BUILD_COMMAND make)
 set(build_def_INSTALL_COMMAND make install)
 set(build_def_BUILD_BYPRODUCTS ${DEPS_DESTDIR}/lib/lib___TARGET___.a ${DEPS_DESTDIR}/include/___TARGET___.h)
@@ -208,7 +215,7 @@ endfunction()
 
 
 build_external(zlib
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CC=${deps_cc}" "CFLAGS=-O2 ${flto}" ./configure --prefix=${DEPS_DESTDIR} --static
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}" ./configure --prefix=${DEPS_DESTDIR} --static
   BUILD_BYPRODUCTS
     ${DEPS_DESTDIR}/lib/libz.a
     ${DEPS_DESTDIR}/include/zlib.h
@@ -229,7 +236,7 @@ build_external(openssl
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env CC=${deps_cc} ${openssl_system_env} ./config
     --prefix=${DEPS_DESTDIR} no-shared no-capieng no-dso no-dtls1 no-ec_nistp_64_gcc_128 no-gost
     no-heartbeats no-md2 no-rc5 no-rdrand no-rfc3779 no-sctp no-ssl-trace no-ssl2 no-ssl3
-    no-static-engine no-tests no-weak-ssl-ciphers no-zlib-dynamic "CFLAGS=-O2 ${flto}"
+    no-static-engine no-tests no-weak-ssl-ciphers no-zlib-dynamic "CFLAGS=${deps_CFLAGS}"
   INSTALL_COMMAND make install_sw
   BUILD_BYPRODUCTS
     ${DEPS_DESTDIR}/lib/libssl.a ${DEPS_DESTDIR}/lib/libcrypto.a
@@ -245,7 +252,7 @@ set(OPENSSL_VERSION 1.1.1)
 build_external(expat
   CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --enable-static
   --disable-shared --with-pic --without-examples --without-tests --without-docbook --without-xmlwf
-  "CC=${deps_cc}" "CFLAGS=-O2 ${flto}"
+  "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}"
 )
 add_static_target(expat expat_external libexpat.a)
 
@@ -256,7 +263,7 @@ build_external(unbound
   --enable-static --with-libunbound-only --with-pic
   --$<IF:$<BOOL:${USE_LTO}>,enable,disable>-flto --with-ssl=${DEPS_DESTDIR}
   --with-libexpat=${DEPS_DESTDIR}
-  "CC=${deps_cc}" "CFLAGS=-O2 ${flto}"
+  "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}"
 )
 add_static_target(libunbound unbound_external libunbound.a)
 if(WIN32)
@@ -298,6 +305,11 @@ if(APPLE AND BOOST_VERSION VERSION_LESS 1.74.0)
   set(boost_patch_commands PATCH_COMMAND patch -p1 -d tools/build -i ${PROJECT_SOURCE_DIR}/utils/build_scripts/boostorg-build-pr560-macos-build-fix.patch)
 endif()
 
+set(boost_buildflags "cxxflags=-fPIC")
+if(APPLE)
+  set(boost_buildflags "cxxflags=-fPIC -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}" "cflags=-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+
 build_external(boost
   #  PATCH_COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam tools/build/src/user-config.jam
   ${boost_patch_commands}
@@ -308,7 +320,7 @@ build_external(boost
   BUILD_COMMAND true
   INSTALL_COMMAND
     ./b2 -d0 variant=release link=static runtime-link=static optimization=speed ${boost_extra}
-      threading=multi threadapi=${boost_threadapi} cxxflags=-fPIC cxxstd=14 visibility=global
+      threading=multi threadapi=${boost_threadapi} ${boost_buildflags} cxxstd=14 visibility=global
       --disable-icu --user-config=${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam
       install
   BUILD_BYPRODUCTS
@@ -350,7 +362,7 @@ if (NOT WIN32)
       --disable-rpath --disable-colorfgbg --disable-ext-mouse --disable-symlinks --enable-warnings
       --enable-assertions --with-default-terminfo-dir=/etc/_terminfo_
       --with-terminfo-dirs=/etc/_terminfo_ --disable-pc-files --enable-database --enable-sp-funcs
-      --disable-term-driver --enable-interop --enable-widec "CC=${CMAKE_C_COMPILER}" "CFLAGS=-O2 -fPIC ${flto}"
+      --disable-term-driver --enable-interop --enable-widec "CC=${CMAKE_C_COMPILER}" "CFLAGS=${deps_CFLAGS} -fPIC"
     INSTALL_COMMAND make install.libs
     BUILD_BYPRODUCTS
       ${DEPS_DESTDIR}/lib/libncursesw.a
@@ -367,7 +379,7 @@ if (NOT WIN32)
   build_external(readline
     DEPENDS ncurses_external
     CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --with-curses
-      "CC=${deps_cc}" "CFLAGS=-fPIC ${flto}"
+      "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS} -fPIC"
     BUILD_BYPRODUCTS
       ${DEPS_DESTDIR}/lib/libreadline.a
       ${DEPS_DESTDIR}/include/readline
@@ -388,7 +400,7 @@ if(APPLE OR WIN32)
 else()
   build_external(eudev
     CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --disable-introspection
-      --disable-programs --disable-manpages --disable-hwdb --with-pic "CC=${deps_cc}" "CFLAGS=-O2 ${flto}"
+      --disable-programs --disable-manpages --disable-hwdb --with-pic "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}"
     BUILD_BYPRODUCTS
       ${DEPS_DESTDIR}/lib/libudev.a
       ${DEPS_DESTDIR}/include/libudev.h
@@ -401,7 +413,7 @@ endif()
 
 build_external(libusb
   CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --disable-udev --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-O2 ${flto}" "CXXFLAGS=-O2 ${flto}"
+    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
   BUILD_BYPRODUCTS
     ${DEPS_DESTDIR}/lib/libusb-1.0.a
     ${DEPS_DESTDIR}/include/libusb-1.0
@@ -422,7 +434,7 @@ endif()
 build_external(hidapi
   DEPENDS ${maybe_eudev} libusb_external
   CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --enable-static --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-O2 ${flto}" "CXXFLAGS=-O2 ${flto}"
+    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
     "libudev_CFLAGS=-I${DEPS_DESTDIR}/include" "libudev_LIBS=-L${DEPS_DESTDIR}/lib -ludev"
     "libusb_CFLAGS=-I${DEPS_DESTDIR}/include/libusb-1.0" "libusb_LIBS=-L${DEPS_DESTDIR}/lib -lusb-1.0"
   BUILD_BYPRODUCTS
@@ -445,7 +457,7 @@ set_target_properties(hidapi_libusb PROPERTIES
 build_external(protobuf
   CONFIGURE_COMMAND
     ./configure ${cross_host} --disable-shared --prefix=${DEPS_DESTDIR} --with-pic
-      "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-O2 ${flto}" "CXXFLAGS=-O2 ${flto}"
+      "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
       "CPP=${deps_cc} -E" "CXXCPP=${deps_cxx} -E"
       "CC_FOR_BUILD=${deps_cc}" "CXX_FOR_BUILD=${deps_cxx}"  # Thanks Google for making people hunt for undocumented magic variables
   BUILD_BYPRODUCTS
@@ -472,7 +484,7 @@ build_external(zmq
   CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --enable-static --disable-shared
     --disable-curve-keygen --enable-curve --disable-drafts --disable-libunwind --with-libsodium
     --without-pgm --without-norm --without-vmci --without-docs --with-pic --disable-Werror
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-O2 -fstack-protector ${flto}" "CXXFLAGS=-O2 -fstack-protector ${flto}"
+    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-fstack-protector ${deps_CFLAGS}" "CXXFLAGS=-fstack-protector ${deps_CXXFLAGS}"
     "sodium_CFLAGS=-I${DEPS_DESTDIR}/include" "sodium_LIBS=-L${DEPS_DESTDIR}/lib -lsodium"
 )
 add_static_target(libzmq zmq_external libzmq.a)
@@ -510,7 +522,7 @@ build_external(curl
   --disable-progress-meter --without-brotli --with-zlib=${DEPS_DESTDIR} ${curl_ssl_opts}
   --without-libmetalink --without-librtmp --disable-versioned-symbols --enable-hidden-symbols
   --without-zsh-functions-dir --without-fish-functions-dir
-  "CC=${deps_cc}" "CFLAGS=-O2 ${flto}" ${curl_LIBS}
+  "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}" ${curl_LIBS}
   BUILD_BYPRODUCTS
     ${DEPS_DESTDIR}/lib/libcurl.a
     ${DEPS_DESTDIR}/include/curl/curl.h

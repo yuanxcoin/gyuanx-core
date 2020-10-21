@@ -1234,7 +1234,7 @@ namespace cryptonote
         return 1;
       }
       if (start_height == std::numeric_limits<uint64_t>::max())
-        start_height = std::get<txin_gen>(b.miner_tx.vin[0]).height;
+        start_height = var::get<txin_gen>(b.miner_tx.vin[0]).height;
 
       auto req_it = context.m_requested_objects.find(block_hash);
       if(req_it == context.m_requested_objects.end())

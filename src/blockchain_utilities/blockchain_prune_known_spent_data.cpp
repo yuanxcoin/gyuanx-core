@@ -199,15 +199,8 @@ int main(int argc, char* argv[])
     db->for_all_transactions([&](const crypto::hash &txid, const cryptonote::transaction &tx){
       const bool miner_tx = tx.vin.size() == 1 && std::holds_alternative<txin_gen>(tx.vin[0]);
       for (const auto &in: tx.vin)
-      {
-        if (!std::holds_alternative<txin_to_key>(in))
-          continue;
-        const auto& txin = std::get<txin_to_key>(in);
-        if (txin.amount == 0)
-          continue;
-
-        outputs[txin.amount].second++;
-      }
+        if (const auto* txin = std::get_if<txin_to_key>(&in); txin && txin->amount != 0)
+          outputs[txin->amount].second++;
 
       for (const auto &out: tx.vout)
       {
