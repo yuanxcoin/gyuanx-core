@@ -11,7 +11,7 @@ Patch the loki cmake files to properly build and install shared libs.
  4 files changed, 32 insertions(+), 4 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79a7bda..aabd2eb 100644
+index 371240d..aca878f 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -53,7 +53,7 @@ if(CCACHE_PROGRAM)
@@ -22,8 +22,8 @@ index 79a7bda..aabd2eb 100644
 +cmake_minimum_required(VERSION 3.13)
  message(STATUS "CMake version ${CMAKE_VERSION}")
  
- project(loki
-@@ -332,7 +332,9 @@ endif()
+ # Has to be set before `project()`, and ignored on non-macos:
+@@ -335,7 +335,9 @@ endif()
  # elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
  #   set(BSDI TRUE)
  
@@ -34,7 +34,7 @@ index 79a7bda..aabd2eb 100644
  
  if(APPLE)
    include_directories(SYSTEM /usr/include/malloc)
-@@ -944,6 +946,17 @@ if(BUILD_DOCUMENTATION)
+@@ -947,6 +949,17 @@ if(BUILD_DOCUMENTATION)
    endif()
  endif()
  
@@ -66,7 +66,7 @@ index 035b24b..357984d 100644
 +    COMPONENT development
 +    FILES_MATCHING PATTERN "*.h" PATTERN "*.inl")
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index a66d343..9650285 100644
+index 4177eeb..682cb92 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
 @@ -61,7 +61,7 @@ endif()
