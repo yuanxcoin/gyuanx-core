@@ -1,4 +1,4 @@
-local default_deps_base='libsystemd-dev libboost-filesystem-dev libboost-thread-dev libboost-date-time-dev libgtest-dev ' +
+local default_deps_base='libsystemd-dev libboost-thread-dev libgtest-dev ' +
     'libboost-serialization-dev libboost-program-options-dev libunbound-dev nettle-dev libevent-dev libminiupnpc-dev ' +
     'libunwind8-dev libsodium-dev libssl-dev libreadline-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev protobuf-compiler python3 ' +
     'pkg-config libsqlite3-dev qttools5-dev libcurl4-openssl-dev';
