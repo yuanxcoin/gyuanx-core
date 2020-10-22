@@ -769,7 +769,7 @@ namespace cryptonote
      *
      * @return false if any enforced checkpoint type fails to load, otherwise true
      */
-    bool update_checkpoints_from_json_file(const std::string& file_path);
+    bool update_checkpoints_from_json_file(const fs::path& file_path);
 
     bool update_checkpoint(checkpoint_t const &checkpoint);
 

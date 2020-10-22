@@ -31,12 +31,10 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <boost/filesystem.hpp>
 #include <boost/endian/conversion.hpp>
 
 #include "common/rules.h"
 #include "common/hex.h"
-#include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "ringct/rctTypes.h"
@@ -48,7 +46,6 @@
 #include "cryptonote_basic/miner.h"
 #include "misc_language.h"
 #include "profile_tools.h"
-#include "file_io_utils.h"
 #include "int-util.h"
 #include "common/threadpool.h"
 #include "common/boost_serialization_helper.h"
@@ -3206,7 +3203,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
   }
   else
   {
-    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + boost::lexical_cast<std::string>(rv.type));
+    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + std::to_string(rv.type));
   }
 
   // II
@@ -3239,7 +3236,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
   }
   else
   {
-    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + boost::lexical_cast<std::string>(rv.type));
+    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + std::to_string(rv.type));
   }
 
   // outPk was already done by handle_incoming_tx
@@ -4696,7 +4693,7 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc,
 // returns false if any of the checkpoints loading returns false.
 // That should happen only if a checkpoint is added that conflicts
 // with an existing checkpoint.
-bool Blockchain::update_checkpoints_from_json_file(const std::string& file_path)
+bool Blockchain::update_checkpoints_from_json_file(const fs::path& file_path)
 {
   std::vector<height_to_hash> checkpoint_hashes;
   if (!cryptonote::load_checkpoints_from_json(file_path, checkpoint_hashes))

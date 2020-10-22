@@ -33,7 +33,6 @@
 
 #include <algorithm>
 #include <optional>
-#include <boost/filesystem/operations.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <atomic>
 #include <functional>
@@ -42,6 +41,7 @@
 #include <tuple>
 #include <vector>
 
+#include "cryptonote_config.h"
 #include "version.h"
 #include "string_tools.h"
 #include "common/file.h"
@@ -119,7 +119,7 @@ namespace nodetool
   bool node_server<t_payload_net_handler>::init_config()
   {
     TRY_ENTRY();
-    auto storage = peerlist_storage::open(m_config_folder + "/" + P2P_NET_DATA_FILENAME);
+    auto storage = peerlist_storage::open(m_config_folder / P2P_NET_DATA_FILENAME);
     if (storage)
       m_peerlist_storage = std::move(*storage);
 
@@ -708,14 +708,11 @@ namespace nodetool
       memcpy(&m_network_id, &::config::NETWORK_ID, 16);
     }
 
-    m_config_folder = command_line::get_arg(vm, cryptonote::arg_data_dir);
+    m_config_folder = fs::u8path(command_line::get_arg(vm, cryptonote::arg_data_dir));
     network_zone& public_zone = m_network_zones.at(epee::net_utils::zone::public_);
 
-    if ((m_nettype == cryptonote::MAINNET && public_zone.m_port != std::to_string(::config::P2P_DEFAULT_PORT))
-        || (m_nettype == cryptonote::TESTNET && public_zone.m_port != std::to_string(::config::testnet::P2P_DEFAULT_PORT))
-        || (m_nettype == cryptonote::DEVNET && public_zone.m_port != std::to_string(::config::devnet::P2P_DEFAULT_PORT))) {
-      m_config_folder = m_config_folder + "/" + public_zone.m_port;
-    }
+    if (public_zone.m_port != std::to_string(cryptonote::get_config(m_nettype).P2P_DEFAULT_PORT))
+      m_config_folder /= public_zone.m_port;
 
     res = init_config();
     CHECK_AND_ASSERT_MES(res, false, "Failed to init config.");
@@ -905,7 +902,7 @@ namespace nodetool
 
     if (!tools::create_directories_if_necessary(m_config_folder))
     {
-      MWARNING("Failed to create data directory \"" << m_config_folder);
+      MWARNING("Failed to create data directory " << m_config_folder);
       return false;
     }
 
@@ -913,7 +910,7 @@ namespace nodetool
     for (auto& zone : m_network_zones)
       zone.second.m_peerlist.get_peerlist(active);
 
-    const std::string state_file_path = m_config_folder + "/" + P2P_NET_DATA_FILENAME;
+    const auto state_file_path = m_config_folder / P2P_NET_DATA_FILENAME;
     if (!m_peerlist_storage.store(state_file_path, active))
     {
       MWARNING("Failed to save config to file " << state_file_path);

@@ -61,5 +61,4 @@ target_link_libraries(dns_checks
     epee
     version
     Boost::program_options
-    Boost::system
     Boost::thread)

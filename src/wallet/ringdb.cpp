@@ -28,7 +28,6 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <lmdb.h>
-#include <boost/filesystem.hpp>
 #include "common/file.h"
 #include "misc_log_ex.h"
 #include "misc_language.h"
@@ -96,11 +95,11 @@ static std::vector<uint64_t> decompress_ring(const std::string &s, uint64_t tag)
   return ring;
 }
 
-std::string get_rings_filename(boost::filesystem::path filename)
+fs::path get_rings_filename(fs::path filename)
 {
-  if (!boost::filesystem::is_directory(filename))
+  if (!fs::is_directory(filename))
     filename.remove_filename();
-  return filename.string();
+  return filename;
 }
 
 static crypto::chacha_iv make_iv(const crypto::key_image &key_image, const crypto::chacha_key &key, uint8_t field)
@@ -158,13 +157,13 @@ static void store_relative_ring(MDB_txn *txn, MDB_dbi &dbi, const crypto::key_im
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set ring for key image in LMDB table: " + std::string(mdb_strerror(dbr)));
 }
 
-static int resize_env(MDB_env *env, const char *db_path, size_t needed)
+static int resize_env(MDB_env *env, const fs::path& db_path, size_t needed)
 {
   MDB_envinfo mei;
   MDB_stat mst;
   int ret;
 
-  needed = std::max(needed, (size_t)(100ul * 1024 * 1024)); // at least 100 MB
+  needed = std::max<size_t>(needed, 100 * 1024 * 1024); // at least 100 MB
 
   ret = mdb_env_info(env, &mei);
   if (ret)
@@ -178,11 +177,10 @@ static int resize_env(MDB_env *env, const char *db_path, size_t needed)
   {
     try
     {
-      boost::filesystem::path path(db_path);
-      boost::filesystem::space_info si = boost::filesystem::space(path);
+      auto si = fs::space(db_path);
       if(si.available < needed)
       {
-        MERROR("!! WARNING: Insufficient free space to extend database !!: " << (si.available >> 20L) << " MB available");
+        MERROR("!! WARNING: Insufficient free space to extend database !!: " << (si.available / 1000000) << " MB available");
         return ENOSPC;
       }
     }
@@ -207,24 +205,22 @@ enum { BLACKBALL_BLACKBALL, BLACKBALL_UNBLACKBALL, BLACKBALL_QUERY, BLACKBALL_CL
 namespace tools
 {
 
-ringdb::ringdb(std::string filename, const std::string &genesis):
-  filename(filename),
-  env(NULL)
+ringdb::ringdb(fs::path fn_, const std::string &genesis) : filename_{std::move(fn_)}
 {
   MDB_txn *txn;
   bool tx_active = false;
   int dbr;
 
-  tools::create_directories_if_necessary(filename);
+  tools::create_directories_if_necessary(filename_);
 
   dbr = mdb_env_create(&env);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_env_set_maxdbs(env, 2);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-  const std::string actual_filename = get_rings_filename(filename); 
-  dbr = mdb_env_open(env, actual_filename.c_str(), 0, 0664);
+  const fs::path actual_filename = get_rings_filename(filename_); 
+  dbr = mdb_env_open(env, actual_filename.string().c_str(), 0, 0664);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to open rings database file '"
-      + actual_filename + "': " + std::string(mdb_strerror(dbr)));
+      + actual_filename.u8string() + "': " + std::string(mdb_strerror(dbr)));
 
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -266,7 +262,7 @@ bool ringdb::add_rings(const crypto::chacha_key &chacha_key, const cryptonote::t
   int dbr;
   bool tx_active = false;
 
-  dbr = resize_env(env, filename.c_str(), get_ring_data_size(tx.vin.size()));
+  dbr = resize_env(env, filename_, get_ring_data_size(tx.vin.size()));
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size");
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -297,7 +293,7 @@ bool ringdb::remove_rings(const crypto::chacha_key &chacha_key, const std::vecto
   int dbr;
   bool tx_active = false;
 
-  dbr = resize_env(env, filename.c_str(), 0);
+  dbr = resize_env(env, filename_, 0);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size");
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -351,7 +347,7 @@ bool ringdb::get_ring(const crypto::chacha_key &chacha_key, const crypto::key_im
   int dbr;
   bool tx_active = false;
 
-  dbr = resize_env(env, filename.c_str(), 0);
+  dbr = resize_env(env, filename_, 0);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -394,7 +390,7 @@ bool ringdb::set_ring(const crypto::chacha_key &chacha_key, const crypto::key_im
   int dbr;
   bool tx_active = false;
 
-  dbr = resize_env(env, filename.c_str(), outs.size() * 64);
+  dbr = resize_env(env, filename_, outs.size() * 64);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -419,7 +415,7 @@ bool ringdb::blackball_worker(const std::vector<std::pair<uint64_t, uint64_t>> &
 
   THROW_WALLET_EXCEPTION_IF(outputs.size() > 1 && op == BLACKBALL_QUERY, tools::error::wallet_internal_error, "Blackball query only makes sense for a single output");
 
-  dbr = resize_env(env, filename.c_str(), 32 * 2 * outputs.size()); // a pubkey, and some slack
+  dbr = resize_env(env, filename_, 32 * 2 * outputs.size()); // a pubkey, and some slack
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));

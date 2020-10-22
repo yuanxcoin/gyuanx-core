@@ -28,7 +28,6 @@
 
 #include "db_lmdb.h"
 
-#include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/endian/conversion.hpp>
@@ -36,7 +35,6 @@
 #include <cstring>
 
 #include "string_tools.h"
-#include "file_io_utils.h"
 #include "common/file.h"
 #include "common/pruning.h"
 #include "common/hex.h"
@@ -608,8 +606,7 @@ void BlockchainLMDB::do_resize(uint64_t increase_size)
   // check disk capacity
   try
   {
-    boost::filesystem::path path(m_folder);
-    boost::filesystem::space_info si = boost::filesystem::space(path);
+    auto si = fs::space(m_folder);
     if(si.available < add_size)
     {
       MERROR("!! WARNING: Insufficient free space to extend database !!: " <<
@@ -957,7 +954,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   result = mdb_cursor_get(m_cur_tx_indices, (MDB_val *)&zerokval, &val_h, MDB_GET_BOTH);
   if (result == 0) {
     txindex *tip = (txindex *)val_h.mv_data;
-    throw1(TX_EXISTS(std::string("Attempting to add transaction that's already in the db (tx id ").append(boost::lexical_cast<std::string>(tip->data.tx_id)).append(")").c_str()));
+    throw1(TX_EXISTS(std::string("Attempting to add transaction that's already in the db (tx id ").append(std::to_string(tip->data.tx_id)).append(")").c_str()));
   } else if (result != MDB_NOTFOUND) {
     throw1(DB_ERROR(lmdb_error(std::string("Error checking if tx index exists for tx hash ") + epee::string_tools::pod_to_hex(tx_hash) + ": ", result).c_str()));
   }
@@ -1243,12 +1240,12 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   }
   result = mdb_cursor_del(m_cur_output_txs, 0);
   if (result)
-    throw0(DB_ERROR(lmdb_error(std::string("Error deleting output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+    throw0(DB_ERROR(lmdb_error(std::string("Error deleting output index ").append(std::to_string(out_index).append(": ")).c_str(), result).c_str()));
 
   // now delete the amount
   result = mdb_cursor_del(m_cur_output_amounts, 0);
   if (result)
-    throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+    throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount for output index ").append(std::to_string(out_index).append(": ")).c_str(), result).c_str()));
 }
 
 void BlockchainLMDB::prune_outputs(uint64_t amount)
@@ -1375,7 +1372,7 @@ BlockchainLMDB::BlockchainLMDB(bool batch_transactions): BlockchainDB()
   m_hardfork = nullptr;
 }
 
-void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type nettype, const int db_flags)
+void BlockchainLMDB::open(const fs::path& filename, cryptonote::network_type nettype, const int db_flags)
 {
   int result;
   int mdb_flags = MDB_NORDAHEAD;
@@ -1385,24 +1382,23 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
   if (m_open)
     throw0(DB_OPEN_FAILURE("Attempted to open db, but it's already open"));
 
-  boost::filesystem::path direc(filename);
-  if (boost::filesystem::exists(direc))
+  if (fs::exists(filename))
   {
-    if (!boost::filesystem::is_directory(direc))
+    if (!fs::is_directory(filename))
       throw0(DB_OPEN_FAILURE("LMDB needs a directory path, but a file was passed"));
   }
   else
   {
-    if (!boost::filesystem::create_directories(direc))
-      throw0(DB_OPEN_FAILURE(std::string("Failed to create directory ").append(filename).c_str()));
+    if (std::error_code ec; !fs::create_directories(filename, ec))
+      throw0(DB_OPEN_FAILURE("Failed to create directory " + filename.u8string()));
   }
 
   // check for existing LMDB files in base directory
-  boost::filesystem::path old_files = direc.parent_path();
-  if (boost::filesystem::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_FILENAME)
-      || boost::filesystem::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME))
+  auto old_files = filename.parent_path();
+  if (fs::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_FILENAME)
+      || fs::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME))
   {
-    LOG_PRINT_L0("Found existing LMDB files in " << old_files.string());
+    LOG_PRINT_L0("Found existing LMDB files in " << old_files.u8string());
     LOG_PRINT_L0("Move " << CRYPTONOTE_BLOCKCHAINDATA_FILENAME << " and/or " << CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME << " to " << filename << ", or delete them, and then restart");
     throw DB_ERROR("Database could not be opened");
   }
@@ -1437,7 +1433,9 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
   if (db_flags & DBF_SALVAGE)
     mdb_flags |= MDB_PREVSNAPSHOT;
 
-  if (auto result = mdb_env_open(m_env, filename.c_str(), mdb_flags, 0644))
+  // This .string() is probably just going to hard fail on Windows with non-ASCII unicode filenames,
+  // but lmdb doesn't support anything else (and so really we're just hitting an underlying lmdb bug).
+  if (auto result = mdb_env_open(m_env, filename.string().c_str(), mdb_flags, 0644))
     throw0(DB_ERROR(lmdb_error("Failed to open lmdb environment: ", result).c_str()));
 
   MDB_envinfo mei;
@@ -1705,28 +1703,18 @@ void BlockchainLMDB::reset()
   m_cum_count = 0;
 }
 
-std::vector<std::string> BlockchainLMDB::get_filenames() const
+std::vector<fs::path> BlockchainLMDB::get_filenames() const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  std::vector<std::string> filenames;
-
-  boost::filesystem::path datafile(m_folder);
-  datafile /= CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
-  boost::filesystem::path lockfile(m_folder);
-  lockfile /= CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME;
-
-  filenames.push_back(datafile.string());
-  filenames.push_back(lockfile.string());
-
-  return filenames;
+  return {{m_folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME, m_folder / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME}};
 }
 
-bool BlockchainLMDB::remove_data_file(const std::string& folder) const
+bool BlockchainLMDB::remove_data_file(const fs::path& folder) const
 {
-  const std::string filename = folder + "/data.mdb";
+  auto filename = folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
   try
   {
-    boost::filesystem::remove(filename);
+    fs::remove(filename);
   }
   catch (const std::exception &e)
   {
@@ -4747,12 +4735,7 @@ bool BlockchainLMDB::is_read_only() const
 
 uint64_t BlockchainLMDB::get_database_size() const
 {
-  uint64_t size = 0;
-  boost::filesystem::path datafile(m_folder);
-  datafile /= CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
-  if (!epee::file_io_utils::get_file_size(datafile.string(), size))
-    size = 0;
-  return size;
+  return fs::file_size(m_folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME);
 }
 
 void BlockchainLMDB::fixup(cryptonote::network_type nettype)

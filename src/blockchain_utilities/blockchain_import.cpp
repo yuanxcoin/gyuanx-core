@@ -32,7 +32,6 @@
 #include <algorithm>
 #include <fstream>
 
-#include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
 #include <unistd.h>
 #include "cryptonote_protocol/quorumnet.h"
@@ -42,7 +41,6 @@
 #include "blocks/blocks.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "serialization/binary_utils.h"
-#include "include_base_utils.h"
 #include "cryptonote_core/cryptonote_core.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
@@ -210,18 +208,16 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
   return 0;
 }
 
-int import_from_file(cryptonote::core& core, const std::string& import_file_path, uint64_t block_stop=0)
+int import_from_file(cryptonote::core& core, const fs::path& import_file_path, uint64_t block_stop=0)
 {
   // Reset stats, in case we're using newly created db, accumulating stats
   // from addition of genesis block.
   // This aligns internal db counts with importer counts.
   core.get_blockchain_storage().get_db().reset_stats();
 
-  boost::filesystem::path fs_import_file_path(import_file_path);
-  boost::system::error_code ec;
-  if (!boost::filesystem::exists(fs_import_file_path, ec))
+  if (std::error_code ec; !fs::exists(import_file_path, ec))
   {
-    MFATAL("bootstrap file not found: " << fs_import_file_path);
+    MFATAL("bootstrap file not found: " << import_file_path);
     return false;
   }
 
@@ -542,8 +538,6 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  std::string import_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
@@ -653,14 +647,12 @@ int main(int argc, char* argv[])
 
   MINFO("Starting...");
 
-  boost::filesystem::path fs_import_file_path;
+  fs::path import_file_path;
 
   if (command_line::has_arg(vm, arg_input_file))
-    fs_import_file_path = boost::filesystem::path(command_line::get_arg(vm, arg_input_file));
+    import_file_path = fs::u8path(command_line::get_arg(vm, arg_input_file));
   else
-    fs_import_file_path = boost::filesystem::path(m_config_folder) / "export" / BLOCKCHAIN_RAW;
-
-  import_file_path = fs_import_file_path.string();
+    import_file_path = fs::u8path(m_config_folder) / "export" / BLOCKCHAIN_RAW;
 
   if (command_line::has_arg(vm, arg_count_blocks))
   {

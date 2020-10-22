@@ -26,11 +26,12 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/filesystem.hpp>
+#include "common/fs.h"
 #include <boost/algorithm/string/predicate.hpp>
 #include <cstdio>
 #include <iostream>
 #include <chrono>
+#include <random>
 #include <thread>
 
 #include "gtest/gtest.h"
@@ -39,6 +40,8 @@
 #include "blockchain_db/blockchain_db.h"
 #include "blockchain_db/lmdb/db_lmdb.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+
+#include "random_path.h"
 
 using namespace cryptonote;
 using epee::string_tools::pod_to_hex;
@@ -210,7 +213,7 @@ protected:
     {
       if (boost::starts_with(f, m_prefix))
       {
-        boost::filesystem::remove(f);
+        fs::remove(f);
       }
       else
       {
@@ -219,7 +222,7 @@ protected:
     }
 
     // remove directory if it still exists
-    boost::filesystem::remove_all(m_prefix);
+    fs::remove_all(m_prefix);
   }
 
   void set_prefix(const std::string& prefix)
@@ -236,7 +239,7 @@ TYPED_TEST_CASE(BlockchainDBTest, implementations);
 
 TYPED_TEST(BlockchainDBTest, OpenAndClose)
 {
-  boost::filesystem::path tempPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  fs::path tempPath = random_tmp_file();
   std::string dirPath = tempPath.string();
 
   this->set_prefix(dirPath);
@@ -254,7 +257,7 @@ TYPED_TEST(BlockchainDBTest, OpenAndClose)
 TYPED_TEST(BlockchainDBTest, AddBlock)
 {
 
-  boost::filesystem::path tempPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  fs::path tempPath = random_tmp_file();
   std::string dirPath = tempPath.string();
 
   this->set_prefix(dirPath);
@@ -302,7 +305,7 @@ TYPED_TEST(BlockchainDBTest, AddBlock)
 
 TYPED_TEST(BlockchainDBTest, RetrieveBlockData)
 {
-  boost::filesystem::path tempPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  fs::path tempPath = random_tmp_file();
   std::string dirPath = tempPath.string();
 
   this->set_prefix(dirPath);

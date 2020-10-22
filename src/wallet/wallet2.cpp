@@ -43,7 +43,6 @@
 #include "common/password.h"
 #include "common/string_util.h"
 #include "cryptonote_core/loki_name_system.h"
-#include "include_base_utils.h"
 #include "common/rules.h"
 #include "cryptonote_config.h"
 #include "cryptonote_core/tx_sanity_check.h"
@@ -160,11 +159,8 @@ namespace {
 
   std::string get_default_ringdb_path()
   {
-    boost::filesystem::path dir = tools::get_default_data_dir();
     // remove .loki, replace with .shared-ringdb
-    dir = dir.remove_filename();
-    dir /= ".shared-ringdb";
-    return dir.string();
+    return tools::get_default_data_dir().replace_filename(".shared-ringdb").u8string();
   }
 
   std::string pack_multisignature_keys(const std::vector<crypto::public_key>& keys, const crypto::secret_key& signer_secret_key)
@@ -276,11 +272,11 @@ struct options {
     {{ &testnet, &devnet, &regtest }},
     [](std::array<bool, 3> test_dev_fake, bool defaulted, std::string val)->std::string {
       if (test_dev_fake[0])
-        return (boost::filesystem::path(val) / "testnet").string();
+        return (fs::u8path(val) / "testnet").u8string();
       else if (test_dev_fake[1])
-        return (boost::filesystem::path(val) / "devnet").string();
+        return (fs::u8path(val) / "devnet").u8string();
       else if (test_dev_fake[2])
-        return (boost::filesystem::path(val) / "fake").string();
+        return (fs::u8path(val) / "fake").u8string();
       return val;
     }
   };
@@ -292,19 +288,17 @@ struct options {
   const command_line::arg_descriptor<std::string> extra_entropy = {"extra-entropy", tools::wallet2::tr("File containing extra entropy to initialize the PRNG (any data, aim for 256 bits of entropy to be useful, wihch typically means more than 256 bits of data)")};
 };
 
-void do_prepare_file_names(const std::string& file_path, std::string& keys_file, std::string& wallet_file, std::string &mms_file)
+void do_prepare_file_names(const fs::path& file_path, fs::path& keys_file, fs::path& wallet_file, fs::path &mms_file)
 {
   keys_file = file_path;
   wallet_file = file_path;
-  boost::system::error_code e;
-  if(string_tools::get_extension(keys_file) == "keys")
-  {//provided keys file name
-    wallet_file = string_tools::cut_off_extension(wallet_file);
-  }else
-  {//provided wallet file name
+
+  if (keys_file.extension() == ".keys") // provided keys file name
+    wallet_file.replace_extension();
+  else // provided wallet file name
     keys_file += ".keys";
-  }
-  mms_file = file_path + ".mms";
+
+  (mms_file = keys_file).replace_extension(".mms");
 }
 
 uint64_t calculate_fee_from_weight(byte_and_output_fees base_fees, uint64_t weight, uint64_t outputs, uint64_t fee_percent, uint64_t fee_fixed, uint64_t fee_quantization_mask)
@@ -413,8 +407,8 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
 
   auto wallet = std::make_unique<tools::wallet2>(nettype, kdf_rounds, unattended);
   wallet->init(std::move(daemon_address), std::move(login), std::move(proxy), 0, trusted_daemon);
-  boost::filesystem::path ringdb_path = command_line::get_arg(vm, opts.shared_ringdb_dir);
-  wallet->set_ring_database(ringdb_path.string());
+  auto ringdb_path = fs::u8path(command_line::get_arg(vm, opts.shared_ringdb_dir));
+  wallet->set_ring_database(ringdb_path);
   wallet->get_message_store().set_options(vm);
   wallet->device_name(device_name);
   wallet->device_derivation_path(device_derivation_path);
@@ -430,7 +424,7 @@ std::unique_ptr<tools::wallet2> make_basic(const boost::program_options::variabl
   if (!extra_entropy.empty())
   {
     std::string data;
-    THROW_WALLET_EXCEPTION_IF(!epee::file_io_utils::load_file_to_string(extra_entropy, data),
+    THROW_WALLET_EXCEPTION_IF(!tools::slurp_file(fs::u8path(extra_entropy), data),
         tools::error::wallet_internal_error, "Failed to load extra entropy from " + extra_entropy);
     add_extra_entropy_thread_safe(data.data(), data.size());
   }
@@ -463,8 +457,7 @@ std::optional<tools::password_container> get_password(const boost::program_optio
   if (command_line::has_arg(vm, opts.password_file))
   {
     std::string password;
-    bool r = epee::file_io_utils::load_file_to_string(command_line::get_arg(vm, opts.password_file),
-                                                      password);
+    bool r = tools::slurp_file(fs::u8path(command_line::get_arg(vm, opts.password_file)), password);
     THROW_WALLET_EXCEPTION_IF(!r, tools::error::wallet_internal_error, tools::wallet2::tr("the password file specified could not be read"));
 
     // Remove line breaks the user might have inserted
@@ -478,7 +471,7 @@ std::optional<tools::password_container> get_password(const boost::program_optio
   return password_prompter(verify ? tools::wallet2::tr("Enter a new password for the wallet") : tools::wallet2::tr("Wallet password"), verify);
 }
 
-std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_from_json(const std::string& json_file, const boost::program_options::variables_map& vm, bool unattended, const options& opts, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
+std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_from_json(const fs::path& json_file, const boost::program_options::variables_map& vm, bool unattended, const options& opts, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
 {
   const bool testnet = command_line::get_arg(vm, opts.testnet);
   const bool devnet = command_line::get_arg(vm, opts.devnet);
@@ -491,8 +484,8 @@ std::pair<std::unique_ptr<tools::wallet2>, tools::password_container> generate_f
   epee::wipeable_string password;
   const auto do_generate = [&]() -> bool {
     std::string buf;
-    if (!epee::file_io_utils::load_file_to_string(json_file, buf)) {
-      THROW_WALLET_EXCEPTION(tools::error::wallet_internal_error, std::string(tools::wallet2::tr("Failed to load file ")) + json_file);
+    if (!tools::slurp_file(json_file, buf)) {
+      THROW_WALLET_EXCEPTION(tools::error::wallet_internal_error, std::string(tools::wallet2::tr("Failed to load file ")) + json_file.u8string());
       return false;
     }
 
@@ -1170,14 +1163,14 @@ void wallet2::init_options(boost::program_options::options_description& desc_par
   command_line::add_arg(desc_params, opts.extra_entropy);
 }
 
-std::pair<std::unique_ptr<wallet2>, tools::password_container> wallet2::make_from_json(const boost::program_options::variables_map& vm, bool unattended, const std::string& json_file, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
+std::pair<std::unique_ptr<wallet2>, tools::password_container> wallet2::make_from_json(const boost::program_options::variables_map& vm, bool unattended, const fs::path& json_file, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
 {
   const options opts{};
   return generate_from_json(json_file, vm, unattended, opts, password_prompter);
 }
 
 std::pair<std::unique_ptr<wallet2>, password_container> wallet2::make_from_file(
-  const boost::program_options::variables_map& vm, bool unattended, const std::string& wallet_file, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
+  const boost::program_options::variables_map& vm, bool unattended, const fs::path& wallet_file, const std::function<std::optional<tools::password_container>(const char *, bool)> &password_prompter)
 {
   const options opts{};
   auto pwd = get_password(vm, opts, password_prompter, false);
@@ -3881,12 +3874,13 @@ void wallet2::clear_soft(bool keep_key_images)
  * \param  watch_only     true to save only view key, false to save both spend and view keys
  * \return                Whether it was successful.
  */
-bool wallet2::store_keys(const std::string& keys_file_name, const epee::wipeable_string& password, bool watch_only)
+bool wallet2::store_keys(const fs::path& keys_file_name, const epee::wipeable_string& password, bool watch_only)
 {
   std::optional<wallet2::keys_file_data> keys_file_data = get_keys_file_data(password, watch_only);
   CHECK_AND_ASSERT_MES(keys_file_data, false, "failed to generate wallet keys data");
 
-  std::string tmp_file_name = keys_file_name + ".new";
+  fs::path tmp_file_name = keys_file_name;
+  tmp_file_name += ".new";
   std::string buf;
   bool r = false;
   try {
@@ -3896,11 +3890,12 @@ bool wallet2::store_keys(const std::string& keys_file_name, const epee::wipeable
   CHECK_AND_ASSERT_MES(r, false, "failed to generate wallet keys file " << tmp_file_name);
 
   unlock_keys_file();
-  std::error_code e = tools::replace_file(tmp_file_name, keys_file_name);
+  std::error_code e;
+  fs::rename(tmp_file_name, keys_file_name, e);
   lock_keys_file();
 
   if (e) {
-    boost::filesystem::remove(tmp_file_name);
+    fs::remove(tmp_file_name);
     LOG_ERROR("failed to update wallet keys file " << keys_file_name);
     return false;
   }
@@ -4122,7 +4117,7 @@ void wallet2::setup_keys(const epee::wipeable_string &password)
   get_ringdb_key();
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::change_password(const std::string &filename, const epee::wipeable_string &original_password, const epee::wipeable_string &new_password)
+void wallet2::change_password(const fs::path& filename, const epee::wipeable_string& original_password, const epee::wipeable_string& new_password)
 {
   if (m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only)
     decrypt_keys(original_password);
@@ -4137,7 +4132,7 @@ void wallet2::change_password(const std::string &filename, const epee::wipeable_
  * \param keys_file_name Name of wallet file
  * \param password       Password of wallet file
  */
-bool wallet2::load_keys(const std::string& keys_file_name, const epee::wipeable_string& password)
+bool wallet2::load_keys(const fs::path& keys_file_name, const epee::wipeable_string& password)
 {
   std::string keys_file_buf;
   bool r = load_from_file(keys_file_name, keys_file_buf);
@@ -4523,7 +4518,7 @@ bool wallet2::verify_password(const epee::wipeable_string& password)
  * can be used prior to rewriting wallet keys file, to ensure user has entered the correct password
  *
  */
-bool wallet2::verify_password(const std::string& keys_file_name, const epee::wipeable_string& password, bool no_spend_key, hw::device &hwdev, uint64_t kdf_rounds)
+bool wallet2::verify_password(const fs::path& keys_file_name, const epee::wipeable_string& password, bool no_spend_key, hw::device &hwdev, uint64_t kdf_rounds)
 {
   rapidjson::Document json;
   wallet2::keys_file_data keys_file_data;
@@ -4536,7 +4531,7 @@ bool wallet2::verify_password(const std::string& keys_file_name, const epee::wip
   try {
     serialization::parse_binary(buf, keys_file_data);
   } catch (const std::exception& e) {
-    THROW_WALLET_EXCEPTION(error::wallet_internal_error, "internal error: failed to deserialize \"" + keys_file_name + "\": " + e.what());
+    THROW_WALLET_EXCEPTION(error::wallet_internal_error, "internal error: failed to deserialize \"" + keys_file_name.u8string() + "\": " + e.what());
   }
   crypto::chacha_key key;
   crypto::generate_chacha_key(password.data(), password.size(), key, kdf_rounds);
@@ -4614,7 +4609,7 @@ void wallet2::setup_new_blockchain()
   add_subaddress_account(tr("Primary account"));
 }
 
-void wallet2::create_keys_file(const std::string &wallet_, bool watch_only, const epee::wipeable_string &password, bool create_address_file)
+void wallet2::create_keys_file(const fs::path &wallet_, bool watch_only, const epee::wipeable_string &password, bool create_address_file)
 {
   if (!wallet_.empty())
   {
@@ -4623,7 +4618,9 @@ void wallet2::create_keys_file(const std::string &wallet_, bool watch_only, cons
 
     if (create_address_file)
     {
-      r = save_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype), true);
+      auto addrfile = m_wallet_file;
+      addrfile += ".address.txt";
+      r = save_to_file(addrfile, m_account.get_public_address_str(m_nettype), true);
       if(!r) MERROR("String with address text not saved");
     }
   }
@@ -4640,7 +4637,7 @@ void wallet2::create_keys_file(const std::string &wallet_, bool watch_only, cons
  * for verification only - determines key storage hardware
  *
  */
-bool wallet2::query_device(hw::device::device_type& device_type, const std::string& keys_file_name, const epee::wipeable_string& password, uint64_t kdf_rounds)
+bool wallet2::query_device(hw::device::device_type& device_type, const fs::path& keys_file_name, const epee::wipeable_string& password, uint64_t kdf_rounds)
 {
   rapidjson::Document json;
   wallet2::keys_file_data keys_file_data;
@@ -4652,7 +4649,7 @@ bool wallet2::query_device(hw::device::device_type& device_type, const std::stri
   try {
     serialization::parse_binary(buf, keys_file_data);
   } catch (const std::exception& e) {
-    THROW_WALLET_EXCEPTION(error::wallet_internal_error, "internal error: failed to deserialize \"" + keys_file_name + "\": " + e.what());
+    THROW_WALLET_EXCEPTION(error::wallet_internal_error, "internal error: failed to deserialize \"" + keys_file_name.u8string() + "\": " + e.what());
   }
   crypto::chacha_key key;
   crypto::generate_chacha_key(password.data(), password.size(), key, kdf_rounds);
@@ -4705,7 +4702,7 @@ void wallet2::init_type(hw::device::device_type device_type)
  * \param  multisig_data        The multisig restore info and keys
  * \param  create_address_file  Whether to create an address file
  */
-void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& password,
+void wallet2::generate(const fs::path& wallet_, const epee::wipeable_string& password,
   const epee::wipeable_string& multisig_data, bool create_address_file)
 {
   clear();
@@ -4713,9 +4710,9 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
 
   if (!wallet_.empty())
   {
-    boost::system::error_code ignored_ec;
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
+    std::error_code ignored_ec;
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
   }
 
   m_account.generate(rct::rct2sk(rct::zero()), true, false);
@@ -4793,7 +4790,7 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
  * \param  create_address_file     Whether to create an address file
  * \return                         The secret key of the generated wallet
  */
-crypto::secret_key wallet2::generate(const std::string& wallet_, const epee::wipeable_string& password,
+crypto::secret_key wallet2::generate(const fs::path& wallet_, const epee::wipeable_string& password,
   const crypto::secret_key& recovery_param, bool recover, bool two_random, bool create_address_file)
 {
   clear();
@@ -4801,9 +4798,9 @@ crypto::secret_key wallet2::generate(const std::string& wallet_, const epee::wip
 
   if (!wallet_.empty())
   {
-    boost::system::error_code ignored_ec;
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
+    std::error_code ignored_ec;
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
   }
 
   crypto::secret_key retval = m_account.generate(recovery_param, recover, two_random);
@@ -4872,7 +4869,7 @@ crypto::secret_key wallet2::generate(const std::string& wallet_, const epee::wip
 * \param  viewkey                 view secret key
 * \param  create_address_file     Whether to create an address file
 */
-void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& password,
+void wallet2::generate(const fs::path& wallet_, const epee::wipeable_string& password,
   const cryptonote::account_public_address &account_public_address,
   const crypto::secret_key& viewkey, bool create_address_file)
 {
@@ -4881,9 +4878,9 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
 
   if (!wallet_.empty())
   {
-    boost::system::error_code ignored_ec;
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
+    std::error_code ignored_ec;
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
   }
 
   m_account.create_from_viewkey(account_public_address, viewkey);
@@ -4909,7 +4906,7 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
 * \param  viewkey                 view secret key
 * \param  create_address_file     Whether to create an address file
 */
-void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& password,
+void wallet2::generate(const fs::path& wallet_, const epee::wipeable_string& password,
   const cryptonote::account_public_address &account_public_address,
   const crypto::secret_key& spendkey, const crypto::secret_key& viewkey, bool create_address_file)
 {
@@ -4918,9 +4915,9 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
 
   if (!wallet_.empty())
   {
-    boost::system::error_code ignored_ec;
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
+    std::error_code ignored_ec;
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
   }
 
   m_account.create_from_keys(account_public_address, spendkey, viewkey);
@@ -4942,15 +4939,15 @@ void wallet2::generate(const std::string& wallet_, const epee::wipeable_string& 
 * \param  password       Password of wallet file
 * \param  device_name    device string address
 */
-void wallet2::restore(const std::string& wallet_, const epee::wipeable_string& password, const std::string &device_name, bool create_address_file)
+void wallet2::restore(const fs::path& wallet_, const epee::wipeable_string& password, const std::string &device_name, bool create_address_file)
 {
   clear();
   prepare_file_names(wallet_);
 
-  boost::system::error_code ignored_ec;
+  std::error_code ignored_ec;
   if (!wallet_.empty()) {
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
-    THROW_WALLET_EXCEPTION_IF(boost::filesystem::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_wallet_file, ignored_ec), error::file_exists, m_wallet_file);
+    THROW_WALLET_EXCEPTION_IF(fs::exists(m_keys_file,   ignored_ec), error::file_exists, m_keys_file);
   }
 
   auto &hwdev = lookup_device(device_name);
@@ -5111,7 +5108,11 @@ std::string wallet2::make_multisig(const epee::wipeable_string &password,
   keys_reencryptor.invoke();
 
   if (!m_wallet_file.empty())
-    create_keys_file(m_wallet_file, false, password, boost::filesystem::exists(m_wallet_file + ".address.txt"));
+  {
+    fs::path addrfile = m_wallet_file;
+    addrfile += ".address.txt";
+    create_keys_file(m_wallet_file, false, password, fs::exists(addrfile));
+  }
 
   setup_new_blockchain();
 
@@ -5208,9 +5209,11 @@ std::string wallet2::exchange_multisig_keys(const epee::wipeable_string &passwor
       bool r = store_keys(m_keys_file, password, false);
       THROW_WALLET_EXCEPTION_IF(!r, error::file_save_error, m_keys_file);
 
-      if (boost::filesystem::exists(m_wallet_file + ".address.txt"))
+      fs::path addrfile = m_wallet_file;
+      addrfile += ".address.txt";
+      if (fs::exists(addrfile))
       {
-        r = save_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str(m_nettype), true);
+        r = save_to_file(addrfile, m_account.get_public_address_str(m_nettype), true);
         if(!r) MERROR("String with address text not saved");
       }
     }
@@ -5260,7 +5263,11 @@ std::string wallet2::exchange_multisig_keys(const epee::wipeable_string &passwor
   ++m_multisig_rounds_passed;
 
   if (!m_wallet_file.empty())
-    create_keys_file(m_wallet_file, false, password, boost::filesystem::exists(m_wallet_file + ".address.txt"));
+  {
+    fs::path addrfile = m_wallet_file;
+    addrfile += ".address.txt";
+    create_keys_file(m_wallet_file, false, password, fs::exists(addrfile));
+  }
 
   return extra_multisig_info;
 }
@@ -5520,13 +5527,13 @@ bool wallet2::has_unknown_key_images() const
  * \param wallet_name Name of wallet file (should exist)
  * \param password    Password for wallet file
  */
-void wallet2::rewrite(const std::string& wallet_name, const epee::wipeable_string& password)
+void wallet2::rewrite(const fs::path& wallet_name, const epee::wipeable_string& password)
 {
   if (wallet_name.empty())
     return;
   prepare_file_names(wallet_name);
-  boost::system::error_code ignored_ec;
-  THROW_WALLET_EXCEPTION_IF(!boost::filesystem::exists(m_keys_file, ignored_ec), error::file_not_found, m_keys_file);
+  std::error_code ignored_ec;
+  THROW_WALLET_EXCEPTION_IF(!fs::exists(m_keys_file, ignored_ec), error::file_not_found, m_keys_file);
   bool r = store_keys(m_keys_file, password, m_watch_only);
   THROW_WALLET_EXCEPTION_IF(!r, error::file_save_error, m_keys_file);
 }
@@ -5536,30 +5543,25 @@ void wallet2::rewrite(const std::string& wallet_name, const epee::wipeable_strin
  * \param password          Password for wallet file
  * \param new_keys_filename [OUT] Name of new keys file
  */
-void wallet2::write_watch_only_wallet(const std::string& wallet_name, const epee::wipeable_string& password, std::string &new_keys_filename)
+void wallet2::write_watch_only_wallet(const fs::path& wallet_name, const epee::wipeable_string& password, fs::path& new_keys_filename)
 {
   prepare_file_names(wallet_name);
-  boost::system::error_code ignored_ec;
-  new_keys_filename = m_wallet_file + "-watchonly.keys";
-  bool watch_only_keys_file_exists = boost::filesystem::exists(new_keys_filename, ignored_ec);
-  THROW_WALLET_EXCEPTION_IF(watch_only_keys_file_exists, error::file_save_error, new_keys_filename);
+  std::error_code ec;
+  new_keys_filename = m_wallet_file;
+  new_keys_filename += "-watchonly.keys";
+  THROW_WALLET_EXCEPTION_IF(fs::exists(new_keys_filename, ec), error::file_save_error, new_keys_filename);
   bool r = store_keys(new_keys_filename, password, true);
   THROW_WALLET_EXCEPTION_IF(!r, error::file_save_error, new_keys_filename);
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::wallet_exists(const std::string& file_path, bool& keys_file_exists, bool& wallet_file_exists)
+void wallet2::wallet_exists(const fs::path& file_path, bool& keys_file_exists, bool& wallet_file_exists)
 {
-  std::string keys_file, wallet_file, mms_file;
+  fs::path keys_file, wallet_file, mms_file;
   do_prepare_file_names(file_path, keys_file, wallet_file, mms_file);
 
-  boost::system::error_code ignore;
-  keys_file_exists = boost::filesystem::exists(keys_file, ignore);
-  wallet_file_exists = boost::filesystem::exists(wallet_file, ignore);
-}
-//----------------------------------------------------------------------------------------------------
-bool wallet2::wallet_valid_path_format(std::string_view file_path)
-{
-  return !file_path.empty();
+  std::error_code ignore;
+  keys_file_exists = fs::exists(keys_file, ignore);
+  wallet_file_exists = fs::exists(wallet_file, ignore);
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::parse_long_payment_id(std::string_view payment_id_str, crypto::hash& payment_id)
@@ -5592,7 +5594,7 @@ bool wallet2::parse_payment_id(std::string_view payment_id_str, crypto::hash& pa
   return false;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::prepare_file_names(const std::string& file_path)
+bool wallet2::prepare_file_names(const fs::path& file_path)
 {
   do_prepare_file_names(file_path, m_keys_file, m_wallet_file, m_mms_file);
   return true;
@@ -5656,7 +5658,7 @@ void wallet2::generate_chacha_key_from_password(const epee::wipeable_string &pas
   crypto::generate_chacha_key(pass.data(), pass.size(), key, m_kdf_rounds);
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::load(const std::string& wallet_, const epee::wipeable_string& password, const std::string& keys_buf, const std::string& cache_buf)
+void wallet2::load(const fs::path& wallet_, const epee::wipeable_string& password, const std::string& keys_buf, const std::string& cache_buf)
 {
   clear();
   prepare_file_names(wallet_);
@@ -5665,13 +5667,13 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
   bool use_fs = !wallet_.empty();
   THROW_WALLET_EXCEPTION_IF((use_fs && !keys_buf.empty()) || (!use_fs && keys_buf.empty()), error::file_read_error, "must load keys either from file system or from buffer");\
 
-  boost::system::error_code e;
+  std::error_code e;
   if (use_fs)
   {
-    bool exists = boost::filesystem::exists(m_keys_file, e);
+    bool exists = fs::exists(m_keys_file, e);
     THROW_WALLET_EXCEPTION_IF(e || !exists, error::file_not_found, m_keys_file);
     lock_keys_file();
-    THROW_WALLET_EXCEPTION_IF(!is_keys_file_locked(), error::wallet_internal_error, "internal error: \"" + m_keys_file + "\" is opened by another wallet program");
+    THROW_WALLET_EXCEPTION_IF(!is_keys_file_locked(), error::wallet_internal_error, "internal error: \"" + m_keys_file.u8string() + "\" is opened by another wallet program");
 
     // this temporary unlocking is necessary for Windows (otherwise the file couldn't be loaded).
     unlock_keys_file();
@@ -5691,7 +5693,7 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
 
   //keys loaded ok!
   //try to load wallet file. but even if we failed, it is not big problem
-  if (use_fs && (!boost::filesystem::exists(m_wallet_file, e) || e))
+  if (use_fs && (!fs::exists(m_wallet_file, e) || e))
   {
     LOG_PRINT_L0("file not found: " << m_wallet_file << ", starting with empty blockchain");
     m_account_public_address = m_account.get_keys().m_account_address;
@@ -5703,7 +5705,7 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
     bool r = true;
     if (use_fs)
     {
-      load_from_file(m_wallet_file, cache_file_buf, std::numeric_limits<size_t>::max());
+      load_from_file(m_wallet_file, cache_file_buf);
       THROW_WALLET_EXCEPTION_IF(!r, error::file_read_error, m_wallet_file);
     }
 
@@ -5715,7 +5717,7 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
       try {
         serialization::parse_binary(use_fs ? cache_file_buf : cache_buf, cache_file_data);
       } catch (const std::exception& e) {
-        THROW_WALLET_EXCEPTION(error::wallet_internal_error, "internal error: failed to deserialize \"" + m_wallet_file + "\": " + e.what());
+        THROW_WALLET_EXCEPTION(error::wallet_internal_error, "internal error: failed to deserialize \"" + m_wallet_file.u8string() + "\": " + e.what());
       }
       std::string cache_data;
       cache_data.resize(cache_file_data.cache_data.size());
@@ -5752,9 +5754,10 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
           catch (...)
           {
             LOG_PRINT_L0("Failed to open portable binary, trying unportable");
-            if (use_fs) boost::filesystem::copy_file(m_wallet_file, m_wallet_file + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
+            auto unportable = m_wallet_file;
+            unportable += ".unportable";
+            if (use_fs) fs::copy_file(m_wallet_file, unportable, fs::copy_options::overwrite_existing);
             std::stringstream iss;
-            iss.str("");
             iss << cache_data;
             boost::archive::binary_iarchive ar(iss);
             ar >> *this;
@@ -5774,9 +5777,10 @@ void wallet2::load(const std::string& wallet_, const epee::wipeable_string& pass
       catch (...)
       {
         LOG_PRINT_L0("Failed to open portable binary, trying unportable");
-        if (use_fs) boost::filesystem::copy_file(m_wallet_file, m_wallet_file + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
+        auto unportable = m_wallet_file;
+        unportable += ".unportable";
+        if (use_fs) fs::copy_file(m_wallet_file, unportable, fs::copy_options::overwrite_existing);
         std::stringstream iss;
-        iss.str("");
         iss << cache_file_buf;
         boost::archive::binary_iarchive ar(iss);
         ar >> *this;
@@ -5868,7 +5872,7 @@ void wallet2::check_genesis(const crypto::hash& genesis_hash) const {
   THROW_WALLET_EXCEPTION_IF(genesis_hash != m_blockchain.genesis(), error::wallet_internal_error, what);
 }
 //----------------------------------------------------------------------------------------------------
-std::string wallet2::path() const
+const fs::path& wallet2::path() const
 {
   return m_wallet_file;
 }
@@ -5879,7 +5883,7 @@ void wallet2::store()
     store_to("", epee::wipeable_string());
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::store_to(const std::string &path, const epee::wipeable_string &password)
+void wallet2::store_to(const fs::path &path, const epee::wipeable_string &password)
 {
   trim_hashchain();
 
@@ -5889,40 +5893,28 @@ void wallet2::store_to(const std::string &path, const epee::wipeable_string &pas
   // 3. rename *.new to wallet_name
 
   // handle if we want just store wallet state to current files (ex store() replacement);
-  bool same_file = true;
-  if (!path.empty())
-  {
-    std::string canonical_path = boost::filesystem::canonical(m_wallet_file).string();
-    size_t pos = canonical_path.find(path);
-    same_file = pos != std::string::npos;
-  }
-
+  std::error_code ec;
+  bool same_file = path.empty() || (fs::exists(path, ec) && fs::equivalent(m_wallet_file, path, ec));
 
   if (!same_file)
   {
     // check if we want to store to directory which doesn't exists yet
-    boost::filesystem::path parent_path = boost::filesystem::path(path).parent_path();
+    auto parent_path = path.parent_path();
 
     // if path is not exists, try to create it
-    if (!parent_path.empty() &&  !boost::filesystem::exists(parent_path))
-    {
-      boost::system::error_code ec;
-      if (!boost::filesystem::create_directories(parent_path, ec))
-      {
-        throw std::logic_error(ec.message());
-      }
-    }
+    if (!parent_path.empty() &&  !fs::exists(parent_path))
+      fs::create_directories(parent_path);
   }
 
   // get wallet cache data
   std::optional<wallet2::cache_file_data> cache_file_data = get_cache_file_data(password);
   THROW_WALLET_EXCEPTION_IF(!cache_file_data, error::wallet_internal_error, "failed to generate wallet cache data");
 
-  const std::string new_file = same_file ? m_wallet_file + ".new" : path;
-  const std::string old_file = m_wallet_file;
-  const std::string old_keys_file = m_keys_file;
-  const std::string old_address_file = m_wallet_file + ".address.txt";
-  const std::string old_mms_file = m_mms_file;
+  const auto& old_file = m_wallet_file;
+  const auto& old_keys_file = m_keys_file;
+  fs::path old_address_file = m_wallet_file;
+  old_address_file += ".address.txt";
+  const auto& old_mms_file = m_mms_file;
 
   // save keys to the new file
   // if we here, main wallet file is saved and we only need to save keys and address files
@@ -5930,63 +5922,45 @@ void wallet2::store_to(const std::string &path, const epee::wipeable_string &pas
     prepare_file_names(path);
     bool r = store_keys(m_keys_file, password, false);
     THROW_WALLET_EXCEPTION_IF(!r, error::file_save_error, m_keys_file);
-    if (boost::filesystem::exists(old_address_file))
+    if (fs::exists(old_address_file))
     {
       // save address to the new file
-      const std::string address_file = m_wallet_file + ".address.txt";
+      fs::path address_file = path;
+      address_file += ".address.txt";
       r = save_to_file(address_file, m_account.get_public_address_str(m_nettype), true);
       THROW_WALLET_EXCEPTION_IF(!r, error::file_save_error, m_wallet_file);
       // remove old address file
-      r = boost::filesystem::remove(old_address_file);
-      if (!r) {
-        LOG_ERROR("error removing file: " << old_address_file);
-      }
+      if (!fs::remove(old_address_file, ec))
+        LOG_ERROR("error removing file: " << old_address_file << ": " << ec.message());
     }
     // remove old wallet file
-    r = boost::filesystem::remove(old_file);
-    if (!r) {
-      LOG_ERROR("error removing file: " << old_file);
-    }
+    if (!fs::remove(old_file, ec))
+      LOG_ERROR("error removing file: " << old_file << ": " << ec.message());
     // remove old keys file
-    r = boost::filesystem::remove(old_keys_file);
-    if (!r) {
-      LOG_ERROR("error removing file: " << old_keys_file);
-    }
+    if (!fs::remove(old_keys_file, ec))
+      LOG_ERROR("error removing file: " << old_keys_file << ": " << ec.message());
     // remove old message store file
-    if (boost::filesystem::exists(old_mms_file))
-    {
-      r = boost::filesystem::remove(old_mms_file);
-      if (!r) {
-        LOG_ERROR("error removing file: " << old_mms_file);
-      }
-    }
+    if (fs::exists(old_mms_file, ec) && !fs::remove(old_mms_file, ec))
+      LOG_ERROR("error removing file: " << old_mms_file << ": " << ec.message());
   } else {
     // save to new file
-#ifdef WIN32
-    // On Windows avoid using std::ofstream which does not work with UTF-8 filenames
-    // The price to pay is temporary higher memory consumption for string stream + binary archive
-    bool success = false;
+    fs::path new_file = m_wallet_file;
+    new_file += ".new";
+
     try {
-      serialization::binary_string_archiver oar;
-      serialization::serialize(oar, *cache_file_data);
-      success = save_to_file(new_file, oar.str());
-    } catch (...) {}
-    THROW_WALLET_EXCEPTION_IF(!success, error::file_save_error, new_file);
-#else
-    try {
-      std::ofstream ostr{new_file, std::ios_base::binary | std::ios_base::trunc};
+      fs::ofstream ostr{new_file, std::ios_base::binary | std::ios_base::trunc};
       serialization::binary_archiver oar{ostr};
       serialization::serialize(oar, *cache_file_data);
     } catch (const std::exception& e) {
       THROW_WALLET_EXCEPTION(error::file_save_error, new_file);
     }
-#endif
 
     // here we have "*.new" file, we need to rename it to be without ".new"
-    std::error_code e = tools::replace_file(new_file, m_wallet_file);
+    std::error_code e;
+    fs::rename(new_file, m_wallet_file, e);
     THROW_WALLET_EXCEPTION_IF(e, error::file_save_error, m_wallet_file, e);
   }
-  
+
   if (m_message_store.get_active())
   {
     // While the "m_message_store" object of course always exist, a file for the message
@@ -6945,7 +6919,7 @@ void wallet2::commit_tx(pending_tx& ptx, bool blink)
     light_rpc::SUBMIT_RAW_TX::response ores{};
     oreq.address = get_account().get_public_address_str(m_nettype);
     oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
-    oreq.tx = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(ptx.tx));
+    oreq.tx = lokimq::to_hex(tx_to_blob(ptx.tx));
     oreq.blink = blink;
     bool r = invoke_http<light_rpc::SUBMIT_RAW_TX>(oreq, ores);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "submit_raw_tx");
@@ -6956,7 +6930,7 @@ void wallet2::commit_tx(pending_tx& ptx, bool blink)
   {
     // Normal submit
     rpc::SEND_RAW_TX::request req{};
-    req.tx_as_hex = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(ptx.tx));
+    req.tx_as_hex = lokimq::to_hex(tx_to_blob(ptx.tx));
     req.do_not_relay = false;
     req.do_sanity_checks = true;
     req.blink = blink;
@@ -7022,7 +6996,7 @@ void wallet2::commit_tx(std::vector<pending_tx>& ptx_vector, bool blink)
   }
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::save_tx(const std::vector<pending_tx>& ptx_vector, const std::string &filename) const
+bool wallet2::save_tx(const std::vector<pending_tx>& ptx_vector, const fs::path& filename) const
 {
   LOG_PRINT_L0("saving " << ptx_vector.size() << " transactions");
   std::string ciphertext = dump_tx_to_str(ptx_vector);
@@ -7060,17 +7034,16 @@ std::string wallet2::dump_tx_to_str(const std::vector<pending_tx> &ptx_vector) c
   return std::string(UNSIGNED_TX_PREFIX) + ciphertext;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::load_unsigned_tx(const std::string &unsigned_filename, unsigned_tx_set &exported_txs) const
+bool wallet2::load_unsigned_tx(const fs::path& unsigned_filename, unsigned_tx_set& exported_txs) const
 {
-  std::string s;
-  boost::system::error_code errcode;
-
-  if (!boost::filesystem::exists(unsigned_filename, errcode))
+  if (std::error_code ec; !fs::exists(unsigned_filename, ec))
   {
-    LOG_PRINT_L0("File " << unsigned_filename << " does not exist: " << errcode);
+    LOG_PRINT_L0("File " << unsigned_filename << " does not exist: " << ec.message());
     return false;
   }
-  if (!load_from_file(unsigned_filename.c_str(), s))
+
+  std::string s;
+  if (!load_from_file(unsigned_filename, s))
   {
     LOG_PRINT_L0("Failed to load from " << unsigned_filename);
     return false;
@@ -7137,7 +7110,7 @@ bool wallet2::parse_unsigned_tx_from_str(std::string_view s, unsigned_tx_set &ex
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::sign_tx(const std::string &unsigned_filename, const std::string &signed_filename, std::vector<wallet2::pending_tx> &txs, std::function<bool(const unsigned_tx_set&)> accept_func, bool export_raw)
+bool wallet2::sign_tx(const fs::path& unsigned_filename, const fs::path& signed_filename, std::vector<wallet2::pending_tx>& txs, std::function<bool(const unsigned_tx_set&)> accept_func, bool export_raw)
 {
   unsigned_tx_set exported_txs;
   if(!load_unsigned_tx(unsigned_filename, exported_txs))
@@ -7283,7 +7256,7 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, std::vector<wallet2::pendin
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::sign_tx(unsigned_tx_set &exported_txs, const std::string &signed_filename, std::vector<wallet2::pending_tx> &txs, bool export_raw)
+bool wallet2::sign_tx(unsigned_tx_set& exported_txs, const fs::path& signed_filename, std::vector<wallet2::pending_tx>& txs, bool export_raw)
 {
   // sign the transactions
   signed_tx_set signed_txes;
@@ -7304,8 +7277,10 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, const std::string &signed_f
   {
     for (size_t i = 0; i < signed_txes.ptx.size(); ++i)
     {
-      std::string tx_as_hex = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(signed_txes.ptx[i].tx));
-      std::string raw_filename = signed_filename + "_raw" + (signed_txes.ptx.size() == 1 ? "" : ("_" + std::to_string(i)));
+      std::string tx_as_hex = lokimq::to_hex(tx_to_blob(signed_txes.ptx[i].tx));
+      fs::path raw_filename = signed_filename;
+      raw_filename += "_raw";
+      if (signed_txes.ptx.size() > 1) raw_filename += "_" + std::to_string(i);
       if (!save_to_file(raw_filename, tx_as_hex))
       {
         LOG_PRINT_L0("Failed to save file to " << raw_filename);
@@ -7342,19 +7317,16 @@ std::string wallet2::sign_tx_dump_to_str(unsigned_tx_set &exported_txs, std::vec
   return std::string(SIGNED_TX_PREFIX) + ciphertext;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::load_tx(const std::string &signed_filename, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set&)> accept_func)
+bool wallet2::load_tx(const fs::path& signed_filename, std::vector<tools::wallet2::pending_tx>& ptx, std::function<bool(const signed_tx_set&)> accept_func)
 {
-  std::string s;
-  boost::system::error_code errcode;
-  signed_tx_set signed_txs;
-
-  if (!boost::filesystem::exists(signed_filename, errcode))
+  if (std::error_code ec; !fs::exists(signed_filename, ec))
   {
-    LOG_PRINT_L0("File " << signed_filename << " does not exist: " << errcode);
+    LOG_PRINT_L0("File " << signed_filename << " does not exist: " << ec);
     return false;
   }
 
-  if (!load_from_file(signed_filename.c_str(), s))
+  std::string s;
+  if (!load_from_file(signed_filename, s))
   {
     LOG_PRINT_L0("Failed to load from " << signed_filename);
     return false;
@@ -7478,7 +7450,7 @@ std::string wallet2::save_multisig_tx(multisig_tx_set txs)
   return std::string(MULTISIG_UNSIGNED_TX_PREFIX) + ciphertext;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::save_multisig_tx(const multisig_tx_set &txs, const std::string &filename)
+bool wallet2::save_multisig_tx(const multisig_tx_set& txs, const fs::path& filename)
 {
   std::string ciphertext = save_multisig_tx(txs);
   if (ciphertext.empty())
@@ -7506,7 +7478,7 @@ std::string wallet2::save_multisig_tx(const std::vector<pending_tx>& ptx_vector)
   return save_multisig_tx(make_multisig_tx_set(ptx_vector));
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::save_multisig_tx(const std::vector<pending_tx>& ptx_vector, const std::string &filename)
+bool wallet2::save_multisig_tx(const std::vector<pending_tx>& ptx_vector, const fs::path& filename)
 {
   std::string ciphertext = save_multisig_tx(ptx_vector);
   if (ciphertext.empty())
@@ -7591,17 +7563,16 @@ bool wallet2::load_multisig_tx(cryptonote::blobdata s, multisig_tx_set &exported
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::load_multisig_tx_from_file(const std::string &filename, multisig_tx_set &exported_txs, std::function<bool(const multisig_tx_set&)> accept_func)
+bool wallet2::load_multisig_tx_from_file(const fs::path& filename, multisig_tx_set& exported_txs, std::function<bool(const multisig_tx_set&)> accept_func)
 {
-  std::string s;
-  boost::system::error_code errcode;
-
-  if (!boost::filesystem::exists(filename, errcode))
+  if (std::error_code ec; !fs::exists(filename, ec))
   {
-    LOG_PRINT_L0("File " << filename << " does not exist: " << errcode);
+    LOG_PRINT_L0("File " << filename << " does not exist: " << ec.message());
     return false;
   }
-  if (!load_from_file(filename.c_str(), s))
+
+  std::string s;
+  if (!load_from_file(filename, s))
   {
     LOG_PRINT_L0("Failed to load from " << filename);
     return false;
@@ -7722,7 +7693,7 @@ bool wallet2::sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::sign_multisig_tx_to_file(multisig_tx_set &exported_txs, const std::string &filename, std::vector<crypto::hash> &txids)
+bool wallet2::sign_multisig_tx_to_file(multisig_tx_set& exported_txs, const fs::path& filename, std::vector<crypto::hash>& txids)
 {
   bool r = sign_multisig_tx(exported_txs, txids);
   if (!r)
@@ -7730,7 +7701,7 @@ bool wallet2::sign_multisig_tx_to_file(multisig_tx_set &exported_txs, const std:
   return save_multisig_tx(exported_txs, filename);
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::sign_multisig_tx_from_file(const std::string &filename, std::vector<crypto::hash> &txids, std::function<bool(const multisig_tx_set&)> accept_func)
+bool wallet2::sign_multisig_tx_from_file(const fs::path& filename, std::vector<crypto::hash> &txids, std::function<bool(const multisig_tx_set&)> accept_func)
 {
   multisig_tx_set exported_txs;
   if(!load_multisig_tx_from_file(filename, exported_txs))
@@ -7842,10 +7813,10 @@ loki_construct_tx_params wallet2::construct_params(uint8_t hf_version, txtype tx
 
 
 //----------------------------------------------------------------------------------------------------
-bool wallet2::set_ring_database(const std::string &filename)
+bool wallet2::set_ring_database(fs::path filename)
 {
-  m_ring_database = filename;
-  MINFO("ringdb path set to " << filename);
+  m_ring_database = std::move(filename);
+  MINFO("ringdb path set to " << m_ring_database.u8string());
   m_ringdb.reset();
   if (!m_ring_database.empty())
   {
@@ -7853,12 +7824,12 @@ bool wallet2::set_ring_database(const std::string &filename)
     {
       cryptonote::block b;
       generate_genesis(b);
-      m_ringdb.reset(new tools::ringdb(m_ring_database, epee::string_tools::pod_to_hex(get_block_hash(b))));
+      m_ringdb = std::make_unique<tools::ringdb>(m_ring_database, tools::type_to_hex(get_block_hash(b)));
     }
     catch (const std::exception &e)
     {
       MERROR("Failed to initialize ringdb: " << e.what());
-      m_ring_database = "";
+      m_ring_database.clear();
       return false;
     }
   }
@@ -12931,12 +12902,12 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
   return true;
 }
 
-std::string wallet2::get_wallet_file() const
+const fs::path& wallet2::get_wallet_file() const
 {
   return m_wallet_file;
 }
 
-std::string wallet2::get_keys_file() const
+const fs::path& wallet2::get_keys_file() const
 {
   return m_keys_file;
 }
@@ -13242,7 +13213,7 @@ crypto::public_key wallet2::get_tx_pub_key_from_received_outs(const tools::walle
   return tx_pub_key;
 }
 
-bool wallet2::export_key_images_to_file(const std::string &filename, bool requested_only) const
+bool wallet2::export_key_images_to_file(const fs::path& filename, bool requested_only) const
 {
   // NOTE: Exported Key Image File
   // [(magic bytes) (ciphertext..................................................................................) (hashed ciphertext signature)]
@@ -13332,17 +13303,17 @@ std::pair<size_t, std::vector<std::pair<crypto::key_image, crypto::signature>>> 
   return std::make_pair(offset, ski);
 }
 
-uint64_t wallet2::import_key_images_from_file(const std::string &filename, uint64_t &spent, uint64_t &unspent)
+uint64_t wallet2::import_key_images_from_file(const fs::path& filename, uint64_t& spent, uint64_t& unspent)
 {
   PERF_TIMER(__FUNCTION__);
   std::string data;
   bool r = load_from_file(filename, data);
 
-  THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, std::string(tr("failed to read file ")) + filename);
+  THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, std::string(tr("failed to read file ")) + filename.u8string());
 
   if (!tools::starts_with(data, KEY_IMAGE_EXPORT_FILE_MAGIC))
   {
-    THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string("Bad key image export file magic in ") + filename);
+    THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string("Bad key image export file magic in ") + filename.u8string());
   }
 
   try
@@ -13352,11 +13323,11 @@ uint64_t wallet2::import_key_images_from_file(const std::string &filename, uint6
   }
   catch (const std::exception &e)
   {
-    THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string("Failed to decrypt ") + filename + ": " + e.what());
+    THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string("Failed to decrypt ") + filename.u8string() + ": " + e.what());
   }
 
   const size_t headerlen = 4 + 2 * sizeof(crypto::public_key);
-  THROW_WALLET_EXCEPTION_IF(data.size() < headerlen, error::wallet_internal_error, std::string("Bad data size from file ") + filename);
+  THROW_WALLET_EXCEPTION_IF(data.size() < headerlen, error::wallet_internal_error, std::string("Bad data size from file ") + filename.u8string());
 
   uint32_t offset;
   std::memcpy(&offset, data.data(), sizeof(offset));
@@ -13372,13 +13343,13 @@ uint64_t wallet2::import_key_images_from_file(const std::string &filename, uint6
     const cryptonote::account_public_address &keys = get_account().get_keys().m_account_address;
     if (public_spend_key != keys.m_spend_public_key || public_view_key != keys.m_view_public_key)
     {
-      THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string( "Key images from ") + filename + " are for a different account");
+      THROW_WALLET_EXCEPTION(error::wallet_internal_error, std::string( "Key images from ") + filename.u8string() + " are for a different account");
     }
   }
 
   const size_t record_size        = sizeof(crypto::key_image) + sizeof(crypto::signature);
   const size_t record_buffer_size = data.size() - headerlen;
-  THROW_WALLET_EXCEPTION_IF(record_buffer_size % record_size, error::wallet_internal_error, std::string("Bad data size from file ") + filename);
+  THROW_WALLET_EXCEPTION_IF(record_buffer_size % record_size, error::wallet_internal_error, std::string("Bad data size from file ") + filename.u8string());
 
   const size_t num_records = record_buffer_size / record_size;
   std::vector<std::pair<crypto::key_image, crypto::signature>> ski(num_records);
@@ -14687,14 +14658,18 @@ std::string wallet2::get_rpc_status(const std::string &s) const
 }
 //----------------------------------------------------------------------------------------------------
 
-bool wallet2::save_to_file(const std::string& path_to_file, const std::string& raw, bool is_printable) const
+bool wallet2::save_to_file(const fs::path& path_to_file, std::string_view binary, bool is_printable) const
 {
   if (is_printable || m_export_format == ExportFormat::Binary)
   {
-    return epee::file_io_utils::save_string_to_file(path_to_file, raw);
+    return tools::dump_file(path_to_file, binary);
   }
 
+#ifdef _WIN32
+  FILE *fp = _wfopen(path_to_file.c_str(), L"w+");
+#else
   FILE *fp = fopen(path_to_file.c_str(), "w+");
+#endif
   if (!fp)
   {
     MERROR("Failed to open wallet file for writing: " << path_to_file << ": " << strerror(errno));
@@ -14702,29 +14677,18 @@ bool wallet2::save_to_file(const std::string& path_to_file, const std::string& r
   }
 
   // Save the result b/c we need to close the fp before returning success/failure.
-  int write_result = PEM_write(fp, ASCII_OUTPUT_MAGIC.c_str(), "", (const unsigned char *) raw.c_str(), raw.length());
+  int write_result = PEM_write(fp, ASCII_OUTPUT_MAGIC.c_str(), "", reinterpret_cast<const unsigned char *>(binary.data()), binary.length());
   fclose(fp);
 
-  if (write_result == 0)
-  {
-    return false;
-  }
-  else
-  {
-    return true;
-  }
+  return write_result != 0;
 }
 //----------------------------------------------------------------------------------------------------
 
-bool wallet2::load_from_file(const std::string& path_to_file, std::string& target_str,
-                             size_t max_size)
+bool wallet2::load_from_file(const fs::path& path_to_file, std::string& target_str)
 {
   std::string data;
-  bool r = epee::file_io_utils::load_file_to_string(path_to_file, data, max_size);
-  if (!r)
-  {
+  if (!tools::slurp_file(path_to_file, data))
     return false;
-  }
 
   if (data.find(ASCII_OUTPUT_MAGIC) == std::string::npos)
   {

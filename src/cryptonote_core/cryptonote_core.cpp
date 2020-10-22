@@ -57,7 +57,6 @@ extern "C" {
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
 #include "misc_language.h"
-#include "file_io_utils.h"
 #include <csignal>
 #include "checkpoints/checkpoints.h"
 #include "ringct/rctTypes.h"
@@ -118,13 +117,13 @@ namespace cryptonote
   const command_line::arg_descriptor<std::string, false, true, 2> arg_data_dir = {
     "data-dir"
   , "Specify data directory"
-  , tools::get_default_data_dir()
+  , tools::get_default_data_dir().u8string()
   , {{ &arg_testnet_on, &arg_devnet_on }}
   , [](std::array<bool, 2> testnet_devnet, bool defaulted, std::string val)->std::string {
       if (testnet_devnet[0])
-        return (boost::filesystem::path(val) / "testnet").string();
+        return (fs::u8path(val) / "testnet").u8string();
       else if (testnet_devnet[1])
-        return (boost::filesystem::path(val) / "devnet").string();
+        return (fs::u8path(val) / "devnet").u8string();
       return val;
     }
   };
@@ -279,7 +278,6 @@ namespace cryptonote
   , m_pprotocol(&m_protocol_stub)
   , m_starter_message_showed(false)
   , m_target_blockchain_height(0)
-  , m_checkpoints_path("")
   , m_last_json_checkpoints_update(0)
   , m_nettype(UNDEFINED)
   , m_last_storage_server_ping(0)
@@ -377,7 +375,7 @@ namespace cryptonote
       m_nettype = testnet ? TESTNET : devnet ? DEVNET : MAINNET;
     }
 
-    m_config_folder = command_line::get_arg(vm, arg_data_dir);
+    m_config_folder = fs::u8path(command_line::get_arg(vm, arg_data_dir));
 
     test_drop_download_height(command_line::get_arg(vm, arg_test_drop_download_height));
     m_pad_transactions = get_arg(vm, arg_pad_transactions);
@@ -616,16 +614,20 @@ namespace cryptonote
       m_service_node_list.set_my_service_node_keys(&m_service_keys);
     }
 
-    boost::filesystem::path folder(m_config_folder);
+    auto folder = m_config_folder;
     if (m_nettype == FAKECHAIN)
       folder /= "fake";
 
     // make sure the data directory exists, and try to lock it
-    CHECK_AND_ASSERT_MES (boost::filesystem::exists(folder) || boost::filesystem::create_directories(folder), false,
-      std::string("Failed to create directory ").append(folder.string()).c_str());
+
+    if (std::error_code ec; !fs::create_directories(folder, ec) && ec)
+    {
+      MERROR("Failed to create directory " + folder.u8string() + (ec ? ": " + ec.message() : ""s));
+      return false;
+    }
 
     std::unique_ptr<BlockchainDB> db(new_db());
-    if (db == NULL)
+    if (!db)
     {
       LOG_ERROR("Failed to initialize a database");
       return false;
@@ -634,9 +636,8 @@ namespace cryptonote
     auto lns_db_file_path = folder / "lns.db";
 
     folder /= db->get_db_name();
-    MGINFO("Loading blockchain from folder " << folder.string() << " ...");
+    MGINFO("Loading blockchain from folder " << folder << " ...");
 
-    const std::string filename = folder.string();
     // default to fast:async:1 if overridden
     blockchain_db_sync_mode sync_mode = db_defaultsync;
     bool sync_on_blocks = true;
@@ -646,12 +647,12 @@ namespace cryptonote
     if (m_nettype == FAKECHAIN && !keep_fakechain)
     {
       // reset the db by removing the database file before opening it
-      if (!db->remove_data_file(filename))
+      if (!db->remove_data_file(folder))
       {
-        MERROR("Failed to remove data file in " << filename);
+        MERROR("Failed to remove data file in " << folder);
         return false;
       }
-      boost::filesystem::remove(lns_db_file_path);
+      fs::remove(lns_db_file_path);
     }
 #endif
 
@@ -732,7 +733,7 @@ namespace cryptonote
       if (db_salvage)
         db_flags |= DBF_SALVAGE;
 
-      db->open(filename, m_nettype, db_flags);
+      db->open(folder, m_nettype, db_flags);
       if(!db->m_open)
         return false;
     }
@@ -800,14 +801,9 @@ namespace cryptonote
     }
 
     // Checkpoints
-    {
-      auto data_dir = boost::filesystem::path(m_config_folder);
-      boost::filesystem::path json(JSON_HASH_FILE_NAME);
-      boost::filesystem::path checkpoint_json_hashfile_fullpath = data_dir / json;
-      m_checkpoints_path = checkpoint_json_hashfile_fullpath.string();
-    }
+    m_checkpoints_path = m_config_folder / fs::u8path(JSON_HASH_FILE_NAME);
 
-    sqlite3 *lns_db = lns::init_loki_name_system(lns_db_file_path.string().c_str(), db->is_read_only());
+    sqlite3 *lns_db = lns::init_loki_name_system(lns_db_file_path, db->is_read_only());
     if (!lns_db) return false;
 
     init_lokimq(vm);
@@ -863,16 +859,17 @@ namespace cryptonote
   ///              returns true for success/false for failure
   /// generate_pair - a void function taking (privkey &, pubkey &) that sets them to the generated values; can throw on error.
   template <typename Privkey, typename Pubkey, typename GetPubkey, typename GeneratePair>
-  bool init_key(const std::string &keypath, Privkey &privkey, Pubkey &pubkey, GetPubkey get_pubkey, GeneratePair generate_pair) {
-    if (epee::file_io_utils::is_file_exist(keypath))
+  bool init_key(const fs::path &keypath, Privkey &privkey, Pubkey &pubkey, GetPubkey get_pubkey, GeneratePair generate_pair) {
+    std::error_code ec;
+    if (fs::exists(keypath, ec))
     {
       std::string keystr;
-      bool r = epee::file_io_utils::load_file_to_string(keypath, keystr);
+      bool r = tools::slurp_file(keypath, keystr);
       memcpy(&unwrap(unwrap(privkey)), keystr.data(), sizeof(privkey));
       memwipe(&keystr[0], keystr.size());
-      CHECK_AND_ASSERT_MES(r, false, "failed to load service node key from " + keypath);
+      CHECK_AND_ASSERT_MES(r, false, "failed to load service node key from " + keypath.u8string());
       CHECK_AND_ASSERT_MES(keystr.size() == sizeof(privkey), false,
-          "service node key file " + keypath + " has an invalid size");
+          "service node key file " + keypath.u8string() + " has an invalid size");
 
       r = get_pubkey(privkey, pubkey);
       CHECK_AND_ASSERT_MES(r, false, "failed to generate pubkey from secret key");
@@ -886,13 +883,10 @@ namespace cryptonote
         return false;
       }
 
-      std::string keystr(reinterpret_cast<const char *>(&privkey), sizeof(privkey));
-      bool r = epee::file_io_utils::save_string_to_file(keypath, keystr);
-      memwipe(&keystr[0], keystr.size());
-      CHECK_AND_ASSERT_MES(r, false, "failed to save service node key to " + keypath);
+      bool r = tools::dump_file(keypath, tools::view_guts(privkey));
+      CHECK_AND_ASSERT_MES(r, false, "failed to save service node key to " + keypath.u8string());
 
-      using namespace boost::filesystem;
-      permissions(keypath, owner_read);
+      fs::permissions(keypath, fs::perms::owner_read, ec);
     }
     return true;
   }
@@ -919,7 +913,7 @@ namespace cryptonote
     // only contains the private key value but not the secret key value that we need for full
     // Ed25519 signing).
     //
-    if (!init_key(m_config_folder + "/key_ed25519", keys.key_ed25519, keys.pub_ed25519,
+    if (!init_key(m_config_folder / "key_ed25519", keys.key_ed25519, keys.pub_ed25519,
           [](crypto::ed25519_secret_key &sk, crypto::ed25519_public_key &pk) { crypto_sign_ed25519_sk_to_pk(pk.data, sk.data); return true; },
           [](crypto::ed25519_secret_key &sk, crypto::ed25519_public_key &pk) { crypto_sign_ed25519_keypair(pk.data, sk.data); })
        )
@@ -936,7 +930,7 @@ namespace cryptonote
     // *just* the private point, but not the seed, and so cannot be used for full Ed25519 signatures
     // (which rely on the seed for signing).
     if (m_service_node) {
-      if (!epee::file_io_utils::is_file_exist(m_config_folder + "/key")) {
+      if (std::error_code ec; !fs::exists(m_config_folder / "key", ec)) {
         epee::wipeable_string privkey_signhash;
         privkey_signhash.resize(crypto_hash_sha512_BYTES);
         unsigned char* pk_sh_data = reinterpret_cast<unsigned char*>(privkey_signhash.data());
@@ -952,7 +946,7 @@ namespace cryptonote
         if (!crypto::secret_key_to_public_key(keys.key, keys.pub))
           throw std::runtime_error{"Failed to derive primary key from ed25519 key"};
         assert(0 == std::memcmp(keys.pub.data, keys.pub_ed25519.data, 32));
-      } else if (!init_key(m_config_folder + "/key", keys.key, keys.pub,
+      } else if (!init_key(m_config_folder / "key", keys.key, keys.pub,
           crypto::secret_key_to_public_key,
           [](crypto::secret_key &key, crypto::public_key &pubkey) {
             throw std::runtime_error{"Internal error: old-style public keys are no longer generated"};
@@ -2491,9 +2485,7 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   uint64_t core::get_free_space() const
   {
-    boost::filesystem::path path(m_config_folder);
-    boost::filesystem::space_info si = boost::filesystem::space(path);
-    return si.available;
+    return fs::space(m_config_folder).available;
   }
   //-----------------------------------------------------------------------------------------------
   std::shared_ptr<const service_nodes::quorum> core::get_quorum(service_nodes::quorum_type type, uint64_t height, bool include_old, std::vector<std::shared_ptr<const service_nodes::quorum>> *alt_states) const

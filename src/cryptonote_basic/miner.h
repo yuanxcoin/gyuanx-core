@@ -37,6 +37,7 @@
 #include "cryptonote_basic/verification_context.h"
 #include "cryptonote_basic/difficulty.h"
 #include "common/periodic_task.h"
+#include "common/fs.h"
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -123,7 +124,7 @@ namespace cryptonote
     tools::periodic_task m_autodetect_interval{1s};
     std::vector<blobdata> m_extra_messages;
     miner_config m_config;
-    std::string m_config_folder_path;    
+    fs::path m_config_dir;
     std::atomic<uint64_t> m_last_hr_merge_time;
     std::atomic<uint64_t> m_hashes;
     std::atomic<uint64_t> m_total_hashes;

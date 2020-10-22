@@ -32,13 +32,13 @@
 
 #include <unordered_map>
 #include <unordered_set>
-#include <boost/filesystem.hpp>
 #include <boost/archive/portable_binary_iarchive.hpp>
 #include <boost/archive/portable_binary_oarchive.hpp>
 #include "common/unordered_containers_boost_serialization.h"
 #include "common/command_line.h"
 #include "common/varint.h"
 #include "common/signal_handler.h"
+#include "common/fs.h"
 #include "serialization/boost_std_variant.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_core/cryptonote_core.h"
@@ -337,8 +337,6 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  boost::filesystem::path output_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
@@ -447,7 +445,7 @@ int main(int argc, char* argv[])
   }
   LOG_PRINT_L0("database: LMDB");
 
-  const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
+  fs::path filename = fs::u8path(opt_data_dir) / db->get_db_name();
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
 
   try
@@ -468,9 +466,9 @@ int main(int argc, char* argv[])
 
   ancestry_state_t state;
 
-  const std::string state_file_path = (boost::filesystem::path(opt_data_dir) / "ancestry-state.bin").string();
+  fs::path state_file_path = fs::u8path(opt_data_dir) / "ancestry-state.bin";
   LOG_PRINT_L0("Loading state data from " << state_file_path);
-  std::ifstream state_data_in;
+  fs::ifstream state_data_in;
   state_data_in.open(state_file_path, std::ios_base::binary | std::ios_base::in);
   if (!state_data_in.fail())
   {

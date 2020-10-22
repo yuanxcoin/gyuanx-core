@@ -42,6 +42,7 @@
 #include "subaddress_account.h"
 #include "common_defines.h"
 #include "common/util.h"
+#include "common/fs.h"
 
 #include "mnemonics/electrum-words.h"
 #include "mnemonics/english.h"
@@ -49,11 +50,6 @@
 #include <sstream>
 #include <unordered_map>
 #include <thread>
-
-#ifdef WIN32
-#include <boost/locale.hpp>
-#include <boost/filesystem.hpp>
-#endif
 
 using namespace std;
 using namespace cryptonote;
@@ -72,17 +68,16 @@ namespace {
     // Connection timeout 30 sec
     static const int    DEFAULT_CONNECTION_TIMEOUT_MILLIS = 1000 * 30;
 
-    std::string get_default_ringdb_path(cryptonote::network_type nettype)
+    fs::path get_default_ringdb_path(cryptonote::network_type nettype)
     {
-      boost::filesystem::path dir = tools::get_default_data_dir();
+      auto dir = tools::get_default_data_dir();
       // remove .loki, replace with .shared-ringdb
-      dir = dir.remove_filename();
-      dir /= ".shared-ringdb";
+      dir.replace_filename(".shared-ringdb");
       if (nettype == cryptonote::TESTNET)
         dir /= "testnet";
       else if (nettype == cryptonote::DEVNET)
         dir /= "devnet";
-      return dir.string();
+      return dir;
     }
 
     void checkMultisigWalletReady(const tools::wallet2* wallet) {
@@ -402,14 +397,9 @@ uint64_t Wallet::maximumAllowedAmount()
     return std::numeric_limits<uint64_t>::max();
 }
 
-void Wallet::init(const char *argv0, const char *default_log_base_name, const std::string &log_path, bool console) {
-#ifdef WIN32
-    // Activate UTF-8 support for Boost filesystem classes on Windows
-    std::locale::global(boost::locale::generator().generate(""));
-    boost::filesystem::path::imbue(std::locale());
-#endif
+void Wallet::init(const char *argv0, const char *default_log_base_name, const fs::path& log_path, bool console) {
     epee::string_tools::set_module_name_and_folder(argv0);
-    mlog_configure(log_path.empty() ? mlog_get_default_log_path(default_log_base_name) : log_path.c_str(), console);
+    mlog_configure(log_path.empty() ? mlog_get_default_log_path(default_log_base_name) : log_path.u8string(), console);
 }
 
 void Wallet::debug(const std::string &category, const std::string &str) {
@@ -496,7 +486,7 @@ WalletImpl::~WalletImpl()
     LOG_PRINT_L1(__FUNCTION__ << " finished");
 }
 
-bool WalletImpl::create(const std::string &path, const std::string &password, const std::string &language)
+bool WalletImpl::create(const fs::path& path, const std::string &password, const std::string &language)
 {
 
     clearStatus();
@@ -533,7 +523,7 @@ bool WalletImpl::create(const std::string &path, const std::string &password, co
     return true;
 }
 
-bool WalletImpl::createWatchOnly(const std::string &path, const std::string &password, const std::string &language) const
+bool WalletImpl::createWatchOnly(const fs::path& path, const std::string &password, const std::string &language) const
 {
     clearStatus();
     std::unique_ptr<tools::wallet2> view_wallet(new tools::wallet2(m_wallet->nettype()));
@@ -599,7 +589,7 @@ bool WalletImpl::createWatchOnly(const std::string &path, const std::string &pas
     return true;
 }
 
-bool WalletImpl::recoverFromKeys(const std::string &path,
+bool WalletImpl::recoverFromKeys(const fs::path& path,
                                 const std::string &language,
                                 const std::string &address_string,
                                 const std::string &viewkey_string,
@@ -608,7 +598,7 @@ bool WalletImpl::recoverFromKeys(const std::string &path,
     return recoverFromKeysWithPassword(path, "", language, address_string, viewkey_string, spendkey_string);
 }
 
-bool WalletImpl::recoverFromKeysWithPassword(const std::string &path,
+bool WalletImpl::recoverFromKeysWithPassword(const fs::path& path,
                                  const std::string &password,
                                  const std::string &language,
                                  const std::string &address_string,
@@ -704,7 +694,7 @@ bool WalletImpl::recoverFromKeysWithPassword(const std::string &path,
     return true;
 }
 
-bool WalletImpl::recoverFromDevice(const std::string &path, const std::string &password, const std::string &device_name)
+bool WalletImpl::recoverFromDevice(const fs::path& path, const std::string &password, const std::string &device_name)
 {
     clearStatus();
     m_recoveringFromSeed = false;
@@ -726,7 +716,7 @@ Wallet::Device WalletImpl::getDeviceType() const
     return static_cast<Wallet::Device>(m_wallet->get_device_type());
 }
 
-bool WalletImpl::open(const std::string &path, const std::string &password)
+bool WalletImpl::open(const fs::path& path, const std::string &password)
 {
     clearStatus();
     m_recoveringFromSeed = false;
@@ -752,12 +742,12 @@ bool WalletImpl::open(const std::string &path, const std::string &password)
     return status() == Status_Ok;
 }
 
-bool WalletImpl::recover(const std::string &path, const std::string &seed)
+bool WalletImpl::recover(const fs::path& path, const std::string &seed)
 {
     return recover(path, "", seed);
 }
 
-bool WalletImpl::recover(const std::string &path, const std::string &password, const std::string &seed, const std::string &seed_offset/* = {}*/)
+bool WalletImpl::recover(const fs::path& path, const std::string &password, const std::string &seed, const std::string &seed_offset/* = {}*/)
 {
     clearStatus();
     m_errorString.clear();
@@ -935,12 +925,12 @@ std::string WalletImpl::publicMultisigSignerKey() const
     }
 }
 
-std::string WalletImpl::path() const
+fs::path WalletImpl::path() const
 {
     return m_wallet->path();
 }
 
-bool WalletImpl::store(const std::string &path)
+bool WalletImpl::store(const fs::path& path)
 {
     clearStatus();
     try {
@@ -958,12 +948,12 @@ bool WalletImpl::store(const std::string &path)
     return true;
 }
 
-string WalletImpl::filename() const
+fs::path WalletImpl::filename() const
 {
     return m_wallet->get_wallet_file();
 }
 
-string WalletImpl::keysFilename() const
+fs::path WalletImpl::keysFilename() const
 {
     return m_wallet->get_keys_file();
 }
@@ -1154,7 +1144,7 @@ int WalletImpl::autoRefreshInterval() const
     return m_refreshIntervalMillis;
 }
 
-UnsignedTransaction *WalletImpl::loadUnsignedTx(const std::string &unsigned_filename) {
+UnsignedTransaction* WalletImpl::loadUnsignedTx(const fs::path& unsigned_filename) {
   clearStatus();
   UnsignedTransactionImpl * transaction = new UnsignedTransactionImpl(*this);
   if (!m_wallet->load_unsigned_tx(unsigned_filename, transaction->m_unsigned_tx_set)){
@@ -1175,7 +1165,7 @@ UnsignedTransaction *WalletImpl::loadUnsignedTx(const std::string &unsigned_file
   return transaction;
 }
 
-bool WalletImpl::submitTransaction(const string &fileName) {
+bool WalletImpl::submitTransaction(const fs::path& fileName) {
   clearStatus();
   std::unique_ptr<PendingTransactionImpl> transaction(new PendingTransactionImpl(*this));
 
@@ -1193,7 +1183,7 @@ bool WalletImpl::submitTransaction(const string &fileName) {
   return true;
 }
 
-bool WalletImpl::exportKeyImages(const string &filename) 
+bool WalletImpl::exportKeyImages(const fs::path& filename) 
 {
   if (m_wallet->watch_only())
   {
@@ -1205,7 +1195,7 @@ bool WalletImpl::exportKeyImages(const string &filename)
   {
     if (!m_wallet->export_key_images_to_file(filename, false /* requested_ki_only */))
     {
-      setStatusError(tr("failed to save file ") + filename);
+      setStatusError(tr("failed to save file ") + filename.u8string());
       return false;
     }
   }
@@ -1218,7 +1208,7 @@ bool WalletImpl::exportKeyImages(const string &filename)
   return true;
 }
 
-bool WalletImpl::importKeyImages(const string &filename)
+bool WalletImpl::importKeyImages(const fs::path& filename)
 {
   if (!trustedDaemon()) {
     setStatusError(tr("Key images can only be imported with a trusted daemon"));

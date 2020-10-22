@@ -30,12 +30,9 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 #include <boost/format.hpp>
 #include <boost/asio/ip/address.hpp>
-#include <boost/filesystem/operations.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/preprocessor/stringize.hpp>
 #include <cstdint>
 #include "cryptonote_basic/cryptonote_basic_impl.h"
-#include "include_base_utils.h"
 #include <chrono>
 #include <exception>
 
@@ -511,20 +508,17 @@ namespace tools
         MERROR(arg_wallet_dir.name << " and " << wallet_args::arg_wallet_file().name << " are incompatible, use only one of them");
         return false;
       }
-      m_wallet_dir = command_line::get_arg(m_vm, arg_wallet_dir);
-#ifdef _WIN32
-#define MKDIR(path, mode)    mkdir(path)
-#else
-#define MKDIR(path, mode)    mkdir(path, mode)
-#endif
-      if (!m_wallet_dir.empty() && MKDIR(m_wallet_dir.c_str(), 0700) < 0 && errno != EEXIST)
+      m_wallet_dir = fs::u8path(command_line::get_arg(m_vm, arg_wallet_dir));
+      if (!m_wallet_dir.empty())
       {
-#ifdef _WIN32
-        LOG_ERROR(tr("Failed to create directory ") + m_wallet_dir);
-#else
-        LOG_ERROR((boost::format(tr("Failed to create directory %s: %s")) % m_wallet_dir % strerror(errno)).str());
-#endif
-        return false;
+        std::error_code ec;
+        if (fs::create_directories(m_wallet_dir, ec))
+          fs::permissions(m_wallet_dir, fs::perms::owner_all, ec);
+        else if (ec)
+        {
+          LOG_ERROR(tr("Failed to create directory ") << m_wallet_dir << ": " << ec.message());
+          return false;
+        }
       }
     }
 
@@ -2370,7 +2364,7 @@ namespace {
 #endif
     if (ptr)
       throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Invalid filename"};
-    std::string wallet_file = req.filename.empty() ? "" : (m_wallet_dir + "/" + req.filename);
+    fs::path wallet_file = req.filename.empty() ? fs::path{} : m_wallet_dir / fs::u8path(req.filename);
     {
       std::vector<std::string> languages;
       crypto::ElectrumWords::get_language_list(languages, false);
@@ -2431,7 +2425,7 @@ namespace {
       m_wallet.reset();
     }
 
-    std::string wallet_file = m_wallet_dir + "/" + req.filename;
+    fs::path wallet_file = m_wallet_dir / fs::u8path(req.filename);
     auto vm2 = password_arg_hack(req.password, m_vm);
     std::unique_ptr<tools::wallet2> wal = tools::wallet2::make_from_file(vm2, true, wallet_file, nullptr).first;
     if (!wal)
@@ -2466,6 +2460,18 @@ namespace {
       throw wallet_rpc_error{error_code::INVALID_PASSWORD, "Invalid original password."};
     return {};
   }
+
+  static fs::path get_wallet_path(fs::path dir, fs::path filename)
+  {
+    if (filename.has_parent_path())
+      throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Invalid filename"};
+    auto wallet_file = filename.empty() ? filename : dir / filename;
+    // check if wallet file already exists
+    if (std::error_code ec; !wallet_file.empty() && fs::exists(wallet_file, ec))
+      throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Wallet already exists."};
+    return wallet_file;
+  }
+
   //------------------------------------------------------------------------------------------------------------------------------
   GENERATE_FROM_KEYS::response wallet_rpc_server::invoke(GENERATE_FROM_KEYS::request&& req)
   {
@@ -2480,23 +2486,7 @@ namespace {
 
     GENERATE_FROM_KEYS::response res{};
 
-    const char *ptr = strchr(req.filename.c_str(), '/');
-  #ifdef _WIN32
-    if (!ptr)
-      ptr = strchr(req.filename.c_str(), '\\');
-    if (!ptr)
-      ptr = strchr(req.filename.c_str(), ':');
-  #endif
-    if (ptr)
-      throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Invalid filename"};
-    std::string wallet_file = req.filename.empty() ? "" : (m_wallet_dir + "/" + req.filename);
-    // check if wallet file already exists
-    if (!wallet_file.empty())
-    {
-      boost::system::error_code ignored_ec;
-      if (boost::filesystem::exists(wallet_file, ignored_ec))
-        throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Wallet already exists."};
-    }
+    auto wallet_file = get_wallet_path(m_wallet_dir, fs::u8path(req.filename));
 
     auto vm2 = password_arg_hack(req.password, m_vm);
     auto rc = tools::wallet2::make_new(vm2, true, nullptr);
@@ -2562,23 +2552,8 @@ namespace {
 
     RESTORE_DETERMINISTIC_WALLET::response res{};
 
-    const char *ptr = strchr(req.filename.c_str(), '/');
-  #ifdef _WIN32
-    if (!ptr)
-      ptr = strchr(req.filename.c_str(), '\\');
-    if (!ptr)
-      ptr = strchr(req.filename.c_str(), ':');
-  #endif
-    if (ptr)
-      throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Invalid filename"};
-    std::string wallet_file = req.filename.empty() ? "" : (m_wallet_dir + "/" + req.filename);
-    // check if wallet file already exists
-    if (!wallet_file.empty())
-    {
-      boost::system::error_code ignored_ec;
-      if (boost::filesystem::exists(wallet_file, ignored_ec))
-        throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Wallet already exists."};
-    }
+    auto wallet_file = get_wallet_path(m_wallet_dir, fs::u8path(req.filename));
+
     crypto::secret_key recovery_key;
     std::string old_language;
 

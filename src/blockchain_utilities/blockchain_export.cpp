@@ -51,8 +51,6 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  boost::filesystem::path output_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
@@ -111,14 +109,13 @@ int main(int argc, char* argv[])
   }
   bool opt_blocks_dat = command_line::get_arg(vm, arg_blocks_dat);
 
-  std::string m_config_folder;
+  auto config_folder = fs::u8path(command_line::get_arg(vm, cryptonote::arg_data_dir));
 
-  m_config_folder = command_line::get_arg(vm, cryptonote::arg_data_dir);
-
+  fs::path output_file_path;
   if (command_line::has_arg(vm, arg_output_file))
-    output_file_path = boost::filesystem::path(command_line::get_arg(vm, arg_output_file));
+    output_file_path = fs::u8path(command_line::get_arg(vm, arg_output_file));
   else
-    output_file_path = boost::filesystem::path(m_config_folder) / "export" / BLOCKCHAIN_RAW;
+    output_file_path = config_folder / "export" / BLOCKCHAIN_RAW;
   LOG_PRINT_L0("Export output file: " << output_file_path.string());
 
   LOG_PRINT_L0("Initializing source blockchain (BlockchainDB)");
@@ -132,9 +129,7 @@ int main(int argc, char* argv[])
   }
   LOG_PRINT_L0("database: LMDB");
 
-  boost::filesystem::path folder(m_config_folder);
-  folder /= db->get_db_name();
-  const std::string filename = folder.string();
+  auto filename = config_folder / db->get_db_name();
 
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
   try

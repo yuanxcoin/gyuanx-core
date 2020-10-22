@@ -32,10 +32,9 @@
 
 #include "wallet/api/wallet2_api.h"
 #include "wallet/wallet2.h"
-#include "include_base_utils.h"
 #include "common/util.h"
 
-#include <boost/filesystem.hpp>
+#include "common/fs.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
@@ -99,26 +98,26 @@ struct Utils
     static void deleteWallet(const std::string & walletname)
     {
         std::cout << "** deleting wallet: " << walletname << std::endl;
-        boost::filesystem::remove(walletname);
-        boost::filesystem::remove(walletname + ".address.txt");
-        boost::filesystem::remove(walletname + ".keys");
+        fs::remove(walletname);
+        fs::remove(walletname + ".address.txt");
+        fs::remove(walletname + ".keys");
     }
 
     static void deleteDir(const std::string &path)
     {
         std::cout << "** removing dir recursively: " << path  << std::endl;
-        boost::filesystem::remove_all(path);
+        fs::remove_all(path);
     }
 
-    static void print_transaction(Monero::TransactionInfo * t)
+    static void print_transaction(Wallet::TransactionInfo * t)
     {
 
         std::cout << "d: "
-                  << (t->direction() == Monero::TransactionInfo::Direction_In ? "in" : "out")
+                  << (t->direction() == Wallet::TransactionInfo::Direction_In ? "in" : "out")
                   << ", pe: " << (t->isPending() ? "true" : "false")
                   << ", bh: " << t->blockHeight()
-                  << ", a: " << Monero::Wallet::displayAmount(t->amount())
-                  << ", f: " << Monero::Wallet::displayAmount(t->fee())
+                  << ", a: " << Wallet::Wallet::displayAmount(t->amount())
+                  << ", f: " << Wallet::Wallet::displayAmount(t->fee())
                   << ", h: " << t->hash()
                   << ", pid: " << t->paymentId()
                   << std::endl;
@@ -146,7 +145,7 @@ struct WalletManagerTest : public testing::Test
         wmgr = Monero::WalletManagerFactory::getWalletManager();
         // Monero::WalletManagerFactory::setLogLevel(Monero::WalletManagerFactory::LogLevel_4);
         Utils::deleteWallet(WALLET_NAME);
-        Utils::deleteDir(boost::filesystem::path(WALLET_NAME_WITH_DIR).parent_path().string());
+        Utils::deleteDir(fs::path(WALLET_NAME_WITH_DIR).parent_path().string());
     }
 
 

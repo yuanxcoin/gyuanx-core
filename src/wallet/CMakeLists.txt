@@ -49,7 +49,7 @@ target_link_libraries(wallet
     lmdb
     rpc_http_client
     Boost::serialization
-    Boost::filesystem
+    filesystem
     Boost::thread
   PRIVATE
     OpenSSL::SSL

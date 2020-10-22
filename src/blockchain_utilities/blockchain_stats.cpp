@@ -57,8 +57,6 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  boost::filesystem::path output_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
@@ -133,7 +131,7 @@ int main(int argc, char* argv[])
     throw std::runtime_error("Failed to initialize a database");
   }
 
-  const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
+  const fs::path filename = fs::u8path(opt_data_dir) / db->get_db_name();
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
 
   try

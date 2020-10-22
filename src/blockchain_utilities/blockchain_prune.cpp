@@ -31,6 +31,7 @@
 #include "common/command_line.h"
 #include "common/pruning.h"
 #include "common/string_util.h"
+#include "common/fs.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_core/blockchain.h"
 #include "blockchain_db/blockchain_db.h"
@@ -46,21 +47,21 @@
 namespace po = boost::program_options;
 using namespace cryptonote;
 
-static std::string db_path;
+static fs::path db_path;
 
 // default to fast:1
 static uint64_t records_per_sync = 128;
 static const size_t slack = 512 * 1024 * 1024;
 
-static std::error_code replace_file(const boost::filesystem::path& replacement_name, const boost::filesystem::path& replaced_name)
+static std::error_code replace_file(const fs::path& replacement_name, const fs::path& replaced_name)
 {
-  std::error_code ec = tools::replace_file(replacement_name.string(), replaced_name.string());
+  std::error_code ec = fs::rename(replacement_name, replaced_name);
   if (ec)
     MERROR("Error renaming " << replacement_name << " to " << replaced_name << ": " << ec.message());
   return ec;
 }
 
-static void open(MDB_env *&env, const boost::filesystem::path &path, uint64_t db_flags, bool readonly)
+static void open(MDB_env *&env, const fs::path &path, uint64_t db_flags, bool readonly)
 {
   int dbr;
   int flags = 0;
@@ -90,8 +91,7 @@ static void add_size(MDB_env *env, uint64_t bytes)
 {
   try
   {
-    boost::filesystem::path path(db_path);
-    boost::filesystem::space_info si = boost::filesystem::space(path);
+    auto si = fs::space(db_path);
     if(si.available < bytes)
     {
       MERROR("!! WARNING: Insufficient free space to extend database !!: " <<
@@ -443,8 +443,6 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  boost::filesystem::path output_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
@@ -523,7 +521,7 @@ int main(int argc, char* argv[])
   // tx_memory_pool, Blockchain's constructor takes tx_memory_pool object.
   MINFO("Initializing source blockchain (BlockchainDB)");
   std::array<Blockchain *, 2> core_storage;
-  boost::filesystem::path paths[2];
+  fs::path paths[2];
   bool already_pruned = false;
   for (size_t n = 0; n < core_storage.size(); ++n)
   {
@@ -539,10 +537,10 @@ int main(int argc, char* argv[])
 
     if (n == 1)
     {
-      paths[1] = boost::filesystem::path(data_dir) / (db->get_db_name() + "-pruned");
-      if (boost::filesystem::exists(paths[1]))
+      paths[1] = fs::u8path(data_dir) / (db->get_db_name() + "-pruned");
+      if (fs::exists(paths[1]))
       {
-        if (!boost::filesystem::is_directory(paths[1]))
+        if (!fs::is_directory(paths[1]))
         {
           MERROR("LMDB needs a directory path, but a file was passed: " << paths[1].string());
           return 1;
@@ -550,17 +548,17 @@ int main(int argc, char* argv[])
       }
       else
       {
-        if (!boost::filesystem::create_directories(paths[1]))
+        if (!fs::create_directories(paths[1]))
         {
           MERROR("Failed to create directory: " << paths[1].string());
           return 1;
         }
       }
-      db_path = paths[1].string();
+      db_path = paths[1];
     }
     else
     {
-      paths[0] = boost::filesystem::path(data_dir) / db->get_db_name();
+      paths[0] = fs::u8path(data_dir) / db->get_db_name();
     }
 
     MINFO("Loading blockchain from folder " << paths[n] << " ...");
@@ -627,7 +625,9 @@ int main(int argc, char* argv[])
   close(env0);
 
   MINFO("Swapping databases, pre-pruning blockchain will be left in " << paths[0].string() + "-old and can be removed if desired");
-  if (replace_file(paths[0].string(), paths[0].string() + "-old") || replace_file(paths[1].string(), paths[0].string()))
+  fs::path old = paths[0];
+  old += "-old";
+  if (replace_file(paths[0], old) || replace_file(paths[1], paths[0]))
   {
     MERROR("Blockchain pruned OK, but renaming failed");
     return 1;

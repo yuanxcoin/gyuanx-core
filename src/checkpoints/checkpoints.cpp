@@ -41,6 +41,7 @@
 
 #include "common/loki_integration_test_hooks.h"
 #include "common/loki.h"
+#include "common/file.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "checkpoints"
@@ -88,17 +89,18 @@ namespace cryptonote
     return result;
   }
 
-  bool load_checkpoints_from_json(const std::string &json_hashfile_fullpath, std::vector<height_to_hash> &checkpoint_hashes)
+  bool load_checkpoints_from_json(const fs::path& json_hashfile_fullpath, std::vector<height_to_hash>& checkpoint_hashes)
   {
-    boost::system::error_code errcode;
-    if (! (boost::filesystem::exists(json_hashfile_fullpath, errcode)))
+    if (std::error_code ec; !fs::exists(json_hashfile_fullpath, ec))
     {
       LOG_PRINT_L1("Blockchain checkpoints file not found");
       return true;
     }
 
     height_to_hash_json hashes;
-    if (!epee::serialization::load_t_from_json_file(hashes, json_hashfile_fullpath))
+    if (std::string contents;
+        !tools::slurp_file(json_hashfile_fullpath, contents) ||
+        !epee::serialization::load_t_from_json(hashes, contents))
     {
       MERROR("Error loading checkpoints from " << json_hashfile_fullpath);
       return false;

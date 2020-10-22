@@ -132,20 +132,19 @@ static bool parse_db_sync_mode(std::string db_sync_mode)
   return true;
 }
 
-static std::string get_default_db_path()
+static fs::path get_default_db_path()
 {
-  boost::filesystem::path dir = tools::get_default_data_dir();
   // remove .loki, replace with .shared-ringdb
-  dir = dir.remove_filename();
-  dir /= ".shared-ringdb";
-  return dir.string();
+  fs::path p = tools::get_default_data_dir();
+  p.replace_filename(".shared-ringdb");
+  return p;
 }
 
-static std::string get_cache_filename(boost::filesystem::path filename)
+static fs::path get_cache_filename(fs::path filename)
 {
-  if (!boost::filesystem::is_directory(filename))
+  if (!fs::is_directory(filename))
     filename.remove_filename();
-  return filename.string();
+  return filename;
 }
 
 static int compare_hash32(const MDB_val *a, const MDB_val *b)
@@ -202,11 +201,10 @@ static int resize_env(const char *db_path)
   {
     try
     {
-      boost::filesystem::path path(db_path);
-      boost::filesystem::space_info si = boost::filesystem::space(path);
+      auto si = fs::space(fs::u8path(db_path));
       if(si.available < needed)
       {
-        MERROR("!! WARNING: Insufficient free space to extend database !!: " << (si.available >> 20L) << " MB available");
+        MERROR("!! WARNING: Insufficient free space to extend database !!: " << (si.available / 1000000) << " MB available");
         return ENOSPC;
       }
     }
@@ -221,7 +219,7 @@ static int resize_env(const char *db_path)
   return mdb_env_set_mapsize(env, mapsize);
 }
 
-static void init(std::string cache_filename)
+static void init(fs::path cache_filename)
 {
   MDB_txn *txn;
   bool tx_active = false;
@@ -229,7 +227,8 @@ static void init(std::string cache_filename)
 
   MINFO("Creating spent output cache in " << cache_filename);
 
-  tools::create_directories_if_necessary(cache_filename);
+  if (std::error_code ec; !fs::create_directories(cache_filename, ec))
+    MWARNING("Failed to create output cache directory " << cache_filename << ": " << ec.message());
 
   int flags = 0;
   if (db_flags & DBF_FAST)
@@ -241,10 +240,10 @@ static void init(std::string cache_filename)
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_env_set_maxdbs(env, 7);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-  const std::string actual_filename = get_cache_filename(cache_filename); 
-  dbr = mdb_env_open(env, actual_filename.c_str(), flags, 0664);
+  auto actual_filename = get_cache_filename(cache_filename); 
+  dbr = mdb_env_open(env, actual_filename.string().c_str(), flags, 0664);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to open rings database file '"
-      + actual_filename + "': " + std::string(mdb_strerror(dbr)));
+      + actual_filename.string() + "': " + std::string(mdb_strerror(dbr)));
 
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -330,7 +329,7 @@ static std::vector<uint64_t> decompress_ring(const std::string &s)
   return ring;
 }
 
-static bool for_all_transactions(const std::string &filename, uint64_t &start_idx, uint64_t &n_txes, const std::function<bool(const cryptonote::transaction_prefix&)> &f)
+static bool for_all_transactions(const fs::path& filename, uint64_t& start_idx, uint64_t& n_txes, const std::function<bool(const cryptonote::transaction_prefix&)>& f)
 {
   MDB_env *env;
   MDB_dbi dbi;
@@ -345,10 +344,9 @@ static bool for_all_transactions(const std::string &filename, uint64_t &start_id
   if (dbr) throw std::runtime_error("Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_env_set_maxdbs(env, 2);
   if (dbr) throw std::runtime_error("Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-  const std::string actual_filename = filename;
-  dbr = mdb_env_open(env, actual_filename.c_str(), 0, 0664);
+  dbr = mdb_env_open(env, filename.string().c_str(), 0, 0664);
   if (dbr) throw std::runtime_error("Failed to open rings database file '"
-      + actual_filename + "': " + std::string(mdb_strerror(dbr)));
+      + filename.u8string() + "': " + std::string(mdb_strerror(dbr)));
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -411,7 +409,7 @@ static bool for_all_transactions(const std::string &filename, uint64_t &start_id
   return fret;
 }
 
-static bool for_all_transactions(const std::string &filename, const uint64_t &start_idx, uint64_t &n_txes, const std::function<bool(bool, uint64_t, const cryptonote::transaction_prefix&)> &f)
+static bool for_all_transactions(const fs::path& filename, const uint64_t& start_idx, uint64_t& n_txes, const std::function<bool(bool, uint64_t, const cryptonote::transaction_prefix&)>& f)
 {
   MDB_env *env;
   MDB_dbi dbi_blocks, dbi_txs;
@@ -426,14 +424,13 @@ static bool for_all_transactions(const std::string &filename, const uint64_t &st
   if (dbr) throw std::runtime_error("Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_env_set_maxdbs(env, 3);
   if (dbr) throw std::runtime_error("Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-  const std::string actual_filename = filename;
-  dbr = mdb_env_open(env, actual_filename.c_str(), 0, 0664);
+  dbr = mdb_env_open(env, filename.string().c_str(), 0, 0664);
   if (dbr) throw std::runtime_error("Failed to open rings database file '"
-      + actual_filename + "': " + std::string(mdb_strerror(dbr)));
+      + filename.u8string() + "': " + std::string(mdb_strerror(dbr)));
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){if (tx_active) mdb_txn_abort(txn);});
+  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "blocks", MDB_INTEGERKEY, &dbi_blocks);
@@ -520,7 +517,7 @@ static bool for_all_transactions(const std::string &filename, const uint64_t &st
   return fret;
 }
 
-static uint64_t find_first_diverging_transaction(const std::string &first_filename, const std::string &second_filename)
+static uint64_t find_first_diverging_transaction(const fs::path& first_filename, const fs::path& second_filename)
 {
   MDB_env *env[2];
   MDB_dbi dbi[2];
@@ -543,10 +540,10 @@ static uint64_t find_first_diverging_transaction(const std::string &first_filena
     if (dbr) throw std::runtime_error("Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
     dbr = mdb_env_set_maxdbs(env[i], 2);
     if (dbr) throw std::runtime_error("Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-    const std::string actual_filename = i ? second_filename : first_filename;
-    dbr = mdb_env_open(env[i], actual_filename.c_str(), 0, 0664);
+    const fs::path& actual_filename = i ? second_filename : first_filename;
+    dbr = mdb_env_open(env[i], actual_filename.string().c_str(), 0, 0664);
     if (dbr) throw std::runtime_error("Failed to open rings database file '"
-        + actual_filename + "': " + std::string(mdb_strerror(dbr)));
+        + actual_filename.u8string() + "': " + std::string(mdb_strerror(dbr)));
 
     dbr = mdb_txn_begin(env[i], NULL, MDB_RDONLY, &txn[i]);
     if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -951,7 +948,7 @@ static void inc_stat(MDB_txn *txn, const char *key)
   set_stat(txn, key, data);
 }
 
-static void open_db(const std::string &filename, MDB_env **env, MDB_txn **txn, MDB_cursor **cur, MDB_dbi *dbi)
+static void open_db(const fs::path& filename, MDB_env** env, MDB_txn** txn, MDB_cursor** cur, MDB_dbi* dbi)
 {
   tools::create_directories_if_necessary(filename);
 
@@ -965,11 +962,10 @@ static void open_db(const std::string &filename, MDB_env **env, MDB_txn **txn, M
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_env_set_maxdbs(*env, 1);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-  const std::string actual_filename = filename;
-  MINFO("Opening monero blockchain at " << actual_filename);
-  dbr = mdb_env_open(*env, actual_filename.c_str(), flags, 0664);
+  MINFO("Opening loki blockchain at " << filename);
+  dbr = mdb_env_open(*env, filename.string().c_str(), flags, 0664);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to open rings database file '"
-      + actual_filename + "': " + std::string(mdb_strerror(dbr)));
+      + filename.u8string() + "': " + std::string(mdb_strerror(dbr)));
 
   dbr = mdb_txn_begin(*env, NULL, MDB_RDONLY, txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -1014,7 +1010,7 @@ static void get_num_outputs(MDB_txn *txn, MDB_cursor *cur, MDB_dbi dbi, uint64_t
   pre_rct = s.ms_entries - rct;
 }
 
-static crypto::hash get_genesis_block_hash(const std::string &filename)
+static crypto::hash get_genesis_block_hash(const fs::path& filename)
 {
   MDB_env *env;
   MDB_dbi dbi;
@@ -1026,10 +1022,9 @@ static crypto::hash get_genesis_block_hash(const std::string &filename)
   if (dbr) throw std::runtime_error("Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_env_set_maxdbs(env, 1);
   if (dbr) throw std::runtime_error("Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-  const std::string actual_filename = filename;
-  dbr = mdb_env_open(env, actual_filename.c_str(), 0, 0664);
+  dbr = mdb_env_open(env, filename.string().c_str(), 0, 0664);
   if (dbr) throw std::runtime_error("Failed to open rings database file '"
-      + actual_filename + "': " + std::string(mdb_strerror(dbr)));
+      + filename.u8string() + "': " + std::string(mdb_strerror(dbr)));
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -1051,13 +1046,18 @@ static crypto::hash get_genesis_block_hash(const std::string &filename)
   return genesis_block_hash;
 }
 
-static std::vector<std::pair<uint64_t, uint64_t>> load_outputs(const std::string &filename)
+static std::vector<std::pair<uint64_t, uint64_t>> load_outputs(const fs::path& filename)
 {
   std::vector<std::pair<uint64_t, uint64_t>> outputs;
   uint64_t amount = std::numeric_limits<uint64_t>::max();
-  FILE *f;
 
-  f = fopen(filename.c_str(), "r");
+  FILE* f =
+#ifdef _WIN32
+      _wfopen(filename.c_str(), L"r");
+#else
+      fopen(filename.c_str(), "r");
+#endif
+
   if (!f)
   {
     MERROR("Failed to load outputs from " << filename << ": " << strerror(errno));
@@ -1108,9 +1108,15 @@ static std::vector<std::pair<uint64_t, uint64_t>> load_outputs(const std::string
   return outputs;
 }
 
-static bool export_spent_outputs(MDB_cursor *cur, const std::string &filename)
+static bool export_spent_outputs(MDB_cursor* cur, const fs::path& filename)
 {
-  FILE *f = fopen(filename.c_str(), "w");
+  FILE* f =
+#ifdef _WIN32
+      _wfopen(filename.c_str(), L"w");
+#else
+      fopen(filename.c_str(), "w");
+#endif
+
   if (!f)
   {
     MERROR("Failed to open " << filename << ": " << strerror(errno));
@@ -1172,15 +1178,13 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  boost::filesystem::path output_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
   po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_blackball_db_dir = {
       "spent-output-db-dir", "Specify spent output database directory",
-      get_default_db_path(),
+      get_default_db_path().u8string(),
   };
   const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
   const command_line::arg_descriptor<bool> arg_rct_only  = {"rct-only", "Only work on ringCT outputs", false};
@@ -1242,7 +1246,7 @@ int main(int argc, char* argv[])
 
   LOG_PRINT_L0("Starting...");
 
-  output_file_path = command_line::get_arg(vm, arg_blackball_db_dir);
+  fs::path output_file_path = fs::u8path(command_line::get_arg(vm, arg_blackball_db_dir));
   bool opt_rct_only = command_line::get_arg(vm, arg_rct_only);
   bool opt_check_subsets = command_line::get_arg(vm, arg_check_subsets);
   bool opt_verbose = command_line::get_arg(vm, arg_verbose);
@@ -1260,7 +1264,9 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  const std::vector<std::string> inputs = command_line::get_arg(vm, arg_inputs);
+  std::vector<fs::path> inputs;
+  for (auto& in : command_line::get_arg(vm, arg_inputs))
+    inputs.push_back(fs::u8path(in));
   if (inputs.empty())
   {
     LOG_PRINT_L0("No inputs given");
@@ -1274,7 +1280,7 @@ int main(int argc, char* argv[])
     core_storage[n] = &(blockchain_objects->m_blockchain);
   }
 
-  const std::string cache_dir = (output_file_path / "spent-outputs-cache").string();
+  fs::path cache_dir = output_file_path / "spent-outputs-cache";
   init(cache_dir);
 
   LOG_PRINT_L0("Scanning for spent outputs...");
@@ -1290,7 +1296,7 @@ int main(int argc, char* argv[])
     stop_requested = true;
   });
 
-  int dbr = resize_env(cache_dir.c_str());
+  int dbr = resize_env(cache_dir.string().c_str());
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to resize LMDB database: " + std::string(mdb_strerror(dbr)));
 
   // open first db
@@ -1395,7 +1401,7 @@ int main(int argc, char* argv[])
 
   for (size_t n = 0; n < inputs.size(); ++n)
   {
-    const std::string canonical = boost::filesystem::canonical(inputs[n]).string();
+    const std::string canonical = fs::canonical(inputs[n]).u8string();
     uint64_t start_idx = get_processed_txidx(canonical);
     if (n > 0 && start_idx == 0)
     {
@@ -1410,10 +1416,9 @@ int main(int argc, char* argv[])
     dbr = mdb_cursor_open(txn, dbi_spent, &cur);
     CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to open LMDB cursor: " + std::string(mdb_strerror(dbr)));
     size_t records = 0;
-    const std::string filename = inputs[n];
     std::vector<std::pair<uint64_t, uint64_t>> blackballs;
     uint64_t n_txes;
-    for_all_transactions(filename, start_idx, n_txes, [&](const cryptonote::transaction_prefix &tx)->bool
+    for_all_transactions(inputs[n], start_idx, n_txes, [&](const cryptonote::transaction_prefix &tx)->bool
     {
       std::cout << "\r" << start_idx << "/" << n_txes << "         \r" << std::flush;
       for (const auto &in: tx.vin)
@@ -1573,7 +1578,7 @@ int main(int argc, char* argv[])
         mdb_cursor_close(cur);
         dbr = mdb_txn_commit(txn);
         CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to commit txn creating/opening database: " + std::string(mdb_strerror(dbr)));
-        int dbr = resize_env(cache_dir.c_str());
+        int dbr = resize_env(cache_dir.string().c_str());
         CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to resize LMDB database: " + std::string(mdb_strerror(dbr)));
         dbr = mdb_txn_begin(env, NULL, 0, &txn);
         CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -1613,7 +1618,7 @@ int main(int argc, char* argv[])
   {
     LOG_PRINT_L0("Secondary pass on " << work_spent.size() << " spent outputs");
 
-    int dbr = resize_env(cache_dir.c_str());
+    int dbr = resize_env(cache_dir.string().c_str());
     CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to resize LMDB database: " + std::string(mdb_strerror(dbr)));
 
     MDB_txn *txn;

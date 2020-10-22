@@ -33,11 +33,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(INSERT CMAKE_MODULE_PATH 0
   "${CMAKE_SOURCE_DIR}/cmake")
-include(CheckCCompilerFlag)
-include(CheckCXXCompilerFlag)
-include(CheckLinkerFlag)
-include(CheckLibraryExists)
-include(CheckFunctionExists)
 
 if (IOS)
     INCLUDE(CmakeLists_IOS.txt)
@@ -84,6 +79,12 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+
+include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
+include(CheckLinkerFlag)
+include(CheckLibraryExists)
+include(CheckFunctionExists)
 
 function (add_c_flag_if_supported flag var)
   string(REPLACE "-" "_" supported ${flag}_c)
@@ -284,6 +285,7 @@ if(NOT MANUAL_SUBMODULES)
       check_submodule(external/googletest)
     endif()
     check_submodule(external/uWebSockets uSockets)
+    check_submodule(external/ghc-filesystem)
   endif()
 endif()
 
@@ -334,6 +336,8 @@ endif()
 #   set(NETBSD TRUE)
 # elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
 #   set(BSDI TRUE)
+
+include(cmake/check_for_std_filesystem.cmake)
 
 include_directories(external/rapidjson/include src external)
 
@@ -792,10 +796,8 @@ set(Boost_USE_MULTITHREADED TRUE) # Needed for macOS, at least, and won't hurt e
 
 if(BUILD_STATIC_DEPS)
   # StaticBuild.cmake sets Boost targets up for us
-elseif (WIN32)
-  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time serialization program_options locale)
 else()
-  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time serialization program_options)
+  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system thread serialization program_options)
 endif()
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES ${OLD_LIB_SUFFIXES})

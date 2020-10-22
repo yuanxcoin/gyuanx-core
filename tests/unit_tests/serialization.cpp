@@ -650,7 +650,7 @@ TEST(Serialization, portability_wallet)
 {
   const cryptonote::network_type nettype = cryptonote::TESTNET;
   tools::wallet2 w(nettype);
-  const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
+  const fs::path wallet_file = unit_test::data_dir / "wallet_testnet";
   std::string password = "test";
   bool r = false;
   try
@@ -787,14 +787,14 @@ TEST(Serialization, portability_outputs)
   const bool restricted = false;
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
-  const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
+  const fs::path wallet_file = unit_test::data_dir / "wallet_testnet";
   const std::string password = "test";
   w.load(wallet_file.string(), password);
 
   // read file
-  const boost::filesystem::path filename = unit_test::data_dir / "outputs";
+  const fs::path filename = unit_test::data_dir / "outputs";
   std::string data;
-  bool r = epee::file_io_utils::load_file_to_string(filename.string(), data);
+  bool r = tools::slurp_file(filename.string(), data);
 
   ASSERT_TRUE(r);
   const size_t magiclen = strlen(OUTPUT_EXPORT_FILE_MAGIC);
@@ -934,14 +934,14 @@ TEST(Serialization, portability_unsigned_tx)
   const bool restricted = false;
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
-  const boost::filesystem::path filename    = unit_test::data_dir / "unsigned_loki_tx";
-  const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
+  const fs::path filename    = unit_test::data_dir / "unsigned_loki_tx";
+  const fs::path wallet_file = unit_test::data_dir / "wallet_testnet";
   const std::string password = "test";
   w.load(wallet_file.string(), password);
 
   std::string s;
   const cryptonote::network_type nettype = cryptonote::TESTNET;
-  bool r = epee::file_io_utils::load_file_to_string(filename.string(), s);
+  bool r = tools::slurp_file(filename.string(), s);
   ASSERT_TRUE(r);
   size_t const magiclen = strlen(UNSIGNED_TX_PREFIX);
   ASSERT_FALSE(strncmp(s.c_str(), UNSIGNED_TX_PREFIX, magiclen));
@@ -1133,14 +1133,14 @@ TEST(Serialization, portability_signed_tx)
   const bool restricted = false;
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
-  const boost::filesystem::path filename    = unit_test::data_dir / "signed_loki_tx";
-  const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
+  const fs::path filename    = unit_test::data_dir / "signed_loki_tx";
+  const fs::path wallet_file = unit_test::data_dir / "wallet_testnet";
   const std::string password = "test";
   w.load(wallet_file.string(), password);
 
   const cryptonote::network_type nettype = cryptonote::TESTNET;
   std::string s;
-  bool r = epee::file_io_utils::load_file_to_string(filename.string(), s);
+  bool r = tools::slurp_file(filename.string(), s);
   ASSERT_TRUE(r);
   size_t const magiclen = strlen(SIGNED_TX_PREFIX);
   ASSERT_FALSE(strncmp(s.c_str(), SIGNED_TX_PREFIX, magiclen));

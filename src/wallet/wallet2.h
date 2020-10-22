@@ -41,7 +41,6 @@
 #include <atomic>
 #include <random>
 
-#include "include_base_utils.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/account_boost_serialization.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
@@ -268,20 +267,36 @@ private:
     static void init_options(boost::program_options::options_description& desc_params, boost::program_options::options_description& hidden_params);
 
     //! Uses stdin and stdout. Returns a wallet2 if no errors.
-    static std::pair<std::unique_ptr<wallet2>, password_container> make_from_json(const boost::program_options::variables_map& vm, bool unattended, const std::string& json_file, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
+    static std::pair<std::unique_ptr<wallet2>, password_container>
+    make_from_json(
+        const boost::program_options::variables_map& vm,
+        bool unattended,
+        const fs::path& json_file,
+        const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
     //! Uses stdin and stdout. Returns a wallet2 and password for `wallet_file` if no errors.
     static std::pair<std::unique_ptr<wallet2>, password_container>
-      make_from_file(const boost::program_options::variables_map& vm, bool unattended, const std::string& wallet_file, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
+    make_from_file(
+        const boost::program_options::variables_map& vm,
+        bool unattended,
+        const fs::path& wallet_file,
+        const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
     //! Uses stdin and stdout. Returns a wallet2 and password for wallet with no file if no errors.
-    static std::pair<std::unique_ptr<wallet2>, password_container> make_new(const boost::program_options::variables_map& vm, bool unattended, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
+    static std::pair<std::unique_ptr<wallet2>, password_container>
+    make_new(
+        const boost::program_options::variables_map& vm,
+        bool unattended,
+        const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
     //! Just parses variables.
-    static std::unique_ptr<wallet2> make_dummy(const boost::program_options::variables_map& vm, bool unattended, const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
+    static std::unique_ptr<wallet2> make_dummy(
+        const boost::program_options::variables_map& vm,
+        bool unattended,
+        const std::function<std::optional<password_container>(const char *, bool)> &password_prompter);
 
-    static bool verify_password(const std::string& keys_file_name, const epee::wipeable_string& password, bool no_spend_key, hw::device &hwdev, uint64_t kdf_rounds);
-    static bool query_device(hw::device::device_type& device_type, const std::string& keys_file_name, const epee::wipeable_string& password, uint64_t kdf_rounds = 1);
+    static bool verify_password(const fs::path& keys_file_name, const epee::wipeable_string& password, bool no_spend_key, hw::device &hwdev, uint64_t kdf_rounds);
+    static bool query_device(hw::device::device_type& device_type, const fs::path& keys_file_name, const epee::wipeable_string& password, uint64_t kdf_rounds = 1);
 
     wallet2(cryptonote::network_type nettype = cryptonote::MAINNET, uint64_t kdf_rounds = 1, bool unattended = false);
     ~wallet2();
@@ -464,7 +479,7 @@ private:
      * \param  multisig_data        The multisig restore info and keys
      * \param  create_address_file  Whether to create an address file
      */
-    void generate(const std::string& wallet_, const epee::wipeable_string& password,
+    void generate(const fs::path& wallet_, const epee::wipeable_string& password,
       const epee::wipeable_string& multisig_data, bool create_address_file = false);
 
     /*!
@@ -477,7 +492,7 @@ private:
      * \param  create_address_file  Whether to create an address file
      * \return                      The secret key of the generated wallet
      */
-    crypto::secret_key generate(const std::string& wallet, const epee::wipeable_string& password,
+    crypto::secret_key generate(const fs::path& wallet, const epee::wipeable_string& password,
       const crypto::secret_key& recovery_param = crypto::secret_key(), bool recover = false,
       bool two_random = false, bool create_address_file = false);
     /*!
@@ -489,7 +504,7 @@ private:
      * \param  viewkey                 view secret key
      * \param  create_address_file     Whether to create an address file
      */
-    void generate(const std::string& wallet, const epee::wipeable_string& password,
+    void generate(const fs::path& wallet, const epee::wipeable_string& password,
       const cryptonote::account_public_address &account_public_address,
       const crypto::secret_key& spendkey, const crypto::secret_key& viewkey, bool create_address_file = false);
     /*!
@@ -500,7 +515,7 @@ private:
      * \param  viewkey                 view secret key
      * \param  create_address_file     Whether to create an address file
      */
-    void generate(const std::string& wallet, const epee::wipeable_string& password,
+    void generate(const fs::path& wallet, const epee::wipeable_string& password,
       const cryptonote::account_public_address &account_public_address,
       const crypto::secret_key& viewkey = crypto::secret_key(), bool create_address_file = false);
     /*!
@@ -510,7 +525,7 @@ private:
      * \param  device_name    name of HW to use
      * \param  create_address_file     Whether to create an address file
      */
-    void restore(const std::string& wallet_, const epee::wipeable_string& password, const std::string &device_name, bool create_address_file = false);
+    void restore(const fs::path& wallet_, const epee::wipeable_string& password, const std::string &device_name, bool create_address_file = false);
 
     /*!
      * \brief Creates a multisig wallet
@@ -572,16 +587,16 @@ private:
      * \param wallet_name Name of wallet file (should exist)
      * \param password    Password for wallet file
      */
-    void rewrite(const std::string& wallet_name, const epee::wipeable_string& password);
-    void write_watch_only_wallet(const std::string& wallet_name, const epee::wipeable_string& password, std::string &new_keys_filename);
-    void load(const std::string& wallet, const epee::wipeable_string& password, const std::string& keys_buf = "", const std::string& cache_buf = "");
+    void rewrite(const fs::path& wallet_name, const epee::wipeable_string& password);
+    void write_watch_only_wallet(const fs::path& wallet_name, const epee::wipeable_string& password, fs::path& new_keys_filename);
+    void load(const fs::path& wallet, const epee::wipeable_string& password, const std::string& keys_buf = "", const std::string& cache_buf = "");
     void store();
     /*!
      * \brief store_to  Stores wallet to another file(s), deleting old ones
      * \param path      Path to the wallet file (keys and address filenames will be generated based on this filename)
      * \param password  Password to protect new wallet (TODO: probably better save the password in the wallet object?)
      */
-    void store_to(const std::string &path, const epee::wipeable_string &password);
+    void store_to(const fs::path &path, const epee::wipeable_string &password);
     /*!
      * \brief get_keys_file_data  Get wallet keys data which can be stored to a wallet file.
      * \param password            Password of the encrypted wallet buffer (TODO: probably better save the password in the wallet object?)
@@ -596,7 +611,7 @@ private:
      */
     std::optional<wallet2::cache_file_data> get_cache_file_data(const epee::wipeable_string& password);
 
-    std::string path() const;
+    const fs::path& path() const;
 
     /*!
      * \brief verifies given password is correct for default wallet keys file
@@ -718,23 +733,23 @@ private:
 
     void commit_tx(pending_tx& ptx_vector, bool blink = false);
     void commit_tx(std::vector<pending_tx>& ptx_vector, bool blink = false);
-    bool save_tx(const std::vector<pending_tx>& ptx_vector, const std::string &filename) const;
+    bool save_tx(const std::vector<pending_tx>& ptx_vector, const fs::path& filename) const;
     std::string dump_tx_to_str(const std::vector<pending_tx> &ptx_vector) const;
     std::string save_multisig_tx(multisig_tx_set txs);
-    bool save_multisig_tx(const multisig_tx_set &txs, const std::string &filename);
+    bool save_multisig_tx(const multisig_tx_set& txs, const fs::path& filename);
     std::string save_multisig_tx(const std::vector<pending_tx>& ptx_vector);
-    bool save_multisig_tx(const std::vector<pending_tx>& ptx_vector, const std::string &filename);
+    bool save_multisig_tx(const std::vector<pending_tx>& ptx_vector, const fs::path& filename);
     multisig_tx_set make_multisig_tx_set(const std::vector<pending_tx>& ptx_vector) const;
     // load unsigned tx from file and sign it. Takes confirmation callback as argument. Used by the cli wallet
-    bool sign_tx(const std::string &unsigned_filename, const std::string &signed_filename, std::vector<pending_tx> &ptx, std::function<bool(const unsigned_tx_set&)> accept_func = NULL, bool export_raw = false);
+    bool sign_tx(const fs::path& unsigned_filename, const fs::path& signed_filename, std::vector<pending_tx> &ptx, std::function<bool(const unsigned_tx_set&)> accept_func = NULL, bool export_raw = false);
     // sign unsigned tx. Takes unsigned_tx_set as argument. Used by GUI
-    bool sign_tx(unsigned_tx_set &exported_txs, const std::string &signed_filename, std::vector<pending_tx> &ptx, bool export_raw = false);
+    bool sign_tx(unsigned_tx_set& exported_txs, const fs::path& signed_filename, std::vector<pending_tx> &ptx, bool export_raw = false);
     bool sign_tx(unsigned_tx_set &exported_txs, std::vector<pending_tx> &ptx, signed_tx_set &signed_txs);
     std::string sign_tx_dump_to_str(unsigned_tx_set &exported_txs, std::vector<pending_tx> &ptx, signed_tx_set &signed_txes);
     // load unsigned_tx_set from file. 
-    bool load_unsigned_tx(const std::string &unsigned_filename, unsigned_tx_set &exported_txs) const;
+    bool load_unsigned_tx(const fs::path& unsigned_filename, unsigned_tx_set& exported_txs) const;
     bool parse_unsigned_tx_from_str(std::string_view unsigned_tx_st, unsigned_tx_set &exported_txs) const;
-    bool load_tx(const std::string &signed_filename, std::vector<pending_tx> &ptx, std::function<bool(const signed_tx_set&)> accept_func = NULL);
+    bool load_tx(const fs::path& signed_filename, std::vector<pending_tx>& ptx, std::function<bool(const signed_tx_set&)> accept_func = NULL);
     bool parse_tx_from_str(std::string_view signed_tx_st, std::vector<pending_tx> &ptx, std::function<bool(const signed_tx_set &)> accept_func);
     std::vector<pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra_base, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::loki_construct_tx_params &tx_params);
 
@@ -749,10 +764,10 @@ private:
     void device_show_address(uint32_t account_index, uint32_t address_index, const std::optional<crypto::hash8> &payment_id);
     bool parse_multisig_tx_from_str(std::string_view multisig_tx_st, multisig_tx_set &exported_txs) const;
     bool load_multisig_tx(cryptonote::blobdata blob, multisig_tx_set &exported_txs, std::function<bool(const multisig_tx_set&)> accept_func = NULL);
-    bool load_multisig_tx_from_file(const std::string &filename, multisig_tx_set &exported_txs, std::function<bool(const multisig_tx_set&)> accept_func = NULL);
-    bool sign_multisig_tx_from_file(const std::string &filename, std::vector<crypto::hash> &txids, std::function<bool(const multisig_tx_set&)> accept_func);
+    bool load_multisig_tx_from_file(const fs::path& filename, multisig_tx_set &exported_txs, std::function<bool(const multisig_tx_set&)> accept_func = NULL);
+    bool sign_multisig_tx_from_file(const fs::path& filename, std::vector<crypto::hash> &txids, std::function<bool(const multisig_tx_set&)> accept_func);
     bool sign_multisig_tx(multisig_tx_set &exported_txs, std::vector<crypto::hash> &txids);
-    bool sign_multisig_tx_to_file(multisig_tx_set &exported_txs, const std::string &filename, std::vector<crypto::hash> &txids);
+    bool sign_multisig_tx_to_file(multisig_tx_set &exported_txs, const fs::path& filename, std::vector<crypto::hash> &txids);
     std::vector<pending_tx> create_unmixable_sweep_transactions();
     void discard_unmixable_outputs();
     bool check_connection(cryptonote::rpc::version_t *version = nullptr, bool *ssl = nullptr, bool throw_on_http_error = false);
@@ -948,13 +963,7 @@ private:
      * \param  keys_file_exists    Whether keys file exists
      * \param  wallet_file_exists  Whether bin file exists
      */
-    static void wallet_exists(const std::string& file_path, bool& keys_file_exists, bool& wallet_file_exists);
-    /*!
-     * \brief  Check if wallet file path is valid format
-     * \param  file_path      Wallet file path
-     * \return                Whether path is valid format
-     */
-    static bool wallet_valid_path_format(std::string_view file_path);
+    static void wallet_exists(const fs::path& file_path, bool& keys_file_exists, bool& wallet_file_exists);
     static bool parse_long_payment_id(std::string_view payment_id_str, crypto::hash& payment_id);
     static bool parse_short_payment_id(std::string_view payment_id_str, crypto::hash8& payment_id);
     static bool parse_payment_id(std::string_view payment_id_str, crypto::hash& payment_id);
@@ -1055,8 +1064,8 @@ private:
     std::optional<uint8_t> get_hard_fork_version() const { return m_node_rpc_proxy.get_hardfork_version(); }
     bool use_fork_rules(uint8_t version, uint64_t early_blocks = 0) const;
 
-    std::string get_wallet_file() const;
-    std::string get_keys_file() const;
+    const fs::path& get_wallet_file() const;
+    const fs::path& get_keys_file() const;
     std::string get_daemon_address() const;
     uint64_t get_daemon_blockchain_height(std::string& err) const;
     uint64_t get_daemon_blockchain_target_height(std::string& err);
@@ -1129,10 +1138,10 @@ private:
     void import_payments_out(const std::list<std::pair<crypto::hash,wallet2::confirmed_transfer_details>> &confirmed_payments);
     std::tuple<size_t, crypto::hash, std::vector<crypto::hash>> export_blockchain() const;
     void import_blockchain(const std::tuple<size_t, crypto::hash, std::vector<crypto::hash>> &bc);
-    bool export_key_images_to_file(const std::string &filename, bool requested_only) const;
+    bool export_key_images_to_file(const fs::path &filename, bool requested_only) const;
     std::pair<size_t, std::vector<std::pair<crypto::key_image, crypto::signature>>> export_key_images(bool requested_only) const;
     uint64_t import_key_images(const std::vector<std::pair<crypto::key_image, crypto::signature>> &signed_key_images, size_t offset, uint64_t &spent, uint64_t &unspent, bool check_spent = true);
-    uint64_t import_key_images_from_file(const std::string &filename, uint64_t &spent, uint64_t &unspent);
+    uint64_t import_key_images_from_file(const fs::path& filename, uint64_t &spent, uint64_t &unspent);
     bool import_key_images(std::vector<crypto::key_image> key_images, size_t offset=0, std::optional<std::unordered_set<size_t>> selected_transfers=std::nullopt);
     bool import_key_images(signed_tx_set & signed_tx, size_t offset=0, bool only_selected_transfers=false);
     crypto::public_key get_tx_pub_key_from_received_outs(const transfer_details &td) const;
@@ -1269,8 +1278,8 @@ private:
       return false;
     }
 
-    bool set_ring_database(const std::string &filename);
-    const std::string get_ring_database() const { return m_ring_database; }
+    bool set_ring_database(fs::path filename);
+    const fs::path& get_ring_database() const { return m_ring_database; }
     bool get_ring(const crypto::key_image &key_image, std::vector<uint64_t> &outs);
     bool get_rings(const crypto::hash &txid, std::vector<std::pair<crypto::key_image, std::vector<uint64_t>>> &outs);
     bool set_ring(const crypto::key_image &key_image, const std::vector<uint64_t> &outs, bool relative);
@@ -1380,8 +1389,8 @@ private:
     bool frozen(const crypto::key_image &ki) const;
     bool frozen(const transfer_details &td) const;
 
-    bool save_to_file(const std::string& path_to_file, const std::string& binary, bool is_printable = false) const;
-    static bool load_from_file(const std::string& path_to_file, std::string& target_str, size_t max_size = 1000000000);
+    bool save_to_file(const fs::path& path_to_file, std::string_view binary, bool is_printable = false) const;
+    static bool load_from_file(const fs::path& path_to_file, std::string& target_str);
 
     uint64_t get_bytes_sent() const;
     uint64_t get_bytes_received() const;
@@ -1395,7 +1404,7 @@ private:
     bool unlock_keys_file();
     bool is_keys_file_locked() const;
 
-    void change_password(const std::string &filename, const epee::wipeable_string &original_password, const epee::wipeable_string &new_password);
+    void change_password(const fs::path& filename, const epee::wipeable_string& original_password, const epee::wipeable_string& new_password);
 
     void set_tx_notify(std::shared_ptr<tools::Notify> notify) { m_tx_notify = std::move(notify); }
 
@@ -1431,13 +1440,13 @@ private:
      * \param  watch_only     true to save only view key, false to save both spend and view keys
      * \return                Whether it was successful.
      */
-    bool store_keys(const std::string& keys_file_name, const epee::wipeable_string& password, bool watch_only = false);
+    bool store_keys(const fs::path& keys_file_name, const epee::wipeable_string& password, bool watch_only = false);
     /*!
      * \brief Load wallet keys information from wallet file.
      * \param keys_file_name Name of wallet file
      * \param password       Password of wallet file
      */
-    bool load_keys(const std::string& keys_file_name, const epee::wipeable_string& password);
+    bool load_keys(const fs::path& keys_file_name, const epee::wipeable_string& password);
     /*!
      * \brief Load wallet keys information from a string buffer.
      * \param keys_buf       Keys buffer to load
@@ -1458,7 +1467,7 @@ private:
     void pull_and_parse_next_blocks(uint64_t start_height, uint64_t &blocks_start_height, std::list<crypto::hash> &short_chain_history, const std::vector<cryptonote::block_complete_entry> &prev_blocks, const std::vector<parsed_block> &prev_parsed_blocks, std::vector<cryptonote::block_complete_entry> &blocks, std::vector<parsed_block> &parsed_blocks, bool &last, bool &error, std::exception_ptr &exception);
     void process_parsed_blocks(uint64_t start_height, const std::vector<cryptonote::block_complete_entry> &blocks, const std::vector<parsed_block> &parsed_blocks, uint64_t& blocks_added, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache = NULL);
     uint64_t select_transfers(uint64_t needed_money, std::vector<size_t> unused_transfers_indices, std::vector<size_t>& selected_transfers) const;
-    bool prepare_file_names(const std::string& file_path);
+    bool prepare_file_names(const fs::path& file_path);
     void process_unconfirmed(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height);
     void process_outgoing(const crypto::hash &txid, const cryptonote::transaction& tx, uint64_t height, uint64_t ts, uint64_t spent, uint64_t received, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
     void add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t amount_in, const std::vector<cryptonote::tx_destination_entry> &dests, const crypto::hash &payment_id, uint64_t change_amount, uint32_t subaddr_account, const std::set<uint32_t>& subaddr_indices);
@@ -1519,7 +1528,7 @@ private:
 
     void init_type(hw::device::device_type device_type);
     void setup_new_blockchain();
-    void create_keys_file(const std::string &wallet_, bool watch_only, const epee::wipeable_string &password, bool create_address_file);
+    void create_keys_file(const fs::path &wallet_, bool watch_only, const epee::wipeable_string &password, bool create_address_file);
 
     wallet_device_callback * get_device_callback();
     void on_device_button_request(uint64_t code);
@@ -1533,9 +1542,9 @@ private:
     bool should_expand(const cryptonote::subaddress_index &index) const;
 
     cryptonote::account_base m_account;
-    std::string m_wallet_file;
-    std::string m_keys_file;
-    std::string m_mms_file;
+    fs::path m_wallet_file;
+    fs::path m_keys_file;
+    fs::path m_mms_file;
     hashchain m_blockchain;
     std::unordered_map<crypto::hash, unconfirmed_transfer_details> m_unconfirmed_txs;
     std::unordered_map<crypto::hash, confirmed_transfer_details> m_confirmed_txs;
@@ -1634,7 +1643,7 @@ private:
     // store calculated key image for faster lookup
     std::unordered_map<crypto::public_key, std::map<uint64_t, crypto::key_image> > m_key_image_cache;
 
-    std::string m_ring_database;
+    fs::path m_ring_database;
     bool m_ring_history_saved;
     std::unique_ptr<ringdb> m_ringdb;
     std::optional<crypto::chacha_key> m_ringdb_key;

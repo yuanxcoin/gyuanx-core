@@ -55,6 +55,7 @@
 #include "net/fwd.h"
 #include "common/command_line.h"
 #include "common/periodic_task.h"
+#include "common/fs.h"
 
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
@@ -415,7 +416,7 @@ namespace nodetool
     }
 
   private:
-    std::string m_config_folder;
+    fs::path m_config_folder;
 
     bool m_have_address;
     bool m_first_connection_maker_call;

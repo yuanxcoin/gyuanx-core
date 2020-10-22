@@ -44,13 +44,18 @@
 namespace po = boost::program_options;
 using namespace cryptonote;
 
-static std::map<uint64_t, uint64_t> load_outputs(const std::string &filename)
+static std::map<uint64_t, uint64_t> load_outputs(const fs::path& filename)
 {
   std::map<uint64_t, uint64_t> outputs;
   uint64_t amount = std::numeric_limits<uint64_t>::max();
-  FILE *f;
 
-  f = fopen(filename.c_str(), "r");
+  FILE *f =
+#ifdef _WIN32
+      _wfopen(filename.c_str(), L"r");
+#else
+      fopen(filename.c_str(), "r");
+#endif
+
   if (!f)
   {
     MERROR("Failed to load outputs from " << filename << ": " << strerror(errno));
@@ -154,14 +159,13 @@ int main(int argc, char* argv[])
 
   LOG_PRINT_L0("Starting...");
 
-  std::string opt_data_dir = command_line::get_arg(vm, cryptonote::arg_data_dir);
   bool opt_testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
   bool opt_devnet = command_line::get_arg(vm, cryptonote::arg_devnet_on);
   network_type net_type = opt_testnet ? TESTNET : opt_devnet ? DEVNET : MAINNET;
   bool opt_verbose = command_line::get_arg(vm, arg_verbose);
   bool opt_dry_run = command_line::get_arg(vm, arg_dry_run);
 
-  const std::string input = command_line::get_arg(vm, arg_input);
+  const auto input = fs::u8path(command_line::get_arg(vm, arg_input));
 
   LOG_PRINT_L0("Initializing source blockchain (BlockchainDB)");
   blockchain_objects_t blockchain_objects = {};
@@ -173,7 +177,7 @@ int main(int argc, char* argv[])
     throw std::runtime_error("Failed to initialize a database");
   }
 
-  const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
+  const fs::path filename = fs::u8path(command_line::get_arg(vm, cryptonote::arg_data_dir)) / db->get_db_name();
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
 
   try

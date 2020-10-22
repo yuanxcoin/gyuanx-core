@@ -73,6 +73,7 @@ target_link_libraries(common
   PUBLIC
     cncrypto
     lokimq::lokimq
+    filesystem
   PRIVATE
     libunbound
     OpenSSL::SSL

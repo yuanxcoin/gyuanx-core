@@ -77,7 +77,7 @@ std::vector<std::string> PendingTransactionImpl::txid() const
     return txid;
 }
 
-bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite, bool blink)
+bool PendingTransactionImpl::commit(const fs::path& filename, bool overwrite, bool blink)
 {
 
     LOG_PRINT_L3("m_pending_tx size: " << m_pending_tx.size());
@@ -85,10 +85,8 @@ bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite,
     try {
       // Save tx to file
       if (!filename.empty()) {
-        boost::system::error_code ignore;
-        bool tx_file_exists = boost::filesystem::exists(filename, ignore);
-        if(tx_file_exists && !overwrite){
-          m_errorString = string(tr("Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:")) + filename;
+        if (std::error_code ec_ignore; fs::exists(filename, ec_ignore) && !overwrite){
+          m_errorString = std::string(tr("Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:")) + filename.u8string();
           m_status = Status_Error;
           LOG_ERROR(m_errorString);
           return false;
