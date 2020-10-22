@@ -3077,7 +3077,7 @@ static std::vector<std::string> hashes_to_hex(It begin, It end)
   if constexpr (std::is_base_of_v<std::random_access_iterator_tag, typename std::iterator_traits<It>::iterator_category>)
     hexes.reserve(std::distance(begin, end));
   while (begin != end)
-    hexes.push_back(tools::type_to_hex(begin++));
+    hexes.push_back(tools::type_to_hex(*begin++));
   return hexes;
 }
 
