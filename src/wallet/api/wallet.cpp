@@ -57,7 +57,7 @@ using namespace cryptonote;
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "WalletAPI"
 
-namespace Monero {
+namespace Wallet {
 
 namespace {
     static const int    DEFAULT_REFRESH_INTERVAL_MILLIS = 1000 * 10;
@@ -2542,14 +2542,10 @@ void WalletImpl::deviceShowAddress(uint32_t accountIndex, uint32_t addressIndex,
         crypto::hash8 payment_id;
         bool res = tools::wallet2::parse_short_payment_id(paymentId, payment_id);
         if (!res)
-        {
-            throw runtime_error("Invalid payment ID");
-        }
+            throw std::runtime_error("Invalid payment ID");
         payment_id_param = payment_id;
     }
 
     m_wallet->device_show_address(accountIndex, addressIndex, payment_id_param);
 }
 } // namespace
-
-namespace Bitmonero = Monero;

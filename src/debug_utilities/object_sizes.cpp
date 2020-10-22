@@ -111,12 +111,12 @@ int main(int argc, char* argv[])
   SL(wallet::unsigned_tx_set);
   SL(wallet::signed_tx_set);
 
-  SL(Monero::WalletImpl);
-  SL(Monero::AddressBookRow);
-  SL(Monero::TransactionInfoImpl);
-  SL(Monero::TransactionHistoryImpl);
-  SL(Monero::PendingTransactionImpl);
-  SL(Monero::UnsignedTransactionImpl);
+  SL(Wallet::WalletImpl);
+  SL(Wallet::AddressBookRow);
+  SL(Wallet::TransactionInfoImpl);
+  SL(Wallet::TransactionHistoryImpl);
+  SL(Wallet::PendingTransactionImpl);
+  SL(Wallet::UnsignedTransactionImpl);
 
   return 0;
 }

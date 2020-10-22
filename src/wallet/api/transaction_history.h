@@ -31,7 +31,7 @@
 #include "wallet/api/wallet2_api.h"
 #include <shared_mutex>
 
-namespace Monero {
+namespace Wallet {
 
 class WalletImpl;
 
@@ -55,6 +55,3 @@ private:
 };
 
 }
-
-namespace Bitmonero = Monero;
-

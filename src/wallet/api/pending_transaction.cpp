@@ -43,7 +43,7 @@
 
 using namespace std;
 
-namespace Monero {
+namespace Wallet {
 
 PendingTransaction::~PendingTransaction() {}
 
@@ -261,6 +261,3 @@ std::vector<std::string> PendingTransactionImpl::signersKeys() const {
 }
 
 }
-
-namespace Bitmonero = Monero;
-

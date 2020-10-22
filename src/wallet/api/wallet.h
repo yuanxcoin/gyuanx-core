@@ -28,8 +28,7 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#ifndef WALLET_IMPL_H
-#define WALLET_IMPL_H
+#pragma once
 
 #include "wallet/api/wallet2_api.h"
 #include "wallet/wallet2.h"
@@ -40,7 +39,7 @@
 #include <thread>
 
 
-namespace Monero {
+namespace Wallet {
 class TransactionHistoryImpl;
 class PendingTransactionImpl;
 class UnsignedTransactionImpl;
@@ -273,8 +272,3 @@ private:
 
 
 } // namespace
-
-namespace Bitmonero = Monero;
-
-#endif
-

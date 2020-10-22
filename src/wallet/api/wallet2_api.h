@@ -42,7 +42,7 @@
 #include "common/fs.h"
 
 //  Public interface for libwallet library
-namespace Monero {
+namespace Wallet {
 
 enum NetworkType : uint8_t {
     MAINNET = 0,
@@ -1296,13 +1296,9 @@ struct WalletManagerFactory
         LogLevel_Max = LogLevel_4
     };
 
-    static WalletManagerBase * getWalletManager();
+    static WalletManagerBase* getWalletManager();
     static void setLogLevel(int level);
     static void setLogCategories(const std::string &categories);
 };
 
-
-}
-
-namespace Bitmonero = Monero;
-
+} // namespace Wallet

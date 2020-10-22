@@ -33,7 +33,7 @@
 #include "rpc/http_client.h"
 #include <string>
 
-namespace Monero {
+namespace Wallet {
 
 class WalletManagerImpl : public WalletManagerBase
 {
@@ -101,5 +101,3 @@ private:
 };
 
 } // namespace
-
-namespace Bitmonero = Monero;

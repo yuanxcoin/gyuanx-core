@@ -28,14 +28,12 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-
-
-#include "include_base_utils.h"                     // LOG_PRINT_x
+#include "misc_log_ex.h"
 #include "common/util.h"
 
 using namespace std;
 
-namespace Monero {
+namespace Wallet {
 namespace Utils {
 
 bool isAddressLocal(const std::string &address)
@@ -58,7 +56,4 @@ void onStartup()
 
 }
 
-
 } // namespace
-
-namespace Bitmonero = Monero;

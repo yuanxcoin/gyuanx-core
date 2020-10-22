@@ -37,7 +37,7 @@
 
 #include <vector>
 
-namespace Monero {
+namespace Wallet {
   
 AddressBook::~AddressBook() {}
   
@@ -147,5 +147,3 @@ AddressBookImpl::~AddressBookImpl()
 }
 
 } // namespace
-
-namespace Bitmonero = Monero;
