@@ -40,8 +40,6 @@
 #include <sstream>
 #include <boost/format.hpp>
 
-using namespace std;
-
 namespace Wallet {
 
 UnsignedTransaction::~UnsignedTransaction() {}
@@ -63,7 +61,7 @@ int UnsignedTransactionImpl::status() const
     return m_status;
 }
 
-string UnsignedTransactionImpl::errorString() const
+std::string UnsignedTransactionImpl::errorString() const
 {
     return m_errorString;
 }
@@ -89,7 +87,7 @@ bool UnsignedTransactionImpl::sign(const std::string &signedFileName)
   }
   catch (const std::exception &e)
   {
-    m_errorString = string(tr("Failed to sign transaction")) + e.what();
+    m_errorString = std::string(tr("Failed to sign transaction")) + e.what();
     m_status = Status_Error;
     return false;
   }
@@ -261,7 +259,7 @@ uint64_t UnsignedTransactionImpl::txCount() const
 
 std::vector<std::string> UnsignedTransactionImpl::paymentId() const 
 {
-    std::vector<string> result;
+    std::vector<std::string> result;
     for (const auto &utx: m_unsigned_tx_set.txes) {     
         crypto::hash payment_id = crypto::null_hash;
         cryptonote::tx_extra_nonce extra_nonce;
@@ -291,7 +289,7 @@ std::vector<std::string> UnsignedTransactionImpl::paymentId() const
 std::vector<std::string> UnsignedTransactionImpl::recipientAddress() const 
 {
     // TODO: return integrated address if short payment ID exists
-    std::vector<string> result;
+    std::vector<std::string> result;
     for (const auto &utx: m_unsigned_tx_set.txes) {
         if (utx.dests.empty()) {
           MERROR("empty destinations, skipped");

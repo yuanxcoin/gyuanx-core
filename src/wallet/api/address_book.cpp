@@ -79,7 +79,7 @@ void AddressBookImpl::refresh()
       address = cryptonote::get_account_integrated_address_as_str(m_wallet->m_wallet->nettype(), row->m_address, row->m_payment_id);
     else
       address = get_account_address_as_str(m_wallet->m_wallet->nettype(), row->m_is_subaddress, row->m_address);
-    AddressBookRow * abr = new AddressBookRow(i, address, "", row->m_description);
+    AddressBookRow* abr = new AddressBookRow(i, address, row->m_description);
     m_rows.push_back(abr);
   }
   

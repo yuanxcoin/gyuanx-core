@@ -1195,7 +1195,7 @@ struct WalletManagerBase
     virtual void setDaemonAddress(std::string address) = 0;
 
     //! returns whether the daemon can be reached, and its version number
-    virtual bool connected(uint32_t *version = NULL) = 0;
+    virtual bool connected(uint32_t *version = nullptr) = 0;
 
     //! returns current blockchain height
     virtual uint64_t blockchainHeight() = 0;
@@ -1216,7 +1216,7 @@ struct WalletManagerBase
     virtual bool isMining() = 0;
 
     //! starts mining with the set number of threads
-    virtual bool startMining(const std::string &address, uint32_t threads = 1) = 0;
+    virtual bool startMining(const std::string& address, uint32_t threads = 1) = 0;
 
     //! stops mining
     virtual bool stopMining() = 0;

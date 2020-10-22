@@ -41,8 +41,6 @@
 #include <sstream>
 #include <boost/format.hpp>
 
-using namespace std;
-
 namespace Wallet {
 
 PendingTransaction::~PendingTransaction() {}
@@ -64,7 +62,7 @@ int PendingTransactionImpl::status() const
     return m_status;
 }
 
-string PendingTransactionImpl::errorString() const
+std::string PendingTransactionImpl::errorString() const
 {
     return m_errorString;
 }
@@ -103,7 +101,7 @@ bool PendingTransactionImpl::commit(const fs::path& filename, bool overwrite, bo
       else {
         auto multisigState = m_wallet.multisig();
         if (multisigState.isMultisig && m_signers.size() < multisigState.threshold) {
-            throw runtime_error("Not enough signers to send multisig transaction");
+            throw std::runtime_error("Not enough signers to send multisig transaction");
         }
 
         m_wallet.pauseRefresh();
@@ -120,7 +118,7 @@ bool PendingTransactionImpl::commit(const fs::path& filename, bool overwrite, bo
           m_wallet.m_wallet->cold_tx_aux_import(m_pending_tx, m_tx_device_aux);
           bool r = m_wallet.m_wallet->import_key_images(m_key_images, 0, selected_transfers);
           if (!r){
-            throw runtime_error("Cold sign transaction submit failed - key image sync fail");
+            throw std::runtime_error("Cold sign transaction submit failed - key image sync fail");
           }
         }
 
@@ -145,9 +143,9 @@ bool PendingTransactionImpl::commit(const fs::path& filename, bool overwrite, bo
         m_status = Status_Error;
         m_errorString = writer.str();
         if (!reason.empty())
-          m_errorString  += string(tr(". Reason: ")) + reason;
+          m_errorString  += std::string(tr(". Reason: ")) + reason;
     } catch (const std::exception &e) {
-        m_errorString = string(tr("Unknown exception: ")) + e.what();
+        m_errorString = std::string(tr("Unknown exception: ")) + e.what();
         m_status = Status_Error;
     } catch (...) {
         m_errorString = tr("Unhandled exception");

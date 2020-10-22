@@ -148,19 +148,19 @@ public:
     bool exportMultisigImages(std::string& images) override;
     size_t importMultisigImages(const std::vector<std::string>& images) override;
     bool hasMultisigPartialKeyImages() const override;
-    PendingTransaction*  restoreMultisigTransaction(const std::string& signData) override;
+    PendingTransaction* restoreMultisigTransaction(const std::string& signData) override;
 
-    PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
+    PendingTransaction* createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
                                         std::optional<std::vector<uint64_t>> amount,
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
                                         std::set<uint32_t> subaddr_indices = {}) override;
-    PendingTransaction * createTransaction(const std::string &dst_addr, const std::string &payment_id,
+    PendingTransaction* createTransaction(const std::string &dst_addr, const std::string &payment_id,
                                         std::optional<uint64_t> amount,
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
                                         std::set<uint32_t> subaddr_indices = {}) override;
-    virtual PendingTransaction * createSweepUnmixableTransaction() override;
+    virtual PendingTransaction* createSweepUnmixableTransaction() override;
     bool submitTransaction(const fs::path& fileName) override;
     virtual UnsignedTransaction* loadUnsignedTx(const fs::path& unsigned_filename) override;
     bool exportKeyImages(const fs::path& filename) override;

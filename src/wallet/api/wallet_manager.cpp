@@ -48,14 +48,14 @@ namespace Wallet {
 Wallet* WalletManagerImpl::createWallet(const fs::path& path, const std::string &password,
                                     const std::string &language, NetworkType nettype, uint64_t kdf_rounds)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     wallet->create(path, password, language);
     return wallet;
 }
 
 Wallet* WalletManagerImpl::openWallet(const fs::path& path, const std::string &password, NetworkType nettype, uint64_t kdf_rounds, WalletListener * listener)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     wallet->setListener(listener);
     if (listener){
         listener->onSetWallet(wallet);
@@ -92,7 +92,7 @@ Wallet* WalletManagerImpl::recoveryWallet(const fs::path& path,
                                                 uint64_t kdf_rounds,
                                                 const std::string &seed_offset/* = {}*/)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     if(restoreHeight > 0){
         wallet->setRefreshFromBlockHeight(restoreHeight);
     }
@@ -110,7 +110,7 @@ Wallet* WalletManagerImpl::createWalletFromKeys(const fs::path& path,
                                                 const std::string &spendKeyString,
                                                 uint64_t kdf_rounds)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     if(restoreHeight > 0){
         wallet->setRefreshFromBlockHeight(restoreHeight);
     }
@@ -127,7 +127,7 @@ Wallet* WalletManagerImpl::createWalletFromDevice(const fs::path& path,
                                                   uint64_t kdf_rounds,
                                                   WalletListener * listener)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     wallet->setListener(listener);
     if (listener){
         listener->onSetWallet(wallet);
@@ -147,9 +147,9 @@ Wallet* WalletManagerImpl::createWalletFromDevice(const fs::path& path,
     return wallet;
 }
 
-bool WalletManagerImpl::closeWallet(Wallet *wallet, bool store)
+bool WalletManagerImpl::closeWallet(Wallet* wallet, bool store)
 {
-    WalletImpl * wallet_ = dynamic_cast<WalletImpl*>(wallet);
+    WalletImpl* wallet_ = dynamic_cast<WalletImpl*>(wallet);
     if (!wallet_)
         return false;
     bool result = wallet_->close(store);

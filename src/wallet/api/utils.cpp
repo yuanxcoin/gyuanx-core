@@ -31,8 +31,6 @@
 #include "misc_log_ex.h"
 #include "common/util.h"
 
-using namespace std;
-
 namespace Wallet {
 namespace Utils {
 
