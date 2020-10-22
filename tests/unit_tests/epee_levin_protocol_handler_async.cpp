@@ -32,7 +32,6 @@
 
 #include "gtest/gtest.h"
 
-#include "include_base_utils.h"
 #include "string_tools.h"
 #include "net/levin_protocol_handler_async.h"
 #include "net/net_utils_base.h"

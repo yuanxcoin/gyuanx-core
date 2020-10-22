@@ -42,6 +42,7 @@
 #include <type_traits>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <lokimq/hex.h>
 #include "storages/parserse_base_utils.h"
 #include "hex.h"
 #include "mlocker.h"
@@ -61,9 +62,10 @@ using namespace std::literals;
 namespace string_tools
 {
   //----------------------------------------------------------------------------
+  [[deprecated("use lokimq::to_hex instead")]]
   inline std::string buff_to_hex_nodelimer(const std::string& src)
   {
-    return to_hex::string(to_byte_span(to_span(src)));
+    return lokimq::to_hex(src);
   }
   //----------------------------------------------------------------------------
   inline bool parse_hexstr_to_binbuff(const epee::span<const char> s, epee::span<char>& res)
@@ -129,21 +131,6 @@ DISABLE_GCC_WARNING(maybe-uninitialized)
   }
 POP_WARNINGS
 	//----------------------------------------------------------------------------
-	template<class XType>
-	inline bool xtype_to_string(const  XType& val, std::string& str)
-	{
-		try
-		{
-			str = boost::lexical_cast<std::string>(val);
-		}
-		catch(...)
-		{
-			return false;
-		}
-
-		return true;
-	}
-	//----------------------------------------------------------------------------
 	std::string get_ip_string_from_int32(uint32_t ip);
 	//----------------------------------------------------------------------------
 	bool get_ip_int32_from_string(uint32_t& ip, const std::string& ip_str);
@@ -176,14 +163,6 @@ POP_WARNINGS
     return true;
   }
 
-	inline std::string num_to_string_fast(int64_t val)
-	{
-		/*
-		char  buff[30] = {0};
-		i64toa_s(val, buff, sizeof(buff)-1, 10);
-		return buff;*/
-		return boost::lexical_cast<std::string>(val);
-	}
 	//----------------------------------------------------------------------------
 	template<typename T>
 	inline std::string to_string_hex(const T &val)
@@ -293,6 +272,7 @@ POP_WARNINGS
   }
   //----------------------------------------------------------------------------
   template<class t_pod_type>
+  [[deprecated("use tools::type_to_hex instead")]]
   std::string pod_to_hex(const t_pod_type& s)
   {
     static_assert(std::is_standard_layout<t_pod_type>(), "expected standard layout type");
@@ -300,6 +280,7 @@ POP_WARNINGS
   }
   //----------------------------------------------------------------------------
   template<class t_pod_type>
+  [[deprecated("use tools::hex_to_type<T> instead")]]
   bool hex_to_pod(const std::string& hex_str, t_pod_type& s)
   {
     static_assert(std::is_pod<t_pod_type>::value, "expected pod type");
@@ -321,6 +302,7 @@ POP_WARNINGS
     return hex_to_pod(hex_str, unwrap(s));
   }
   //----------------------------------------------------------------------------
+  [[deprecated("use lokimq::is_hex instead")]]
   bool validate_hex(uint64_t length, const std::string& str);
 }
 }

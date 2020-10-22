@@ -1728,7 +1728,7 @@ std::string BlockchainLMDB::get_db_name() const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
 
-  return std::string("lmdb");
+  return "lmdb"s;
 }
 
 void BlockchainLMDB::lock()
@@ -2611,7 +2611,7 @@ uint64_t BlockchainLMDB::get_block_timestamp(const uint64_t& height) const
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get timestamp from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- timestamp not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get timestamp from height ").append(std::to_string(height)).append(" failed -- timestamp not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a timestamp from the db"));
@@ -2709,7 +2709,7 @@ size_t BlockchainLMDB::get_block_weight(const uint64_t& height) const
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get block size from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- block size not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get block size from height ").append(std::to_string(height)).append(" failed -- block size not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a block size from the db"));
@@ -2845,7 +2845,7 @@ difficulty_type BlockchainLMDB::get_block_cumulative_difficulty(const uint64_t& 
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get cumulative difficulty from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- difficulty not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get cumulative difficulty from height ").append(std::to_string(height)).append(" failed -- difficulty not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a cumulative difficulty from the db"));
@@ -2884,7 +2884,7 @@ uint64_t BlockchainLMDB::get_block_already_generated_coins(const uint64_t& heigh
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get generated coins from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- block size not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get generated coins from height ").append(std::to_string(height)).append(" failed -- block size not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a total generated coins from the db"));
@@ -2906,7 +2906,7 @@ uint64_t BlockchainLMDB::get_block_long_term_weight(const uint64_t& height) cons
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get block long term weight from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- block info not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get block long term weight from height ").append(std::to_string(height)).append(" failed -- block info not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a long term block weight from the db"));
@@ -2928,7 +2928,7 @@ crypto::hash BlockchainLMDB::get_block_hash_from_height(const uint64_t& height) 
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get hash from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- hash not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get hash from height ").append(std::to_string(height)).append(" failed -- hash not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("Error attempting to retrieve a block hash from the db: ", get_result).c_str()));
@@ -4290,7 +4290,7 @@ void BlockchainLMDB::get_output_key(const epee::span<const uint64_t> &amounts, c
         MDEBUG("Partial result: " << outputs.size() << "/" << offsets.size());
         break;
       }
-      throw1(OUTPUT_DNE((std::string("Attempting to get output pubkey by global index (amount ") + boost::lexical_cast<std::string>(amount) + ", index " + boost::lexical_cast<std::string>(offsets[i]) + ", count " + boost::lexical_cast<std::string>(get_num_outputs(amount)) + "), but key does not exist (current height " + boost::lexical_cast<std::string>(height()) + ")").c_str()));
+      throw1(OUTPUT_DNE((std::string("Attempting to get output pubkey by global index (amount ") + std::to_string(amount) + ", index " + std::to_string(offsets[i]) + ", count " + std::to_string(get_num_outputs(amount)) + "), but key does not exist (current height " + std::to_string(height()) + ")").c_str()));
     }
     else if (get_result)
       throw0(DB_ERROR(lmdb_error("Error attempting to retrieve an output pubkey from the db", get_result).c_str()));
@@ -4598,7 +4598,7 @@ uint8_t BlockchainLMDB::get_hard_fork_version(uint64_t height) const
   MDB_val val_ret;
   auto result = mdb_cursor_get(m_cur_hf_versions, &val_key, &val_ret, MDB_SET);
   if (result == MDB_NOTFOUND || result)
-    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve a hard fork version at height " + boost::lexical_cast<std::string>(height) + " from the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve a hard fork version at height " + std::to_string(height) + " from the db: ", result).c_str()));
 
   uint8_t ret = *(const uint8_t*)val_ret.mv_data;
   return ret;

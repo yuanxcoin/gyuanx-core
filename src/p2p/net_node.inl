@@ -2057,7 +2057,7 @@ namespace nodetool
     if(!zone.m_peerlist.is_host_allowed(context.m_remote_address))
       return false;
 
-    std::string port = epee::string_tools::num_to_string_fast(node_data.my_port);
+    std::string port = std::to_string(node_data.my_port);
 
     epee::net_utils::network_address address;
     if (ipv4_addr)
@@ -2814,13 +2814,13 @@ namespace nodetool
     {
       const epee::net_utils::ipv4_network_address &ipv4 = na.as<const epee::net_utils::ipv4_network_address>();
       address = epee::string_tools::get_ip_string_from_int32(ipv4.ip());
-      port = epee::string_tools::num_to_string_fast(ipv4.port());
+      port = std::to_string(ipv4.port());
     }
     else
     {
       const epee::net_utils::ipv6_network_address &ipv6 = na.as<const epee::net_utils::ipv6_network_address>();
       address = ipv6.ip().to_string();
-      port = epee::string_tools::num_to_string_fast(ipv6.port());
+      port = std::to_string(ipv6.port());
     }
 
     typename net_server::t_connection_context con{};

@@ -37,7 +37,6 @@
 
 #include "gtest/gtest.h"
 
-#include "include_base_utils.h"
 #include "misc_language.h"
 #include "misc_log_ex.h"
 #include "storages/levin_abstract_invoke2.h"

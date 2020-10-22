@@ -64,6 +64,7 @@ endif()
 target_link_libraries(epee
   PUBLIC
     easylogging
+    lokimq::lokimq
   PRIVATE
     lokimq::lokimq
     filesystem

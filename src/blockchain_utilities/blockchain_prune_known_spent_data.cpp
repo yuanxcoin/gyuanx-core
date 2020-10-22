@@ -30,7 +30,6 @@
  #define __STDC_FORMAT_MACROS // NOTE(loki): Explicitly define the PRIu64 macro on Mingw
 #endif
 
-#include <boost/algorithm/string.hpp>
 #include "common/command_line.h"
 #include "serialization/crypto.h"
 #include "cryptonote_core/cryptonote_core.h"
