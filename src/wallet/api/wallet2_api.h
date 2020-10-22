@@ -198,22 +198,19 @@ struct TransactionHistory
  */
 struct AddressBookRow {
 public:
-    AddressBookRow(std::size_t _rowId, const std::string &_address, const std::string &_paymentId, const std::string &_description):
+    AddressBookRow(std::size_t _rowId, const std::string &_address, const std::string &_description):
         m_rowId(_rowId),
         m_address(_address),
-        m_paymentId(_paymentId), 
         m_description(_description) {}
  
 private:
     std::size_t m_rowId;
     std::string m_address;
-    std::string m_paymentId;
     std::string m_description;
 public:
     std::string extra;
     std::string getAddress() const {return m_address;} 
     std::string getDescription() const {return m_description;} 
-    std::string getPaymentId() const {return m_paymentId;} 
     std::size_t getRowId() const {return m_rowId;}
 };
 
@@ -226,17 +223,15 @@ struct AddressBook
     enum ErrorCode {
         Status_Ok,
         General_Error,
-        Invalid_Address,
-        Invalid_Payment_Id
+        Invalid_Address
     };
     virtual ~AddressBook() = 0;
     virtual std::vector<AddressBookRow*> getAll() const = 0;
-    virtual bool addRow(const std::string &dst_addr , const std::string &payment_id, const std::string &description) = 0;  
+    virtual bool addRow(const std::string &dst_addr, const std::string &description) = 0;  
     virtual bool deleteRow(std::size_t rowId) = 0;
     virtual void refresh() = 0;  
     virtual std::string errorString() const = 0;
     virtual int errorCode() const = 0;
-    virtual int lookupPaymentID(const std::string &payment_id) const = 0;
 };
 
 struct SubaddressRow {
@@ -644,23 +639,15 @@ struct Wallet
     /// Check if the string represents a valid public key (regardless of whether the service node actually exists or not)
     static bool serviceNodePubkeyValid(const std::string &str);
     static bool addressValid(const std::string &str, NetworkType nettype);
-    static bool addressValid(const std::string &str, bool testnet)          // deprecated
-    {
-        return addressValid(str, testnet ? TESTNET : MAINNET);
-    }
     static bool keyValid(const std::string &secret_key_string, const std::string &address_string, bool isViewKey, NetworkType nettype, std::string &error);
     static bool keyValid(const std::string &secret_key_string, const std::string &address_string, bool isViewKey, bool testnet, std::string &error)     // deprecated
     {
         return keyValid(secret_key_string, address_string, isViewKey, testnet ? TESTNET : MAINNET, error);
     }
     static std::string paymentIdFromAddress(const std::string &str, NetworkType nettype);
-    static std::string paymentIdFromAddress(const std::string &str, bool testnet)       // deprecated
-    {
-        return paymentIdFromAddress(str, testnet ? TESTNET : MAINNET);
-    }
     static uint64_t maximumAllowedAmount();
     // Easylogger wrapper
-    static void init(const char *argv0, const char *default_log_base_name) { init(argv0, default_log_base_name, "", true); }
+    static void init(const char* argv0, const char* default_log_base_name) { init(argv0, default_log_base_name, "", true); }
     static void init(const char* argv0, const char* default_log_base_name, const fs::path& log_path, bool console);
     static void debug(const std::string &category, const std::string &str);
     static void info(const std::string &category, const std::string &str);
@@ -1045,10 +1032,6 @@ struct WalletManagerBase
      * \return                Wallet instance (Wallet::status() needs to be called to check if created successfully)
      */
     virtual Wallet* createWallet(const fs::path& path, const std::string& password, const std::string& language, NetworkType nettype, uint64_t kdf_rounds = 1) = 0;
-    Wallet * createWallet(const std::string &path, const std::string &password, const std::string &language, bool testnet = false)      // deprecated
-    {
-        return createWallet(path, password, language, testnet ? TESTNET : MAINNET);
-    }
 
     /*!
      * \brief  Opens existing wallet
@@ -1060,10 +1043,6 @@ struct WalletManagerBase
      * \return                Wallet instance (Wallet::status() needs to be called to check if opened successfully)
      */
     virtual Wallet* openWallet(const fs::path& path, const std::string& password, NetworkType nettype, uint64_t kdf_rounds = 1, WalletListener * listener = nullptr) = 0;
-    Wallet * openWallet(const std::string &path, const std::string &password, bool testnet = false)     // deprecated
-    {
-        return openWallet(path, password, testnet ? TESTNET : MAINNET);
-    }
 
     /*!
      * \brief  recovers existing wallet using mnemonic (electrum seed)
@@ -1079,11 +1058,6 @@ struct WalletManagerBase
     virtual Wallet* recoveryWallet(const fs::path& path, const std::string& password, const std::string& mnemonic,
                                     NetworkType nettype = MAINNET, uint64_t restoreHeight = 0, uint64_t kdf_rounds = 1,
                                     const std::string &seed_offset = {}) = 0;
-    Wallet * recoveryWallet(const std::string &path, const std::string &password, const std::string &mnemonic,
-                                    bool testnet = false, uint64_t restoreHeight = 0)           // deprecated
-    {
-        return recoveryWallet(path, password, mnemonic, testnet ? TESTNET : MAINNET, restoreHeight);
-    }
 
     /*!
      * \deprecated this method creates a wallet WITHOUT a passphrase, use the alternate recoverWallet() method
@@ -1095,10 +1069,6 @@ struct WalletManagerBase
      * \return                Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
      */
     virtual Wallet* recoveryWallet(const fs::path& path, const std::string& mnemonic, NetworkType nettype, uint64_t restoreHeight = 0) = 0;
-    Wallet * recoveryWallet(const std::string &path, const std::string &mnemonic, bool testnet = false, uint64_t restoreHeight = 0)         // deprecated
-    {
-        return recoveryWallet(path, mnemonic, testnet ? TESTNET : MAINNET, restoreHeight);
-    }
 
     /*!
      * \brief  recovers existing wallet using keys. Creates a view only wallet if spend key is omitted
@@ -1123,17 +1093,6 @@ struct WalletManagerBase
             const std::string& viewKeyString,
             const std::string& spendKeyString = "",
             uint64_t kdf_rounds = 1) = 0;
-    Wallet * createWalletFromKeys(const std::string &path,
-                                  const std::string &password,
-                                  const std::string &language,
-                                  bool testnet,
-                                  uint64_t restoreHeight,
-                                  const std::string &addressString,
-                                  const std::string &viewKeyString,
-                                  const std::string &spendKeyString = "")       // deprecated
-    {
-        return createWalletFromKeys(path, password, language, testnet ? TESTNET : MAINNET, restoreHeight, addressString, viewKeyString, spendKeyString);
-    }
 
    /*!
     * \deprecated this method creates a wallet WITHOUT a passphrase, use createWalletFromKeys(..., password, ...) instead
@@ -1155,16 +1114,6 @@ struct WalletManagerBase
             const std::string& addressString,
             const std::string& viewKeyString,
             const std::string& spendKeyString = "") = 0;
-    Wallet * createWalletFromKeys(const std::string &path, 
-                                  const std::string &language,
-                                  bool testnet, 
-                                  uint64_t restoreHeight,
-                                  const std::string &addressString,
-                                  const std::string &viewKeyString,
-                                  const std::string &spendKeyString = "")           // deprecated
-    {
-        return createWalletFromKeys(path, language, testnet ? TESTNET : MAINNET, restoreHeight, addressString, viewKeyString, spendKeyString);
-    }
 
     /*!
      * \brief  creates wallet using hardware device.
@@ -1178,21 +1127,22 @@ struct WalletManagerBase
      * \param  listener             Wallet listener to set to the wallet after creation
      * \return                      Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
      */
-    virtual Wallet * createWalletFromDevice(const std::string &path,
-                                            const std::string &password,
-                                            NetworkType nettype,
-                                            const std::string &deviceName,
-                                            uint64_t restoreHeight = 0,
-                                            const std::string &subaddressLookahead = "",
-                                            uint64_t kdf_rounds = 1,
-                                            WalletListener * listener = nullptr) = 0;
+    virtual Wallet* createWalletFromDevice(
+            const fs::path& path,
+            const std::string& password,
+            NetworkType nettype,
+            const std::string& deviceName,
+            uint64_t restoreHeight = 0,
+            const std::string& subaddressLookahead = "",
+            uint64_t kdf_rounds = 1,
+            WalletListener* listener = nullptr) = 0;
 
     /*!
      * \brief Closes wallet. In case operation succeeded, wallet object deleted. in case operation failed, wallet object not deleted
      * \param wallet        previously opened / created wallet instance
      * \return              None
      */
-    virtual bool closeWallet(Wallet *wallet, bool store = true) = 0;
+    virtual bool closeWallet(Wallet* wallet, bool store = true) = 0;
 
     /*
      * ! checks if wallet with the given name already exists
@@ -1273,13 +1223,6 @@ struct WalletManagerBase
 
     //! resolves an OpenAlias address to a monero address
     virtual std::string resolveOpenAlias(const std::string &address, bool &dnssec_valid) const = 0;
-
-    //! checks for an update and returns version, hash and url
-    static std::tuple<bool, std::string, std::string, std::string, std::string> checkUpdates(
-        const std::string &software,
-        std::string subdir,
-        const char *buildtag = nullptr,
-        const char *current_version = nullptr);
 };
 
 struct WalletManagerFactory
