@@ -754,8 +754,8 @@ namespace cryptonote
       if(!msout && !(in_ephemeral.pub == src_entr.outputs[src_entr.real_output].second.dest) )
       {
         LOG_ERROR("derived public key mismatch with output public key at index " << idx << ", real out " << src_entr.real_output << "!\nderived_key:"
-          << epee::string_tools::pod_to_hex(in_ephemeral.pub) << "\nreal output_public_key:"
-          << epee::string_tools::pod_to_hex(src_entr.outputs[src_entr.real_output].second.dest) );
+          << tools::type_to_hex(in_ephemeral.pub) << "\nreal output_public_key:"
+          << tools::type_to_hex(src_entr.outputs[src_entr.real_output].second.dest) );
         LOG_ERROR("amount " << src_entr.amount << ", rct " << src_entr.rct);
         LOG_ERROR("tx pubkey " << src_entr.real_out_tx_key << ", real_output_in_tx_index " << src_entr.real_output_in_tx_index);
         return false;

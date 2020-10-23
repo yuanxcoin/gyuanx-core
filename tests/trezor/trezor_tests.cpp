@@ -686,7 +686,7 @@ void gen_trezor_base::init_fields()
   DEFAULT_HARDFORKS(m_hard_forks);
 
   crypto::secret_key master_seed{};
-  CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(m_master_seed_str, master_seed), "Hexdecode fails");
+  CHECK_AND_ASSERT_THROW_MES(tools::hex_to_type(m_master_seed_str, master_seed), "Hexdecode fails");
 
   m_alice_account.generate(master_seed, true);
   m_alice_account.set_createtime(m_wallet_ts);

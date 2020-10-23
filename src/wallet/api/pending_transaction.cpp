@@ -71,7 +71,7 @@ std::vector<std::string> PendingTransactionImpl::txid() const
 {
     std::vector<std::string> txid;
     for (const auto &pt: m_pending_tx)
-        txid.push_back(epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(pt.tx)));
+        txid.push_back(tools::type_to_hex(cryptonote::get_transaction_hash(pt.tx)));
     return txid;
 }
 
@@ -218,7 +218,7 @@ std::string PendingTransactionImpl::multisigSignData() {
         txSet.m_signers = m_signers;
         auto cipher = m_wallet.m_wallet->save_multisig_tx(txSet);
 
-        return epee::string_tools::buff_to_hex_nodelimer(cipher);
+        return lokimq::to_hex(cipher);
     } catch (const std::exception& e) {
         m_status = Status_Error;
         m_errorString = std::string(tr("Couldn't multisig sign data: ")) + e.what();

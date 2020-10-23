@@ -34,6 +34,7 @@
 #include <limits>
 #include <lokimq/hex.h>
 #include <variant>
+#include "common/hex.h"
 #include "wipeable_string.h"
 #include "string_tools.h"
 #include "common/i18n.h"
@@ -972,11 +973,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   std::string short_hash_str(const crypto::hash& h)
   {
-    std::string res = epee::string_tools::pod_to_hex(h);
-    CHECK_AND_ASSERT_MES(res.size() == 64, res, "wrong hash256 with string_tools::pod_to_hex conversion");
-    auto erased_pos = res.erase(8, 48);
-    res.insert(8, "....");
-    return res;
+    return lokimq::to_hex(tools::view_guts(h).substr(0, 4)) + "....";
   }
   //---------------------------------------------------------------
   bool is_out_to_acc(const account_keys& acc, const txout_to_key& out_key, const crypto::public_key& tx_pub_key, const std::vector<crypto::public_key>& additional_tx_pub_keys, size_t output_index)
@@ -1553,7 +1550,7 @@ std::string lns::generic_owner::to_string(cryptonote::network_type nettype) cons
   if (type == lns::generic_owner_sig_type::monero)
     return cryptonote::get_account_address_as_str(nettype, wallet.is_subaddress, wallet.address);
   else
-    return epee::to_hex::string(epee::as_byte_span(ed25519));
+    return tools::type_to_hex(ed25519);
 }
 
 bool lns::generic_owner::operator==(generic_owner const &other) const

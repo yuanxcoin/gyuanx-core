@@ -502,40 +502,6 @@ TEST(ToHex, Formatted)
   EXPECT_EQ(expected, out.str());
 }
 
-TEST(StringTools, BuffToHex)
-{
-  const std::vector<unsigned char> all_bytes = get_all_bytes();
-
-  EXPECT_EQ(
-    std_to_hex(all_bytes),
-    (epee::string_tools::buff_to_hex_nodelimer(
-      std::string{reinterpret_cast<const char*>(all_bytes.data()), all_bytes.size()}
-    ))
-  );
-}
-
-TEST(StringTools, PodToHex)
-{
-  struct some_pod { unsigned char data[4]; };
-  EXPECT_EQ(
-    std::string{"ffab0100"},
-    (epee::string_tools::pod_to_hex(some_pod{{0xFF, 0xAB, 0x01, 0x00}}))
-  );
-}
-
-TEST(StringTools, ParseHex)
-{
-  static const char data[] = "a10b68c2";
-  for (size_t i = 0; i < sizeof(data); i += 2)
-  {
-    std::string res;
-    ASSERT_TRUE(epee::string_tools::parse_hexstr_to_binbuff(std::string(data, i), res));
-    std::string hex = epee::string_tools::buff_to_hex_nodelimer(res);
-    ASSERT_EQ(hex.size(), i);
-    ASSERT_EQ(memcmp(data, hex.data(), i), 0);
-  }
-}
-
 TEST(StringTools, ParseNotHex)
 {
   std::string res;

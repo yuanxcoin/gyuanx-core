@@ -42,6 +42,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "serialization/binary_utils.h"
 #include "cryptonote_core/cryptonote_core.h"
+#include "common/hex.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "bcutil"
@@ -141,7 +142,7 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
     if (!parse_and_validate_block_from_blob(b.block, block))
     {
       MERROR("Failed to parse block: "
-          << epee::string_tools::pod_to_hex(get_blob_hash(b.block)));
+          << tools::type_to_hex(get_blob_hash(b.block)));
       core.cleanup_handle_incoming_blocks();
       return 1;
     }
@@ -174,7 +175,7 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
       if(tvc.m_verifivation_failed)
       {
         MERROR("transaction verification failed, tx_id = "
-            << epee::string_tools::pod_to_hex(get_blob_hash(tx_blob)));
+            << tools::type_to_hex(get_blob_hash(tx_blob)));
         core.cleanup_handle_incoming_blocks();
         return 1;
       }
@@ -189,7 +190,7 @@ int check_flush(cryptonote::core &core, std::vector<block_complete_entry> &block
     if(bvc.m_verifivation_failed)
     {
       MERROR("Block verification failed, id = "
-          << epee::string_tools::pod_to_hex(get_blob_hash(block_entry.block)));
+          << tools::type_to_hex(get_blob_hash(block_entry.block)));
       core.cleanup_handle_incoming_blocks();
       return 1;
     }
@@ -239,11 +240,8 @@ int import_from_file(cryptonote::core& core, const fs::path& import_file_path, u
 
   std::cout << "\nPreparing to read blocks...\n\n";
 
-  std::ifstream import_file;
-  import_file.open(import_file_path, std::ios_base::binary | std::ifstream::in);
+  fs::ifstream import_file{import_file_path, std::ios::binary};
 
-  uint64_t h = 0;
-  uint64_t num_imported = 0;
   if (import_file.fail())
   {
     MFATAL("import_file.open() fail");
@@ -279,6 +277,9 @@ int import_from_file(cryptonote::core& core, const fs::path& import_file_path, u
   std::cout << "\n";
 
   std::vector<block_complete_entry> blocks;
+
+  uint64_t h = 0;
+  uint64_t num_imported = 0;
 
   // Skip to start_height before we start adding.
   {

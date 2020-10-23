@@ -85,7 +85,6 @@ using namespace crypto;
  */
 
 using namespace cryptonote;
-using epee::string_tools::pod_to_hex;
 
 DISABLE_VS_WARNINGS(4267)
 
@@ -1170,7 +1169,7 @@ bool Blockchain::switch_to_alternative_blockchain(const std::list<block_extended
   std::shared_ptr<tools::Notify> block_notify = m_block_notify;
   if (block_notify)
     for (const auto &bei: alt_chain)
-      block_notify->notify("%s", epee::string_tools::pod_to_hex(get_block_hash(bei.bl)).c_str(), NULL);
+      block_notify->notify("%s", tools::type_to_hex(get_block_hash(bei.bl)).c_str(), NULL);
 
   MGINFO_GREEN("REORGANIZE SUCCESS! on height: " << split_height << ", new blockchain size: " << m_db->height());
   return true;
@@ -1955,7 +1954,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
         cryptonote::transaction tx;
         if (!cryptonote::parse_and_validate_tx_base_from_blob(blob, tx))
         {
-          MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) refers to unparsable transaction hash " << txid << ".");
+          MERROR_VER("Block with id: " << tools::type_to_hex(id) << " (as alternative) refers to unparsable transaction hash " << txid << ".");
           bvc.m_verifivation_failed = true;
           return false;
         }
@@ -3324,7 +3323,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
 
         if(have_tx_keyimg_as_spent(in_to_key.k_image))
         {
-          MERROR_VER("Key image already spent in blockchain: " << epee::string_tools::pod_to_hex(in_to_key.k_image));
+          MERROR_VER("Key image already spent in blockchain: " << tools::type_to_hex(in_to_key.k_image));
           if (key_image_conflicts)
             key_image_conflicts->insert(in_to_key.k_image);
           else
@@ -3358,7 +3357,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         {
           if (in_to_key.k_image == entry.key_image) // Check if key image is on the blacklist
           {
-            MERROR_VER("Key image: " << epee::string_tools::pod_to_hex(entry.key_image) << " is blacklisted by the service node network");
+            MERROR_VER("Key image: " << tools::type_to_hex(entry.key_image) << " is blacklisted by the service node network");
             tvc.m_key_image_blacklisted = true;
             return false;
           }
@@ -3367,7 +3366,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         uint64_t unlock_height = 0;
         if (m_service_node_list.is_key_image_locked(in_to_key.k_image, &unlock_height))
         {
-          MERROR_VER("Key image: " << epee::string_tools::pod_to_hex(in_to_key.k_image) << " is locked in a stake until height: " << unlock_height);
+          MERROR_VER("Key image: " << tools::type_to_hex(in_to_key.k_image) << " is locked in a stake until height: " << unlock_height);
           tvc.m_key_image_locked_by_snode = true;
           return false;
         }
@@ -3624,7 +3623,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       uint64_t unlock_height = 0;
       if (!m_service_node_list.is_key_image_locked(unlock.key_image, &unlock_height, &contribution))
       {
-        MERROR_VER("Requested key image: " << epee::string_tools::pod_to_hex(unlock.key_image) << " to unlock is not locked");
+        MERROR_VER("Requested key image: " << tools::type_to_hex(unlock.key_image) << " to unlock is not locked");
         tvc.m_invalid_input = true;
         return false;
       }
@@ -4521,7 +4520,7 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   {
     std::shared_ptr<tools::Notify> block_notify = m_block_notify;
     if (block_notify)
-      block_notify->notify("%s", epee::string_tools::pod_to_hex(id).c_str(), NULL);
+      block_notify->notify("%s", tools::type_to_hex(id).c_str(), NULL);
   }
 
   return true;

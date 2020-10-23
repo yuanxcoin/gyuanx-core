@@ -62,12 +62,6 @@ using namespace std::literals;
 namespace string_tools
 {
   //----------------------------------------------------------------------------
-  [[deprecated("use lokimq::to_hex instead")]]
-  inline std::string buff_to_hex_nodelimer(const std::string& src)
-  {
-    return lokimq::to_hex(src);
-  }
-  //----------------------------------------------------------------------------
   inline bool parse_hexstr_to_binbuff(const epee::span<const char> s, epee::span<char>& res)
   {
       if (s.size() != res.size() * 2)
@@ -225,37 +219,33 @@ POP_WARNINGS
 
 	}
 
-	//----------------------------------------------------------------------------
-	inline bool trim_left(std::string& str)
-	{
-		for(std::string::iterator it = str.begin(); it!= str.end() && isspace(static_cast<unsigned char>(*it));)
-			str.erase(str.begin());
-			
-		return true;
-	}
-	//----------------------------------------------------------------------------
-	inline bool trim_right(std::string& str)
-	{
-
-		for(std::string::reverse_iterator it = str.rbegin(); it!= str.rend() && isspace(static_cast<unsigned char>(*it));)
-			str.erase( --((it++).base()));
-
-		return true;
-	}
-	//----------------------------------------------------------------------------
-	inline std::string& trim(std::string& str)
-	{
-
-		trim_left(str);
-		trim_right(str);
-		return str;
-	}
+  //----------------------------------------------------------------------------
+  inline std::string& trim_left(std::string& str)
+  {
+      auto it = str.begin();
+      while (it != str.end() && std::isspace(static_cast<unsigned char>(*it)))
+          it++;
+      if (it != str.begin())
+          str.erase(str.begin(), it);
+      return str;
+  }
+  //----------------------------------------------------------------------------
+  inline std::string& trim_right(std::string& str)
+  {
+      while (!str.empty() && std::isspace(static_cast<unsigned char>(str.back())))
+          str.pop_back();
+      return str;
+  }
+  //----------------------------------------------------------------------------
+  inline std::string& trim(std::string& str)
+  {
+    return trim_left(trim_right(str));
+  }
   //----------------------------------------------------------------------------
   inline std::string trim(const std::string& str_)
   {
     std::string str = str_;
-    trim_left(str);
-    trim_right(str);
+    trim(str);
     return str;
   }
   //----------------------------------------------------------------------------
@@ -270,40 +260,6 @@ POP_WARNINGS
     }
     return s;
   }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  [[deprecated("use tools::type_to_hex instead")]]
-  std::string pod_to_hex(const t_pod_type& s)
-  {
-    static_assert(std::is_standard_layout<t_pod_type>(), "expected standard layout type");
-    return to_hex::string(as_byte_span(s));
-  }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  [[deprecated("use tools::hex_to_type<T> instead")]]
-  bool hex_to_pod(const std::string& hex_str, t_pod_type& s)
-  {
-    static_assert(std::is_pod<t_pod_type>::value, "expected pod type");
-    if(sizeof(s)*2 != hex_str.size())
-      return false;
-    epee::span<char> rspan((char*)&s, sizeof(s));
-    return parse_hexstr_to_binbuff(epee::to_span(hex_str), rspan);
-  }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  bool hex_to_pod(const std::string& hex_str, tools::scrubbed<t_pod_type>& s)
-  {
-    return hex_to_pod(hex_str, unwrap(s));
-  }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  bool hex_to_pod(const std::string& hex_str, epee::mlocked<t_pod_type>& s)
-  {
-    return hex_to_pod(hex_str, unwrap(s));
-  }
-  //----------------------------------------------------------------------------
-  [[deprecated("use lokimq::is_hex instead")]]
-  bool validate_hex(uint64_t length, const std::string& str);
 }
 }
 #endif //_STRING_TOOLS_H_

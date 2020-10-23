@@ -45,6 +45,7 @@
 #include "common/varint.h"
 #include "common/perf_timer.h"
 #include "common/meta.h"
+#include "common/hex.h"
 #include "checkpoints/checkpoints.h"
 
 #include "cryptonote_core/service_node_quorum_cop.h"
@@ -2288,7 +2289,7 @@ namespace rpc {
       quorum_signature_serialized() = default;
       quorum_signature_serialized(service_nodes::quorum_signature const &entry)
       : voter_index(entry.voter_index)
-      , signature(epee::string_tools::pod_to_hex(entry.signature)) { }
+      , signature(tools::type_to_hex(entry.signature)) { }
 
       KV_MAP_SERIALIZABLE
 
@@ -2312,7 +2313,7 @@ namespace rpc {
       : version(checkpoint.version)
       , type(checkpoint_t::type_to_string(checkpoint.type))
       , height(checkpoint.height)
-      , block_hash(epee::string_tools::pod_to_hex(checkpoint.block_hash))
+      , block_hash(tools::type_to_hex(checkpoint.block_hash))
       , prev_height(checkpoint.prev_height)
       {
         signatures.reserve(checkpoint.signatures.size());

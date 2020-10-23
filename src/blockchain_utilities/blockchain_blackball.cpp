@@ -37,6 +37,7 @@
 #include "common/varint.h"
 #include "common/file.h"
 #include "common/signal_handler.h"
+#include "common/hex.h"
 #include "serialization/crypto.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_core/cryptonote_core.h"
@@ -476,7 +477,7 @@ static bool for_all_transactions(const fs::path& filename, const uint64_t& start
 
     ret = mdb_cursor_get(cur_txs, &k, &v, op_txs);
     if (ret)
-      throw std::runtime_error("Failed to fetch transaction " + epee::string_tools::pod_to_hex(get_transaction_hash(b.miner_tx)) + ": " + std::string(mdb_strerror(ret)));
+      throw std::runtime_error("Failed to fetch transaction " + tools::type_to_hex(get_transaction_hash(b.miner_tx)) + ": " + std::string(mdb_strerror(ret)));
     op_txs = MDB_NEXT;
 
     bool last_block = height == n_blocks - 1;
@@ -490,7 +491,7 @@ static bool for_all_transactions(const fs::path& filename, const uint64_t& start
       const crypto::hash& txid = b.tx_hashes[i];
       ret = mdb_cursor_get(cur_txs, &k, &v, op_txs);
       if (ret)
-        throw std::runtime_error("Failed to fetch transaction " + epee::string_tools::pod_to_hex(txid) + ": " + std::string(mdb_strerror(ret)));
+        throw std::runtime_error("Failed to fetch transaction " + tools::type_to_hex(txid) + ": " + std::string(mdb_strerror(ret)));
       if (start_idx <= tx_idx++)
       {
         cryptonote::transaction_prefix tx;
@@ -1289,7 +1290,7 @@ int main(int argc, char* argv[])
 
   const uint64_t start_blackballed_outputs = get_num_spent_outputs();
 
-  tools::ringdb ringdb(output_file_path.string(), epee::string_tools::pod_to_hex(get_genesis_block_hash(inputs[0])));
+  tools::ringdb ringdb(output_file_path.string(), tools::type_to_hex(get_genesis_block_hash(inputs[0])));
 
   bool stop_requested = false;
   tools::signal_handler::install([&stop_requested](int type) {

@@ -43,6 +43,7 @@
 #include "blockchain_db/blockchain_db.h"
 #include "common/boost_serialization_helper.h"
 #include "common/lock.h"
+#include "common/hex.h"
 #include "int-util.h"
 #include "misc_language.h"
 #include "warnings.h"
@@ -1270,7 +1271,7 @@ namespace cryptonote
       }
       tx_infos.emplace_back();
       auto& txi = tx_infos.back();
-      txi.id_hash = epee::string_tools::pod_to_hex(txid);
+      txi.id_hash = tools::type_to_hex(txid);
       txi.tx_blob = *bd;
       tx.set_hash(txid);
       txi.tx_json = obj_to_json_str(tx);
@@ -1279,9 +1280,9 @@ namespace cryptonote
       txi.fee = meta.fee;
       txi.kept_by_block = meta.kept_by_block;
       txi.max_used_block_height = meta.max_used_block_height;
-      txi.max_used_block_id_hash = epee::string_tools::pod_to_hex(meta.max_used_block_id);
+      txi.max_used_block_id_hash = tools::type_to_hex(meta.max_used_block_id);
       txi.last_failed_height = meta.last_failed_height;
-      txi.last_failed_id_hash = epee::string_tools::pod_to_hex(meta.last_failed_id);
+      txi.last_failed_id_hash = tools::type_to_hex(meta.last_failed_id);
       // In restricted mode we do not include this data:
       txi.receive_time = include_sensitive_data ? meta.receive_time : 0;
       txi.relayed = meta.relayed;
@@ -1300,7 +1301,7 @@ namespace cryptonote
       const crypto::key_image& k_image = kee.first;
       const std::unordered_set<crypto::hash>& kei_image_set = kee.second;
       rpc::spent_key_image_info ki{};
-      ki.id_hash = epee::string_tools::pod_to_hex(k_image);
+      ki.id_hash = tools::type_to_hex(k_image);
       for (const crypto::hash& tx_id_hash : kei_image_set)
       {
         if (!include_sensitive_data)
@@ -1322,7 +1323,7 @@ namespace cryptonote
             return false;
           }
         }
-        ki.txs_hashes.push_back(epee::string_tools::pod_to_hex(tx_id_hash));
+        ki.txs_hashes.push_back(tools::type_to_hex(tx_id_hash));
       }
       // Only return key images for which we have at least one tx that we can show for them
       if (!ki.txs_hashes.empty())

@@ -50,6 +50,7 @@ extern "C" {
 #include "common/util.h"
 #include "common/random.h"
 #include "common/lock.h"
+#include "common/hex.h"
 #include "misc_os_dependent.h"
 #include "blockchain.h"
 #include "service_node_quorum_cop.h"
@@ -355,10 +356,10 @@ namespace service_nodes
       throw invalid_contributions{"Failed to generate registration hash"};
 
     if (!crypto::check_key(service_node_key))
-      throw invalid_contributions{"Service Node Key was not a valid crypto key" + epee::string_tools::pod_to_hex(service_node_key)};
+      throw invalid_contributions{"Service Node Key was not a valid crypto key" + tools::type_to_hex(service_node_key)};
 
     if (!crypto::check_signature(hash, service_node_key, signature))
-      throw invalid_contributions{"Failed to validate service node with key:" + epee::string_tools::pod_to_hex(service_node_key) + " and hash: " + epee::string_tools::pod_to_hex(hash)};
+      throw invalid_contributions{"Failed to validate service node with key:" + tools::type_to_hex(service_node_key) + " and hash: " + tools::type_to_hex(hash)};
   }
 
   struct parsed_tx_contribution
@@ -2884,7 +2885,7 @@ namespace service_nodes
 
     crypto::x25519_public_key derived_x25519_pubkey = crypto::x25519_public_key::null();
     if (!proof.pubkey_ed25519)
-      REJECT_PROOF("required ed25519 auxiliary pubkey " << epee::string_tools::pod_to_hex(proof.pubkey_ed25519) << " not included in proof");
+      REJECT_PROOF("required ed25519 auxiliary pubkey " << proof.pubkey_ed25519 << " not included in proof");
 
     if (0 != crypto_sign_verify_detached(proof.sig_ed25519.data, reinterpret_cast<unsigned char *>(hash.data), sizeof(hash.data), proof.pubkey_ed25519.data))
       REJECT_PROOF("ed25519 signature validation failed");
@@ -3555,9 +3556,7 @@ namespace service_nodes
       stream << " " << args[i];
     }
 
-    stream << " " << exp_timestamp << " ";
-    stream << epee::string_tools::pod_to_hex(keys.pub) << " ";
-    stream << epee::string_tools::pod_to_hex(signature);
+    stream << " " << exp_timestamp << " " << tools::type_to_hex(keys.pub) << " " << tools::type_to_hex(signature);
 
     if (make_friendly)
     {

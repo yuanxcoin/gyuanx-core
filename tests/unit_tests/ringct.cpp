@@ -38,7 +38,7 @@
 #include "ringct/rctSigs.h"
 #include "ringct/rctOps.h"
 #include "device/device.hpp"
-#include "string_tools.h"
+#include "common/hex.h"
 
 using namespace crypto;
 using namespace rct;
@@ -284,7 +284,7 @@ TEST(ringct, CLSAG)
   // D not in main subgroup in clsag at verification
   backup_key = clsag.D;
   rct::key x;
-  ASSERT_TRUE(epee::string_tools::hex_to_pod("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", x));
+  ASSERT_TRUE(tools::hex_to_type("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", x));
   clsag.D = rct::addKeys(clsag.D, x);
   ASSERT_FALSE(rct::verRctCLSAGSimple(message,clsag,pubs,Cout));
   clsag.D = backup_key;

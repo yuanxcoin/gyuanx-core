@@ -34,6 +34,7 @@
 #include "rpc/message_data_structs.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "common/sfinae_helpers.h"
+#include "common/hex.h"
 
 namespace cryptonote
 {
@@ -76,24 +77,17 @@ constexpr bool is_to_hex = std::is_standard_layout_v<Type> && std::is_trivial_v<
 template <class Type>
 typename std::enable_if_t<is_to_hex<Type>> toJsonValue(rapidjson::Document& doc, const Type& pod, rapidjson::Value& value)
 {
-  value = rapidjson::Value(epee::string_tools::pod_to_hex(pod).c_str(), doc.GetAllocator());
+  value = rapidjson::Value(tools::type_to_hex(pod).c_str(), doc.GetAllocator());
 }
 
 template <class Type>
 typename std::enable_if_t<is_to_hex<Type>> fromJsonValue(const rapidjson::Value& val, Type& t)
 {
   if (!val.IsString())
-  {
     throw WRONG_TYPE("string");
-  }
 
-  //TODO: handle failure to convert hex string to POD type
-  bool success = epee::string_tools::hex_to_pod(val.GetString(), t);
-
-  if (!success)
-  {
+  if (!tools::hex_to_type(val.GetString(), t))
     throw BAD_INPUT();
-  }
 }
 
 void toJsonValue(rapidjson::Document& doc, const std::string& i, rapidjson::Value& val);

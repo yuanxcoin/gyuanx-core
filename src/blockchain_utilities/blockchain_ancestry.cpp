@@ -419,7 +419,7 @@ int main(int argc, char* argv[])
   uint64_t output_amount = 0, output_offset = 0;
   if (!opt_txid_string.empty())
   {
-    if (!epee::string_tools::hex_to_pod(opt_txid_string, opt_txid))
+    if (!tools::hex_to_type(opt_txid_string, opt_txid))
     {
       std::cerr << "Invalid txid" << std::endl;
       return 1;

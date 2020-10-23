@@ -786,9 +786,8 @@ struct Wallet
     virtual PendingTransaction*  restoreMultisigTransaction(const std::string& signData) = 0;
 
     /*!
-     * \brief createTransactionMultDest creates transaction with multiple destinations. if dst_addr is an integrated address, payment_id is ignored
+     * \brief createTransactionMultDest creates transaction with multiple destinations
      * \param dst_addr                  vector of destination address as string
-     * \param payment_id                optional payment_id, can be empty string
      * \param amount                    vector of amounts
      * \param subaddr_account           subaddress account from which the input funds are taken
      * \param subaddr_indices           set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
@@ -797,16 +796,15 @@ struct Wallet
      *                                  after object returned
      */
 
-    virtual PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
+    virtual PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr,
                                                    std::optional<std::vector<uint64_t>> amount,
                                                    uint32_t priority = 0,
                                                    uint32_t subaddr_account = 0,
                                                    std::set<uint32_t> subaddr_indices = {}) = 0;
 
     /*!
-     * \brief createTransaction creates transaction. if dst_addr is an integrated address, payment_id is ignored
+     * \brief createTransaction creates transaction
      * \param dst_addr          destination address as string
-     * \param payment_id        optional payment_id, can be empty string
      * \param amount            amount
      * \param subaddr_account   subaddress account from which the input funds are taken
      * \param subaddr_indices   set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
@@ -816,7 +814,6 @@ struct Wallet
      */
 
     virtual PendingTransaction *createTransaction(const std::string &dst_addr,
-                                                  const std::string &payment_id,
                                                   std::optional<uint64_t> amount,
                                                   uint32_t priority                  = 0,
                                                   uint32_t subaddr_account           = 0,
@@ -909,7 +906,7 @@ struct Wallet
      */
     virtual std::string getUserNote(const std::string &txid) const = 0;
     virtual std::string getTxKey(const std::string &txid) const = 0;
-    virtual bool checkTxKey(const std::string &txid, std::string tx_key, const std::string &address, uint64_t &received, bool &in_pool, uint64_t &confirmations) = 0;
+    virtual bool checkTxKey(const std::string &txid, std::string_view tx_key, const std::string &address, uint64_t &received, bool &in_pool, uint64_t &confirmations) = 0;
     virtual std::string getTxProof(const std::string &txid, const std::string &address, const std::string &message) const = 0;
     virtual bool checkTxProof(const std::string &txid, const std::string &address, const std::string &message, const std::string &signature, bool &good, uint64_t &received, bool &in_pool, uint64_t &confirmations) = 0;
     virtual std::string getSpendProof(const std::string &txid, const std::string &message) const = 0;

@@ -150,12 +150,12 @@ public:
     bool hasMultisigPartialKeyImages() const override;
     PendingTransaction* restoreMultisigTransaction(const std::string& signData) override;
 
-    PendingTransaction* createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
+    PendingTransaction* createTransactionMultDest(const std::vector<std::string> &dst_addr,
                                         std::optional<std::vector<uint64_t>> amount,
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
                                         std::set<uint32_t> subaddr_indices = {}) override;
-    PendingTransaction* createTransaction(const std::string &dst_addr, const std::string &payment_id,
+    PendingTransaction* createTransaction(const std::string &dst_addr,
                                         std::optional<uint64_t> amount,
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
@@ -179,7 +179,7 @@ public:
     bool setUserNote(const std::string &txid, const std::string &note) override;
     std::string getUserNote(const std::string &txid) const override;
     std::string getTxKey(const std::string &txid) const override;
-    bool checkTxKey(const std::string &txid, std::string tx_key, const std::string &address, uint64_t &received, bool &in_pool, uint64_t &confirmations) override;
+    bool checkTxKey(const std::string &txid, std::string_view tx_key, const std::string &address, uint64_t &received, bool &in_pool, uint64_t &confirmations) override;
     std::string getTxProof(const std::string &txid, const std::string &address, const std::string &message) const override;
     bool checkTxProof(const std::string &txid, const std::string &address, const std::string &message, const std::string &signature, bool &good, uint64_t &received, bool &in_pool, uint64_t &confirmations) override;
     std::string getSpendProof(const std::string &txid, const std::string &message) const override;

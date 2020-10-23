@@ -52,7 +52,6 @@
 #define LOKI_DEFAULT_LOG_CATEGORY "blockchain.db.lmdb"
 
 
-using epee::string_tools::pod_to_hex;
 using namespace crypto;
 using namespace boost::endian;
 
@@ -258,10 +257,10 @@ constexpr unsigned int LMDB_DB_COUNT = 23; // Should agree with the number of db
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
 
-const std::string lmdb_error(const std::string& error_string, int mdb_res)
+const std::string lmdb_error(std::string error_string, int mdb_res)
 {
-  const std::string full_string = error_string + mdb_strerror(mdb_res);
-  return full_string;
+  error_string += mdb_strerror(mdb_res);
+  return error_string;
 }
 
 void lmdb_db_open(MDB_txn* txn, const char* name, int flags, MDB_dbi& dbi, const std::string& error_string)
@@ -956,7 +955,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     txindex *tip = (txindex *)val_h.mv_data;
     throw1(TX_EXISTS(std::string("Attempting to add transaction that's already in the db (tx id ").append(std::to_string(tip->data.tx_id)).append(")").c_str()));
   } else if (result != MDB_NOTFOUND) {
-    throw1(DB_ERROR(lmdb_error(std::string("Error checking if tx index exists for tx hash ") + epee::string_tools::pod_to_hex(tx_hash) + ": ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Error checking if tx index exists for tx hash " + tools::type_to_hex(tx_hash) + ": ", result)));
   }
 
   const cryptonote::transaction &tx = txp.first;
@@ -1706,7 +1705,10 @@ void BlockchainLMDB::reset()
 std::vector<fs::path> BlockchainLMDB::get_filenames() const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  return {{m_folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME, m_folder / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME}};
+  std::vector<fs::path> paths;
+  paths.push_back(m_folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME);
+  paths.push_back(m_folder / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME);
+  return paths;
 }
 
 bool BlockchainLMDB::remove_data_file(const fs::path& folder) const
@@ -2486,7 +2488,7 @@ bool BlockchainLMDB::block_exists(const crypto::hash& h, uint64_t *height) const
   auto get_result = mdb_cursor_get(m_cur_block_heights, (MDB_val *)&zerokval, &key, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    LOG_PRINT_L3("Block with hash " << epee::string_tools::pod_to_hex(h) << " not found in db");
+    LOG_PRINT_L3("Block with hash " << tools::type_to_hex(h) << " not found in db");
   }
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("DB error attempting to fetch block index from hash", get_result).c_str()));
@@ -3048,14 +3050,14 @@ bool BlockchainLMDB::tx_exists(const crypto::hash& h) const
   if (get_result == 0)
     tx_found = true;
   else if (get_result != MDB_NOTFOUND)
-    throw0(DB_ERROR(lmdb_error(std::string("DB error attempting to fetch transaction index from hash ") + epee::string_tools::pod_to_hex(h) + ": ", get_result).c_str()));
+    throw0(DB_ERROR(lmdb_error(std::string("DB error attempting to fetch transaction index from hash ") + tools::type_to_hex(h) + ": ", get_result).c_str()));
 
   TIME_MEASURE_FINISH(time1);
   time_tx_exists += time1;
 
   if (! tx_found)
   {
-    LOG_PRINT_L1("transaction with hash " << epee::string_tools::pod_to_hex(h) << " not found in db");
+    LOG_PRINT_L1("transaction with hash " << tools::type_to_hex(h) << " not found in db");
     return false;
   }
 
@@ -3084,7 +3086,7 @@ bool BlockchainLMDB::tx_exists(const crypto::hash& h, uint64_t& tx_id) const
   bool ret = false;
   if (get_result == MDB_NOTFOUND)
   {
-    LOG_PRINT_L1("transaction with hash " << epee::string_tools::pod_to_hex(h) << " not found in db");
+    LOG_PRINT_L1("transaction with hash " << tools::type_to_hex(h) << " not found in db");
   }
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("DB error attempting to fetch transaction from hash", get_result).c_str()));
@@ -3105,7 +3107,7 @@ uint64_t BlockchainLMDB::get_tx_unlock_time(const crypto::hash& h) const
   MDB_val_set(v, h);
   auto get_result = mdb_cursor_get(m_cur_tx_indices, (MDB_val *)&zerokval, &v, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
-    throw1(TX_DNE(lmdb_error(std::string("tx data with hash ") + epee::string_tools::pod_to_hex(h) + " not found in db: ", get_result).c_str()));
+    throw1(TX_DNE(lmdb_error(std::string("tx data with hash ") + tools::type_to_hex(h) + " not found in db: ", get_result).c_str()));
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("DB error attempting to fetch tx data from hash: ", get_result).c_str()));
 
@@ -4662,7 +4664,7 @@ bool BlockchainLMDB::get_alt_block(const crypto::hash &blkid, alt_block_data_t *
     return false;
 
   if (result)
-    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve alternate block " + epee::string_tools::pod_to_hex(blkid) + " from the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve alternate block " + tools::type_to_hex(blkid) + " from the db: ", result).c_str()));
   if (!read_alt_block_data_from_mdb_val(v, data, block, checkpoint))
     throw0(DB_ERROR("Record size is less than expected"));
   return true;
@@ -4680,10 +4682,10 @@ void BlockchainLMDB::remove_alt_block(const crypto::hash &blkid)
   MDB_val v;
   int result = mdb_cursor_get(m_cur_alt_blocks, &k, &v, MDB_SET);
   if (result)
-    throw0(DB_ERROR(lmdb_error("Error locating alternate block " + epee::string_tools::pod_to_hex(blkid) + " in the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error locating alternate block " + tools::type_to_hex(blkid) + " in the db: ", result).c_str()));
   result = mdb_cursor_del(m_cur_alt_blocks, 0);
   if (result)
-    throw0(DB_ERROR(lmdb_error("Error deleting alternate block " + epee::string_tools::pod_to_hex(blkid) + " from the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error deleting alternate block " + tools::type_to_hex(blkid) + " from the db: ", result).c_str()));
 }
 
 uint64_t BlockchainLMDB::get_alt_block_count()

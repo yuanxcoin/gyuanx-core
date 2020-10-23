@@ -46,10 +46,10 @@ using namespace cryptonote;
 static std::string extra_nonce_to_string(const cryptonote::tx_extra_nonce &extra_nonce)
 {
   if (extra_nonce.nonce.size() == 9 && extra_nonce.nonce[0] == TX_EXTRA_NONCE_ENCRYPTED_PAYMENT_ID)
-    return "encrypted payment ID: " + epee::string_tools::buff_to_hex_nodelimer(extra_nonce.nonce.substr(1));
+    return "encrypted payment ID: " + lokimq::to_hex(extra_nonce.nonce.begin() + 1, extra_nonce.nonce.end());
   if (extra_nonce.nonce.size() == 33 && extra_nonce.nonce[0] == TX_EXTRA_NONCE_PAYMENT_ID)
-    return "plaintext payment ID: " + epee::string_tools::buff_to_hex_nodelimer(extra_nonce.nonce.substr(1));
-  return epee::string_tools::buff_to_hex_nodelimer(extra_nonce.nonce);
+    return "plaintext payment ID: " + lokimq::to_hex(extra_nonce.nonce.begin() + 1, extra_nonce.nonce.end());
+  return lokimq::to_hex(extra_nonce.nonce);
 }
 
 struct extra_printer {

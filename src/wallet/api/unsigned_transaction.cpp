@@ -120,14 +120,14 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
         {
           if (!payment_id_string.empty())
             payment_id_string += ", ";
-          payment_id_string = std::string("encrypted payment ID ") + epee::string_tools::pod_to_hex(payment_id8);
+          payment_id_string = std::string("encrypted payment ID ") + tools::type_to_hex(payment_id8);
           has_encrypted_payment_id = true;
         }
         else if (cryptonote::get_payment_id_from_tx_extra_nonce(extra_nonce.nonce, payment_id))
         {
           if (!payment_id_string.empty())
             payment_id_string += ", ";
-          payment_id_string = std::string("unencrypted payment ID ") + epee::string_tools::pod_to_hex(payment_id);
+          payment_id_string = std::string("unencrypted payment ID ") + tools::type_to_hex(payment_id);
         }
       }
     }
@@ -146,7 +146,7 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
       if (has_encrypted_payment_id && !entry.is_subaddress)
       {
         address = get_account_integrated_address_as_str(m_wallet.m_wallet->nettype(), entry.addr, payment_id8);
-        address += std::string(" (" + standard_address + " with encrypted payment id " + epee::string_tools::pod_to_hex(payment_id8) + ")");
+        address += std::string(" (" + standard_address + " with encrypted payment id " + tools::type_to_hex(payment_id8) + ")");
       }
       else
         address = standard_address;
@@ -279,7 +279,7 @@ std::vector<std::string> UnsignedTransactionImpl::paymentId() const
           }      
         }
         if(payment_id != crypto::null_hash)
-            result.push_back(epee::string_tools::pod_to_hex(payment_id));
+            result.push_back(tools::type_to_hex(payment_id));
         else
             result.push_back("");
     }

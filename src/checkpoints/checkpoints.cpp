@@ -42,6 +42,7 @@
 #include "common/loki_integration_test_hooks.h"
 #include "common/loki.h"
 #include "common/file.h"
+#include "common/hex.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "checkpoints"
@@ -83,7 +84,7 @@ namespace cryptonote
       uint64_t last_index         = loki::array_count(HARDCODED_MAINNET_CHECKPOINTS) - 1;
       height_to_hash const &entry = HARDCODED_MAINNET_CHECKPOINTS[last_index];
 
-      if (epee::string_tools::hex_to_pod(entry.hash, result))
+      if (tools::hex_to_type(entry.hash, result))
         *height = entry.height;
     }
     return result;
@@ -127,7 +128,7 @@ namespace cryptonote
   bool checkpoints::add_checkpoint(uint64_t height, const std::string& hash_str)
   {
     crypto::hash h = crypto::null_hash;
-    bool r         = epee::string_tools::hex_to_pod(hash_str, h);
+    bool r         = tools::hex_to_type(hash_str, h);
     CHECK_AND_ASSERT_MES(r, false, "Failed to parse checkpoint hash string into binary representation!");
 
     checkpoint_t checkpoint = {};

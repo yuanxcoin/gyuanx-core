@@ -911,7 +911,7 @@ namespace tools
     {
       return "";
     }
-    return epee::string_tools::buff_to_hex_nodelimer(oss.str());
+    return lokimq::to_hex(oss.str());
   }
   //------------------------------------------------------------------------------------------------------------------------------
   template<typename T> static bool is_error_value(const T &val) { return false; }
@@ -961,14 +961,14 @@ namespace tools
 
     if (m_wallet->multisig())
     {
-      multisig_txset = epee::string_tools::buff_to_hex_nodelimer(m_wallet->save_multisig_tx(ptx_vector));
+      multisig_txset = lokimq::to_hex(m_wallet->save_multisig_tx(ptx_vector));
       if (multisig_txset.empty())
         throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Failed to save multisig tx set after creation"};
     }
     else
     {
       if (m_wallet->watch_only()){
-        unsigned_txset = epee::string_tools::buff_to_hex_nodelimer(m_wallet->dump_tx_to_str(ptx_vector));
+        unsigned_txset = lokimq::to_hex(m_wallet->dump_tx_to_str(ptx_vector));
         if (unsigned_txset.empty())
           throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Failed to save unsigned tx set after creation"};
       }
@@ -978,8 +978,8 @@ namespace tools
       // populate response with tx hashes
       for (auto & ptx : ptx_vector)
       {
-        bool r = fill(tx_hash, epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
-        r = r && (!get_tx_hex || fill(tx_blob, epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(ptx.tx))));
+        bool r = fill(tx_hash, tools::type_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
+        r = r && (!get_tx_hex || fill(tx_blob, lokimq::to_hex(tx_to_blob(ptx.tx))));
         r = r && (!get_tx_metadata || fill(tx_metadata, ptx_to_string(ptx)));
         if (!r)
           throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Failed to save tx info"};
@@ -1079,17 +1079,17 @@ namespace tools
       if (ciphertext.empty())
         throw wallet_rpc_error{error_code::SIGN_UNSIGNED, "Failed to sign unsigned tx"};
 
-      res.signed_txset = epee::string_tools::buff_to_hex_nodelimer(ciphertext);
+      res.signed_txset = lokimq::to_hex(ciphertext);
     }
 
     for (auto &ptx: ptxs)
     {
-      res.tx_hash_list.push_back(epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
+      res.tx_hash_list.push_back(tools::type_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
       if (req.get_tx_keys)
       {
-        res.tx_key_list.push_back(epee::string_tools::pod_to_hex(ptx.tx_key));
+        res.tx_key_list.push_back(tools::type_to_hex(ptx.tx_key));
         for (const crypto::secret_key& additional_tx_key : ptx.additional_tx_keys)
-          res.tx_key_list.back() += epee::string_tools::pod_to_hex(additional_tx_key);
+          res.tx_key_list.back() += tools::type_to_hex(additional_tx_key);
       }
     }
 
@@ -1097,7 +1097,7 @@ namespace tools
     {
       for (auto &ptx: ptxs)
       {
-        res.tx_raw_list.push_back(epee::string_tools::buff_to_hex_nodelimer(cryptonote::tx_to_blob(ptx.tx)));
+        res.tx_raw_list.push_back(lokimq::to_hex(cryptonote::tx_to_blob(ptx.tx)));
       }
     }
 
@@ -1171,13 +1171,13 @@ namespace tools
             {
               if (payment_id8 != crypto::null_hash8)
               {
-                desc.payment_id = epee::string_tools::pod_to_hex(payment_id8);
+                desc.payment_id = tools::type_to_hex(payment_id8);
                 has_encrypted_payment_id = true;
               }
             }
             else if (cryptonote::get_payment_id_from_tx_extra_nonce(extra_nonce.nonce, payment_id))
             {
-              desc.payment_id = epee::string_tools::pod_to_hex(payment_id);
+              desc.payment_id = tools::type_to_hex(payment_id);
             }
           }
         }
@@ -1278,7 +1278,7 @@ namespace tools
       for (auto &ptx: ptx_vector)
       {
         m_wallet->commit_tx(ptx);
-        res.tx_hash_list.push_back(epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
+        res.tx_hash_list.push_back(tools::type_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
       }
     }
     catch (const std::exception &e)
@@ -1360,7 +1360,7 @@ namespace tools
     validate_transfer(destination, req.payment_id, dsts, extra, true);
 
     crypto::key_image ki;
-    if (!epee::string_tools::hex_to_pod(req.key_image, ki))
+    if (!tools::hex_to_type(req.key_image, ki))
       throw wallet_rpc_error{error_code::WRONG_KEY_IMAGE, "failed to parse key image"};
 
     {
@@ -1411,7 +1411,7 @@ namespace tools
       throw wallet_rpc_error{error_code::GENERIC_TRANSFER_ERROR, "Failed to commit tx."};
     }
 
-    res.tx_hash = epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(ptx.tx));
+    res.tx_hash = tools::type_to_hex(cryptonote::get_transaction_hash(ptx.tx));
 
     return res;
   }
@@ -1428,7 +1428,7 @@ namespace tools
       }
       else
       {
-        if (!tools::wallet2::parse_short_payment_id(req.payment_id,payment_id))
+        if (!tools::hex_to_type(req.payment_id,payment_id))
           throw wallet_rpc_error{error_code::WRONG_PAYMENT_ID, "Invalid payment ID"};
       }
 
@@ -1449,7 +1449,7 @@ namespace tools
           throw wallet_rpc_error{error_code::WRONG_PAYMENT_ID, "Payment ID shouldn't be left unspecified"};
         res.integrated_address = get_account_integrated_address_as_str(m_wallet->nettype(), info.address, payment_id);
       }
-      res.payment_id = epee::string_tools::pod_to_hex(payment_id);
+      res.payment_id = tools::type_to_hex(payment_id);
     }
     return res;
   }
@@ -1466,7 +1466,7 @@ namespace tools
       if(!info.has_payment_id)
         throw wallet_rpc_error{error_code::WRONG_ADDRESS, "Address is not an integrated address"};
       res.standard_address = get_account_address_as_str(m_wallet->nettype(), info.is_subaddress, info.address);
-      res.payment_id = epee::string_tools::pod_to_hex(info.payment_id);
+      res.payment_id = tools::type_to_hex(info.payment_id);
     }
     return res;
   }
@@ -1509,7 +1509,7 @@ namespace tools
     {
       wallet_rpc::payment_details& rpc_payment = res.payments.emplace_back();
       rpc_payment.payment_id   = req.payment_id;
-      rpc_payment.tx_hash      = epee::string_tools::pod_to_hex(payment.m_tx_hash);
+      rpc_payment.tx_hash      = tools::type_to_hex(payment.m_tx_hash);
       rpc_payment.amount       = payment.m_amount;
       rpc_payment.block_height = payment.m_block_height;
       rpc_payment.unlock_time  = payment.m_unlock_time;
@@ -1535,8 +1535,8 @@ namespace tools
       for (auto & payment : payment_list)
       {
         wallet_rpc::payment_details& rpc_payment = res.payments.emplace_back();
-        rpc_payment.payment_id   = epee::string_tools::pod_to_hex(payment.first);
-        rpc_payment.tx_hash      = epee::string_tools::pod_to_hex(payment.second.m_tx_hash);
+        rpc_payment.payment_id   = tools::type_to_hex(payment.first);
+        rpc_payment.tx_hash      = tools::type_to_hex(payment.second.m_tx_hash);
         rpc_payment.amount       = payment.second.m_amount;
         rpc_payment.block_height = payment.second.m_block_height;
         rpc_payment.unlock_time  = payment.second.m_unlock_time;
@@ -1558,11 +1558,11 @@ namespace tools
       bool r;
       if (payment_id_str.size() == 2 * sizeof(payment_id))
       {
-        r = epee::string_tools::hex_to_pod(payment_id_str, payment_id);
+        r = tools::hex_to_type(payment_id_str, payment_id);
       }
       else if (payment_id_str.size() == 2 * sizeof(payment_id8))
       {
-        r = epee::string_tools::hex_to_pod(payment_id_str, payment_id8);
+        r = tools::hex_to_type(payment_id_str, payment_id8);
         if (r)
         {
           memcpy(payment_id.data, payment_id8.data, 8);
@@ -1582,7 +1582,7 @@ namespace tools
       {
         wallet_rpc::payment_details& rpc_payment = res.payments.emplace_back();
         rpc_payment.payment_id   = payment_id_str;
-        rpc_payment.tx_hash      = epee::string_tools::pod_to_hex(payment.m_tx_hash);
+        rpc_payment.tx_hash      = tools::type_to_hex(payment.m_tx_hash);
         rpc_payment.amount       = payment.m_amount;
         rpc_payment.block_height = payment.m_block_height;
         rpc_payment.unlock_time  = payment.m_unlock_time;
@@ -1628,9 +1628,9 @@ namespace tools
         rpc_transfers.amount       = td.amount();
         rpc_transfers.spent        = td.m_spent;
         rpc_transfers.global_index = td.m_global_output_index;
-        rpc_transfers.tx_hash      = epee::string_tools::pod_to_hex(td.m_txid);
+        rpc_transfers.tx_hash      = tools::type_to_hex(td.m_txid);
         rpc_transfers.subaddr_index = {td.m_subaddr_index.major, td.m_subaddr_index.minor};
-        rpc_transfers.key_image    = td.m_key_image_known ? epee::string_tools::pod_to_hex(td.m_key_image) : "";
+        rpc_transfers.key_image    = td.m_key_image_known ? tools::type_to_hex(td.m_key_image) : "";
         rpc_transfers.block_height = td.m_block_height;
         rpc_transfers.frozen       = td.m_frozen;
         rpc_transfers.unlocked     = m_wallet->is_transfer_unlocked(td);
@@ -1794,7 +1794,7 @@ namespace tools
     GET_TX_KEY::response res{};
 
     crypto::hash txid;
-    if (!epee::string_tools::hex_to_pod(req.txid, txid))
+    if (!tools::hex_to_type(req.txid, txid))
       throw wallet_rpc_error{error_code::WRONG_TXID, "TX ID has invalid format"};
 
     crypto::secret_key tx_key;
@@ -1816,7 +1816,7 @@ namespace tools
     CHECK_TX_KEY::response res{};
 
     crypto::hash txid;
-    if (!epee::string_tools::hex_to_pod(req.txid, txid))
+    if (!tools::hex_to_type(req.txid, txid))
       throw wallet_rpc_error{error_code::WRONG_TXID, "TX ID has invalid format"};
 
     epee::wipeable_string tx_key_str = req.tx_key;
@@ -1850,7 +1850,7 @@ namespace tools
     GET_TX_PROOF::response res{};
 
     crypto::hash txid;
-    if (!epee::string_tools::hex_to_pod(req.txid, txid))
+    if (!tools::hex_to_type(req.txid, txid))
       throw wallet_rpc_error{error_code::WRONG_TXID, "TX ID has invalid format"};
 
     cryptonote::address_parse_info info;
@@ -1867,7 +1867,7 @@ namespace tools
     CHECK_TX_PROOF::response res{};
 
     crypto::hash txid;
-    if (!epee::string_tools::hex_to_pod(req.txid, txid))
+    if (!tools::hex_to_type(req.txid, txid))
       throw wallet_rpc_error{error_code::WRONG_TXID, "TX ID has invalid format"};
 
     cryptonote::address_parse_info info;
@@ -1886,7 +1886,7 @@ namespace tools
     GET_SPEND_PROOF::response res{};
 
     crypto::hash txid;
-    if (!epee::string_tools::hex_to_pod(req.txid, txid))
+    if (!tools::hex_to_type(req.txid, txid))
       throw wallet_rpc_error{error_code::WRONG_TXID, "TX ID has invalid format"};
 
     res.signature = m_wallet->get_spend_proof(txid, req.message);
@@ -1899,7 +1899,7 @@ namespace tools
     CHECK_SPEND_PROOF::response res{};
 
     crypto::hash txid;
-    if (!epee::string_tools::hex_to_pod(req.txid, txid))
+    if (!tools::hex_to_type(req.txid, txid))
       throw wallet_rpc_error{error_code::WRONG_TXID, "TX ID has invalid format"};
 
     res.good = m_wallet->check_spend_proof(txid, req.message, req.signature);
@@ -2093,7 +2093,7 @@ namespace tools
     if (m_wallet->key_on_device())
       throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "command not supported by HW wallet"};
 
-    res.outputs_data_hex = epee::string_tools::buff_to_hex_nodelimer(m_wallet->export_outputs_to_str(req.all));
+    res.outputs_data_hex = lokimq::to_hex(m_wallet->export_outputs_to_str(req.all));
 
     return res;
   }
@@ -2124,8 +2124,8 @@ namespace tools
       res.signed_key_images.resize(ski.second.size());
       for (size_t n = 0; n < ski.second.size(); ++n)
       {
-         res.signed_key_images[n].key_image = epee::string_tools::pod_to_hex(ski.second[n].first);
-         res.signed_key_images[n].signature = epee::string_tools::pod_to_hex(ski.second[n].second);
+         res.signed_key_images[n].key_image = tools::type_to_hex(ski.second[n].first);
+         res.signed_key_images[n].signature = tools::type_to_hex(ski.second[n].second);
       }
     }
 
@@ -2143,10 +2143,10 @@ namespace tools
       ski.resize(req.signed_key_images.size());
       for (size_t n = 0; n < ski.size(); ++n)
       {
-        if (!epee::string_tools::hex_to_pod(req.signed_key_images[n].key_image, ski[n].first))
+        if (!tools::hex_to_type(req.signed_key_images[n].key_image, ski[n].first))
           throw wallet_rpc_error{error_code::WRONG_KEY_IMAGE, "failed to parse key image"};
 
-        if (!epee::string_tools::hex_to_pod(req.signed_key_images[n].signature, ski[n].second))
+        if (!tools::hex_to_type(req.signed_key_images[n].signature, ski[n].second))
           throw wallet_rpc_error{error_code::WRONG_SIGNATURE, "failed to parse signature"};
       }
       uint64_t spent = 0, unspent = 0;
@@ -2679,7 +2679,7 @@ namespace {
     cryptonote::blobdata info;
     info = m_wallet->export_multisig();
 
-    res.info = epee::string_tools::buff_to_hex_nodelimer(info);
+    res.info = lokimq::to_hex(info);
 
     return res;
   }
@@ -2798,11 +2798,11 @@ namespace {
       throw wallet_rpc_error{error_code::MULTISIG_SIGNATURE, "Failed to sign multisig tx: "s + e.what()};
     }
 
-    res.tx_data_hex = epee::string_tools::buff_to_hex_nodelimer(m_wallet->save_multisig_tx(txs));
+    res.tx_data_hex = lokimq::to_hex(m_wallet->save_multisig_tx(txs));
     if (!txids.empty())
     {
       for (const crypto::hash &txid: txids)
-        res.tx_hash_list.push_back(epee::string_tools::pod_to_hex(txid));
+        res.tx_hash_list.push_back(tools::type_to_hex(txid));
     }
 
     return res;
@@ -2836,7 +2836,7 @@ namespace {
       for (auto &ptx: txs.m_ptx)
       {
         m_wallet->commit_tx(ptx);
-        res.tx_hash_list.push_back(epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
+        res.tx_hash_list.push_back(tools::type_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
       }
     }
     catch (const std::exception &e)
@@ -2942,7 +2942,7 @@ namespace {
     if (!cryptonote::get_account_address_from_str(addr_info, m_wallet->nettype(), req.destination))
       throw wallet_rpc_error{error_code::WRONG_ADDRESS, std::string("Unparsable address given: ") + req.destination};
 
-    if (!epee::string_tools::hex_to_pod(req.service_node_key, snode_key))
+    if (!tools::hex_to_type(req.service_node_key, snode_key))
       throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.service_node_key};
 
     // NOTE(loki): Pre-emptively set subaddr_account to 0. We don't support onwards from Infinite Staking which is when this call was implemented.
@@ -2990,7 +2990,7 @@ namespace {
     CAN_REQUEST_STAKE_UNLOCK::response res{};
 
     crypto::public_key snode_key             = {};
-    if (!epee::string_tools::hex_to_pod(req.service_node_key, snode_key))
+    if (!tools::hex_to_type(req.service_node_key, snode_key))
       throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.service_node_key};
 
     tools::wallet2::request_stake_unlock_result unlock_result = m_wallet->can_request_stake_unlock(snode_key);
@@ -3006,7 +3006,7 @@ namespace {
     REQUEST_STAKE_UNLOCK::response res{};
 
     crypto::public_key snode_key             = {};
-    if (!epee::string_tools::hex_to_pod(req.service_node_key, snode_key))
+    if (!tools::hex_to_type(req.service_node_key, snode_key))
       throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.service_node_key};
 
     tools::wallet2::request_stake_unlock_result unlock_result = m_wallet->can_request_stake_unlock(snode_key);
@@ -3186,7 +3186,7 @@ namespace {
                                                      &reason))
       throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, "Failed to create signature for LNS update transaction: " + reason};
 
-    res.signature = epee::string_tools::pod_to_hex(signature.ed25519);
+    res.signature = tools::type_to_hex(signature.ed25519);
     return res;
   }
 

@@ -818,7 +818,7 @@ bool rpc_command_executor::print_block(GET_BLOCK::request&& req, bool include_he
 
 bool rpc_command_executor::print_block_by_hash(const crypto::hash& block_hash, bool include_hex) {
   GET_BLOCK::request req{};
-  req.hash = epee::string_tools::pod_to_hex(block_hash);
+  req.hash = tools::type_to_hex(block_hash);
   return print_block(std::move(req), include_hex);
 }
 
@@ -898,7 +898,7 @@ bool rpc_command_executor::print_transaction(const crypto::hash& transaction_has
 
 bool rpc_command_executor::is_key_image_spent(const crypto::key_image &ki) {
   IS_KEY_IMAGE_SPENT::response res{};
-  if (!invoke<IS_KEY_IMAGE_SPENT>({{epee::string_tools::pod_to_hex(ki)}}, res, "Failed to retrieve key image status"))
+  if (!invoke<IS_KEY_IMAGE_SPENT>({{tools::type_to_hex(ki)}}, res, "Failed to retrieve key image status"))
     return false;
 
   if (1 == res.spent_status.size())

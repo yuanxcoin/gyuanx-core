@@ -860,7 +860,7 @@ bool get_pruned_tx(const rpc::GET_TRANSACTIONS::entry &entry, cryptonote::transa
     CHECK_AND_ASSERT_MES(cryptonote::parse_and_validate_tx_from_blob(bd, tx), false, "Invalid tx data");
     tx_hash = cryptonote::get_transaction_hash(tx);
     // if the hash was given, check it matches
-    CHECK_AND_ASSERT_MES(entry.tx_hash.empty() || epee::string_tools::pod_to_hex(tx_hash) == entry.tx_hash, false,
+    CHECK_AND_ASSERT_MES(entry.tx_hash.empty() || tools::type_to_hex(tx_hash) == entry.tx_hash, false,
         "Response claims a different hash than the data yields");
     return true;
   }
@@ -868,7 +868,7 @@ bool get_pruned_tx(const rpc::GET_TRANSACTIONS::entry &entry, cryptonote::transa
   if (entry.pruned_as_hex && entry.prunable_hash)
   {
     crypto::hash ph;
-    CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(*entry.prunable_hash, ph), false, "Failed to parse prunable hash");
+    CHECK_AND_ASSERT_MES(tools::hex_to_type(*entry.prunable_hash, ph), false, "Failed to parse prunable hash");
     CHECK_AND_ASSERT_MES(epee::string_tools::parse_hexstr_to_binbuff(*entry.pruned_as_hex, bd), false, "Failed to parse pruned data");
     CHECK_AND_ASSERT_MES(parse_and_validate_tx_base_from_blob(bd, tx), false, "Invalid base tx data");
     // only v2 txes can calculate their txid after pruned
@@ -879,7 +879,7 @@ bool get_pruned_tx(const rpc::GET_TRANSACTIONS::entry &entry, cryptonote::transa
     else
     {
       // for v1, we trust the dameon
-      CHECK_AND_ASSERT_MES(epee::string_tools::hex_to_pod(entry.tx_hash, tx_hash), false, "Failed to parse tx hash");
+      CHECK_AND_ASSERT_MES(tools::hex_to_type(entry.tx_hash, tx_hash), false, "Failed to parse tx hash");
     }
     return true;
   }
@@ -2120,7 +2120,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         {
           if (transfer.amount() > tx_scan_info[o].amount)
           {
-            LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
+            LOG_ERROR("Public key " << tools::type_to_hex(kit->first)
                 << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
                 << (transfer.m_spent ? "spent" : "unspent") << " "
                 << print_money(transfer.amount()) << " in tx " << transfer.m_txid << ", received output ignored");
@@ -2132,7 +2132,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
             THROW_WALLET_EXCEPTION_IF(transfer.amount() != tx_scan_info[o].amount, error::wallet_internal_error, "A blink should credit the amount exactly as we recorded it when it arrived in the mempool");
             THROW_WALLET_EXCEPTION_IF(transfer.m_spent, error::wallet_internal_error, "Blink can not be spent before it is mined, this should never happen");
 
-            MINFO("Public key " << epee::string_tools::pod_to_hex(kit->first)
+            MINFO("Public key " << tools::type_to_hex(kit->first)
                 << " of blink tx " << transfer.m_txid << " (for " << print_money(tx_scan_info[o].amount) << ")"
                 << " status updated: now mined in block " << height);
 
@@ -2157,7 +2157,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         }
         else if (transfer.m_spent || transfer.amount() >= tx_scan_info[o].amount)
         {
-          LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
+          LOG_ERROR("Public key " << tools::type_to_hex(kit->first)
               << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << (transfer.m_spent ? "spent" : "unspent") << " "
               << print_money(transfer.amount()) << " in tx " << transfer.m_txid << ", received output ignored");
@@ -2178,7 +2178,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         }
         else
         {
-          LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
+          LOG_ERROR("Public key " << tools::type_to_hex(kit->first)
               << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << print_money(transfer.amount()) << ", replacing with new output");
 
@@ -2375,7 +2375,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     {
       auto i = m_confirmed_txs.find(txid);
       THROW_WALLET_EXCEPTION_IF(i == m_confirmed_txs.end(), error::wallet_internal_error,
-        "confirmed tx wasn't found: " + string_tools::pod_to_hex(txid));
+        "confirmed tx wasn't found: " + tools::type_to_hex(txid));
       i->second.m_change = self_received;
     }
   }
@@ -2532,7 +2532,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   {
     std::shared_ptr<tools::Notify> tx_notify = m_tx_notify;
     if (tx_notify)
-      tx_notify->notify("%s", epee::string_tools::pod_to_hex(txid).c_str(), NULL);
+      tx_notify->notify("%s", tools::type_to_hex(txid).c_str(), NULL);
   }
 }
 //----------------------------------------------------------------------------------------------------
@@ -2868,16 +2868,16 @@ void wallet2::process_parsed_blocks(uint64_t start_height, const std::vector<cry
     {
       //split detected here !!!
       THROW_WALLET_EXCEPTION_IF(current_index == start_height, error::wallet_internal_error,
-        "wrong daemon response: split starts from the first block in response " + string_tools::pod_to_hex(bl_id) +
+        "wrong daemon response: split starts from the first block in response " + tools::type_to_hex(bl_id) +
         " (height " + std::to_string(start_height) + "), local block id at this height: " +
-        string_tools::pod_to_hex(m_blockchain[current_index]));
+        tools::type_to_hex(m_blockchain[current_index]));
 
       detach_blockchain(current_index, output_tracker_cache);
       process_new_blockchain_entry(bl, blocks[i], parsed_blocks[i], bl_id, current_index, tx_cache_data, tx_cache_data_offset, output_tracker_cache);
     }
     else
     {
-      LOG_PRINT_L2("Block is already in blockchain: " << string_tools::pod_to_hex(bl_id));
+      LOG_PRINT_L2("Block is already in blockchain: " << tools::type_to_hex(bl_id));
     }
     ++current_index;
     tx_cache_data_offset += 1 + parsed_blocks[i].txes.size();
@@ -3782,7 +3782,7 @@ void wallet2::detach_blockchain(uint64_t height, std::map<std::pair<uint64_t, ui
     if (!m_transfers[i].m_key_image_known || m_transfers[i].m_key_image_partial)
       continue;
     auto it_ki = m_key_images.find(m_transfers[i].m_key_image);
-    THROW_WALLET_EXCEPTION_IF(it_ki == m_key_images.end(), error::wallet_internal_error, "key image not found: index " + std::to_string(i) + ", ki " + epee::string_tools::pod_to_hex(m_transfers[i].m_key_image) + ", " + std::to_string(m_key_images.size()) + " key images known");
+    THROW_WALLET_EXCEPTION_IF(it_ki == m_key_images.end(), error::wallet_internal_error, "key image not found: index " + std::to_string(i) + ", ki " + tools::type_to_hex(m_transfers[i].m_key_image) + ", " + std::to_string(m_key_images.size()) + " key images known");
     m_key_images.erase(it_ki);
   }
 
@@ -4078,7 +4078,7 @@ std::optional<wallet2::keys_file_data> wallet2::get_keys_file_data(const epee::w
     original_address = get_account_address_as_str(m_nettype, false, m_original_address);
     value.SetString(original_address.c_str(), original_address.length());
     json.AddMember("original_address", value, json.GetAllocator());
-    original_view_secret_key = epee::string_tools::pod_to_hex(m_original_view_secret_key);
+    original_view_secret_key = tools::type_to_hex(m_original_view_secret_key);
     value.SetString(original_view_secret_key.c_str(), original_view_secret_key.length());
     json.AddMember("original_view_secret_key", value, json.GetAllocator());
   }
@@ -4419,7 +4419,7 @@ bool wallet2::load_keys_buf(const std::string& keys_buf, const epee::wipeable_st
         }
         m_original_address = info.address;
         GET_FIELD_FROM_JSON_RETURN_ON_ERROR(json, original_view_secret_key, std::string, String, true, std::string());
-        ok = epee::string_tools::hex_to_pod(field_original_view_secret_key, m_original_view_secret_key);
+        ok = tools::hex_to_type(field_original_view_secret_key, m_original_view_secret_key);
         if (!ok)
         {
           LOG_ERROR("Failed to parse original_view_secret_key from JSON");
@@ -5564,28 +5564,12 @@ void wallet2::wallet_exists(const fs::path& file_path, bool& keys_file_exists, b
   wallet_file_exists = fs::exists(wallet_file, ignore);
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::parse_long_payment_id(std::string_view payment_id_str, crypto::hash& payment_id)
-{
-  if (!lokimq::is_hex(payment_id_str) || payment_id_str.size() != 2*sizeof(crypto::hash))
-    return false;
-  lokimq::from_hex(payment_id_str.begin(), payment_id_str.end(), reinterpret_cast<unsigned char*>(&payment_id));
-  return true;
-}
-//----------------------------------------------------------------------------------------------------
-bool wallet2::parse_short_payment_id(std::string_view payment_id_str, crypto::hash8& payment_id)
-{
-  if (!lokimq::is_hex(payment_id_str) || payment_id_str.size() != 2*sizeof(crypto::hash8))
-    return false;
-  lokimq::from_hex(payment_id_str.begin(), payment_id_str.end(), reinterpret_cast<unsigned char*>(&payment_id));
-  return true;
-}
-//----------------------------------------------------------------------------------------------------
 bool wallet2::parse_payment_id(std::string_view payment_id_str, crypto::hash& payment_id)
 {
-  if (parse_long_payment_id(payment_id_str, payment_id))
+  if (tools::hex_to_type(payment_id_str, payment_id))
     return true;
   crypto::hash8 payment_id8;
-  if (parse_short_payment_id(payment_id_str, payment_id8))
+  if (tools::hex_to_type(payment_id_str, payment_id8))
   {
     payment_id = crypto::null_hash;
     std::memcpy(payment_id.data, payment_id8.data, sizeof(payment_id8));
@@ -5850,7 +5834,7 @@ void wallet2::trim_hashchain()
     if (r && res.status == rpc::STATUS_OK)
     {
       crypto::hash hash;
-      epee::string_tools::hex_to_pod(res.block_header->hash, hash);
+      tools::hex_to_type(res.block_header->hash, hash);
       m_blockchain.refill(hash);
     }
     else
@@ -6144,9 +6128,9 @@ static void set_confirmations(wallet::transfer_view &entry, uint64_t blockchain_
 wallet::transfer_view wallet2::make_transfer_view(const crypto::hash &txid, const crypto::hash &payment_id, const tools::wallet2::payment_details &pd) const
 {
   wallet::transfer_view result = {};
-  result.txid = string_tools::pod_to_hex(pd.m_tx_hash);
+  result.txid = tools::type_to_hex(pd.m_tx_hash);
   result.hash = txid;
-  result.payment_id = string_tools::pod_to_hex(payment_id);
+  result.payment_id = tools::type_to_hex(payment_id);
   if (result.payment_id.substr(16).find_first_not_of('0') == std::string::npos)
     result.payment_id = result.payment_id.substr(0,16);
   result.height = pd.m_block_height;
@@ -6174,9 +6158,9 @@ wallet::transfer_view wallet2::make_transfer_view(const crypto::hash &txid, cons
 wallet::transfer_view wallet2::wallet2::make_transfer_view(const crypto::hash &txid, const tools::wallet2::confirmed_transfer_details &pd) const
 {
   wallet::transfer_view result = {};
-  result.txid = string_tools::pod_to_hex(txid);
+  result.txid = tools::type_to_hex(txid);
   result.hash = txid;
-  result.payment_id = string_tools::pod_to_hex(pd.m_payment_id);
+  result.payment_id = tools::type_to_hex(pd.m_payment_id);
   if (result.payment_id.substr(16).find_first_not_of('0') == std::string::npos)
     result.payment_id = result.payment_id.substr(0,16);
   result.height = pd.m_block_height;
@@ -6210,10 +6194,10 @@ wallet::transfer_view wallet2::make_transfer_view(const crypto::hash &txid, cons
 {
   wallet::transfer_view result = {};
   bool is_failed = pd.m_state == tools::wallet2::unconfirmed_transfer_details::failed;
-  result.txid = string_tools::pod_to_hex(txid);
+  result.txid = tools::type_to_hex(txid);
   result.hash = txid;
-  result.payment_id = string_tools::pod_to_hex(pd.m_payment_id);
-  result.payment_id = string_tools::pod_to_hex(pd.m_payment_id);
+  result.payment_id = tools::type_to_hex(pd.m_payment_id);
+  result.payment_id = tools::type_to_hex(pd.m_payment_id);
   if (result.payment_id.substr(16).find_first_not_of('0') == std::string::npos)
     result.payment_id = result.payment_id.substr(0,16);
   result.height = 0;
@@ -6245,9 +6229,9 @@ wallet::transfer_view wallet2::make_transfer_view(const crypto::hash &payment_id
 {
   wallet::transfer_view result = {};
   const tools::wallet2::payment_details &pd = ppd.m_pd;
-  result.txid = string_tools::pod_to_hex(pd.m_tx_hash);
+  result.txid = tools::type_to_hex(pd.m_tx_hash);
   result.hash = pd.m_tx_hash;
-  result.payment_id = string_tools::pod_to_hex(payment_id);
+  result.payment_id = tools::type_to_hex(payment_id);
   if (result.payment_id.substr(16).find_first_not_of('0') == std::string::npos)
     result.payment_id = result.payment_id.substr(0,16);
   result.height = 0;
@@ -6538,7 +6522,7 @@ void wallet2::rescan_spent()
     rpc::IS_KEY_IMAGE_SPENT::request req{};
     rpc::IS_KEY_IMAGE_SPENT::response daemon_resp{};
     for (size_t n = start_offset; n < start_offset + n_outputs; ++n)
-      req.key_images.push_back(string_tools::pod_to_hex(m_transfers[n].m_key_image));
+      req.key_images.push_back(tools::type_to_hex(m_transfers[n].m_key_image));
     bool r = invoke_http<rpc::IS_KEY_IMAGE_SPENT>(req, daemon_resp);
     THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "is_key_image_spent");
     THROW_WALLET_EXCEPTION_IF(daemon_resp.status == rpc::STATUS_BUSY, error::daemon_busy, "is_key_image_spent");
@@ -6918,7 +6902,7 @@ void wallet2::commit_tx(pending_tx& ptx, bool blink)
     light_rpc::SUBMIT_RAW_TX::request oreq{};
     light_rpc::SUBMIT_RAW_TX::response ores{};
     oreq.address = get_account().get_public_address_str(m_nettype);
-    oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
+    oreq.view_key = tools::type_to_hex(get_account().get_keys().m_view_secret_key);
     oreq.tx = lokimq::to_hex(tx_to_blob(ptx.tx));
     oreq.blink = blink;
     bool r = invoke_http<light_rpc::SUBMIT_RAW_TX>(oreq, ores);
@@ -8401,14 +8385,14 @@ wallet2::register_service_node_result wallet2::create_register_service_node_tx(c
       return result;
     }
 
-    if (!epee::string_tools::hex_to_pod(local_args[key_index], service_node_key))
+    if (!tools::hex_to_type(local_args[key_index], service_node_key))
     {
       result.status = register_service_node_result_status::service_node_key_parse_fail;
       result.msg = tr("Failed to parse service node pubkey");
       return result;
     }
 
-    if (!epee::string_tools::hex_to_pod(local_args[signature_index], signature))
+    if (!tools::hex_to_type(local_args[signature_index], signature))
     {
       result.status = register_service_node_result_status::service_node_signature_parse_fail;
       result.msg = tr("Failed to parse service node signature");
@@ -8738,7 +8722,7 @@ static lns_prepared_args prepare_tx_extra_loki_name_system_values(wallet2 const 
 
     if (response->size())
     {
-      if (!epee::string_tools::hex_to_pod((*response)[0].txid, result.prev_txid))
+      if (!tools::hex_to_type((*response)[0].txid, result.prev_txid))
       {
         if (reason) *reason = "Failed to convert response txid=" + (*response)[0].txid + " from the daemon into a 32 byte hash, it must be a 64 char hex string";
         return result;
@@ -8916,7 +8900,7 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(lns::mapp
 
   if (!make_signature)
   {
-    if (!epee::string_tools::hex_to_pod(*signature, prepared_args.signature.ed25519))
+    if (!tools::hex_to_type(*signature, prepared_args.signature.ed25519))
     {
       if (reason) *reason = "Hex signature provided failed to convert to a signature, signature=" + *signature;
       return {};
@@ -9099,7 +9083,7 @@ void wallet2::light_wallet_get_outs(std::vector<std::vector<tools::wallet2::get_
     const transfer_details &td = m_transfers[idx];
     const uint64_t amount = td.is_rct() ? 0 : td.amount();
     outs.back().push_back(std::make_tuple(td.m_global_output_index, td.get_public_key(), rct::commit(td.amount(), td.m_mask)));
-    MDEBUG("added real output " << string_tools::pod_to_hex(td.get_public_key()));
+    MDEBUG("added real output " << tools::type_to_hex(td.get_public_key()));
     
     // Even if the lightwallet server returns random outputs, we pick them randomly.
     std::vector<size_t> order;
@@ -9134,8 +9118,9 @@ void wallet2::light_wallet_get_outs(std::vector<std::vector<tools::wallet2::get_
       crypto::public_key tx_public_key;
       rct::key mask{}; // decrypted mask - not used here
       rct::key rct_commit{};
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, ores.amount_outs[amount_key].outputs[i].public_key), error::wallet_internal_error, "Invalid public_key");
-      string_tools::hex_to_pod(ores.amount_outs[amount_key].outputs[i].public_key, tx_public_key);
+      const auto& pkey = ores.amount_outs[amount_key].outputs[i].public_key;
+      THROW_WALLET_EXCEPTION_IF(pkey.size() != 64 || !lokimq::is_hex(pkey), error::wallet_internal_error, "Invalid public_key");
+      tools::hex_to_type(ores.amount_outs[amount_key].outputs[i].public_key, tx_public_key);
       const uint64_t global_index = ores.amount_outs[amount_key].outputs[i].global_index;
       if(!light_wallet_parse_rct_str(ores.amount_outs[amount_key].outputs[i].rct, tx_public_key, 0, mask, rct_commit, false))
         rct_commit = rct::zeroCommit(td.amount());
@@ -10292,7 +10277,7 @@ bool wallet2::light_wallet_login(bool &new_address)
   light_rpc::LOGIN::request request{};
   light_rpc::LOGIN::response response{};
   request.address = get_account().get_public_address_str(m_nettype);
-  request.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
+  request.view_key = tools::type_to_hex(get_account().get_keys().m_view_secret_key);
   // Always create account if it doesn't exist.
   request.create_account = true;
   bool connected = invoke_http<light_rpc::LOGIN>(request, response);
@@ -10317,7 +10302,7 @@ bool wallet2::light_wallet_import_wallet_request(light_rpc::IMPORT_WALLET_REQUES
   MDEBUG("Light wallet import wallet request");
   light_rpc::IMPORT_WALLET_REQUEST::request oreq{};
   oreq.address = get_account().get_public_address_str(m_nettype);
-  oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
+  oreq.view_key = tools::type_to_hex(get_account().get_keys().m_view_secret_key);
   bool r = invoke_http<light_rpc::IMPORT_WALLET_REQUEST>(oreq, response);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "import_wallet_request");
 
@@ -10334,7 +10319,7 @@ void wallet2::light_wallet_get_unspent_outs()
   
   oreq.amount = "0";
   oreq.address = get_account().get_public_address_str(m_nettype);
-  oreq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
+  oreq.view_key = tools::type_to_hex(get_account().get_keys().m_view_secret_key);
   // openMonero specific
   oreq.dust_threshold = boost::lexical_cast<std::string>(::config::DEFAULT_DUST_THRESHOLD);
   // below are required by openMonero api - but are not used.
@@ -10366,15 +10351,15 @@ void wallet2::light_wallet_get_unspent_outs()
     bool add_transfer = true;
     crypto::key_image unspent_key_image;
     crypto::public_key tx_public_key{};
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
-    string_tools::hex_to_pod(o.tx_pub_key, tx_public_key);
+    THROW_WALLET_EXCEPTION_IF(o.tx_pub_key.size() != 64 || !lokimq::is_hex(o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
+    tools::hex_to_type(o.tx_pub_key, tx_public_key);
     
     for (const std::string &ski: o.spend_key_images) {
       spent = false;
 
       // Check if key image is ours
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, ski), error::wallet_internal_error, "Invalid key image");
-      string_tools::hex_to_pod(ski, unspent_key_image);
+      THROW_WALLET_EXCEPTION_IF(ski.size() != 64 || !lokimq::is_hex(ski), error::wallet_internal_error, "Invalid key image");
+      tools::hex_to_type(ski, unspent_key_image);
       if(light_wallet_key_image_is_ours(unspent_key_image, tx_public_key, o.index)){
         MTRACE("Output " << o.public_key << " is spent. Key image: " <<  ski);
         spent = true;
@@ -10388,12 +10373,12 @@ void wallet2::light_wallet_get_unspent_outs()
     crypto::hash txid;
     crypto::public_key tx_pub_key;
     crypto::public_key public_key;
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.tx_hash), error::wallet_internal_error, "Invalid tx_hash field");
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.public_key), error::wallet_internal_error, "Invalid public_key field");
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
-    string_tools::hex_to_pod(o.tx_hash, txid);
-    string_tools::hex_to_pod(o.public_key, public_key);
-    string_tools::hex_to_pod(o.tx_pub_key, tx_pub_key);
+    THROW_WALLET_EXCEPTION_IF(o.tx_hash.size() != 64 || !lokimq::is_hex(o.tx_hash), error::wallet_internal_error, "Invalid tx_hash field");
+    THROW_WALLET_EXCEPTION_IF(o.public_key.size() != 64 || !lokimq::is_hex(o.public_key), error::wallet_internal_error, "Invalid public_key field");
+    THROW_WALLET_EXCEPTION_IF(o.tx_pub_key.size() != 64 || !lokimq::is_hex(o.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
+    tools::hex_to_type(o.tx_hash, txid);
+    tools::hex_to_type(o.public_key, public_key);
+    tools::hex_to_type(o.tx_pub_key, tx_pub_key);
     
     for(auto &t: m_transfers){
       if(t.get_public_key() == public_key) {
@@ -10458,9 +10443,9 @@ void wallet2::light_wallet_get_unspent_outs()
         if(!valid_commit)
         {
           MDEBUG("output index: " << o.global_index);
-          MDEBUG("mask: " + string_tools::pod_to_hex(td.m_mask));
-          MDEBUG("calculated commit: " + string_tools::pod_to_hex(rct::commit(td.amount(), td.m_mask)));
-          MDEBUG("expected commit: " + string_tools::pod_to_hex(rct_commit));
+          MDEBUG("mask: " + tools::type_to_hex(td.m_mask));
+          MDEBUG("calculated commit: " + tools::type_to_hex(rct::commit(td.amount(), td.m_mask)));
+          MDEBUG("expected commit: " + tools::type_to_hex(rct_commit));
           MDEBUG("amount: " << td.amount());
         }
         THROW_WALLET_EXCEPTION_IF(!valid_commit, error::wallet_internal_error, "Lightwallet: rct commit hash mismatch!");
@@ -10486,7 +10471,7 @@ bool wallet2::light_wallet_get_address_info(light_rpc::GET_ADDRESS_INFO::respons
   light_rpc::GET_ADDRESS_INFO::request request{};
   
   request.address = get_account().get_public_address_str(m_nettype);
-  request.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
+  request.view_key = tools::type_to_hex(get_account().get_keys().m_view_secret_key);
   bool r = invoke_http<light_rpc::GET_ADDRESS_INFO>(request, response);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_address_info");
   // TODO: Validate result
@@ -10501,7 +10486,7 @@ void wallet2::light_wallet_get_address_txs()
   light_rpc::GET_ADDRESS_TXS::response ires{};
   
   ireq.address = get_account().get_public_address_str(m_nettype);
-  ireq.view_key = string_tools::pod_to_hex(get_account().get_keys().m_view_secret_key);
+  ireq.view_key = tools::type_to_hex(get_account().get_keys().m_view_secret_key);
   bool r = invoke_http<light_rpc::GET_ADDRESS_TXS>(ireq, ires);
   THROW_WALLET_EXCEPTION_IF(!r, error::no_connection_to_daemon, "get_address_txs");
   //OpenMonero sends status=success, Mymonero doesn't. 
@@ -10534,10 +10519,10 @@ void wallet2::light_wallet_get_address_txs()
     {
       crypto::public_key tx_public_key;
       crypto::key_image key_image;
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
-      THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, so.key_image), error::wallet_internal_error, "Invalid key_image field");
-      string_tools::hex_to_pod(so.tx_pub_key, tx_public_key);
-      string_tools::hex_to_pod(so.key_image, key_image);
+      THROW_WALLET_EXCEPTION_IF(so.tx_pub_key.size() != 64 || !lokimq::is_hex(so.tx_pub_key), error::wallet_internal_error, "Invalid tx_pub_key field");
+      THROW_WALLET_EXCEPTION_IF(so.key_image.size() != 64 || !lokimq::is_hex(so.key_image), error::wallet_internal_error, "Invalid key_image field");
+      tools::hex_to_type(so.tx_pub_key, tx_public_key);
+      tools::hex_to_type(so.key_image, key_image);
 
       if(!light_wallet_key_image_is_ours(key_image, tx_public_key, so.out_index)) {
         THROW_WALLET_EXCEPTION_IF(so.amount > t.total_sent, error::wallet_internal_error, "Lightwallet: total sent is negative!");
@@ -10552,10 +10537,10 @@ void wallet2::light_wallet_get_address_txs()
     crypto::hash payment_id = null_hash;
     crypto::hash tx_hash;
     
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.payment_id), error::wallet_internal_error, "Invalid payment_id field");
-    THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, t.hash), error::wallet_internal_error, "Invalid hash field");
-    string_tools::hex_to_pod(t.payment_id, payment_id);
-    string_tools::hex_to_pod(t.hash, tx_hash);
+    THROW_WALLET_EXCEPTION_IF(t.payment_id.size() != 64 || !lokimq::is_hex(t.payment_id), error::wallet_internal_error, "Invalid payment_id field");
+    THROW_WALLET_EXCEPTION_IF(t.hash.size() != 64 || !lokimq::is_hex(t.hash), error::wallet_internal_error, "Invalid hash field");
+    tools::hex_to_type(t.payment_id, payment_id);
+    tools::hex_to_type(t.hash, tx_hash);
 
     // lightwallet specific info
     bool incoming = (total_received > total_sent);
@@ -10592,7 +10577,7 @@ void wallet2::light_wallet_get_address_txs()
           pool_txs.push_back(tx_hash);
           // assume false as we don't get that info from the light wallet server
           crypto::hash payment_id;
-          THROW_WALLET_EXCEPTION_IF(!epee::string_tools::hex_to_pod(t.payment_id, payment_id),
+          THROW_WALLET_EXCEPTION_IF(!tools::hex_to_type(t.payment_id, payment_id),
               error::wallet_internal_error, "Failed to parse payment id");
           emplace_or_replace(m_unconfirmed_payments, payment_id, pool_payment_details{payment, false});
           if (0 != m_callback) {
@@ -10692,10 +10677,10 @@ bool wallet2::light_wallet_parse_rct_str(const std::string& rct_string, const cr
   rct::key encrypted_mask;
   std::string rct_commit_str = rct_string.substr(0,64);
   std::string encrypted_mask_str = rct_string.substr(64,64);
-  THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, rct_commit_str), error::wallet_internal_error, "Invalid rct commit hash: " + rct_commit_str);
-  THROW_WALLET_EXCEPTION_IF(string_tools::validate_hex(64, encrypted_mask_str), error::wallet_internal_error, "Invalid rct mask: " + encrypted_mask_str);
-  string_tools::hex_to_pod(rct_commit_str, rct_commit);
-  string_tools::hex_to_pod(encrypted_mask_str, encrypted_mask);
+  THROW_WALLET_EXCEPTION_IF(rct_commit_str.size() != 64 || !lokimq::is_hex(rct_commit_str), error::wallet_internal_error, "Invalid rct commit hash: " + rct_commit_str);
+  THROW_WALLET_EXCEPTION_IF(encrypted_mask_str.size() != 64 || !lokimq::is_hex(encrypted_mask_str), error::wallet_internal_error, "Invalid rct mask: " + encrypted_mask_str);
+  tools::hex_to_type(rct_commit_str, rct_commit);
+  tools::hex_to_type(encrypted_mask_str, encrypted_mask);
   if (decrypt) {
     // Decrypt the mask
     crypto::key_derivation derivation;
@@ -12796,7 +12781,7 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
   rpc::IS_KEY_IMAGE_SPENT::request kispent_req{};
   rpc::IS_KEY_IMAGE_SPENT::response kispent_res{};
   for (size_t i = 0; i < proofs.size(); ++i)
-    kispent_req.key_images.push_back(epee::string_tools::pod_to_hex(proofs[i].key_image));
+    kispent_req.key_images.push_back(tools::type_to_hex(proofs[i].key_image));
   bool ok = invoke_http<rpc::IS_KEY_IMAGE_SPENT>(kispent_req, kispent_res);
   THROW_WALLET_EXCEPTION_IF(!ok || kispent_res.spent_status.size() != proofs.size(),
     error::wallet_internal_error, "Failed to get key image spent status from daemon");
@@ -13398,7 +13383,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       "Non txout_to_key output found");
     const auto pkey = var::get<cryptonote::txout_to_key>(out.target).key;
 
-    std::string const key_image_str = epee::string_tools::pod_to_hex(key_image);
+    std::string const key_image_str = tools::type_to_hex(key_image);
     if (!td.m_key_image_known || !(key_image == td.m_key_image))
     {
       std::vector<const crypto::public_key*> pkeys;
@@ -13419,7 +13404,7 @@ uint64_t wallet2::import_key_images(const std::vector<std::pair<crypto::key_imag
       THROW_WALLET_EXCEPTION_IF(!crypto::check_ring_signature((const crypto::hash&)key_image, key_image, pkeys, &signature),
           error::signature_check_failed, std::to_string(n + offset) + "/"
           + std::to_string(signed_key_images.size()) + ", key image " + key_image_str
-          + ", signature " + epee::string_tools::pod_to_hex(signature) + ", pubkey " + epee::string_tools::pod_to_hex(*pkeys[0]));
+          + ", signature " + tools::type_to_hex(signature) + ", pubkey " + tools::type_to_hex(*pkeys[0]));
     }
     req.key_images.push_back(key_image_str);
   }

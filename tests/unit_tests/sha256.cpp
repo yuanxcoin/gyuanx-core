@@ -30,12 +30,12 @@
 
 #include "common/sha256sum.h"
 #include "crypto/hash.h"
-#include "string_tools.h"
+#include "common/hex.h"
 
 static bool check(const std::string &data, const char *expected_hash_hex)
 {
   crypto::hash hash, expected_hash;
-  if (!epee::string_tools::hex_to_pod(expected_hash_hex, expected_hash))
+  if (!tools::hex_to_type(expected_hash_hex, expected_hash))
     return false;
   return tools::sha256sum_str(data, hash) && hash == expected_hash;
 }
