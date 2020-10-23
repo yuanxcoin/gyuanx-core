@@ -49,7 +49,6 @@ add_library(common
   spawn.cpp
   string_util.cpp
   threadpool.cpp
-  timings.cc
   util.cpp
   ${PROJECT_BINARY_DIR}/translations/translation_files.cpp
   )

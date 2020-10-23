@@ -39,7 +39,7 @@
 #include "misc_language.h"
 #include "stats.h"
 #include "common/perf_timer.h"
-#include "common/timings.h"
+#include "timings.h"
 
 struct Params
 {
