@@ -37,8 +37,8 @@
 #include "common/util.h"
 #include "common/hex.h"
 
-#include "misc_log_ex.h"
-#include "string_tools.h"
+#include "epee/misc_log_ex.h"
+#include "epee/string_tools.h"
 
 #include <string>
 #include <vector>

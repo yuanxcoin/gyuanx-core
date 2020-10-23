@@ -37,11 +37,11 @@
 #include <vector>
 #include <random>
 
-#include "memwipe.h"
-#include "mlocker.h"
+#include "epee/memwipe.h"
+#include "epee/mlocker.h"
 #include "generic-ops.h"
-#include "hex.h"
-#include "span.h"
+#include "epee/hex.h"
+#include "epee/span.h"
 #include "hash.h"
 
 namespace crypto {

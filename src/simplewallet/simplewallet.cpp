@@ -54,7 +54,7 @@
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
 #include <lokimq/hex.h>
-#include "console_handler.h"
+#include "epee/console_handler.h"
 #include "common/i18n.h"
 #include "common/command_line.h"
 #include "common/util.h"
@@ -79,11 +79,11 @@
 #include "wallet/wallet_args.h"
 #include "version.h"
 #include <stdexcept>
-#include "int-util.h"
-#include "readline_suspend.h"
+#include "epee/int-util.h"
+#include "epee/readline_suspend.h"
 #include "wallet/message_store.h"
 #include "wallet/wallet_rpc_server_commands_defs.h"
-#include "string_coding.h"
+#include "epee/string_coding.h"
 
 extern "C"
 {

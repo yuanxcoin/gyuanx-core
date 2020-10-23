@@ -6,7 +6,7 @@
 #include <boost/endian/conversion.hpp>
 #include <lokimq/variant.h>
 #include "common/string_util.h"
-#include "net/jsonrpc_structs.h" // epee
+#include "epee/net/jsonrpc_structs.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "rpc/rpc_args.h"
 #include "version.h"

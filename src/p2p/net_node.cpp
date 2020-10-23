@@ -40,13 +40,13 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "net_node.h"
-#include "net/net_utils_base.h"
+#include "epee/net/net_utils_base.h"
 #include "net/socks.h"
 #include "net/parse.h"
 #include "net/tor_address.h"
 #include "net/i2p_address.h"
 #include "p2p/p2p_protocol_defs.h"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 
 namespace
 {

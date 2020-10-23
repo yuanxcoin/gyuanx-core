@@ -33,8 +33,8 @@
 #include <vector>
 #include <deque>
 #include <array>
-#include "span.h"
-#include "storages/portable_storage_base.h"
+#include "../span.h"
+#include "../storages/portable_storage_base.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "serialization"
@@ -126,24 +126,6 @@ namespace epee
       section* child_section = stg.open_section(pname, parent_section, false);
       if(!child_section) return false;
       return obj._load(stg, child_section);
-    }
-    //-------------------------------------------------------------------------------------------------------------------
-    template<class serializible_type, class t_storage>
-    static bool serialize_t_obj(enableable<serializible_type>& obj, t_storage& stg, section* parent_section, const char* pname)
-    {
-      if(!obj.enabled)
-        return true;
-      return serialize_t_obj(obj.v, stg, parent_section, pname);
-    }
-    //-------------------------------------------------------------------------------------------------------------------
-    template<class serializible_type, class t_storage>
-    static bool unserialize_t_obj(enableable<serializible_type>& obj, t_storage& stg, section* parent_section, const char* pname)
-    {
-      obj.enabled = false;
-      section* child_section = stg.open_section(pname, parent_section, false);
-      if(!child_section) return false;
-      obj.enabled = true;
-      return obj.v._load(stg, child_section);
     }
     //-------------------------------------------------------------------------------------------------------------------
     template<class stl_container, class t_storage>

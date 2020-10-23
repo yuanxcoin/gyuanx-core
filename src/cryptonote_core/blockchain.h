@@ -49,9 +49,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "span.h"
-#include "string_tools.h"
-#include "rolling_median.h"
+#include "epee/span.h"
+#include "epee/string_tools.h"
+#include "epee/rolling_median.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "common/util.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"

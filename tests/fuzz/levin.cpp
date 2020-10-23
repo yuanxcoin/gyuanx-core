@@ -27,10 +27,10 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "common/file.h"
-#include "net/net_utils_base.h"
-#include "net/abstract_tcp_server2.h"
-#include "storages/levin_abstract_invoke2.h"
-#include "net/levin_protocol_handler_async.h"
+#include "epee/net/net_utils_base.h"
+#include "epee/net/abstract_tcp_server2.h"
+#include "epee/storages/levin_abstract_invoke2.h"
+#include "epee/net/levin_protocol_handler_async.h"
 #include "fuzzer.h"
 
 namespace

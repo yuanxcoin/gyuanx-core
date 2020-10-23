@@ -70,6 +70,3 @@ target_link_libraries(epee
     filesystem
     Boost::thread
     extra)
-
-target_include_directories(epee PUBLIC ../include)
-

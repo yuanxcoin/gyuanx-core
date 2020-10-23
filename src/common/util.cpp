@@ -37,13 +37,13 @@
 
 #include "unbound.h"
 
-#include "string_tools.h"
-#include "wipeable_string.h"
+#include "epee/string_tools.h"
+#include "epee/wipeable_string.h"
 #include "crypto/crypto.h"
 #include "util.h"
 #include "stack_trace.h"
-#include "misc_os_dependent.h"
-#include "readline_buffer.h"
+#include "epee/misc_os_dependent.h"
+#include "epee/readline_buffer.h"
 #include "string_util.h"
 
 #include "i18n.h"

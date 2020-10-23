@@ -27,14 +27,14 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#include "serialization/keyvalue_serialization.h"
+#include "epee/serialization/keyvalue_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_basic/account_boost_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "rpc/http_client.h"
 #include "common/util.h"
-#include "wipeable_string.h"
+#include "epee/wipeable_string.h"
 #include <vector>
 
 namespace mms

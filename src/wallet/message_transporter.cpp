@@ -27,7 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "message_transporter.h"
-#include "string_coding.h"
+#include "epee/string_coding.h"
 #include <boost/format.hpp>
 #include "wallet_errors.h"
 #include <algorithm>

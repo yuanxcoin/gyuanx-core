@@ -34,13 +34,13 @@
 #include <memory>
 #include <cstring>
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "common/file.h"
 #include "common/pruning.h"
 #include "common/hex.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "crypto/crypto.h"
-#include "profile_tools.h"
+#include "epee/profile_tools.h"
 #include "ringct/rctOps.h"
 
 #include "checkpoints/checkpoints.h"

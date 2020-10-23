@@ -32,7 +32,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/endian/conversion.hpp>
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 
 #include <unordered_set>
 #include <iomanip>
@@ -53,10 +53,10 @@ extern "C" {
 #include "common/threadpool.h"
 #include "common/command_line.h"
 #include "common/hex.h"
-#include "warnings.h"
+#include "epee/warnings.h"
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
-#include "misc_language.h"
+#include "epee/misc_language.h"
 #include <csignal>
 #include "checkpoints/checkpoints.h"
 #include "ringct/rctTypes.h"
@@ -64,9 +64,9 @@ extern "C" {
 #include "ringct/rctSigs.h"
 #include "common/notify.h"
 #include "version.h"
-#include "memwipe.h"
+#include "epee/memwipe.h"
 #include "common/i18n.h"
-#include "net/local_ip.h"
+#include "epee/net/local_ip.h"
 
 #include "common/loki_integration_test_hooks.h"
 

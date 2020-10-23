@@ -73,7 +73,7 @@
 #include "multisig_sig.h"
 
 #include "common/loki_integration_test_hooks.h"
-#include "wipeable_string.h"
+#include "epee/wipeable_string.h"
 
 #include "rpc/http_client.h"
 

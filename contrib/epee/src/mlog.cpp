@@ -38,9 +38,9 @@
 #include <ctime>
 #include <atomic>
 #include <boost/algorithm/string.hpp>
-#include "string_tools.h"
-#include "misc_os_dependent.h"
-#include "misc_log_ex.h"
+#include "epee/string_tools.h"
+#include "epee/misc_os_dependent.h"
+#include "epee/misc_log_ex.h"
 
 #ifndef USE_GHC_FILESYSTEM
 #include <filesystem>

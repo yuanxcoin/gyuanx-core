@@ -35,9 +35,9 @@
 
 #include "levin_base.h"
 #include "buffer.h"
-#include "misc_language.h"
-#include "misc_os_dependent.h"
-#include "int-util.h"
+#include "../misc_language.h"
+#include "../misc_os_dependent.h"
+#include "../int-util.h"
 
 #include <random>
 #include <chrono>

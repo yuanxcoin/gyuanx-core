@@ -30,12 +30,12 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 //
 #include "file.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include <unistd.h>
 #include <cstdio>
 
 #ifdef WIN32
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #ifndef STRSAFE_NO_DEPRECATE
 #define STRSAFE_NO_DEPRECATE
 #endif

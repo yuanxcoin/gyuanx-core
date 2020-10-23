@@ -29,13 +29,13 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "common/password.h"
 #include "common/scoped_message_writer.h"
 #include "common/pruning.h"
 #include "common/hex.h"
 #include "daemon/rpc_command_executor.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_core/service_node_rules.h"

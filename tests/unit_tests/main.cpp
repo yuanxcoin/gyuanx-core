@@ -37,7 +37,7 @@
 #include "p2p/net_node.inl"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.inl"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "common/command_line.h"
 #include "common/util.h"
 #include "unit_tests_utils.h"

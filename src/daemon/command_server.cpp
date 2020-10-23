@@ -30,7 +30,7 @@
 #include <optional>
 #include "cryptonote_config.h"
 #include "version.h"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "daemon/command_server.h"
 
 #include "common/loki_integration_test_hooks.h"

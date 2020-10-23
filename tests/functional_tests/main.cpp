@@ -30,7 +30,7 @@
 
 #include <boost/program_options.hpp>
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 
 #include "common/command_line.h"
 #include "common/util.h"

@@ -28,7 +28,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <stdarg.h>
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "spawn.h"
 #include "notify.h"
 

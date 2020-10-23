@@ -32,7 +32,7 @@
 #pragma once
 
 #include "crypto/crypto.h"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "cryptonote_basic/cryptonote_basic.h"

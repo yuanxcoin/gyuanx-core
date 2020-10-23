@@ -30,7 +30,7 @@
 #include <string>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/asio/ip/address_v6.hpp>
-#include "int-util.h"
+#include "../int-util.h"
 
 namespace epee
 {

@@ -30,7 +30,7 @@
 
 #include <unordered_set>
 #include <random>
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "common/apply_permutation.h"
 #include "common/hex.h"
 #include "cryptonote_tx_utils.h"
@@ -42,7 +42,7 @@
 #include "crypto/hash.h"
 #include "ringct/rctSigs.h"
 #include "multisig/multisig.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 
 using namespace crypto;
 

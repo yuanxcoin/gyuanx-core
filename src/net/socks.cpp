@@ -39,7 +39,7 @@
 #include <string>
 #include <string_view>
 
-#include "net/net_utils_base.h"
+#include "epee/net/net_utils_base.h"
 #include "net/tor_address.h"
 #include "net/i2p_address.h"
 

@@ -30,7 +30,7 @@
 
 #include "gtest/gtest.h"
 #include "common/file.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 
 #include "random_path.h"
 

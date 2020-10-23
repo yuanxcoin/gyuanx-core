@@ -34,8 +34,8 @@
 #include <iostream>
 
 #include "generic-ops.h"
-#include "hex.h"
-#include "span.h"
+#include "epee/hex.h"
+#include "epee/span.h"
 #include "crypto/cn_heavy_hash.hpp"
 
 namespace crypto {

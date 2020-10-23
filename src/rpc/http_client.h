@@ -5,9 +5,9 @@
 #include <shared_mutex>
 #include <string_view>
 
-#include "storages/portable_storage_template_helper.h"
-#include "net/jsonrpc_structs.h"
-#include "memwipe.h"
+#include "epee/storages/portable_storage_template_helper.h"
+#include "epee/net/jsonrpc_structs.h"
+#include "epee/memwipe.h"
 
 #include "common/meta.h"
 #include "version.h"

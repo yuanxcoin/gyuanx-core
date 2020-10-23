@@ -40,7 +40,7 @@
 #include <lokimq/lokimq.h>
 
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
-#include "storages/portable_storage_template_helper.h"
+#include "epee/storages/portable_storage_template_helper.h"
 #include "common/command_line.h"
 #include "tx_pool.h"
 #include "blockchain.h"
@@ -50,7 +50,7 @@
 #include "pulse.h"
 #include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
-#include "warnings.h"
+#include "epee/warnings.h"
 #include "crypto/hash.h"
 #include "cryptonote_protocol/quorumnet.h"
 PUSH_WARNINGS

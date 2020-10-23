@@ -35,11 +35,11 @@
 #include <boost/bind/bind.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include "warnings.h"
-#include "string_tools.h"
-#include "misc_language.h"
-#include "net/local_ip.h"
-#include "pragma_comp_defs.h"
+#include "../warnings.h"
+#include "../string_tools.h"
+#include "../misc_language.h"
+#include "local_ip.h"
+#include "../pragma_comp_defs.h"
 
 #include <chrono>
 #include <thread>

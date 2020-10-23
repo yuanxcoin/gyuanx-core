@@ -45,8 +45,8 @@
 
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
-#include "net/enums.h"
-#include "net/local_ip.h"
+#include "epee/net/enums.h"
+#include "epee/net/local_ip.h"
 #include "p2p_protocol_defs.h"
 #include "common/random.h"
 #include "common/fs.h"

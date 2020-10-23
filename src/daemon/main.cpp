@@ -37,7 +37,7 @@
 #include "common/fs.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "daemonizer/daemonizer.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "p2p/net_node.h"
 #include "rpc/rpc_args.h"
 #include "rpc/core_rpc_server.h"

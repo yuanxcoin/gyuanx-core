@@ -38,7 +38,7 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "common/string_util.h"
 #include "common/i18n.h"
 

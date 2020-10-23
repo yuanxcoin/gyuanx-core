@@ -37,7 +37,7 @@
 #include <boost/serialization/version.hpp>
 #include <functional>
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "common/periodic_task.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/verification_context.h"

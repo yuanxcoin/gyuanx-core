@@ -32,20 +32,20 @@
 
 /* rfree: implementation for the non-template base, can be used by connection<> template class in abstract_tcp_server2 file  */
 
-#include "net/connection_basic.hpp"
+#include "epee/net/connection_basic.hpp"
 
-#include "net/net_utils_base.h" 
-#include "misc_log_ex.h" 
+#include "epee/net/net_utils_base.h"
+#include "epee/misc_log_ex.h"
 #include <thread>
 #include <chrono>
-#include "misc_language.h"
-#include "pragma_comp_defs.h"
+#include "epee/misc_language.h"
+#include "epee/pragma_comp_defs.h"
 #include <iomanip>
 
 #include <boost/asio/basic_socket.hpp>
 
 // TODO:
-#include "net/network_throttle-detail.hpp"
+#include "epee/net/network_throttle-detail.hpp"
 
 #if BOOST_VERSION >= 107000
 #define GET_IO_SERVICE(s) ((boost::asio::io_context&)(s).get_executor().context())

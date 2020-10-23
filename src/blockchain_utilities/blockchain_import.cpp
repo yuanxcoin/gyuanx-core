@@ -35,7 +35,7 @@
 #include <boost/algorithm/string.hpp>
 #include <unistd.h>
 #include "cryptonote_protocol/quorumnet.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "bootstrap_file.h"
 #include "bootstrap_serialization.h"
 #include "blocks/blocks.h"

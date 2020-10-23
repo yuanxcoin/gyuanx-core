@@ -37,7 +37,7 @@
 #include "randomx.h"
 #include "c_threads.h"
 #include "hash-ops.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 
 #define RX_LOGCAT	"randomx"
 

@@ -35,8 +35,8 @@
 #include <lokimq/hex.h>
 #include <variant>
 #include "common/hex.h"
-#include "wipeable_string.h"
-#include "string_tools.h"
+#include "epee/wipeable_string.h"
+#include "epee/string_tools.h"
 #include "common/i18n.h"
 #include "common/meta.h"
 #include "serialization/string.h"

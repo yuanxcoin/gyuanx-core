@@ -31,7 +31,7 @@
 #include <map>
 #include <algorithm>
 #include <boost/program_options.hpp>
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "common/util.h"
 #include "common/command_line.h"
 #include "common/dns_utils.h"

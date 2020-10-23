@@ -38,7 +38,7 @@
 #include "common/base58.h"
 #include "common/util.h"
 #include "common/file.h"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 
 
 #undef LOKI_DEFAULT_LOG_CATEGORY

@@ -34,9 +34,9 @@
 #include <utility>
 #include <vector>
 #include <cstring>
-#include "memwipe.h"
-#include "misc_log_ex.h"
-#include "wipeable_string.h"
+#include "epee/memwipe.h"
+#include "epee/misc_log_ex.h"
+#include "epee/wipeable_string.h"
 
 static constexpr const char hex[] = u8"0123456789abcdef";
 

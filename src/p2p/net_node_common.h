@@ -34,8 +34,8 @@
 #include <utility>
 #include <vector>
 #include "cryptonote_basic/blobdatatype.h"
-#include "net/enums.h"
-#include "net/net_utils_base.h"
+#include "epee/net/enums.h"
+#include "epee/net/net_utils_base.h"
 #include "p2p_protocol_defs.h"
 
 namespace nodetool

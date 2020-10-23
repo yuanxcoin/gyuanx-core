@@ -35,7 +35,7 @@
 #include "blockchain_objects.h"
 #include "blockchain_db/blockchain_db.h"
 #include "version.h"
-#include "misc_os_dependent.h"
+#include "epee/misc_os_dependent.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "bcutil"

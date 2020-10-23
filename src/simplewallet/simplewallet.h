@@ -47,9 +47,9 @@
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "wallet/wallet2.h"
-#include "console_handler.h"
+#include "epee/console_handler.h"
 #include "common/periodic_task.h"
-#include "wipeable_string.h"
+#include "epee/wipeable_string.h"
 #include "common/i18n.h"
 #include "common/password.h"
 #include "crypto/crypto.h"  // for definition of crypto::secret_key

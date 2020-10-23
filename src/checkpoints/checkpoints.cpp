@@ -31,9 +31,9 @@
 
 #include "checkpoints.h"
 
-#include "string_tools.h"
-#include "storages/portable_storage_template_helper.h" // epee json include
-#include "serialization/keyvalue_serialization.h"
+#include "epee/string_tools.h"
+#include "epee/storages/portable_storage_template_helper.h" // epee json include
+#include "epee/serialization/keyvalue_serialization.h"
 #include "cryptonote_core/service_node_rules.h"
 #include <vector>
 #include "blockchain_db/blockchain_db.h"

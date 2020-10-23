@@ -40,18 +40,18 @@ extern "C" {
 }
 
 #include "ringct/rctSigs.h"
-#include "net/local_ip.h"
+#include "epee/net/local_ip.h"
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_basic/tx_extra.h"
 #include "cryptonote_basic/hardfork.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 #include "common/scoped_message_writer.h"
 #include "common/i18n.h"
 #include "common/util.h"
 #include "common/random.h"
 #include "common/lock.h"
 #include "common/hex.h"
-#include "misc_os_dependent.h"
+#include "epee/misc_os_dependent.h"
 #include "blockchain.h"
 #include "service_node_quorum_cop.h"
 

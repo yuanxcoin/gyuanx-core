@@ -27,9 +27,9 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "common/file.h"
-#include "serialization/keyvalue_serialization.h"
-#include "storages/portable_storage_template_helper.h"
-#include "storages/portable_storage_base.h"
+#include "epee/serialization/keyvalue_serialization.h"
+#include "epee/storages/portable_storage_template_helper.h"
+#include "epee/storages/portable_storage_base.h"
 #include "fuzzer.h"
 
 class PortableStorageFuzzer: public Fuzzer

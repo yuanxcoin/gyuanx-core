@@ -30,7 +30,7 @@
 
 #pragma once
 
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/portable_binary_oarchive.hpp>
 #include <boost/archive/portable_binary_iarchive.hpp>

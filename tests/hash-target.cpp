@@ -32,7 +32,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "crypto/hash.h"
 #include "cryptonote_basic/difficulty.h"
 

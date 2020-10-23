@@ -34,7 +34,7 @@
 #include <lokimq/lokimq.h>
 #include <utility>
 
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #if defined(PER_BLOCK_CHECKPOINT)
 #include "blocks/blocks.h"
 #endif

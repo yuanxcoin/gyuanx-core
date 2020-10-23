@@ -44,9 +44,9 @@
 #include "common/boost_serialization_helper.h"
 #include "common/lock.h"
 #include "common/hex.h"
-#include "int-util.h"
-#include "misc_language.h"
-#include "warnings.h"
+#include "epee/int-util.h"
+#include "epee/misc_language.h"
+#include "epee/warnings.h"
 #include "common/perf_timer.h"
 #include "crypto/hash.h"
 

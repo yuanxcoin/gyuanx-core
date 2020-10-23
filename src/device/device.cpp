@@ -32,7 +32,7 @@
 #ifdef WITH_DEVICE_LEDGER
 #include "device_ledger.hpp"
 #endif
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 
 
 namespace hw {

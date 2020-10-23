@@ -3,7 +3,7 @@
 
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
-#include "span.h"
+#include "epee/span.h"
 #include "cryptonote_basic/tx_extra.h"
 #include "common/fs.h"
 #include <lokimq/hex.h>

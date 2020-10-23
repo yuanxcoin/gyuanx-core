@@ -29,8 +29,8 @@
 
 #include <lmdb.h>
 #include "common/file.h"
-#include "misc_log_ex.h"
-#include "misc_language.h"
+#include "epee/misc_log_ex.h"
+#include "epee/misc_language.h"
 #include "wallet_errors.h"
 #include "ringdb.h"
 #include "cryptonote_config.h"

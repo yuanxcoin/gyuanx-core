@@ -33,10 +33,10 @@
 #include <memory>
 #include <vector>
 
-#include "shared_sv.h"
+#include "epee/shared_sv.h"
 #include "cryptonote_basic/blobdatatype.h"
-#include "net/enums.h"
-#include "span.h"
+#include "epee/net/enums.h"
+#include "epee/span.h"
 
 namespace epee
 {

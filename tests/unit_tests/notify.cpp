@@ -32,8 +32,8 @@
 
 #include "gtest/gtest.h"
 
-#include "misc_language.h"
-#include "string_tools.h"
+#include "epee/misc_language.h"
+#include "epee/string_tools.h"
 #include "common/file.h"
 #include "common/notify.h"
 

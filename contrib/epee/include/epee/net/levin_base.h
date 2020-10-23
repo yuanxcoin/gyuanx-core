@@ -34,7 +34,7 @@
 #include <string_view>
 
 #include "net_utils_base.h"
-#include "span.h"
+#include "../span.h"
 
 #define LEVIN_SIGNATURE  0x0101010101012101LL  //Bender's nightmare
 

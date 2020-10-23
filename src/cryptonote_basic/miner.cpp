@@ -32,16 +32,16 @@
 
 #include <numeric>
 #include <lokimq/base64.h>
-#include "misc_language.h"
+#include "epee/misc_language.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "misc_os_dependent.h"
+#include "epee/misc_os_dependent.h"
 #include "common/command_line.h"
 #include "common/util.h"
 #include "common/file.h"
 #include "common/string_util.h"
-#include "string_coding.h"
-#include "string_tools.h"
-#include "storages/portable_storage_template_helper.h"
+#include "epee/string_coding.h"
+#include "epee/string_tools.h"
+#include "epee/storages/portable_storage_template_helper.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "miner"
