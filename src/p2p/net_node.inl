@@ -57,9 +57,11 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "net/parse.h"
 
+#ifndef WITHOUT_MINIUPNPC
 #include <miniupnp/miniupnpc/miniupnpc.h>
 #include <miniupnp/miniupnpc/upnpcommands.h>
 #include <miniupnp/miniupnpc/upnperrors.h>
+#endif
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net.p2p"
@@ -2654,6 +2656,10 @@ namespace nodetool
   template<class t_payload_net_handler>
   void node_server<t_payload_net_handler>::add_upnp_port_mapping_impl(uint32_t port, bool ipv6) // if ipv6 false, do ipv4
   {
+#ifdef WITHOUT_MINIUPNPC
+    (void) port;
+    (void) ipv6;
+#else
     std::string ipversion = ipv6 ? "(IPv6)" : "(IPv4)";
     MDEBUG("Attempting to add IGD port mapping " << ipversion << ".");
     int result;
@@ -2698,6 +2704,7 @@ namespace nodetool
     } else {
       MINFO("No IGD was found.");
     }
+#endif
   }
 
   template<class t_payload_net_handler>
@@ -2723,6 +2730,10 @@ namespace nodetool
   template<class t_payload_net_handler>
   void node_server<t_payload_net_handler>::delete_upnp_port_mapping_impl(uint32_t port, bool ipv6)
   {
+#ifdef WITHOUT_MINIUPNPC
+    (void) port;
+    (void) ipv6;
+#else
     std::string ipversion = ipv6 ? "(IPv6)" : "(IPv4)";
     MDEBUG("Attempting to delete IGD port mapping " << ipversion << ".");
     int result;
@@ -2763,6 +2774,7 @@ namespace nodetool
     } else {
       MINFO("No IGD was found.");
     }
+#endif
   }
 
   template<class t_payload_net_handler>
