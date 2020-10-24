@@ -5,24 +5,24 @@
 
 set(LOCAL_MIRROR "" CACHE STRING "local mirror path/URL for lib downloads")
 
-set(OPENSSL_VERSION 1.1.1g CACHE STRING "openssl version")
+set(OPENSSL_VERSION 1.1.1h CACHE STRING "openssl version")
 set(OPENSSL_MIRROR ${LOCAL_MIRROR} https://www.openssl.org/source CACHE STRING "openssl download mirror(s)")
 set(OPENSSL_SOURCE openssl-${OPENSSL_VERSION}.tar.gz)
-set(OPENSSL_HASH SHA256=ddb04774f1e32f0c49751e21b67216ac87852ceb056b75209af2443400636d46
+set(OPENSSL_HASH SHA256=5c9ca8774bd7b03e5784f26ae9e9e6d749c9da2438545077e6b3d755a06595d9
     CACHE STRING "openssl source hash")
 
-set(EXPAT_VERSION 2.2.9 CACHE STRING "expat version")
+set(EXPAT_VERSION 2.2.10 CACHE STRING "expat version")
 string(REPLACE "." "_" EXPAT_TAG "R_${EXPAT_VERSION}")
 set(EXPAT_MIRROR ${LOCAL_MIRROR} https://github.com/libexpat/libexpat/releases/download/${EXPAT_TAG}
     CACHE STRING "expat download mirror(s)")
 set(EXPAT_SOURCE expat-${EXPAT_VERSION}.tar.xz)
-set(EXPAT_HASH SHA512=e082874efcc4b00709e2c0192c88fb15dfc4f33fc3a2b09e619b010ea93baaf7e7572683f738463db0ce2350cab3de48a0c38af6b74d1c4f5a9e311f499edab0
+set(EXPAT_HASH SHA512=a8e0c8a9cf7e6fbacdc6e709f3c99c533ab550fba52557d24259bb8b360f9697624c7500c0e9886fa57ee2b529aadd0d1835d66fe8112e15c20df75cd3eb090f
     CACHE STRING "expat source hash")
 
-set(UNBOUND_VERSION 1.11.0 CACHE STRING "unbound version")
+set(UNBOUND_VERSION 1.12.0 CACHE STRING "unbound version")
 set(UNBOUND_MIRROR ${LOCAL_MIRROR} https://nlnetlabs.nl/downloads/unbound CACHE STRING "unbound download mirror(s)")
 set(UNBOUND_SOURCE unbound-${UNBOUND_VERSION}.tar.gz)
-set(UNBOUND_HASH SHA256=9f2f0798f76eb8f30feaeda7e442ceed479bc54db0e3ac19c052d68685e51ef7
+set(UNBOUND_HASH SHA256=5b9253a97812f24419bf2e6b3ad28c69287261cf8c8fa79e3e9f6d3bf7ef5835
     CACHE STRING "unbound source hash")
 
 set(BOOST_VERSION 1.74.0 CACHE STRING "boost version")
