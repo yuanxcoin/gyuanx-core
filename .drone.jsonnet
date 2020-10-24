@@ -71,7 +71,7 @@ local debian_pipeline(name, image,
             ) + extra_cmds,
         }
     ],
-}; 
+};
 
 // Macos build
 local mac_builder(name,
@@ -128,6 +128,18 @@ local static_check_and_upload = [
 local static_build_deps='autoconf automake make qttools5-dev file libtool gperf pkg-config patch openssh-client';
 
 
+local android_build_steps(android_abi, android_platform=21, jobs=6) = [
+    'mkdir build-' + android_abi,
+    'cd build-' + android_abi,
+    'cmake .. -DCMAKE_CXX_FLAGS=-fdiagnostics-color=always -DCMAKE_C_FLAGS=-fdiagnostics-color=always ' +
+        '-DCMAKE_TOOLCHAIN_FILE=/usr/lib/android-sdk/ndk-bundle/build/cmake/android.toolchain.cmake ' +
+        '-DANDROID_PLATFORM=' + android_platform + ' -DANDROID_ABI=' + android_abi + ' ' +
+        '-DBUILD_STATIC_DEPS=ON -DSTATIC=ON -G Ninja',
+    'ninja -j' + jobs + ' -v wallet_api',
+    'cd ..',
+];
+
+
 
 [
     // Various debian builds
@@ -159,4 +171,32 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
                 build_tests=false, extra_cmds=static_check_and_upload, lto=true),
     mac_builder('macOS (Release)', run_tests=true),
     mac_builder('macOS (Debug)', build_type='Debug', cmake_extra='-DBUILD_DEBUG_UTILS=ON'),
+
+
+    // Android builds; we do them all in one image because the android NDK is huge
+    {   name: 'Android builds', kind: 'pipeline', type: 'docker', platform: { arch: 'amd64' },
+        steps: [submodules, {
+                name: 'build',
+                image: 'debian:sid',
+                environment: { SSH_KEY: { from_secret: "SSH_KEY" } },
+                commands: [
+                    'echo "man-db man-db/auto-update boolean false" | debconf-set-selections',
+                    'echo deb http://deb.debian.org/debian sid contrib >/etc/apt/sources.list.d/sid-contrib.list',
+                    apt_get_quiet + ' update',
+                    apt_get_quiet + ' install -y eatmydata',
+                    'eatmydata ' + apt_get_quiet + ' dist-upgrade -y',
+                    // Keep cached copies of the android NDK around because it is huge:
+                    'if [ -d /cache ]; then if ! [ -d /cache/google-android-ndk-installer ]; then mkdir /cache/google-android-ndk-installer; fi; ln -s /cache/google-android-ndk-installer /var/cache/; fi',
+                    'eatmydata ' + apt_get_quiet + ' install -y --no-install-recommends cmake g++ git ninja-build ccache tar xz-utils google-android-ndk-installer ' + static_build_deps,
+                    ]
+                    + android_build_steps('armeabi-v7a')
+                    + android_build_steps('arm64-v8a')
+                    + android_build_steps('x86_64')
+                    + android_build_steps('x86')
+                    + [
+                    './utils/build_scripts/android-static-upload.sh armeabi-v7a arm64-v8a x86_64 x86'
+                ]
+            }
+        ]
+    }
 ]
