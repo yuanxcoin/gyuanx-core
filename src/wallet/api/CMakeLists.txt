@@ -84,13 +84,14 @@ function(combine_archives output_archive)
 endfunction(combine_archives)
 
 # build and install libwallet_merged only if we building for GUI
-if (STATIC)
+if (STATIC AND BUILD_STATIC_DEPS)
     combine_archives(wallet_merged
             wallet_api
             wallet
             multisig
             cryptonote_core
             cryptonote_basic
+            cryptonote_protocol
             mnemonics
             common
             cncrypto
@@ -100,7 +101,30 @@ if (STATIC)
             checkpoints
             version
             net
-            device_trezor)
+            device_trezor
+            epee
+            blockchain_db
+            rpc_http_client
+            rpc_commands
+
+            # Static deps:
+            Boost::program_options Boost::serialization Boost::system Boost::thread
+            zlib
+            OpenSSL::SSL OpenSSL::Crypto
+            expat
+            libunbound
+            sqlite3
+            protobuf_lite
+            sodium
+            libzmq
+            CURL::libcurl
+            lokimq::lokimq
+            lmdb
+            easylogging
+            randomx
+            uSockets
+            cpr
+            )
 
     if(IOS)
         set(lib_folder lib-${ARCH})
