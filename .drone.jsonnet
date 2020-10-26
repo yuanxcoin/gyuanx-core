@@ -174,7 +174,7 @@ local android_build_steps(android_abi, android_platform=21, jobs=6) = [
 
 
     // Android builds; we do them all in one image because the android NDK is huge
-    {   name: 'Android builds', kind: 'pipeline', type: 'docker', platform: { arch: 'amd64' },
+    {   name: 'Android wallet_api', kind: 'pipeline', type: 'docker', platform: { arch: 'amd64' },
         steps: [submodules, {
                 name: 'build',
                 image: 'debian:sid',
