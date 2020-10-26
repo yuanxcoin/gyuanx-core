@@ -477,10 +477,10 @@ private:
      * \param  wallet_              Name of wallet file
      * \param  password             Password of wallet file
      * \param  multisig_data        The multisig restore info and keys
-     * \param  create_address_file  Whether to create an address file
+     * \param  create_address_file  Whether to create an address file (defaults to yes)
      */
     void generate(const fs::path& wallet_, const epee::wipeable_string& password,
-      const epee::wipeable_string& multisig_data, bool create_address_file = false);
+      const epee::wipeable_string& multisig_data, bool create_address_file = true);
 
     /*!
      * \brief Generates a wallet or restores one.
@@ -489,12 +489,12 @@ private:
      * \param  recovery_param       If it is a restore, the recovery key
      * \param  recover              Whether it is a restore
      * \param  two_random           Whether it is a non-deterministic wallet
-     * \param  create_address_file  Whether to create an address file
+     * \param  create_address_file  Whether to create an address file (defaults to yes)
      * \return                      The secret key of the generated wallet
      */
     crypto::secret_key generate(const fs::path& wallet, const epee::wipeable_string& password,
       const crypto::secret_key& recovery_param = crypto::secret_key(), bool recover = false,
-      bool two_random = false, bool create_address_file = false);
+      bool two_random = false, bool create_address_file = true);
     /*!
      * \brief Creates a wallet from a public address and a spend/view secret key pair.
      * \param  wallet_                 Name of wallet file
@@ -502,11 +502,11 @@ private:
      * \param  account_public_address  The account's public address
      * \param  spendkey                spend secret key
      * \param  viewkey                 view secret key
-     * \param  create_address_file     Whether to create an address file
+     * \param  create_address_file     Whether to create an address file (defaults to yes)
      */
     void generate(const fs::path& wallet, const epee::wipeable_string& password,
       const cryptonote::account_public_address &account_public_address,
-      const crypto::secret_key& spendkey, const crypto::secret_key& viewkey, bool create_address_file = false);
+      const crypto::secret_key& spendkey, const crypto::secret_key& viewkey, bool create_address_file = true);
     /*!
      * \brief Creates a watch only wallet from a public address and a view secret key.
      * \param  wallet_                 Name of wallet file
@@ -517,7 +517,7 @@ private:
      */
     void generate(const fs::path& wallet, const epee::wipeable_string& password,
       const cryptonote::account_public_address &account_public_address,
-      const crypto::secret_key& viewkey = crypto::secret_key(), bool create_address_file = false);
+      const crypto::secret_key& viewkey = crypto::secret_key(), bool create_address_file = true);
     /*!
      * \brief Restore a wallet hold by an HW.
      * \param  wallet_        Name of wallet file
@@ -525,7 +525,7 @@ private:
      * \param  device_name    name of HW to use
      * \param  create_address_file     Whether to create an address file
      */
-    void restore(const fs::path& wallet_, const epee::wipeable_string& password, const std::string &device_name, bool create_address_file = false);
+    void restore(const fs::path& wallet_, const epee::wipeable_string& password, const std::string &device_name, bool create_address_file = true);
 
     /*!
      * \brief Creates a multisig wallet
