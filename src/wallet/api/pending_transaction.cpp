@@ -35,6 +35,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "common/base58.h"
+#include "common/fs.h"
 
 #include <memory>
 #include <vector>
@@ -47,24 +48,13 @@ PendingTransaction::~PendingTransaction() {}
 
 
 PendingTransactionImpl::PendingTransactionImpl(WalletImpl &wallet)
-    : m_wallet(wallet)
+    : m_wallet(wallet), m_status{Status_Ok, ""}
 {
-  m_status = Status_Ok;
 }
 
 PendingTransactionImpl::~PendingTransactionImpl()
 {
 
-}
-
-int PendingTransactionImpl::status() const
-{
-    return m_status;
-}
-
-std::string PendingTransactionImpl::errorString() const
-{
-    return m_errorString;
 }
 
 std::vector<std::string> PendingTransactionImpl::txid() const
@@ -75,26 +65,26 @@ std::vector<std::string> PendingTransactionImpl::txid() const
     return txid;
 }
 
-bool PendingTransactionImpl::commit(const fs::path& filename, bool overwrite, bool blink)
+bool PendingTransactionImpl::commit(std::string_view filename_, bool overwrite, bool blink)
 {
 
     LOG_PRINT_L3("m_pending_tx size: " << m_pending_tx.size());
+
+    auto filename = fs::u8path(filename_);
 
     try {
       // Save tx to file
       if (!filename.empty()) {
         if (std::error_code ec_ignore; fs::exists(filename, ec_ignore) && !overwrite){
-          m_errorString = std::string(tr("Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:")) + filename.u8string();
-          m_status = Status_Error;
-          LOG_ERROR(m_errorString);
+          m_status = {Status_Error, tr("Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:") + filename.u8string()};
+          LOG_ERROR(m_status.second);
           return false;
         }
         bool r = m_wallet.m_wallet->save_tx(m_pending_tx, filename);
         if (!r) {
-          m_errorString = tr("Failed to write transaction(s) to file");
-          m_status = Status_Error;
+          m_status = {Status_Error, tr("Failed to write transaction(s) to file")};
         } else {
-          m_status = Status_Ok;
+          m_status = {Status_Ok, ""};
         }
       }
       // Commit tx
@@ -130,31 +120,24 @@ bool PendingTransactionImpl::commit(const fs::path& filename, bool overwrite, bo
         } // TODO: extract method;
       }
     } catch (const tools::error::daemon_busy&) {
-        // TODO: make it translatable with "tr"?
-        m_errorString = tr("daemon is busy. Please try again later.");
-        m_status = Status_Error;
+        m_status = {Status_Error, tr("daemon is busy. Please try again later.")};
     } catch (const tools::error::no_connection_to_daemon&) {
-        m_errorString = tr("no connection to daemon. Please make sure daemon is running.");
-        m_status = Status_Error;
+        m_status = {Status_Error, tr("no connection to daemon. Please make sure daemon is running.")};
     } catch (const tools::error::tx_rejected& e) {
-        std::ostringstream writer(m_errorString);
-        writer << (boost::format(tr("transaction %s was rejected by daemon with status: ")) % get_transaction_hash(e.tx())) <<  e.status();
-        std::string reason = e.reason();
-        m_status = Status_Error;
-        m_errorString = writer.str();
-        if (!reason.empty())
-          m_errorString  += std::string(tr(". Reason: ")) + reason;
+        m_status.first = Status_Error;
+        m_status.second += (boost::format(tr("transaction %s was rejected by daemon with status: ")) % get_transaction_hash(e.tx())).str();
+        m_status.second += e.status();
+        if (auto& reason = e.reason(); !reason.empty())
+            m_status.second += tr(". Reason: ") + reason;
     } catch (const std::exception &e) {
-        m_errorString = std::string(tr("Unknown exception: ")) + e.what();
-        m_status = Status_Error;
+        m_status = {Status_Error, std::string(tr("Unknown exception: ")) + e.what()};
     } catch (...) {
-        m_errorString = tr("Unhandled exception");
-        LOG_ERROR(m_errorString);
-        m_status = Status_Error;
+        m_status = {Status_Error, tr("Unhandled exception")};
+        LOG_ERROR(m_status.second);
     }
 
     m_wallet.startRefresh();
-    return m_status == Status_Ok;
+    return good();
 }
 
 uint64_t PendingTransactionImpl::amount() const
@@ -220,8 +203,7 @@ std::string PendingTransactionImpl::multisigSignData() {
 
         return lokimq::to_hex(cipher);
     } catch (const std::exception& e) {
-        m_status = Status_Error;
-        m_errorString = std::string(tr("Couldn't multisig sign data: ")) + e.what();
+        m_status = {Status_Error, std::string(tr("Couldn't multisig sign data: ")) + e.what()};
     }
 
     return std::string();
@@ -242,8 +224,7 @@ void PendingTransactionImpl::signMultisigTx() {
         std::swap(m_pending_tx, txSet.m_ptx);
         std::swap(m_signers, txSet.m_signers);
     } catch (const std::exception& e) {
-        m_status = Status_Error;
-        m_errorString = std::string(tr("Couldn't sign multisig transaction: ")) + e.what();
+        m_status = {Status_Error, std::string(tr("Couldn't sign multisig transaction: ")) + e.what()};
     }
 }
 
