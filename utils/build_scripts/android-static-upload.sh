@@ -29,11 +29,11 @@ cp src/wallet/api/wallet2_api.h $tmpdir
 
 for android_abi in "$@"; do
     mkdir -p $tmpdir/${android_abi}
-    cp -v build-${android_abi}/src/wallet/api/libwallet_api.a $tmpdir/${android_abi}
+    ln -s ../../build-${android_abi}/src/wallet/api/libwallet_merged.a $tmpdir/${android_abi}/libwallet_api.a
 done
 
 filename=android-deps-${DRONE_COMMIT}.tar.xz
-tar cJvf $filename $tmpdir
+XZ_OPT="--threads=6" tar --dereference -cJvf $filename $tmpdir
 
 # sftp doesn't have any equivalent to mkdir -p, so we have to split the above up into a chain of
 # -mkdir a/, -mkdir a/b/, -mkdir a/b/c/, ... commands.  The leading `-` allows the command to fail
