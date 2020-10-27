@@ -279,7 +279,7 @@ namespace tools {
   fs::path get_default_data_dir()
   {
     char* home = std::getenv("HOME");
-    return fs::u8path(home && std::strlen(home) ? home : "/") / fs::u8path("." CRYPTONOTE_NAME);
+    return (home && std::strlen(home) ? fs::u8path(home) : fs::current_path()) / fs::u8path("." CRYPTONOTE_NAME);
   }
 #endif
 
