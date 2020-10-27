@@ -435,21 +435,14 @@ WalletImpl::WalletImpl(NetworkType nettype, uint64_t kdf_rounds)
     m_longPollThread = std::thread([this]() {
       for (;;)
       {
-        if (!m_refreshEnabled)
-        {
-          std::this_thread::sleep_for(std::chrono::seconds(10));
-          continue;
-        }
-
-        try
-        {
-          if (m_wallet->long_poll_pool_state())
+        if (m_wallet->m_long_poll_disabled)
+          return true;
+        try {
+          if (m_refreshEnabled && m_wallet->long_poll_pool_state())
             m_refreshCV.notify_one();
-        }
-        catch (...)
-        {
-          // Ignore
-        }
+        } catch (...) { /* ignore */ }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
       }
     });
 }
@@ -465,6 +458,10 @@ WalletImpl::~WalletImpl()
     close(false); // do not store wallet as part of the closing activities
     // Stop refresh thread
     stopRefresh();
+
+    m_wallet->cancel_long_poll();
+    if (m_longPollThread.joinable())
+      m_longPollThread.join();
 
     if (m_wallet2Callback->getListener()) {
       m_wallet2Callback->getListener()->onSetWallet(nullptr);
