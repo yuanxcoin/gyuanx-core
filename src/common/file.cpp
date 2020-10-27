@@ -278,8 +278,8 @@ namespace tools {
   // Non-windows: ~/.CRYPTONOTE_NAME
   fs::path get_default_data_dir()
   {
-    std::string_view home{getenv("HOME")};
-    return fs::u8path(!home.empty() ? home : "/"sv) / fs::u8path("." CRYPTONOTE_NAME);
+    char* home = std::getenv("HOME");
+    return fs::u8path(home && std::strlen(home) ? home : "/") / fs::u8path("." CRYPTONOTE_NAME);
   }
 #endif
 
