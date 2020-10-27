@@ -128,14 +128,14 @@ local static_check_and_upload = [
 local static_build_deps='autoconf automake make qttools5-dev file libtool gperf pkg-config patch openssh-client';
 
 
-local android_build_steps(android_abi, android_platform=21, jobs=6) = [
+local android_build_steps(android_abi, android_platform=21, jobs=6, cmake_extra='') = [
     'mkdir build-' + android_abi,
     'cd build-' + android_abi,
     'cmake .. -DCMAKE_CXX_FLAGS=-fdiagnostics-color=always -DCMAKE_C_FLAGS=-fdiagnostics-color=always ' +
         '-DCMAKE_BUILD_TYPE=Release ' +
         '-DCMAKE_TOOLCHAIN_FILE=/usr/lib/android-sdk/ndk-bundle/build/cmake/android.toolchain.cmake ' +
         '-DANDROID_PLATFORM=' + android_platform + ' -DANDROID_ABI=' + android_abi + ' ' +
-        '-DBUILD_STATIC_DEPS=ON -DSTATIC=ON -G Ninja',
+        '-DBUILD_STATIC_DEPS=ON -DSTATIC=ON -G Ninja ' + cmake_extra,
     'ninja -j' + jobs + ' -v wallet_merged',
     'cd ..',
 ];
@@ -190,10 +190,10 @@ local android_build_steps(android_abi, android_platform=21, jobs=6) = [
                     'if [ -d /cache ]; then if ! [ -d /cache/google-android-ndk-installer ]; then mkdir /cache/google-android-ndk-installer; fi; ln -s /cache/google-android-ndk-installer /var/cache/; fi',
                     'eatmydata ' + apt_get_quiet + ' install -y --no-install-recommends cmake g++ git ninja-build ccache tar xz-utils google-android-ndk-installer ' + static_build_deps,
                     ]
-                    + android_build_steps('armeabi-v7a')
-                    + android_build_steps('arm64-v8a')
-                    + android_build_steps('x86_64')
-                    + android_build_steps('x86')
+                    + android_build_steps('armeabi-v7a', cmake_extra='-DARCH=armv7-a -DARCH_ID=arm32')
+                    + android_build_steps('arm64-v8a', cmake_extra='-DARCH=armv8-a -DARCH_ID=arm64')
+                    + android_build_steps('x86_64', cmake_extra='-DARCH="x86-64 -msse4.2 -mpopcnt" -DARCH_ID=x86-64')
+                    + android_build_steps('x86', cmake_extra='-DARCH="i686 -mssse3 -mfpmath=sse" -DARCH_ID=i386')
                     + [
                     './utils/build_scripts/android-static-upload.sh armeabi-v7a arm64-v8a x86_64 x86'
                 ]
