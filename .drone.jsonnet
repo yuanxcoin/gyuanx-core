@@ -6,10 +6,11 @@ local default_deps='g++ ' + default_deps_base; // g++ sometimes needs replacemen
 
 local gtest_filter='-AddressFromURL.Failure:DNSResolver.DNSSEC*';
 
+local submodules_commands = ['git fetch --tags', 'git submodule update --init --recursive --depth=1'];
 local submodules = {
     name: 'submodules',
     image: 'drone/git',
-    commands: ['git fetch --tags', 'git submodule update --init --recursive --depth=1']
+    commands: submodules_commands
 };
 
 local apt_get_quiet = 'apt-get -o=Dpkg::Use-Pty=0 -q';
@@ -89,10 +90,7 @@ local mac_builder(name,
     name: name,
     platform: { os: 'darwin', arch: 'amd64' },
     steps: [
-        {
-            name: 'submodules',
-            commands: ['git fetch --tags', 'git submodule update --init --recursive']
-        },
+        { name: 'submodules', commands: submodules_commands },
         {
             name: 'build',
             environment: { SSH_KEY: { from_secret: "SSH_KEY" }, GTEST_FILTER: gtest_filter },
