@@ -146,7 +146,7 @@ if(Protobuf_FOUND AND USE_DEVICE_TREZOR AND TREZOR_PYTHON AND Protobuf_COMPILE_T
             message(STATUS "Trezor compatible LibUSB found")
         endif()
 
-        if (BUILD_GUI_DEPS)
+        if (ANDROID)
 
             if (Protobuf_LIBRARY)
                 list(APPEND TREZOR_DEP_LIBS ${Protobuf_LIBRARY})

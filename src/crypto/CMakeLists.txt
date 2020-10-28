@@ -94,8 +94,6 @@ endif()
 # So this code runs with a 1 MB default stack size. 
 # This will force the use of the heap for the allocation of the scratchpad
 if (ANDROID OR IOS)
-  if( BUILD_GUI_DEPS )
-    target_compile_definitions(cncrypto PUBLIC FORCE_USE_HEAP=1)
-  endif()
+  target_compile_definitions(cncrypto PUBLIC FORCE_USE_HEAP=1)
 endif()
 

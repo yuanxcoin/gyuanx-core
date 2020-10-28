@@ -746,7 +746,7 @@ else()
 
   endif(ARM)
 
-  if(ANDROID AND NOT BUILD_GUI_DEPS STREQUAL "ON" OR IOS)
+  if(ANDROID OR IOS)
     #From Android 5: "only position independent executables (PIE) are supported" 
     message(STATUS "Enabling PIE executable")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIE")
@@ -948,9 +948,6 @@ if(BUILD_DOCUMENTATION)
       COMMENT "Generating API documentation with Doxygen.." VERBATIM)
   endif()
 endif()
-
-# when ON - will install libwallet_merged into "lib"
-option(BUILD_GUI_DEPS "Build GUI dependencies." OFF)
 
 find_package(PythonInterp)
 find_program(iwyu_tool_path NAMES iwyu_tool.py iwyu_tool)
