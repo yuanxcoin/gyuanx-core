@@ -34,7 +34,7 @@
 # others.
 
 set(DEFAULT_WITH_MINIUPNPC ON)
-if(ANDROID)
+if(ANDROID OR IOS)
   set(DEFAULT_WITH_MINIUPNPC OFF)
 endif()
 
