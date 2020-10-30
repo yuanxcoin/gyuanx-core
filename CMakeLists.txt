@@ -34,10 +34,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(INSERT CMAKE_MODULE_PATH 0
   "${CMAKE_SOURCE_DIR}/cmake")
 
-if (IOS)
-    INCLUDE(CmakeLists_IOS.txt)
-endif()
-
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
   foreach(lang C CXX)
