@@ -134,12 +134,4 @@ if (STATIC AND BUILD_STATIC_DEPS)
     install(TARGETS wallet_merged
         ARCHIVE DESTINATION ${lib_folder}
         EXCLUDE_FROM_ALL)
-
-    install(FILES ${TREZOR_DEP_LIBS}
-            DESTINATION ${lib_folder})
-    file(WRITE "trezor_link_flags.txt" ${TREZOR_DEP_LINKER})
-    install(FILES "trezor_link_flags.txt"
-            DESTINATION ${lib_folder}
-            EXCLUDE_FROM_ALL)
 endif()
-
