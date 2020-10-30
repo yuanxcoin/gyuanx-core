@@ -57,7 +57,6 @@ target_link_libraries(cncrypto
   PUBLIC
     epee
     randomx
-    Boost::system
     Boost::thread
     sodium
   PRIVATE

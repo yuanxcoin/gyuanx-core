@@ -39,7 +39,7 @@
 
 #include <string.h>
 #include <stdint.h>
-#include <memwipe.h>
+#include "epee/memwipe.h"
 #include "blake256.h"
 
 #define U8TO32(p) \

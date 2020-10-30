@@ -1,4 +1,4 @@
-local default_deps_base='libsystemd-dev libboost-filesystem-dev libboost-thread-dev libboost-date-time-dev libgtest-dev ' +
+local default_deps_base='libsystemd-dev libboost-thread-dev libgtest-dev ' +
     'libboost-serialization-dev libboost-program-options-dev libunbound-dev nettle-dev libevent-dev libminiupnpc-dev ' +
     'libunwind8-dev libsodium-dev libssl-dev libreadline-dev libhidapi-dev libusb-1.0-0-dev libprotobuf-dev protobuf-compiler python3 ' +
     'pkg-config libsqlite3-dev qttools5-dev libcurl4-openssl-dev';
@@ -131,17 +131,17 @@ local static_build_deps='autoconf automake make qttools5-dev file libtool gperf 
 
 [
     // Various debian builds
-    debian_pipeline("Debian (w/ tests) (amd64)", "debian:testing", lto=true, run_tests=true),
-    debian_pipeline("Debian Debug (amd64)", "debian:testing", build_type='Debug'),
-    debian_pipeline("Debian clang-10 (amd64)", "debian:testing", deps='clang-10 '+default_deps_base,
-                    cmake_extra='-DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 ', lto=true),
+    debian_pipeline("Debian (w/ tests) (amd64)", "debian:sid", lto=true, run_tests=true),
+    debian_pipeline("Debian Debug (amd64)", "debian:sid", build_type='Debug'),
+    debian_pipeline("Debian clang-11 (amd64)", "debian:sid", deps='clang-11 '+default_deps_base,
+                    cmake_extra='-DCMAKE_C_COMPILER=clang-11 -DCMAKE_CXX_COMPILER=clang++-11 ', lto=true),
     debian_pipeline("Debian gcc-10 (amd64)", "debian:testing", deps='g++-10 '+default_deps_base,
                     cmake_extra='-DCMAKE_C_COMPILER=gcc-10 -DCMAKE_CXX_COMPILER=g++-10 -DBUILD_DEBUG_UTILS=ON'),
     debian_pipeline("Debian buster (i386)", "i386/debian:buster", cmake_extra='-DDOWNLOAD_SODIUM=ON -DARCH_ID=i386'),
     debian_pipeline("Ubuntu focal (amd64)", "ubuntu:focal"),
 
     // ARM builds (ARM64 and armhf)
-    debian_pipeline("Debian (ARM64)", "debian:testing", arch="arm64", build_tests=false),
+    debian_pipeline("Debian (ARM64)", "debian:sid", arch="arm64", build_tests=false),
     debian_pipeline("Debian buster (armhf)", "arm32v7/debian:buster", arch="arm64", build_tests=false, cmake_extra='-DDOWNLOAD_SODIUM=ON -DARCH_ID=armhf'),
 
     // Static build (on bionic) which gets uploaded to builds.lokinet.dev:

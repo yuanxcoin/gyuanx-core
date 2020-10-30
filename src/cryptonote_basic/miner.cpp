@@ -31,17 +31,17 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <numeric>
-#include "lokimq/base64.h"
-#include "misc_language.h"
+#include <lokimq/base64.h>
+#include "epee/misc_language.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "misc_os_dependent.h"
-#include "file_io_utils.h"
+#include "epee/misc_os_dependent.h"
 #include "common/command_line.h"
 #include "common/util.h"
+#include "common/file.h"
 #include "common/string_util.h"
-#include "string_coding.h"
-#include "string_tools.h"
-#include "storages/portable_storage_template_helper.h"
+#include "epee/string_coding.h"
+#include "epee/string_tools.h"
+#include "epee/storages/portable_storage_template_helper.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "miner"
@@ -245,7 +245,7 @@ namespace cryptonote
     if(command_line::has_arg(vm, arg_extra_messages))
     {
       std::string buff;
-      bool r = epee::file_io_utils::load_file_to_string(command_line::get_arg(vm, arg_extra_messages), buff);
+      bool r = tools::slurp_file(fs::u8path(command_line::get_arg(vm, arg_extra_messages)), buff);
       CHECK_AND_ASSERT_MES(r, false, "Failed to load file with extra messages: " << command_line::get_arg(vm, arg_extra_messages));
       auto extra_vec = tools::split_any(buff, "\n"sv, true);
       m_extra_messages.resize(extra_vec.size());
@@ -264,10 +264,16 @@ namespace cryptonote
         if(buff != "0")
           m_extra_messages[i] = buff;
       }
-      m_config_folder_path = boost::filesystem::path(command_line::get_arg(vm, arg_extra_messages)).parent_path().string();
+      m_config_dir = fs::u8path(command_line::get_arg(vm, arg_extra_messages)).parent_path();
       m_config = {};
-      const std::string filename = m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME;
-      CHECK_AND_ASSERT_MES(epee::serialization::load_t_from_json_file(m_config, filename), false, "Failed to load data from " << filename);
+      fs::path filename = m_config_dir / MINER_CONFIG_FILE_NAME;
+      if (std::string contents;
+          !tools::slurp_file(filename, contents) ||
+          !epee::serialization::load_t_from_json(m_config, contents))
+      {
+        MERROR("Failed to load data from " << filename);
+        return false;
+      }
       MINFO("Loaded " << m_extra_messages.size() << " extra messages, current index " << m_config.current_extra_message_index);
     }
 
@@ -493,14 +499,11 @@ namespace cryptonote
         MGINFO_GREEN("Found block " << get_block_hash(b) << " at height " << height << " for difficulty: " << local_diff);
         cryptonote::block_verification_context bvc;
         if(!m_phandler->handle_block_found(b, bvc) || !bvc.m_added_to_main_chain)
-        {
           --m_config.current_extra_message_index;
-        }else
-        {
+        else if (!m_config_dir.empty())
           //success update, lets update config
-          if (!m_config_folder_path.empty())
-            epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
-        }
+          if (std::string json; epee::serialization::store_t_to_json(m_config, json))
+            tools::dump_file(m_config_dir / fs::u8path(MINER_CONFIG_FILE_NAME), json);
       }
 
       nonce+=m_threads_total;

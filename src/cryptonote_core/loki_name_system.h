@@ -3,8 +3,9 @@
 
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
-#include "span.h"
+#include "epee/span.h"
 #include "cryptonote_basic/tx_extra.h"
+#include "common/fs.h"
 #include <lokimq/hex.h>
 
 #include <cassert>
@@ -130,7 +131,7 @@ constexpr bool mapping_type_allowed(uint8_t hf_version, mapping_type type) {
 // relevant within a LNS buy tx).
 std::vector<mapping_type> all_mapping_types(uint8_t hf_version);
 
-sqlite3 *init_loki_name_system(char const *file_path, bool read_only);
+sqlite3 *init_loki_name_system(const fs::path& file_path, bool read_only);
 
 /// Returns the integer value used in the database and in RPC lookup calls for the given mapping
 /// type.  In particularly this maps all mapping_type::lokinet_Xyears values to the underlying value

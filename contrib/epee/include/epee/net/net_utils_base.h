@@ -34,11 +34,11 @@
 #include <boost/asio/ip/address_v6.hpp>
 #include <typeinfo>
 #include <type_traits>
-#include "shared_sv.h"
+#include "../shared_sv.h"
 #include "enums.h"
-#include "misc_log_ex.h"
-#include "serialization/keyvalue_serialization.h"
-#include "int-util.h"
+#include "../misc_log_ex.h"
+#include "../serialization/keyvalue_serialization.h"
+#include "../int-util.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net"

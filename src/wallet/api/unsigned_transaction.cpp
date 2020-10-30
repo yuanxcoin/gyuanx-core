@@ -40,9 +40,7 @@
 #include <sstream>
 #include <boost/format.hpp>
 
-using namespace std;
-
-namespace Monero {
+namespace Wallet {
 
 UnsignedTransaction::~UnsignedTransaction() {}
 
@@ -63,7 +61,7 @@ int UnsignedTransactionImpl::status() const
     return m_status;
 }
 
-string UnsignedTransactionImpl::errorString() const
+std::string UnsignedTransactionImpl::errorString() const
 {
     return m_errorString;
 }
@@ -89,7 +87,7 @@ bool UnsignedTransactionImpl::sign(const std::string &signedFileName)
   }
   catch (const std::exception &e)
   {
-    m_errorString = string(tr("Failed to sign transaction")) + e.what();
+    m_errorString = std::string(tr("Failed to sign transaction")) + e.what();
     m_status = Status_Error;
     return false;
   }
@@ -122,14 +120,14 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
         {
           if (!payment_id_string.empty())
             payment_id_string += ", ";
-          payment_id_string = std::string("encrypted payment ID ") + epee::string_tools::pod_to_hex(payment_id8);
+          payment_id_string = std::string("encrypted payment ID ") + tools::type_to_hex(payment_id8);
           has_encrypted_payment_id = true;
         }
         else if (cryptonote::get_payment_id_from_tx_extra_nonce(extra_nonce.nonce, payment_id))
         {
           if (!payment_id_string.empty())
             payment_id_string += ", ";
-          payment_id_string = std::string("unencrypted payment ID ") + epee::string_tools::pod_to_hex(payment_id);
+          payment_id_string = std::string("unencrypted payment ID ") + tools::type_to_hex(payment_id);
         }
       }
     }
@@ -148,7 +146,7 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
       if (has_encrypted_payment_id && !entry.is_subaddress)
       {
         address = get_account_integrated_address_as_str(m_wallet.m_wallet->nettype(), entry.addr, payment_id8);
-        address += std::string(" (" + standard_address + " with encrypted payment id " + epee::string_tools::pod_to_hex(payment_id8) + ")");
+        address += std::string(" (" + standard_address + " with encrypted payment id " + tools::type_to_hex(payment_id8) + ")");
       }
       else
         address = standard_address;
@@ -261,7 +259,7 @@ uint64_t UnsignedTransactionImpl::txCount() const
 
 std::vector<std::string> UnsignedTransactionImpl::paymentId() const 
 {
-    std::vector<string> result;
+    std::vector<std::string> result;
     for (const auto &utx: m_unsigned_tx_set.txes) {     
         crypto::hash payment_id = crypto::null_hash;
         cryptonote::tx_extra_nonce extra_nonce;
@@ -281,7 +279,7 @@ std::vector<std::string> UnsignedTransactionImpl::paymentId() const
           }      
         }
         if(payment_id != crypto::null_hash)
-            result.push_back(epee::string_tools::pod_to_hex(payment_id));
+            result.push_back(tools::type_to_hex(payment_id));
         else
             result.push_back("");
     }
@@ -291,7 +289,7 @@ std::vector<std::string> UnsignedTransactionImpl::paymentId() const
 std::vector<std::string> UnsignedTransactionImpl::recipientAddress() const 
 {
     // TODO: return integrated address if short payment ID exists
-    std::vector<string> result;
+    std::vector<std::string> result;
     for (const auto &utx: m_unsigned_tx_set.txes) {
         if (utx.dests.empty()) {
           MERROR("empty destinations, skipped");
@@ -316,6 +314,3 @@ uint64_t UnsignedTransactionImpl::minMixinCount() const
 }
 
 } // namespace
-
-namespace Bitmonero = Monero;
-

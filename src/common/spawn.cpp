@@ -36,7 +36,7 @@
 #include <signal.h>
 #endif
 
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "util.h"
 #include "spawn.h"
 #include "loki.h"
@@ -70,7 +70,7 @@ static void closefrom(int fd)
 #endif
 
 
-int spawn(const char *filename, const std::vector<std::string>& args, bool wait)
+int spawn(const fs::path& filename, const std::vector<std::string>& args, bool wait)
 {
 #ifdef _WIN32
   std::string joined = tools::join(" ", args);
@@ -78,12 +78,15 @@ int spawn(const char *filename, const std::vector<std::string>& args, bool wait)
   STARTUPINFOA si = {};
   si.cb = sizeof(si);
   PROCESS_INFORMATION pi;
-  if (!CreateProcessA(filename, commandLine, nullptr, nullptr, false, 0, nullptr, nullptr, &si, &pi))
+  // This .string() is wrong for non-ascii paths, but if we switch to CreateProcessW and use
+  // .c_str() directly our commandLine argument will not be accepted (because it then has to be a
+  // wchar_t* but out input is utf-8).  Shame on you for this garbage API, Windows.
+  if (!CreateProcessA(filename.string().c_str(), commandLine, nullptr, nullptr, false, 0, nullptr, nullptr, &si, &pi))
   {
     MERROR("CreateProcess failed. Error code " << GetLastError());
     return -1;
   }
-  
+
   LOKI_DEFER {
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
@@ -129,7 +132,7 @@ int spawn(const char *filename, const std::vector<std::string>& args, bool wait)
     tools::closefrom(3);
     close(0);
     char *envp[] = {NULL};
-    execve(filename, argv.data(), envp);
+    execve(filename.c_str(), argv.data(), envp);
     MERROR("Failed to execve: " << strerror(errno));
     return -1;
   }

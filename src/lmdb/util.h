@@ -32,7 +32,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "span.h"
+#include "epee/span.h"
 
 /*! Calculates types and offset of struct field. Use in template arguments for
     `table::get_value`, `value_iterator::get_value`,

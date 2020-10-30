@@ -38,8 +38,8 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
-#include "misc_log_ex.h"
-#include "fnv1.h"
+#include "epee/misc_log_ex.h"
+#include "epee/fnv1.h"
 
 /*!
  * \namespace Language

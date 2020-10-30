@@ -31,7 +31,7 @@
 #include "common/loki.h"
 #include <string>
 #include <cstdint>
-#include "serialization/keyvalue_serialization.h"
+#include "epee/serialization/keyvalue_serialization.h"
 
 namespace wallet {
 

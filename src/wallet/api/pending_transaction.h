@@ -28,14 +28,14 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include "wallet/api/wallet2_api.h"
-#include "wallet/wallet2.h"
+#include "wallet2_api.h"
+#include "../wallet2.h"
 
 #include <string>
 #include <vector>
 
 
-namespace Monero {
+namespace Wallet {
 
 class WalletImpl;
 class PendingTransactionImpl : public PendingTransaction
@@ -45,7 +45,7 @@ public:
     ~PendingTransactionImpl();
     int status() const override;
     std::string errorString() const override;
-    bool commit(const std::string &filename = "", bool overwrite = false, bool blink = false) override;
+    bool commit(const fs::path& filename = "", bool overwrite = false, bool blink = false) override;
     uint64_t amount() const override;
     uint64_t dust() const override;
     uint64_t fee() const override;
@@ -71,7 +71,4 @@ private:
     std::vector<crypto::key_image> m_key_images;
 };
 
-
 }
-
-namespace Bitmonero = Monero;

@@ -49,7 +49,6 @@ add_library(common
   spawn.cpp
   string_util.cpp
   threadpool.cpp
-  timings.cc
   util.cpp
   ${PROJECT_BINARY_DIR}/translations/translation_files.cpp
   )
@@ -73,6 +72,7 @@ target_link_libraries(common
   PUBLIC
     cncrypto
     lokimq::lokimq
+    filesystem
   PRIVATE
     libunbound
     OpenSSL::SSL

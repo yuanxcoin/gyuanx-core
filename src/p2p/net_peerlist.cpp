@@ -36,11 +36,11 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/portable_binary_oarchive.hpp>
 #include <boost/archive/portable_binary_iarchive.hpp>
-#include <boost/filesystem/operations.hpp>
 #include <boost/range/join.hpp>
 #include <boost/serialization/version.hpp>
 
 #include "net_peerlist_boost_serialization.h"
+#include "common/fs.h"
 
 
 namespace nodetool
@@ -188,10 +188,9 @@ namespace nodetool
     return std::nullopt;
   }
 
-  std::optional<peerlist_storage> peerlist_storage::open(const std::string& path)
+  std::optional<peerlist_storage> peerlist_storage::open(const fs::path& path)
   {
-    std::ifstream src_file{};
-    src_file.open( path , std::ios_base::binary | std::ios_base::in);
+    fs::ifstream src_file{path, std::ios::binary};
     if(src_file.fail())
       return std::nullopt;
 
@@ -199,9 +198,11 @@ namespace nodetool
     if (!out)
     {
       // if failed, try reading in unportable mode
-      boost::filesystem::copy_file(path, path + ".unportable", boost::filesystem::copy_option::overwrite_if_exists);
+      auto unportable = path;
+      unportable += ".unportable";
+      fs::copy_file(path, unportable, fs::copy_options::overwrite_existing);
       src_file.close();
-      src_file.open( path , std::ios_base::binary | std::ios_base::in);
+      src_file.open(path, std::ios_base::binary);
       if(src_file.fail())
         return std::nullopt;
 
@@ -237,10 +238,9 @@ namespace nodetool
     return false;
   }
 
-  bool peerlist_storage::store(const std::string& path, const peerlist_types& other) const
+  bool peerlist_storage::store(const fs::path& path, const peerlist_types& other) const
   {
-    std::ofstream dest_file{};
-    dest_file.open( path , std::ios_base::binary | std::ios_base::out| std::ios::trunc);
+    fs::ofstream dest_file{path, std::ios::binary | std::ios::trunc};
     if(dest_file.fail())
       return false;
 

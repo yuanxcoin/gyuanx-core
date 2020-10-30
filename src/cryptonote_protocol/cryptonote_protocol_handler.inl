@@ -46,8 +46,8 @@
 #include "cryptonote_basic/verification_context.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_core/tx_pool.h"
-#include "profile_tools.h"
-#include "net/network_throttle-detail.hpp"
+#include "epee/profile_tools.h"
+#include "epee/net/network_throttle-detail.hpp"
 #include "common/pruning.h"
 #include "common/random.h"
 #include "common/lock.h"
@@ -319,7 +319,7 @@ namespace cryptonote
       cnx.current_download = cntxt.m_current_speed_down / 1024;
       cnx.current_upload = cntxt.m_current_speed_up / 1024;
 
-      cnx.connection_id = epee::string_tools::pod_to_hex(cntxt.m_connection_id);
+      cnx.connection_id = tools::type_to_hex(cntxt.m_connection_id);
 
       cnx.height = cntxt.m_remote_blockchain_height;
       cnx.pruning_seed = cntxt.m_pruning_seed;
@@ -578,7 +578,7 @@ namespace cryptonote
           LOG_ERROR_CCONTEXT
           (
             "NOTIFY_NEW_FLUFFY_BLOCK -> request/response mismatch, " 
-            << "block = " << epee::string_tools::pod_to_hex(get_blob_hash(arg.b.block))
+            << "block = " << tools::type_to_hex(get_blob_hash(arg.b.block))
             << ", requested = " << context.m_requested_objects.size() 
             << ", received = " << new_block.tx_hashes.size()
             << ", dropping connection"
@@ -690,7 +690,7 @@ namespace cryptonote
           LOG_ERROR_CCONTEXT
           (
             "sent wrong tx: failed to parse and validate transaction: "
-            << epee::string_tools::buff_to_hex_nodelimer(tx_blob) 
+            << lokimq::to_hex(tx_blob) 
             << ", dropping connection"
           );
             
@@ -832,7 +832,7 @@ namespace cryptonote
       LOG_ERROR_CCONTEXT
       (
         "sent wrong block: failed to parse and validate block: "
-        << epee::string_tools::buff_to_hex_nodelimer(arg.b.block) 
+        << lokimq::to_hex(arg.b.block) 
         << ", dropping connection"
       );
         
@@ -1220,7 +1220,7 @@ namespace cryptonote
       if(!parse_and_validate_block_from_blob(block_entry.block, b, block_hash))
       {
         LOG_ERROR_CCONTEXT("sent wrong block: failed to parse and validate block: "
-          << epee::string_tools::buff_to_hex_nodelimer(block_entry.block) << ", dropping connection");
+          << lokimq::to_hex(block_entry.block) << ", dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
         return 1;
@@ -1228,7 +1228,7 @@ namespace cryptonote
       if (b.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(b.miner_tx.vin.front()))
       {
         LOG_ERROR_CCONTEXT("sent wrong block: block: miner tx does not have exactly one txin_gen input"
-          << epee::string_tools::buff_to_hex_nodelimer(block_entry.block) << ", dropping connection");
+          << lokimq::to_hex(block_entry.block) << ", dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
         return 1;
@@ -1239,7 +1239,7 @@ namespace cryptonote
       auto req_it = context.m_requested_objects.find(block_hash);
       if(req_it == context.m_requested_objects.end())
       {
-        LOG_ERROR_CCONTEXT("sent wrong NOTIFY_RESPONSE_GET_BLOCKS: block with id=" << epee::string_tools::pod_to_hex(get_blob_hash(block_entry.block))
+        LOG_ERROR_CCONTEXT("sent wrong NOTIFY_RESPONSE_GET_BLOCKS: block with id=" << tools::type_to_hex(get_blob_hash(block_entry.block))
           << " wasn't requested, dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
@@ -1247,7 +1247,7 @@ namespace cryptonote
       }
       if(b.tx_hashes.size() != block_entry.txs.size())
       {
-        LOG_ERROR_CCONTEXT("sent wrong NOTIFY_RESPONSE_GET_BLOCKS: block with id=" << epee::string_tools::pod_to_hex(get_blob_hash(block_entry.block))
+        LOG_ERROR_CCONTEXT("sent wrong NOTIFY_RESPONSE_GET_BLOCKS: block with id=" << tools::type_to_hex(get_blob_hash(block_entry.block))
           << ", tx_hashes.size()=" << b.tx_hashes.size() << " mismatch with block_complete_entry.m_txs.size()=" << block_entry.txs.size() << ", dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
@@ -1511,7 +1511,7 @@ namespace cryptonote
                     cryptonote::transaction tx;
                     parse_and_validate_tx_from_blob(block_entry.txs[i], tx); // must succeed if we got here
                     LOG_ERROR_CCONTEXT("transaction verification failed on NOTIFY_RESPONSE_GET_BLOCKS, tx_id = "
-                        << epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(tx)) << ", dropping connection");
+                        << tools::type_to_hex(cryptonote::get_transaction_hash(tx)) << ", dropping connection");
                     drop_connection(context, false, true);
                     return 1;
                   }))

@@ -32,7 +32,6 @@
 #include <string>
 #include <mutex>
 #include <type_traits>
-#include "include_base_utils.h"
 #include "rpc/http_client.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 

@@ -30,8 +30,8 @@
 // Paper references are to https://eprint.iacr.org/2017/1066 (revision 1 July 2018)
 
 #include <stdlib.h>
-#include "misc_log_ex.h"
-#include "span.h"
+#include "epee/misc_log_ex.h"
+#include "epee/span.h"
 #include "common/perf_timer.h"
 #include "common/varint.h"
 #include "cryptonote_config.h"

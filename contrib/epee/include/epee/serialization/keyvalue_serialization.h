@@ -26,8 +26,7 @@
 
 #pragma once
 
-#include "misc_log_ex.h"
-#include "enableable.h"
+#include "../misc_log_ex.h"
 #include "keyvalue_serialization_overloads.h"
 #include "../storages/portable_storage.h"
 

@@ -40,7 +40,7 @@
 #include <string>
 #include <list>
 
-namespace Monero {
+namespace Wallet {
 
 TransactionHistory::~TransactionHistory() {}
 
@@ -251,5 +251,3 @@ void TransactionHistoryImpl::refresh()
 }
 
 } // namespace
-
-namespace Bitmonero = Monero;

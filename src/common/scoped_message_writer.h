@@ -28,8 +28,8 @@
 
 #pragma once
 
-#include "misc_log_ex.h"
-#include "readline_suspend.h"
+#include "epee/misc_log_ex.h"
+#include "epee/readline_suspend.h"
 #include <iostream>
 
 #include "common/loki_integration_test_hooks.h"

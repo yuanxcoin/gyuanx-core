@@ -1,7 +1,7 @@
 #pragma once
 #include <lokimq/hex.h>
 #include <type_traits>
-#include "span.h" // epee
+#include "epee/span.h" // epee
 
 namespace tools {
   // Reads a hex string directly into a trivially copyable type T without performing any temporary

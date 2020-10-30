@@ -29,8 +29,8 @@
 #pragma once
 
 #include <vector>
-#include "misc_log_ex.h"
-#include "span.h"
+#include "../misc_log_ex.h"
+#include "../span.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net.buffer"

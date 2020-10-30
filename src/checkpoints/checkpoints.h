@@ -31,11 +31,12 @@
 #pragma once
 #include <vector>
 
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "crypto/hash.h"
 #include "cryptonote_config.h"
 #include "cryptonote_core/service_node_voting.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
+#include "common/fs.h"
 
 #define ADD_CHECKPOINT(h, hash)  CHECK_AND_ASSERT(add_checkpoint(h,  hash), false);
 #define JSON_HASH_FILE_NAME "checkpoints.json"
@@ -100,7 +101,7 @@ namespace cryptonote
   };
 
   crypto::hash get_newest_hardcoded_checkpoint(cryptonote::network_type nettype, uint64_t *height);
-  bool         load_checkpoints_from_json     (const std::string &json_hashfile_fullpath, std::vector<height_to_hash> &checkpoint_hashes);
+  bool         load_checkpoints_from_json     (const fs::path& json_hashfile_fullpath, std::vector<height_to_hash>& checkpoint_hashes);
 
   /**
    * @brief A container for blockchain checkpoints

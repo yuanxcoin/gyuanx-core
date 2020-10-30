@@ -29,18 +29,17 @@
 
 #include "cryptonote_core/service_node_rules.h"
 #include "checkpoints/checkpoints.h"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "blockchain_db.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "profile_tools.h"
+#include "epee/profile_tools.h"
 #include "ringct/rctOps.h"
+#include "common/hex.h"
 
 #include "lmdb/db_lmdb.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "blockchain.db"
-
-using epee::string_tools::pod_to_hex;
 
 namespace cryptonote
 {
@@ -307,7 +306,7 @@ transaction BlockchainDB::get_tx(const crypto::hash& h) const
 {
   transaction tx;
   if (!get_tx(h, tx))
-    throw TX_DNE(std::string("tx with hash ").append(epee::string_tools::pod_to_hex(h)).append(" not found in db").c_str());
+    throw TX_DNE("tx with hash " + tools::type_to_hex(h) + " not found in db");
   return tx;
 }
 
@@ -321,7 +320,7 @@ transaction BlockchainDB::get_pruned_tx(const crypto::hash& h) const
 {
   transaction tx;
   if (!get_pruned_tx(h, tx))
-    throw TX_DNE(std::string("pruned tx with hash ").append(epee::string_tools::pod_to_hex(h)).append(" not found in db").c_str());
+    throw TX_DNE("pruned tx with hash " + tools::type_to_hex(h) + " not found in db");
   return tx;
 }
 
@@ -399,7 +398,7 @@ uint64_t BlockchainDB::get_tx_block_height(const crypto::hash &h) const
   auto result = get_tx_block_heights({{h}}).front();
   if (result == std::numeric_limits<uint64_t>::max())
   {
-    std::string err = "tx_data_t with hash " + epee::string_tools::pod_to_hex(h) + " not found in db";
+    std::string err = "tx_data_t with hash " + tools::type_to_hex(h) + " not found in db";
     LOG_PRINT_L1(err);
     throw TX_DNE(std::move(err));
   }
@@ -411,7 +410,7 @@ bool BlockchainDB::get_alt_block_header(const crypto::hash &blkid, alt_block_dat
   cryptonote::blobdata blob;
   if (!get_alt_block(blkid, data, &blob, checkpoint))
   {
-    throw BLOCK_DNE("Alt-block with hash "s.append(epee::string_tools::pod_to_hex(blkid)).append(" not found in db").c_str());
+    throw BLOCK_DNE("Alt-block with hash " + tools::type_to_hex(blkid) + " not found in db");
     return false;
   }
 

@@ -39,7 +39,7 @@
 #include <utility>
 
 #include "net/fwd.h"
-#include "span.h"
+#include "epee/span.h"
 
 namespace epee
 {

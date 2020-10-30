@@ -34,7 +34,7 @@
 #include "version.h"
 #include "common/loki.h"
 #include "common/util.h"
-#include "net/local_ip.h"
+#include "epee/net/local_ip.h"
 #include <boost/endian/conversion.hpp>
 
 #include "common/loki_integration_test_hooks.h"

@@ -28,7 +28,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "log.hpp"
 
 namespace hw {

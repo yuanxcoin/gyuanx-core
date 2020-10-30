@@ -50,7 +50,7 @@
 
 #include <boost/asio.hpp>
 
-#include "shared_sv.h"
+#include "../shared_sv.h"
 
 namespace epee
 {

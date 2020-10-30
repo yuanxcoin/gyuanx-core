@@ -33,6 +33,7 @@
 #include <device_trezor/device_trezor.hpp>
 #include <wallet/api/wallet2_api.h>
 #include "daemon.h"
+#include "common/fs.h"
 #include "../core_tests/chaingen.h"
 #include "../core_tests/wallet_tools.h"
 
@@ -321,5 +322,5 @@ public:
   bool generate(std::vector<test_event_entry>& events) override;
 
 protected:
-  boost::filesystem::path m_wallet_dir;
+  fs::path m_wallet_dir;
 };

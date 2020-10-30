@@ -34,7 +34,6 @@ target_link_libraries(net_load_tests_clt
     cryptonote_core
     epee
     gtest
-    Boost::date_time
     Boost::thread
     extra)
 
@@ -46,7 +45,6 @@ target_link_libraries(net_load_tests_srv
     cryptonote_core
     epee
     gtest
-    Boost::date_time
     extra)
 
 set_property(TARGET net_load_tests_clt net_load_tests_srv

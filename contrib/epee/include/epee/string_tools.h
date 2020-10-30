@@ -42,6 +42,7 @@
 #include <type_traits>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/predicate.hpp>
+#include <lokimq/hex.h>
 #include "storages/parserse_base_utils.h"
 #include "hex.h"
 #include "mlocker.h"
@@ -60,11 +61,6 @@ using namespace std::literals;
 
 namespace string_tools
 {
-  //----------------------------------------------------------------------------
-  inline std::string buff_to_hex_nodelimer(const std::string& src)
-  {
-    return to_hex::string(to_byte_span(to_span(src)));
-  }
   //----------------------------------------------------------------------------
   inline bool parse_hexstr_to_binbuff(const epee::span<const char> s, epee::span<char>& res)
   {
@@ -129,21 +125,6 @@ DISABLE_GCC_WARNING(maybe-uninitialized)
   }
 POP_WARNINGS
 	//----------------------------------------------------------------------------
-	template<class XType>
-	inline bool xtype_to_string(const  XType& val, std::string& str)
-	{
-		try
-		{
-			str = boost::lexical_cast<std::string>(val);
-		}
-		catch(...)
-		{
-			return false;
-		}
-
-		return true;
-	}
-	//----------------------------------------------------------------------------
 	std::string get_ip_string_from_int32(uint32_t ip);
 	//----------------------------------------------------------------------------
 	bool get_ip_int32_from_string(uint32_t& ip, const std::string& ip_str);
@@ -176,14 +157,6 @@ POP_WARNINGS
     return true;
   }
 
-	inline std::string num_to_string_fast(int64_t val)
-	{
-		/*
-		char  buff[30] = {0};
-		i64toa_s(val, buff, sizeof(buff)-1, 10);
-		return buff;*/
-		return boost::lexical_cast<std::string>(val);
-	}
 	//----------------------------------------------------------------------------
 	template<typename T>
 	inline std::string to_string_hex(const T &val)
@@ -246,37 +219,33 @@ POP_WARNINGS
 
 	}
 
-	//----------------------------------------------------------------------------
-	inline bool trim_left(std::string& str)
-	{
-		for(std::string::iterator it = str.begin(); it!= str.end() && isspace(static_cast<unsigned char>(*it));)
-			str.erase(str.begin());
-			
-		return true;
-	}
-	//----------------------------------------------------------------------------
-	inline bool trim_right(std::string& str)
-	{
-
-		for(std::string::reverse_iterator it = str.rbegin(); it!= str.rend() && isspace(static_cast<unsigned char>(*it));)
-			str.erase( --((it++).base()));
-
-		return true;
-	}
-	//----------------------------------------------------------------------------
-	inline std::string& trim(std::string& str)
-	{
-
-		trim_left(str);
-		trim_right(str);
-		return str;
-	}
+  //----------------------------------------------------------------------------
+  inline std::string& trim_left(std::string& str)
+  {
+      auto it = str.begin();
+      while (it != str.end() && std::isspace(static_cast<unsigned char>(*it)))
+          it++;
+      if (it != str.begin())
+          str.erase(str.begin(), it);
+      return str;
+  }
+  //----------------------------------------------------------------------------
+  inline std::string& trim_right(std::string& str)
+  {
+      while (!str.empty() && std::isspace(static_cast<unsigned char>(str.back())))
+          str.pop_back();
+      return str;
+  }
+  //----------------------------------------------------------------------------
+  inline std::string& trim(std::string& str)
+  {
+    return trim_left(trim_right(str));
+  }
   //----------------------------------------------------------------------------
   inline std::string trim(const std::string& str_)
   {
     std::string str = str_;
-    trim_left(str);
-    trim_right(str);
+    trim(str);
     return str;
   }
   //----------------------------------------------------------------------------
@@ -291,94 +260,6 @@ POP_WARNINGS
     }
     return s;
   }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  std::string pod_to_hex(const t_pod_type& s)
-  {
-    static_assert(std::is_standard_layout<t_pod_type>(), "expected standard layout type");
-    return to_hex::string(as_byte_span(s));
-  }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  bool hex_to_pod(const std::string& hex_str, t_pod_type& s)
-  {
-    static_assert(std::is_pod<t_pod_type>::value, "expected pod type");
-    if(sizeof(s)*2 != hex_str.size())
-      return false;
-    epee::span<char> rspan((char*)&s, sizeof(s));
-    return parse_hexstr_to_binbuff(epee::to_span(hex_str), rspan);
-  }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  bool hex_to_pod(const std::string& hex_str, tools::scrubbed<t_pod_type>& s)
-  {
-    return hex_to_pod(hex_str, unwrap(s));
-  }
-  //----------------------------------------------------------------------------
-  template<class t_pod_type>
-  bool hex_to_pod(const std::string& hex_str, epee::mlocked<t_pod_type>& s)
-  {
-    return hex_to_pod(hex_str, unwrap(s));
-  }
-  //----------------------------------------------------------------------------
-  bool validate_hex(uint64_t length, const std::string& str);
-  //----------------------------------------------------------------------------
-	inline std::string get_extension(const std::string& str)
-	{
-		std::string res;
-		std::string::size_type pos = str.rfind('.');
-		if(std::string::npos == pos)
-			return res;
-		
-		res = str.substr(pos+1, str.size()-pos);
-		return res;
-	}
-	//----------------------------------------------------------------------------
-	inline std::string cut_off_extension(const std::string& str)
-	{
-		std::string res;
-		std::string::size_type pos = str.rfind('.');
-		if(std::string::npos == pos)
-			return str;
-
-		res = str.substr(0, pos);
-		return res;
-	}
-  //----------------------------------------------------------------------------
-#ifdef _WIN32
-  inline std::wstring utf8_to_utf16(const std::string& str)
-  {
-    if (str.empty())
-      return {};
-    int wstr_size = MultiByteToWideChar(CP_UTF8, 0, &str[0], str.size(), NULL, 0);
-    if (wstr_size == 0)
-    {
-      throw std::runtime_error(std::error_code(GetLastError(), std::system_category()).message());
-    }
-    std::wstring wstr(wstr_size, wchar_t{});
-    if (!MultiByteToWideChar(CP_UTF8, 0, &str[0], str.size(), &wstr[0], wstr_size))
-    {
-      throw std::runtime_error(std::error_code(GetLastError(), std::system_category()).message());
-    }
-    return wstr;
-  }
-  inline std::string utf16_to_utf8(const std::wstring& wstr)
-  {
-    if (wstr.empty())
-      return {};
-    int str_size = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], wstr.size(), NULL, 0, NULL, NULL);
-    if (str_size == 0)
-    {
-      throw std::runtime_error(std::error_code(GetLastError(), std::system_category()).message());
-    }
-    std::string str(str_size, char{});
-    if (!WideCharToMultiByte(CP_UTF8, 0, &wstr[0], wstr.size(), &str[0], str_size, NULL, NULL))
-    {
-      throw std::runtime_error(std::error_code(GetLastError(), std::system_category()).message());
-    }
-    return str;
-  }
-#endif
 }
 }
 #endif //_STRING_TOOLS_H_

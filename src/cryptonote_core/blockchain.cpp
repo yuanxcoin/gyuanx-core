@@ -31,12 +31,10 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <boost/filesystem.hpp>
 #include <boost/endian/conversion.hpp>
 
 #include "common/rules.h"
 #include "common/hex.h"
-#include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "ringct/rctTypes.h"
@@ -46,13 +44,12 @@
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_config.h"
 #include "cryptonote_basic/miner.h"
-#include "misc_language.h"
-#include "profile_tools.h"
-#include "file_io_utils.h"
-#include "int-util.h"
+#include "epee/misc_language.h"
+#include "epee/profile_tools.h"
+#include "epee/int-util.h"
 #include "common/threadpool.h"
 #include "common/boost_serialization_helper.h"
-#include "warnings.h"
+#include "epee/warnings.h"
 #include "crypto/hash.h"
 #include "cryptonote_core.h"
 #include "ringct/rctSigs.h"
@@ -88,7 +85,6 @@ using namespace crypto;
  */
 
 using namespace cryptonote;
-using epee::string_tools::pod_to_hex;
 
 DISABLE_VS_WARNINGS(4267)
 
@@ -1173,7 +1169,7 @@ bool Blockchain::switch_to_alternative_blockchain(const std::list<block_extended
   std::shared_ptr<tools::Notify> block_notify = m_block_notify;
   if (block_notify)
     for (const auto &bei: alt_chain)
-      block_notify->notify("%s", epee::string_tools::pod_to_hex(get_block_hash(bei.bl)).c_str(), NULL);
+      block_notify->notify("%s", tools::type_to_hex(get_block_hash(bei.bl)).c_str(), NULL);
 
   MGINFO_GREEN("REORGANIZE SUCCESS! on height: " << split_height << ", new blockchain size: " << m_db->height());
   return true;
@@ -1958,7 +1954,7 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
         cryptonote::transaction tx;
         if (!cryptonote::parse_and_validate_tx_base_from_blob(blob, tx))
         {
-          MERROR_VER("Block with id: " << epee::string_tools::pod_to_hex(id) << " (as alternative) refers to unparsable transaction hash " << txid << ".");
+          MERROR_VER("Block with id: " << tools::type_to_hex(id) << " (as alternative) refers to unparsable transaction hash " << txid << ".");
           bvc.m_verifivation_failed = true;
           return false;
         }
@@ -3206,7 +3202,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
   }
   else
   {
-    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + boost::lexical_cast<std::string>(rv.type));
+    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + std::to_string(rv.type));
   }
 
   // II
@@ -3239,7 +3235,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
   }
   else
   {
-    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + boost::lexical_cast<std::string>(rv.type));
+    CHECK_AND_ASSERT_MES(false, false, "Unsupported rct tx type: " + std::to_string(rv.type));
   }
 
   // outPk was already done by handle_incoming_tx
@@ -3327,7 +3323,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
 
         if(have_tx_keyimg_as_spent(in_to_key.k_image))
         {
-          MERROR_VER("Key image already spent in blockchain: " << epee::string_tools::pod_to_hex(in_to_key.k_image));
+          MERROR_VER("Key image already spent in blockchain: " << tools::type_to_hex(in_to_key.k_image));
           if (key_image_conflicts)
             key_image_conflicts->insert(in_to_key.k_image);
           else
@@ -3361,7 +3357,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         {
           if (in_to_key.k_image == entry.key_image) // Check if key image is on the blacklist
           {
-            MERROR_VER("Key image: " << epee::string_tools::pod_to_hex(entry.key_image) << " is blacklisted by the service node network");
+            MERROR_VER("Key image: " << tools::type_to_hex(entry.key_image) << " is blacklisted by the service node network");
             tvc.m_key_image_blacklisted = true;
             return false;
           }
@@ -3370,7 +3366,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         uint64_t unlock_height = 0;
         if (m_service_node_list.is_key_image_locked(in_to_key.k_image, &unlock_height))
         {
-          MERROR_VER("Key image: " << epee::string_tools::pod_to_hex(in_to_key.k_image) << " is locked in a stake until height: " << unlock_height);
+          MERROR_VER("Key image: " << tools::type_to_hex(in_to_key.k_image) << " is locked in a stake until height: " << unlock_height);
           tvc.m_key_image_locked_by_snode = true;
           return false;
         }
@@ -3627,7 +3623,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
       uint64_t unlock_height = 0;
       if (!m_service_node_list.is_key_image_locked(unlock.key_image, &unlock_height, &contribution))
       {
-        MERROR_VER("Requested key image: " << epee::string_tools::pod_to_hex(unlock.key_image) << " to unlock is not locked");
+        MERROR_VER("Requested key image: " << tools::type_to_hex(unlock.key_image) << " to unlock is not locked");
         tvc.m_invalid_input = true;
         return false;
       }
@@ -4524,7 +4520,7 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   {
     std::shared_ptr<tools::Notify> block_notify = m_block_notify;
     if (block_notify)
-      block_notify->notify("%s", epee::string_tools::pod_to_hex(id).c_str(), NULL);
+      block_notify->notify("%s", tools::type_to_hex(id).c_str(), NULL);
   }
 
   return true;
@@ -4696,7 +4692,7 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc,
 // returns false if any of the checkpoints loading returns false.
 // That should happen only if a checkpoint is added that conflicts
 // with an existing checkpoint.
-bool Blockchain::update_checkpoints_from_json_file(const std::string& file_path)
+bool Blockchain::update_checkpoints_from_json_file(const fs::path& file_path)
 {
   std::vector<height_to_hash> checkpoint_hashes;
   if (!cryptonote::load_checkpoints_from_json(file_path, checkpoint_hashes))

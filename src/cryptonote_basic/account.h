@@ -32,7 +32,7 @@
 
 #include "cryptonote_basic.h"
 #include "crypto/crypto.h"
-#include "serialization/keyvalue_serialization.h"
+#include "epee/serialization/keyvalue_serialization.h"
 
 namespace cryptonote
 {
@@ -93,9 +93,6 @@ namespace cryptonote
 
     uint64_t get_createtime() const { return m_creation_timestamp; }
     void set_createtime(uint64_t val) { m_creation_timestamp = val; }
-
-    bool load(const std::string& file_path);
-    bool store(const std::string& file_path);
 
     void forget_spend_key();
     const std::vector<crypto::secret_key> &get_multisig_keys() const { return m_keys.m_multisig_keys; }

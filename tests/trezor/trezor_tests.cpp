@@ -28,12 +28,11 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include "include_base_utils.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
-#include "misc_language.h"
-#include "string_tools.h"
+#include "epee/misc_language.h"
+#include "epee/string_tools.h"
 
 using namespace cryptonote;
 
@@ -329,7 +328,7 @@ static void setup_chain(cryptonote::core * core, gen_trezor_base & trezor_base, 
 {
   std::vector<test_event_entry> events;
   const bool do_serialize = !chain_path.empty();
-  const bool chain_file_exists = do_serialize && boost::filesystem::exists(chain_path);
+  const bool chain_file_exists = do_serialize && fs::exists(chain_path);
   bool loaded = false;
   bool generated = false;
 
@@ -687,7 +686,7 @@ void gen_trezor_base::init_fields()
   DEFAULT_HARDFORKS(m_hard_forks);
 
   crypto::secret_key master_seed{};
-  CHECK_AND_ASSERT_THROW_MES(epee::string_tools::hex_to_pod(m_master_seed_str, master_seed), "Hexdecode fails");
+  CHECK_AND_ASSERT_THROW_MES(tools::hex_to_type(m_master_seed_str, master_seed), "Hexdecode fails");
 
   m_alice_account.generate(master_seed, true);
   m_alice_account.set_createtime(m_wallet_ts);
@@ -1832,17 +1831,17 @@ bool gen_trezor_many_utxo::generate(std::vector<test_event_entry>& events)
 
 void wallet_api_tests::init()
 {
-  m_wallet_dir = boost::filesystem::unique_path();
-  boost::filesystem::create_directories(m_wallet_dir);
+  m_wallet_dir = fs::unique_path();
+  fs::create_directories(m_wallet_dir);
 }
 
 wallet_api_tests::~wallet_api_tests()
 {
   try
   {
-    if (!m_wallet_dir.empty() && boost::filesystem::exists(m_wallet_dir))
+    if (!m_wallet_dir.empty() && fs::exists(m_wallet_dir))
     {
-      boost::filesystem::remove_all(m_wallet_dir);
+      fs::remove_all(m_wallet_dir);
     }
   }
   catch(...)

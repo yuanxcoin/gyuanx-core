@@ -28,9 +28,9 @@
 
 #pragma once
 
-#include <boost/filesystem/path.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include "common/fs.h"
 
 namespace daemonizer
 {
@@ -39,9 +39,9 @@ namespace daemonizer
     , boost::program_options::options_description & normal_options
     );
 
-  boost::filesystem::path get_default_data_dir();
+  fs::path get_default_data_dir();
 
-  boost::filesystem::path get_relative_path_base(
+  fs::path get_relative_path_base(
       boost::program_options::variables_map const & vm
     );
 

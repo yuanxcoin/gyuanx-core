@@ -154,7 +154,7 @@
 #include <type_traits>
 #include <stdexcept>
 #include "base.h"
-#include "span.h" // for detecting epee-wrapped byte spannable objects
+#include "epee/span.h" // for detecting epee-wrapped byte spannable objects
 
 namespace serialization {
 

@@ -41,9 +41,7 @@
 #include <sstream>
 #include <boost/format.hpp>
 
-using namespace std;
-
-namespace Monero {
+namespace Wallet {
 
 PendingTransaction::~PendingTransaction() {}
 
@@ -64,7 +62,7 @@ int PendingTransactionImpl::status() const
     return m_status;
 }
 
-string PendingTransactionImpl::errorString() const
+std::string PendingTransactionImpl::errorString() const
 {
     return m_errorString;
 }
@@ -73,11 +71,11 @@ std::vector<std::string> PendingTransactionImpl::txid() const
 {
     std::vector<std::string> txid;
     for (const auto &pt: m_pending_tx)
-        txid.push_back(epee::string_tools::pod_to_hex(cryptonote::get_transaction_hash(pt.tx)));
+        txid.push_back(tools::type_to_hex(cryptonote::get_transaction_hash(pt.tx)));
     return txid;
 }
 
-bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite, bool blink)
+bool PendingTransactionImpl::commit(const fs::path& filename, bool overwrite, bool blink)
 {
 
     LOG_PRINT_L3("m_pending_tx size: " << m_pending_tx.size());
@@ -85,10 +83,8 @@ bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite,
     try {
       // Save tx to file
       if (!filename.empty()) {
-        boost::system::error_code ignore;
-        bool tx_file_exists = boost::filesystem::exists(filename, ignore);
-        if(tx_file_exists && !overwrite){
-          m_errorString = string(tr("Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:")) + filename;
+        if (std::error_code ec_ignore; fs::exists(filename, ec_ignore) && !overwrite){
+          m_errorString = std::string(tr("Attempting to save transaction to file, but specified file(s) exist. Exiting to not risk overwriting. File:")) + filename.u8string();
           m_status = Status_Error;
           LOG_ERROR(m_errorString);
           return false;
@@ -105,7 +101,7 @@ bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite,
       else {
         auto multisigState = m_wallet.multisig();
         if (multisigState.isMultisig && m_signers.size() < multisigState.threshold) {
-            throw runtime_error("Not enough signers to send multisig transaction");
+            throw std::runtime_error("Not enough signers to send multisig transaction");
         }
 
         m_wallet.pauseRefresh();
@@ -122,7 +118,7 @@ bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite,
           m_wallet.m_wallet->cold_tx_aux_import(m_pending_tx, m_tx_device_aux);
           bool r = m_wallet.m_wallet->import_key_images(m_key_images, 0, selected_transfers);
           if (!r){
-            throw runtime_error("Cold sign transaction submit failed - key image sync fail");
+            throw std::runtime_error("Cold sign transaction submit failed - key image sync fail");
           }
         }
 
@@ -147,9 +143,9 @@ bool PendingTransactionImpl::commit(const std::string &filename, bool overwrite,
         m_status = Status_Error;
         m_errorString = writer.str();
         if (!reason.empty())
-          m_errorString  += string(tr(". Reason: ")) + reason;
+          m_errorString  += std::string(tr(". Reason: ")) + reason;
     } catch (const std::exception &e) {
-        m_errorString = string(tr("Unknown exception: ")) + e.what();
+        m_errorString = std::string(tr("Unknown exception: ")) + e.what();
         m_status = Status_Error;
     } catch (...) {
         m_errorString = tr("Unhandled exception");
@@ -222,7 +218,7 @@ std::string PendingTransactionImpl::multisigSignData() {
         txSet.m_signers = m_signers;
         auto cipher = m_wallet.m_wallet->save_multisig_tx(txSet);
 
-        return epee::string_tools::buff_to_hex_nodelimer(cipher);
+        return lokimq::to_hex(cipher);
     } catch (const std::exception& e) {
         m_status = Status_Error;
         m_errorString = std::string(tr("Couldn't multisig sign data: ")) + e.what();
@@ -263,6 +259,3 @@ std::vector<std::string> PendingTransactionImpl::signersKeys() const {
 }
 
 }
-
-namespace Bitmonero = Monero;
-

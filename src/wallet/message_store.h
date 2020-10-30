@@ -42,6 +42,7 @@
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "common/i18n.h"
 #include "common/command_line.h"
+#include "common/fs.h"
 #include "message_transporter.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
@@ -195,7 +196,7 @@ namespace mms
     bool has_multisig_partial_key_images;
     uint32_t multisig_rounds_passed;
     size_t num_transfer_details;
-    std::string mms_file;
+    fs::path mms_file;
   };
 
   class message_store
@@ -279,8 +280,8 @@ namespace mms
     bool check_for_messages(const multisig_wallet_state &state, std::vector<message> &messages);
     void stop() { m_run.store(false, std::memory_order_relaxed); m_transporter.stop(); }
 
-    void write_to_file(const multisig_wallet_state &state, const std::string &filename);
-    void read_from_file(const multisig_wallet_state &state, const std::string &filename);
+    void write_to_file(const multisig_wallet_state &state, const fs::path &filename);
+    void read_from_file(const multisig_wallet_state &state, const fs::path &filename);
 
     template <class t_archive>
     inline void serialize(t_archive &a, const unsigned int ver)
@@ -312,7 +313,7 @@ namespace mms
     std::vector<authorized_signer> m_signers;
     std::vector<message> m_messages;
     uint32_t m_next_message_id;
-    std::string m_filename;
+    fs::path m_filename;
     message_transporter m_transporter;
     std::atomic<bool> m_run;
 

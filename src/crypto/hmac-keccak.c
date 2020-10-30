@@ -27,7 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "hmac-keccak.h"
-#include "memwipe.h"
+#include "epee/memwipe.h"
 
 #define KECCAK_BLOCKLEN 136
 #define HASH_SIZE 32
