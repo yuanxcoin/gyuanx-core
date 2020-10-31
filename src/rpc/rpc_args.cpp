@@ -45,9 +45,8 @@ namespace cryptonote
      , rpc_use_ipv6({"rpc-use-ipv6", rpc_args::tr("Allow IPv6 for RPC"), false})
      , rpc_ignore_ipv4({"rpc-ignore-ipv4", rpc_args::tr("Ignore unsuccessful IPv4 bind for RPC"), false})
      , rpc_login({"rpc-login", rpc_args::tr("Specify username[:password] required for RPC server"), "", true})
-     , confirm_external_bind({"confirm-external-bind", rpc_args::tr("Confirm rpc-bind-ip value is NOT a loopback (local) IP")})
+     , confirm_external_bind({"confirm-external-bind", rpc_args::tr("Confirm rpc bind IP value is NOT a loopback (local) IP")})
      , rpc_access_control_origins({"rpc-access-control-origins", rpc_args::tr("Specify a comma separated list of origins to allow cross origin resource sharing"), ""})
-     , rpc_public_node({"public-node", rpc_args::tr("Allow other users to use the node as a remote (restricted RPC mode, view-only commands) and advertise it over P2P"), false})
      , zmq_rpc_bind_ip({"zmq-rpc-bind-ip", rpc_args::tr("Deprecated option, ignored."), ""})
      , zmq_rpc_bind_port({"zmq-rpc-bind-port", rpc_args::tr("Deprecated option, ignored."), ""})
   {}
@@ -90,20 +89,22 @@ namespace cryptonote
   {
     const descriptors arg{};
     rpc_args config{};
-    
-    config.bind_ip = command_line::get_arg(vm, arg.rpc_bind_ip);
-    config.bind_ipv6_address = command_line::get_arg(vm, arg.rpc_bind_ipv6_address);
+
+    if (!command_line::is_arg_defaulted(vm, arg.rpc_bind_ip)) {
+      config.bind_ip = command_line::get_arg(vm, arg.rpc_bind_ip);
+      check_ip(*config.bind_ip, command_line::get_arg(vm, arg.confirm_external_bind), arg.rpc_bind_ip.name);
+    }
+    if (!command_line::is_arg_defaulted(vm, arg.rpc_bind_ipv6_address))
+      config.bind_ipv6_address = command_line::get_arg(vm, arg.rpc_bind_ipv6_address);
     config.use_ipv6 = command_line::get_arg(vm, arg.rpc_use_ipv6);
     config.require_ipv4 = !command_line::get_arg(vm, arg.rpc_ignore_ipv4);
-    if (!config.bind_ip.empty())
-      check_ip(config.bind_ip, command_line::get_arg(vm, arg.confirm_external_bind), arg.rpc_bind_ip.name);
-
-    if (!config.bind_ipv6_address.empty())
+    if (config.bind_ipv6_address && !config.bind_ipv6_address->empty())
     {
       // allow square braces, but remove them here if present
-      if (config.bind_ipv6_address.find('[') != std::string::npos && config.bind_ipv6_address.rfind(']') != std::string::npos)
-        config.bind_ipv6_address = config.bind_ipv6_address.substr(1, config.bind_ipv6_address.size() - 2);
-      check_ip(config.bind_ipv6_address, command_line::get_arg(vm, arg.confirm_external_bind), arg.rpc_bind_ipv6_address.name);
+      auto& ipv6 = *config.bind_ipv6_address;
+      if (ipv6.size() > 2 && ipv6.front() == '[' && ipv6.back() == ']')
+        ipv6 = ipv6.substr(1, ipv6.size() - 2);
+      check_ip(ipv6, command_line::get_arg(vm, arg.confirm_external_bind), arg.rpc_bind_ipv6_address.name);
     }
 
     auto verify = [](bool verify) { return tools::password_container::prompt(verify, "RPC server password"); };

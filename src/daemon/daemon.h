@@ -72,7 +72,7 @@ private:
   std::unique_ptr<protocol_handler> protocol;
   std::unique_ptr<node_server> p2p;
   std::unique_ptr<cryptonote::rpc::core_rpc_server> rpc;
-  std::list<std::pair<std::string, cryptonote::rpc::http_server>> http_rpcs;
+  std::optional<cryptonote::rpc::http_server> http_rpc_admin, http_rpc_public;
   std::unique_ptr<cryptonote::rpc::lmq_rpc> lmq_rpc;
 };
 
