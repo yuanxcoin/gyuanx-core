@@ -53,29 +53,20 @@ class WalletImpl : public Wallet
 public:
     WalletImpl(NetworkType nettype = MAINNET, uint64_t kdf_rounds = 1);
     ~WalletImpl();
-    bool create(const fs::path& path, const std::string &password,
+    bool create(const std::string_view path, const std::string &password,
                 const std::string &language);
-    bool createWatchOnly(const fs::path& path, const std::string &password,
+    bool createWatchOnly(std::string_view path, const std::string &password,
                             const std::string &language) const override;
-    bool open(const fs::path& path, const std::string &password);
-    bool recover(const fs::path& path,const std::string &password,
+    bool open(std::string_view path, const std::string &password);
+    bool recover(std::string_view path,const std::string &password,
                             const std::string &seed, const std::string &seed_offset = {});
-    bool recoverFromKeysWithPassword(const fs::path& path,
+    bool recoverFromKeysWithPassword(std::string_view path,
                             const std::string &password,
                             const std::string &language,
                             const std::string &address_string,
                             const std::string &viewkey_string,
                             const std::string &spendkey_string = "");
-    // following two methods are deprecated since they create passwordless wallets
-    // use the two equivalent methods above
-    bool recover(const fs::path& path, const std::string &seed);
-    // deprecated: use recoverFromKeysWithPassword() instead
-    bool recoverFromKeys(const fs::path& path,
-                            const std::string &language,
-                            const std::string &address_string, 
-                            const std::string &viewkey_string,
-                            const std::string &spendkey_string = "");
-    bool recoverFromDevice(const fs::path& path,
+    bool recoverFromDevice(std::string_view path,
                            const std::string &password,
                            const std::string &device_name);
     Device getDeviceType() const override;
@@ -83,10 +74,8 @@ public:
     std::string seed() const override;
     std::string getSeedLanguage() const override;
     void setSeedLanguage(const std::string &arg) override;
-    // void setListener(Listener *) {}
-    int status() const override;
-    std::string errorString() const override;
-    void statusWithErrorString(int& status, std::string& errorString) const override;
+    bool good() const override;
+    std::pair<int, std::string> status() const override;
     bool setPassword(const std::string &password) override;
     bool setDevicePin(const std::string &password) override;
     bool setDevicePassphrase(const std::string &password) override;
@@ -97,10 +86,10 @@ public:
     std::string secretSpendKey() const override;
     std::string publicSpendKey() const override;
     std::string publicMultisigSignerKey() const override;
-    fs::path path() const override;
-    bool store(const fs::path& path) override;
-    fs::path filename() const override;
-    fs::path keysFilename() const override;
+    std::string path() const override;
+    bool store(std::string_view path) override;
+    std::string filename() const override;
+    std::string keysFilename() const override;
     bool init(const std::string &daemon_address, uint64_t upper_transaction_size_limit = 0, const std::string &daemon_username = "", const std::string &daemon_password = "", bool use_ssl = false, bool lightWallet = false) override;
     bool connectToDaemon() override;
     ConnectionStatus connected() const override;
@@ -160,11 +149,11 @@ public:
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
                                         std::set<uint32_t> subaddr_indices = {}) override;
-    virtual PendingTransaction* createSweepUnmixableTransaction() override;
-    bool submitTransaction(const fs::path& fileName) override;
-    virtual UnsignedTransaction* loadUnsignedTx(const fs::path& unsigned_filename) override;
-    bool exportKeyImages(const fs::path& filename) override;
-    bool importKeyImages(const fs::path& filename) override;
+    PendingTransaction* createSweepUnmixableTransaction() override;
+    bool submitTransaction(std::string_view filename) override;
+    UnsignedTransaction* loadUnsignedTx(std::string_view unsigned_filename) override;
+    bool exportKeyImages(std::string_view filename) override;
+    bool importKeyImages(std::string_view filename) override;
 
     void disposeTransaction(PendingTransaction * t) override;
     // TODO(loki): Implement
@@ -213,9 +202,9 @@ public:
 
 private:
     void clearStatus() const;
-    void setStatusError(const std::string& message) const;
-    void setStatusCritical(const std::string& message) const;
-    void setStatus(int status, const std::string& message) const;
+    bool setStatusError(std::string message) const;
+    bool setStatusCritical(std::string message) const;
+    bool setStatus(int status, std::string message) const;
     void refreshThreadFunc();
     void doRefresh();
     bool daemonSynced() const;
@@ -235,8 +224,7 @@ private:
 
     std::unique_ptr<tools::wallet2> m_wallet;
     mutable std::mutex m_statusMutex;
-    mutable int m_status;
-    mutable std::string m_errorString;
+    mutable std::pair<int, std::string> m_status;
     std::string m_password;
     std::unique_ptr<TransactionHistoryImpl> m_history;
     std::unique_ptr<Wallet2CallbackImpl> m_wallet2Callback;

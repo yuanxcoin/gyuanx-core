@@ -43,9 +43,9 @@ class PendingTransactionImpl : public PendingTransaction
 public:
     PendingTransactionImpl(WalletImpl &wallet);
     ~PendingTransactionImpl();
-    int status() const override;
-    std::string errorString() const override;
-    bool commit(const fs::path& filename = "", bool overwrite = false, bool blink = false) override;
+    std::pair<int, std::string> status() const override { return m_status; }
+    bool good() const override { return m_status.first == Status_Ok; }
+    bool commit(std::string_view filename = "", bool overwrite = false, bool blink = false) override;
     uint64_t amount() const override;
     uint64_t dust() const override;
     uint64_t fee() const override;
@@ -63,8 +63,7 @@ private:
     friend class WalletImpl;
     WalletImpl &m_wallet;
 
-    int  m_status;
-    std::string m_errorString;
+    std::pair<int, std::string> m_status;
     std::vector<tools::wallet2::pending_tx> m_pending_tx;
     std::unordered_set<crypto::public_key> m_signers;
     std::vector<std::string> m_tx_device_aux;

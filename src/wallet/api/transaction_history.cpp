@@ -74,7 +74,7 @@ TransactionInfo *TransactionHistoryImpl::transaction(int index) const
     return index_ < m_history.size() ? m_history[index_] : nullptr;
 }
 
-TransactionInfo *TransactionHistoryImpl::transaction(const std::string &id) const
+TransactionInfo *TransactionHistoryImpl::transaction(std::string_view id) const
 {
     std::shared_lock lock{m_historyMutex};
     auto itr = std::find_if(m_history.begin(), m_history.end(),

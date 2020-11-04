@@ -35,8 +35,8 @@ namespace Wallet {
 
 TransactionInfo::~TransactionInfo() {}
 
-TransactionInfo::Transfer::Transfer(uint64_t _amount, const std::string &_address)
-    : amount(_amount), address(_address) {}
+TransactionInfo::Transfer::Transfer(uint64_t _amount, std::string _address)
+    : amount(_amount), address(std::move(_address)) {}
 
 
 TransactionInfoImpl::TransactionInfoImpl()

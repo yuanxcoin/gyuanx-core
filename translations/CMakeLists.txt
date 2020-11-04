@@ -26,6 +26,19 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+if (ANDROID)
+  # Override the stuff (locally, inside this subdir) because we want to find the host system Qt5 to
+  # build the translation files.
+  set(CMAKE_FIND_ROOT_PATH "")
+  # This might be wrong, but cmake gives us no easy way to find this, so for now we only support
+  # doing the android builds with translations on amd64 linux
+  set(CMAKE_LIBRARY_ARCHITECTURE "x86_64-linux-gnu")
+  set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE NEVER)
+  set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
+  set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)
+  set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+  set(ANDROID_PLATFORM FALSE)
+endif()
 find_package(Qt5 QUIET COMPONENTS Core LinguistTools)
 if(NOT Qt5_FOUND OR NOT Qt5LinguistTools_FOUND)
   set(qm_files "")

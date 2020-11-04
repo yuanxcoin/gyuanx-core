@@ -32,6 +32,7 @@
 
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <list>
 #include <set>
@@ -39,7 +40,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <optional>
-#include "common/fs.h"
 
 //  Public interface for libwallet library
 namespace Wallet {
@@ -67,10 +67,13 @@ struct PendingTransaction
     };
 
     virtual ~PendingTransaction() = 0;
-    virtual int status() const = 0;
-    virtual std::string errorString() const = 0;
-    // commit transaction or save to file if filename is provided.
-    virtual bool commit(const fs::path& filename = "", bool overwrite = false, bool blink = false) = 0;
+    /// returns true if the status is currently set to Status_Ok, false otherwise.
+    /// For more details, call status() instead.
+    virtual bool good() const = 0;
+    /// returns error status code (Status_Ok, Status_Error, or Status_Critical) and error string.
+    virtual std::pair<int, std::string> status() const = 0;
+    // commit transaction or save to file if filename (utf-8) is provided.
+    virtual bool commit(std::string_view filename = "", bool overwrite = false, bool blink = false) = 0;
     virtual uint64_t amount() const = 0;
     virtual uint64_t dust() const = 0;
     virtual uint64_t fee() const = 0;
@@ -120,8 +123,11 @@ struct UnsignedTransaction
     };
 
     virtual ~UnsignedTransaction() = 0;
-    virtual int status() const = 0;
-    virtual std::string errorString() const = 0;
+    /// returns true if the status is currently set to Status_Ok, false otherwise.
+    /// For more details, call status() instead.
+    virtual bool good() const = 0;
+    /// returns error status code (Status_Ok, Status_Error, or Status_Critical) and error string.
+    virtual std::pair<int, std::string> status() const = 0;
     virtual std::vector<uint64_t> amount() const = 0;
     virtual std::vector<uint64_t>  fee() const = 0;
     virtual std::vector<uint64_t> mixin() const = 0;
@@ -137,10 +143,10 @@ struct UnsignedTransaction
     virtual uint64_t txCount() const = 0;
    /*!
     * @brief sign - Sign txs and saves to file
-    * @param signedFileName
+    * @param signedFileName - utf8 filename to write to
     * return - true on success
     */
-    virtual bool sign(const std::string &signedFileName) = 0;
+    virtual bool sign(std::string_view signedFileName) = 0;
 };
 
 /**
@@ -154,7 +160,7 @@ struct TransactionInfo
     };
 
     struct Transfer {
-        Transfer(uint64_t _amount, const std::string &address);
+        Transfer(uint64_t _amount, std::string address);
         const uint64_t amount;
         const std::string address;
     };
@@ -188,7 +194,7 @@ struct TransactionHistory
     virtual ~TransactionHistory() = 0;
     virtual int count() const = 0;
     virtual TransactionInfo * transaction(int index)  const = 0;
-    virtual TransactionInfo * transaction(const std::string &id) const = 0;
+    virtual TransactionInfo * transaction(std::string_view id) const = 0;
     virtual std::vector<TransactionInfo*> getAll() const = 0;
     virtual void refresh() = 0;
 };
@@ -198,10 +204,10 @@ struct TransactionHistory
  */
 struct AddressBookRow {
 public:
-    AddressBookRow(std::size_t _rowId, const std::string &_address, const std::string &_description):
+    AddressBookRow(std::size_t _rowId, std::string _address, std::string _description):
         m_rowId(_rowId),
-        m_address(_address),
-        m_description(_description) {}
+        m_address(std::move(_address)),
+        m_description(std::move(_description)) {}
  
 private:
     std::size_t m_rowId;
@@ -209,9 +215,9 @@ private:
     std::string m_description;
 public:
     std::string extra;
-    std::string getAddress() const {return m_address;} 
-    std::string getDescription() const {return m_description;} 
-    std::size_t getRowId() const {return m_rowId;}
+    const std::string& getAddress() const { return m_address; }
+    const std::string& getDescription() const { return m_description; } 
+    std::size_t getRowId() const { return m_rowId; }
 };
 
 /**
@@ -236,10 +242,10 @@ struct AddressBook
 
 struct SubaddressRow {
 public:
-    SubaddressRow(std::size_t _rowId, const std::string &_address, const std::string &_label):
+    SubaddressRow(std::size_t _rowId, std::string _address, std::string _label):
         m_rowId(_rowId),
-        m_address(_address),
-        m_label(_label) {}
+        m_address(std::move(_address)),
+        m_label(std::move(_label)) {}
  
 private:
     std::size_t m_rowId;
@@ -247,8 +253,8 @@ private:
     std::string m_label;
 public:
     std::string extra;
-    std::string getAddress() const {return m_address;}
-    std::string getLabel() const {return m_label;}
+    const std::string& getAddress() const {return m_address;}
+    const std::string& getLabel() const {return m_label;}
     std::size_t getRowId() const {return m_rowId;}
 };
 
@@ -263,12 +269,12 @@ struct Subaddress
 
 struct SubaddressAccountRow {
 public:
-    SubaddressAccountRow(std::size_t _rowId, const std::string &_address, const std::string &_label, const std::string &_balance, const std::string &_unlockedBalance):
+    SubaddressAccountRow(std::size_t _rowId, std::string _address, std::string _label, std::string _balance, std::string _unlockedBalance):
         m_rowId(_rowId),
-        m_address(_address),
-        m_label(_label),
-        m_balance(_balance),
-        m_unlockedBalance(_unlockedBalance) {}
+        m_address(std::move(_address)),
+        m_label(std::move(_label)),
+        m_balance(std::move(_balance)),
+        m_unlockedBalance(std::move(_unlockedBalance)) {}
 
 private:
     std::size_t m_rowId;
@@ -278,10 +284,10 @@ private:
     std::string m_unlockedBalance;
 public:
     std::string extra;
-    std::string getAddress() const {return m_address;}
-    std::string getLabel() const {return m_label;}
-    std::string getBalance() const {return m_balance;}
-    std::string getUnlockedBalance() const {return m_unlockedBalance;}
+    const std::string& getAddress() const {return m_address;}
+    const std::string& getLabel() const {return m_label;}
+    const std::string& getBalance() const {return m_balance;}
+    const std::string& getUnlockedBalance() const {return m_unlockedBalance;}
     std::size_t getRowId() const {return m_rowId;}
 };
 
@@ -423,18 +429,17 @@ struct Wallet
     virtual std::string seed() const = 0;
     virtual std::string getSeedLanguage() const = 0;
     virtual void setSeedLanguage(const std::string &arg) = 0;
-    //! returns wallet status (Status_Ok | Status_Error)
-    virtual int status() const = 0; //deprecated: use safe alternative statusWithErrorString
-    //! in case error status, returns error string
-    virtual std::string errorString() const = 0; //deprecated: use safe alternative statusWithErrorString
-    //! returns both error and error string atomically. suggested to use in instead of status() and errorString()
-    virtual void statusWithErrorString(int& status, std::string& errorString) const = 0;
+    /// returns true if the wallet status is currently set to Status_Ok, false otherwise.
+    /// For more details, call status() instead.
+    virtual bool good() const = 0;
+    /// returns error status code (Status_Ok, Status_Error, or Status_Critical) and error string.
+    virtual std::pair<int, std::string> status() const = 0;
     virtual bool setPassword(const std::string &password) = 0;
     virtual bool setDevicePin(const std::string &pin) { (void)pin; return false; };
     virtual bool setDevicePassphrase(const std::string &passphrase) { (void)passphrase; return false; };
     virtual std::string address(uint32_t accountIndex = 0, uint32_t addressIndex = 0) const = 0;
     std::string mainAddress() const { return address(0, 0); }
-    virtual fs::path path() const = 0;
+    virtual std::string path() const = 0;
     virtual NetworkType nettype() const = 0;
     bool mainnet() const { return nettype() == MAINNET; }
     bool testnet() const { return nettype() == TESTNET; }
@@ -490,17 +495,17 @@ struct Wallet
      *               to store to the same file - just pass empty string;
      * \return
      */
-    virtual bool store(const fs::path& path) = 0;
+    virtual bool store(std::string_view path) = 0;
     /*!
      * \brief filename - returns wallet filename
      * \return
      */
-    virtual fs::path filename() const = 0;
+    virtual std::string filename() const = 0;
     /*!
      * \brief keysFilename - returns keys filename. usually this formed as "wallet_filename".keys
      * \return
      */
-    virtual fs::path keysFilename() const = 0;
+    virtual std::string keysFilename() const = 0;
     /*!
      * \brief init - initializes wallet with daemon connection params.
      *               if daemon_address is local address, "trusted daemon" will be set to true forcibly
@@ -517,12 +522,12 @@ struct Wallet
 
    /*!
     * \brief createWatchOnly - Creates a watch only wallet
-    * \param path - where to store the wallet
+    * \param path - where to store the wallet (utf8)
     * \param password
     * \param language
     * \return  - true if created successfully
     */
-    virtual bool createWatchOnly(const fs::path& path, const std::string& password, const std::string& language) const = 0;
+    virtual bool createWatchOnly(std::string_view path, const std::string& password, const std::string& language) const = 0;
 
    /*!
     * \brief setRefreshFromBlockHeight - start refresh from block height on recover
@@ -614,14 +619,14 @@ struct Wallet
     /**
      * @brief daemonBlockChainHeight - returns daemon blockchain height
      * @return 0 - in case error communicating with the daemon.
-     *             status() will return Status_Error and errorString() will return verbose error description
+     *             status() will return Status_Error and a return verbose error description
      */
     virtual uint64_t daemonBlockChainHeight() const = 0;
 
     /**
      * @brief daemonBlockChainTargetHeight - returns daemon blockchain target height
      * @return 0 - in case error communicating with the daemon.
-     *             status() will return Status_Error and errorString() will return verbose error description
+     *             status() will return Status_Error and a verbose error description
      */
     virtual uint64_t daemonBlockChainTargetHeight() const = 0;
 
@@ -640,15 +645,11 @@ struct Wallet
     static bool serviceNodePubkeyValid(const std::string &str);
     static bool addressValid(const std::string &str, NetworkType nettype);
     static bool keyValid(const std::string &secret_key_string, const std::string &address_string, bool isViewKey, NetworkType nettype, std::string &error);
-    static bool keyValid(const std::string &secret_key_string, const std::string &address_string, bool isViewKey, bool testnet, std::string &error)     // deprecated
-    {
-        return keyValid(secret_key_string, address_string, isViewKey, testnet ? TESTNET : MAINNET, error);
-    }
     static std::string paymentIdFromAddress(const std::string &str, NetworkType nettype);
     static uint64_t maximumAllowedAmount();
     // Easylogger wrapper
     static void init(const char* argv0, const char* default_log_base_name) { init(argv0, default_log_base_name, "", true); }
-    static void init(const char* argv0, const char* default_log_base_name, const fs::path& log_path, bool console);
+    static void init(const char* argv0, const char* default_log_base_name, const std::string& log_path, bool console);
     static void debug(const std::string &category, const std::string &str);
     static void info(const std::string &category, const std::string &str);
     static void warning(const std::string &category, const std::string &str);
@@ -828,17 +829,18 @@ struct Wallet
     virtual PendingTransaction * createSweepUnmixableTransaction() = 0;
     
    /*!
-    * \brief loadUnsignedTx  - creates transaction from unsigned tx file
+    * \brief loadUnsignedTx  - creates transaction from unsigned tx file (utf8 filename)
     * \return                - UnsignedTransaction object. caller is responsible to check UnsignedTransaction::status()
     *                          after object returned
     */
-    virtual UnsignedTransaction * loadUnsignedTx(const fs::path& unsigned_filename) = 0;
+    virtual UnsignedTransaction * loadUnsignedTx(std::string_view unsigned_filename) = 0;
     
    /*!
-    * \brief submitTransaction - submits transaction in signed tx file
+    * \brief submitTransaction - submits transaction in signed tx file (utf8 filename)
+    * \param filename - utf8 filename to read from
     * \return                  - true on success
     */
-    virtual bool submitTransaction(const fs::path& fileName) = 0;
+    virtual bool submitTransaction(std::string_view filename) = 0;
     
 
     /*!
@@ -860,17 +862,17 @@ struct Wallet
 
    /*!
     * \brief exportKeyImages - exports key images to file
-    * \param filename
+    * \param filename - utf8 filename to write to
     * \return                  - true on success
     */
-    virtual bool exportKeyImages(const fs::path& filename) = 0;
+    virtual bool exportKeyImages(std::string_view filename) = 0;
    
    /*!
     * \brief importKeyImages - imports key images from file
-    * \param filename
+    * \param filename - utf8 filename to read from
     * \return                  - true on success
     */
-    virtual bool importKeyImages(const fs::path& filename) = 0;
+    virtual bool importKeyImages(std::string_view filename) = 0;
 
 
     virtual TransactionHistory * history() = 0;
@@ -1021,14 +1023,14 @@ struct WalletManagerBase
 
     /*!
      * \brief  Creates new wallet
-     * \param  path           Name of wallet file
+     * \param  path           Name of wallet file (utf-8)
      * \param  password       Password of wallet file
      * \param  language       Language to be used to generate electrum seed mnemonic
      * \param  nettype        Network type
      * \param  kdf_rounds     Number of rounds for key derivation function
      * \return                Wallet instance (Wallet::status() needs to be called to check if created successfully)
      */
-    virtual Wallet* createWallet(const fs::path& path, const std::string& password, const std::string& language, NetworkType nettype, uint64_t kdf_rounds = 1) = 0;
+    virtual Wallet* createWallet(std::string_view path, const std::string& password, const std::string& language, NetworkType nettype, uint64_t kdf_rounds = 1) = 0;
 
     /*!
      * \brief  Opens existing wallet
@@ -1039,11 +1041,11 @@ struct WalletManagerBase
      * \param  listener       Wallet listener to set to the wallet after creation
      * \return                Wallet instance (Wallet::status() needs to be called to check if opened successfully)
      */
-    virtual Wallet* openWallet(const fs::path& path, const std::string& password, NetworkType nettype, uint64_t kdf_rounds = 1, WalletListener * listener = nullptr) = 0;
+    virtual Wallet* openWallet(std::string_view path, const std::string& password, NetworkType nettype, uint64_t kdf_rounds = 1, WalletListener * listener = nullptr) = 0;
 
     /*!
      * \brief  recovers existing wallet using mnemonic (electrum seed)
-     * \param  path           Name of wallet file to be created
+     * \param  path           Name of wallet file to be created (utf-8)
      * \param  password       Password of wallet file
      * \param  mnemonic       mnemonic (25 words electrum seed)
      * \param  nettype        Network type
@@ -1052,24 +1054,13 @@ struct WalletManagerBase
      * \param  seed_offset    Seed offset passphrase (optional)
      * \return                Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
      */
-    virtual Wallet* recoveryWallet(const fs::path& path, const std::string& password, const std::string& mnemonic,
+    virtual Wallet* recoveryWallet(std::string_view path, const std::string& password, const std::string& mnemonic,
                                     NetworkType nettype = MAINNET, uint64_t restoreHeight = 0, uint64_t kdf_rounds = 1,
                                     const std::string &seed_offset = {}) = 0;
 
     /*!
-     * \deprecated this method creates a wallet WITHOUT a passphrase, use the alternate recoverWallet() method
-     * \brief  recovers existing wallet using mnemonic (electrum seed)
-     * \param  path           Name of wallet file to be created
-     * \param  mnemonic       mnemonic (25 words electrum seed)
-     * \param  nettype        Network type
-     * \param  restoreHeight  restore from start height
-     * \return                Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
-     */
-    virtual Wallet* recoveryWallet(const fs::path& path, const std::string& mnemonic, NetworkType nettype, uint64_t restoreHeight = 0) = 0;
-
-    /*!
      * \brief  recovers existing wallet using keys. Creates a view only wallet if spend key is omitted
-     * \param  path           Name of wallet file to be created
+     * \param  path           Name of wallet file to be created (utf-8)
      * \param  password       Password of wallet file
      * \param  language       language
      * \param  nettype        Network type
@@ -1081,7 +1072,7 @@ struct WalletManagerBase
      * \return                Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
      */
     virtual Wallet* createWalletFromKeys(
-            const fs::path& path,
+            std::string_view path,
             const std::string& password,
             const std::string& language,
             NetworkType nettype,
@@ -1091,30 +1082,9 @@ struct WalletManagerBase
             const std::string& spendKeyString = "",
             uint64_t kdf_rounds = 1) = 0;
 
-   /*!
-    * \deprecated this method creates a wallet WITHOUT a passphrase, use createWalletFromKeys(..., password, ...) instead
-    * \brief  recovers existing wallet using keys. Creates a view only wallet if spend key is omitted
-    * \param  path           Name of wallet file to be created
-    * \param  language       language
-    * \param  nettype        Network type
-    * \param  restoreHeight  restore from start height
-    * \param  addressString  public address
-    * \param  viewKeyString  view key
-    * \param  spendKeyString spend key (optional)
-    * \return                Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
-    */
-    virtual Wallet* createWalletFromKeys(
-            const fs::path& path, 
-            const std::string& language,
-            NetworkType nettype, 
-            uint64_t restoreHeight,
-            const std::string& addressString,
-            const std::string& viewKeyString,
-            const std::string& spendKeyString = "") = 0;
-
     /*!
      * \brief  creates wallet using hardware device.
-     * \param  path                 Name of wallet file to be created
+     * \param  path                 Name of wallet file to be created (utf-8)
      * \param  password             Password of wallet file
      * \param  nettype              Network type
      * \param  deviceName           Device name
@@ -1125,7 +1095,7 @@ struct WalletManagerBase
      * \return                      Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
      */
     virtual Wallet* createWalletFromDevice(
-            const fs::path& path,
+            std::string_view path,
             const std::string& password,
             NetworkType nettype,
             const std::string& deviceName,
@@ -1147,14 +1117,14 @@ struct WalletManagerBase
 
     /*!
      * @brief TODO: delme walletExists - check if the given filename is the wallet
-     * @param path - filename
+     * @param path - filename (utf-8)
      * @return - true if wallet exists
      */
-    virtual bool walletExists(const fs::path& path) = 0;
+    virtual bool walletExists(std::string_view path) = 0;
 
     /*!
      * @brief verifyWalletPassword - check if the given filename is the wallet
-     * @param keys_file_name - location of keys file
+     * @param keys_file_name - location of keys file (utf-8)
      * @param password - password to verify
      * @param no_spend_key - verify only view keys?
      * @param kdf_rounds - number of rounds for key derivation function
@@ -1164,26 +1134,26 @@ struct WalletManagerBase
      * This function will fail when the wallet keys file is opened because the wallet program locks the keys file.
      * In this case, Wallet::unlockKeysFile() and Wallet::lockKeysFile() need to be called before and after the call to this function, respectively.
      */
-    virtual bool verifyWalletPassword(const fs::path& keys_file_name, const std::string &password, bool no_spend_key, uint64_t kdf_rounds = 1) const = 0;
+    virtual bool verifyWalletPassword(std::string_view keys_file_name, const std::string &password, bool no_spend_key, uint64_t kdf_rounds = 1) const = 0;
 
     /*!
      * \brief determine the key storage for the specified wallet file
      * \param device_type     (OUT) wallet backend as enumerated in Wallet::Device
-     * \param keys_file_name  Keys file to verify password for
+     * \param keys_file_name  Keys file to verify password for (utf-8)
      * \param password        Password to verify
      * \return                true if password correct, else false
      *
      * for verification only - determines key storage hardware
      *
      */
-    virtual bool queryWalletDevice(Wallet::Device& device_type, const fs::path& keys_file_name, const std::string& password, uint64_t kdf_rounds = 1) const = 0;
+    virtual bool queryWalletDevice(Wallet::Device& device_type, std::string_view keys_file_name, const std::string& password, uint64_t kdf_rounds = 1) const = 0;
 
     /*!
      * \brief findWallets - searches for the wallet files by given path name recursively
-     * \param path - starting point to search
+     * \param path - starting point to search (utf-8)
      * \return - list of strings with found wallets (absolute paths);
      */
-    virtual std::vector<std::string> findWallets(const fs::path& path) = 0;
+    virtual std::vector<std::string> findWallets(std::string_view path) = 0;
 
     //! returns verbose error string regarding last error;
     virtual std::string errorString() const = 0;

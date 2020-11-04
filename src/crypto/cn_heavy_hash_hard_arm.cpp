@@ -31,10 +31,6 @@
 
 #if defined(__aarch64__)
 
-#ifndef __clang__
-#  pragma GCC target ("+crypto")
-#endif
-
 #include "cn_heavy_hash.hpp"
 extern "C" {
 #include "keccak.h"

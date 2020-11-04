@@ -33,14 +33,26 @@
 # ...except for FreeBSD, because FreeBSD is a special case that doesn't play well with
 # others.
 
+set(DEFAULT_WITH_MINIUPNPC ON)
+if(ANDROID)
+  set(DEFAULT_WITH_MINIUPNPC OFF)
+endif()
+
+option(WITH_MINIUPNPC "Enable miniupnpc support for IGD NAT hole punching" ${DEFAULT_WITH_MINIUPNPC})
+
 if(NOT STATIC AND NOT BUILD_STATIC_DEPS)
   find_package(PkgConfig REQUIRED)
-  pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
+  if(WITH_MINIUPNPC)
+    pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
+  endif()
   pkg_check_modules(UNBOUND libunbound)
   pkg_check_modules(LOKIMQ liblokimq>=1.2)
 endif()
 
-if(MINIUPNPC_FOUND)
+if(NOT WITH_MINIUPNPC)
+  message(STATUS "miniupnpc support disabled")
+  target_compile_definitions(miniupnpc INTERFACE WITHOUT_MINIUPNPC)
+elseif(MINIUPNPC_FOUND)
   message(STATUS "Found miniupnpc")
   link_dep_libs(miniupnpc INTERFACE "${MINIUPNPC_LIBRARY_DIRS}" ${MINIUPNPC_LIBRARIES})
   target_include_directories(miniupnpc INTERFACE ${MINIUPNPC_INCLUDE_DIRS})
@@ -88,7 +100,7 @@ else()
 endif()
 
 add_subdirectory(db_drivers)
-add_subdirectory(easylogging++)
+add_subdirectory(easylogging++ easyloggingpp)
 add_subdirectory(randomx EXCLUDE_FROM_ALL)
 
 # uSockets doesn't really have a proper build system (just a very simple Makefile) so build it

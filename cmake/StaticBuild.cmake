@@ -5,24 +5,24 @@
 
 set(LOCAL_MIRROR "" CACHE STRING "local mirror path/URL for lib downloads")
 
-set(OPENSSL_VERSION 1.1.1g CACHE STRING "openssl version")
+set(OPENSSL_VERSION 1.1.1h CACHE STRING "openssl version")
 set(OPENSSL_MIRROR ${LOCAL_MIRROR} https://www.openssl.org/source CACHE STRING "openssl download mirror(s)")
 set(OPENSSL_SOURCE openssl-${OPENSSL_VERSION}.tar.gz)
-set(OPENSSL_HASH SHA256=ddb04774f1e32f0c49751e21b67216ac87852ceb056b75209af2443400636d46
+set(OPENSSL_HASH SHA256=5c9ca8774bd7b03e5784f26ae9e9e6d749c9da2438545077e6b3d755a06595d9
     CACHE STRING "openssl source hash")
 
-set(EXPAT_VERSION 2.2.9 CACHE STRING "expat version")
+set(EXPAT_VERSION 2.2.10 CACHE STRING "expat version")
 string(REPLACE "." "_" EXPAT_TAG "R_${EXPAT_VERSION}")
 set(EXPAT_MIRROR ${LOCAL_MIRROR} https://github.com/libexpat/libexpat/releases/download/${EXPAT_TAG}
     CACHE STRING "expat download mirror(s)")
 set(EXPAT_SOURCE expat-${EXPAT_VERSION}.tar.xz)
-set(EXPAT_HASH SHA512=e082874efcc4b00709e2c0192c88fb15dfc4f33fc3a2b09e619b010ea93baaf7e7572683f738463db0ce2350cab3de48a0c38af6b74d1c4f5a9e311f499edab0
+set(EXPAT_HASH SHA512=a8e0c8a9cf7e6fbacdc6e709f3c99c533ab550fba52557d24259bb8b360f9697624c7500c0e9886fa57ee2b529aadd0d1835d66fe8112e15c20df75cd3eb090f
     CACHE STRING "expat source hash")
 
-set(UNBOUND_VERSION 1.11.0 CACHE STRING "unbound version")
+set(UNBOUND_VERSION 1.12.0 CACHE STRING "unbound version")
 set(UNBOUND_MIRROR ${LOCAL_MIRROR} https://nlnetlabs.nl/downloads/unbound CACHE STRING "unbound download mirror(s)")
 set(UNBOUND_SOURCE unbound-${UNBOUND_VERSION}.tar.gz)
-set(UNBOUND_HASH SHA256=9f2f0798f76eb8f30feaeda7e442ceed479bc54db0e3ac19c052d68685e51ef7
+set(UNBOUND_HASH SHA256=5b9253a97812f24419bf2e6b3ad28c69287261cf8c8fa79e3e9f6d3bf7ef5835
     CACHE STRING "unbound source hash")
 
 set(BOOST_VERSION 1.74.0 CACHE STRING "boost version")
@@ -125,6 +125,29 @@ file(MAKE_DIRECTORY ${DEPS_DESTDIR}/include)
 
 set(deps_cc "${CMAKE_C_COMPILER}")
 set(deps_cxx "${CMAKE_CXX_COMPILER}")
+if (ANDROID)
+  if(NOT ANDROID_TOOLCHAIN_NAME)
+    message(FATAL_ERROR "ANDROID_TOOLCHAIN_NAME not set; did you run with the proper android toolchain options?")
+  endif()
+  if(CMAKE_ANDROID_ARCH_ABI MATCHES x86_64)
+    set(android_clang x86_64-linux-android${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine x86_64)
+  elseif(CMAKE_ANDROID_ARCH_ABI MATCHES x86)
+    set(android_clang i686-linux-android${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine i686)
+  elseif(CMAKE_ANDROID_ARCH_ABI MATCHES armeabi-v7a)
+    set(android_clang armv7a-linux-androideabi${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine armv7)
+  elseif(CMAKE_ANDROID_ARCH_ABI MATCHES arm64-v8a)
+    set(android_clang aarch64-linux-android${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine aarch64)
+  else()
+    message(FATAL_ERROR "Don't know how to build for android arch abi ${CMAKE_ANDROID_ARCH_ABI}")
+  endif()
+  set(deps_cc "${ANDROID_TOOLCHAIN_ROOT}/bin/${android_clang}")
+  set(deps_cxx "${deps_cc}++")
+endif()
+
 if(CMAKE_C_COMPILER_LAUNCHER)
   set(deps_cc "${CMAKE_C_COMPILER_LAUNCHER} ${deps_cc}")
 endif()
@@ -157,13 +180,18 @@ else()
 endif()
 
 set(cross_host "")
-set(cross_rc "")
-if(CMAKE_CROSSCOMPILING)
+set(cross_extra "")
+if (ANDROID)
+  set(cross_host "--host=${CMAKE_LIBRARY_ARCHITECTURE}")
+  set(cross_extra "LD=${ANDROID_TOOLCHAIN_ROOT}/bin/${CMAKE_LIBRARY_ARCHITECTURE}-ld" "RANLIB=${CMAKE_RANLIB}" "AR=${CMAKE_AR}")
+elseif(CMAKE_CROSSCOMPILING)
   set(cross_host "--host=${ARCH_TRIPLET}")
   if (ARCH_TRIPLET MATCHES mingw AND CMAKE_RC_COMPILER)
-    set(cross_rc "WINDRES=${CMAKE_RC_COMPILER}")
+    set(cross_extra "WINDRES=${CMAKE_RC_COMPILER}")
   endif()
 endif()
+
+
 
 set(deps_CFLAGS "-O2 ${flto}")
 set(deps_CXXFLAGS "-O2 ${flto}")
@@ -180,7 +208,7 @@ endif()
 set(build_def_DEPENDS "")
 set(build_def_PATCH_COMMAND "")
 set(build_def_CONFIGURE_COMMAND ./configure ${cross_host} --disable-shared --prefix=${DEPS_DESTDIR} --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}" ${cross_rc})
+    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}" ${cross_extra})
 set(build_def_BUILD_COMMAND make)
 set(build_def_INSTALL_COMMAND make install)
 set(build_def_BUILD_BYPRODUCTS ${DEPS_DESTDIR}/lib/lib___TARGET___.a ${DEPS_DESTDIR}/include/___TARGET___.h)
@@ -215,7 +243,7 @@ endfunction()
 
 
 build_external(zlib
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}" ./configure --prefix=${DEPS_DESTDIR} --static
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS} -fPIC" ${cross_extra} ./configure --prefix=${DEPS_DESTDIR} --static
   BUILD_BYPRODUCTS
     ${DEPS_DESTDIR}/lib/libz.a
     ${DEPS_DESTDIR}/include/zlib.h
@@ -230,11 +258,14 @@ if(CMAKE_CROSSCOMPILING)
     set(openssl_system_env SYSTEM=MINGW64 RC=${CMAKE_RC_COMPILER})
   elseif(ARCH_TRIPLET STREQUAL i686-w64-mingw32)
     set(openssl_system_env SYSTEM=MINGW64 RC=${CMAKE_RC_COMPILER})
+  elseif(ANDROID)
+    set(openssl_system_env SYSTEM=Linux MACHINE=${openssl_machine} ${cross_extra})
+    set(openssl_extra_opts no-asm)
   endif()
 endif()
 build_external(openssl
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env CC=${deps_cc} ${openssl_system_env} ./config
-    --prefix=${DEPS_DESTDIR} no-shared no-capieng no-dso no-dtls1 no-ec_nistp_64_gcc_128 no-gost
+    --prefix=${DEPS_DESTDIR} ${openssl_extra_opts} no-shared no-capieng no-dso no-dtls1 no-ec_nistp_64_gcc_128 no-gost
     no-heartbeats no-md2 no-rc5 no-rdrand no-rfc3779 no-sctp no-ssl-trace no-ssl2 no-ssl3
     no-static-engine no-tests no-weak-ssl-ciphers no-zlib-dynamic "CFLAGS=${deps_CFLAGS}"
   INSTALL_COMMAND make install_sw
@@ -259,7 +290,7 @@ add_static_target(expat expat_external libexpat.a)
 
 build_external(unbound
   DEPENDS openssl_external expat_external
-  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_rc} --prefix=${DEPS_DESTDIR} --disable-shared
+  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_extra} --prefix=${DEPS_DESTDIR} --disable-shared
   --enable-static --with-libunbound-only --with-pic
   --$<IF:$<BOOL:${USE_LTO}>,enable,disable>-flto --with-ssl=${DEPS_DESTDIR}
   --with-libexpat=${DEPS_DESTDIR}
@@ -289,6 +320,8 @@ if(CMAKE_CROSSCOMPILING)
     else()
       list(APPEND boost_extra "address-model=32")
     endif()
+  elseif(ANDROID)
+    set(boost_bootstrap_cxx "CXX=c++")
   endif()
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
@@ -348,7 +381,7 @@ add_static_target(sqlite3 sqlite3_external libsqlite3.a)
 
 
 
-if (NOT WIN32)
+if (NOT (WIN32 OR ANDROID))
   build_external(ncurses
     CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --without-debug --without-ada
       --without-cxx-binding --without-cxx --without-ticlib --without-tic --without-progs
@@ -389,7 +422,7 @@ endif()
 
 
 
-if(APPLE OR WIN32)
+if(APPLE OR WIN32 OR ANDROID)
   add_library(libudev INTERFACE)
   set(maybe_eudev "")
 else()
@@ -406,53 +439,65 @@ endif()
 
 
 
-build_external(libusb
-  CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --disable-udev --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
-  BUILD_BYPRODUCTS
-    ${DEPS_DESTDIR}/lib/libusb-1.0.a
-    ${DEPS_DESTDIR}/include/libusb-1.0
-    ${DEPS_DESTDIR}/include/libusb-1.0/libusb.h
-)
-add_static_target(libusb_vendor libusb_external libusb-1.0.a)
-set_target_properties(libusb_vendor PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DEPS_DESTDIR}/include/libusb-1.0)
+if(NOT ANDROID)
+  build_external(libusb
+    CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --disable-udev --with-pic
+      "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
+    BUILD_BYPRODUCTS
+      ${DEPS_DESTDIR}/lib/libusb-1.0.a
+      ${DEPS_DESTDIR}/include/libusb-1.0
+      ${DEPS_DESTDIR}/include/libusb-1.0/libusb.h
+  )
+  add_static_target(libusb_vendor libusb_external libusb-1.0.a)
+  set_target_properties(libusb_vendor PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DEPS_DESTDIR}/include/libusb-1.0)
+endif()
 
 
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(hidapi_libusb_lib libhidapi-libusb.a)
-  set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi-libusb.a ${DEPS_DESTDIR}/lib/libhidapi-hidraw.a)
+if(ANDROID)
+  set(HIDAPI_FOUND FALSE)
 else()
-  set(hidapi_libusb_lib libhidapi.a)
-  set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi.a)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(hidapi_libusb_lib libhidapi-libusb.a)
+    set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi-libusb.a ${DEPS_DESTDIR}/lib/libhidapi-hidraw.a)
+  else()
+    set(hidapi_libusb_lib libhidapi.a)
+    set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi.a)
+  endif()
+  build_external(hidapi
+    DEPENDS ${maybe_eudev} libusb_external
+    CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --enable-static --with-pic
+      "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
+      ${cross_extra}
+      "libudev_CFLAGS=-I${DEPS_DESTDIR}/include" "libudev_LIBS=-L${DEPS_DESTDIR}/lib -ludev"
+      "libusb_CFLAGS=-I${DEPS_DESTDIR}/include/libusb-1.0" "libusb_LIBS=-L${DEPS_DESTDIR}/lib -lusb-1.0"
+    BUILD_BYPRODUCTS
+      ${hidapi_lib_byproducts}
+      ${DEPS_DESTDIR}/include/hidapi
+      ${DEPS_DESTDIR}/include/hidapi/hidapi.h
+  )
+  set(HIDAPI_FOUND TRUE)
+  add_static_target(hidapi_libusb hidapi_external ${hidapi_libusb_lib})
+  set(hidapi_links "libusb_vendor;libudev")
+  if(WIN32)
+    list(APPEND hidapi_links setupapi)
+  endif()
+  set_target_properties(hidapi_libusb PROPERTIES
+      INTERFACE_LINK_LIBRARIES "${hidapi_links}"
+      INTERFACE_COMPILE_DEFINITIONS HAVE_HIDAPI)
 endif()
-build_external(hidapi
-  DEPENDS ${maybe_eudev} libusb_external
-  CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --enable-static --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
-    "libudev_CFLAGS=-I${DEPS_DESTDIR}/include" "libudev_LIBS=-L${DEPS_DESTDIR}/lib -ludev"
-    "libusb_CFLAGS=-I${DEPS_DESTDIR}/include/libusb-1.0" "libusb_LIBS=-L${DEPS_DESTDIR}/lib -lusb-1.0"
-  BUILD_BYPRODUCTS
-    ${hidapi_lib_byproducts}
-    ${DEPS_DESTDIR}/include/hidapi
-    ${DEPS_DESTDIR}/include/hidapi/hidapi.h
-)
-set(HIDAPI_FOUND TRUE)
-add_static_target(hidapi_libusb hidapi_external ${hidapi_libusb_lib})
-set(hidapi_links "libusb_vendor;libudev")
-if(WIN32)
-  list(APPEND hidapi_links setupapi)
+
+
+
+set(protobuf_extra "")
+if(ANDROID)
+  set(protobuf_extra "LDFLAGS=-llog")
 endif()
-set_target_properties(hidapi_libusb PROPERTIES
-    INTERFACE_LINK_LIBRARIES "${hidapi_links}"
-    INTERFACE_COMPILE_DEFINITIONS HAVE_HIDAPI)
-
-
-
 build_external(protobuf
   CONFIGURE_COMMAND
     ./configure ${cross_host} --disable-shared --prefix=${DEPS_DESTDIR} --with-pic
       "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
+      ${cross_extra} ${protobuf_extra}
       "CPP=${deps_cc} -E" "CXXCPP=${deps_cxx} -E"
       "CC_FOR_BUILD=${deps_cc}" "CXX_FOR_BUILD=${deps_cxx}"  # Thanks Google for making people hunt for undocumented magic variables
   BUILD_BYPRODUCTS
@@ -480,6 +525,7 @@ build_external(zmq
     --disable-curve-keygen --enable-curve --disable-drafts --disable-libunwind --with-libsodium
     --without-pgm --without-norm --without-vmci --without-docs --with-pic --disable-Werror
     "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-fstack-protector ${deps_CFLAGS}" "CXXFLAGS=-fstack-protector ${deps_CXXFLAGS}"
+    ${cross_extra}
     "sodium_CFLAGS=-I${DEPS_DESTDIR}/include" "sodium_LIBS=-L${DEPS_DESTDIR}/lib -lsodium"
 )
 add_static_target(libzmq zmq_external libzmq.a)
@@ -507,7 +553,7 @@ endif()
 
 build_external(curl
   DEPENDS openssl_external zlib_external
-  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_rc} --prefix=${DEPS_DESTDIR} --disable-shared
+  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_extra} --prefix=${DEPS_DESTDIR} --disable-shared
   --enable-static --disable-ares --disable-ftp --disable-ldap --disable-laps --disable-rtsp
   --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb
   --disable-smtp --disable-gopher --disable-manual --disable-libcurl-option --enable-http
