@@ -24,12 +24,29 @@ branch_or_tag=${DRONE_BRANCH:-${DRONE_TAG:-unknown}}
 upload_to="builds.lokinet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
 
 tmpdir=ios-deps-${DRONE_COMMIT}
-mkdir -p $tmpdir/ios
-mkdir -p $tmpdir/sim64
-cp src/wallet/api/wallet2_api.h $tmpdir
+mkdir -p $tmpdir/lib
+mkdir -p $tmpdir/include
 
-ln -s ../build-ios/src/wallet/api/libwallet_merged.a $tmpdir/ios
-ln -s ../build-simulator/src/wallet/api/libwallet_merged.a $tmpdir/sim64
+# Merge the arm64 and simulator libs into a single multi-arch merged lib:
+lipo -create build/{arm64,sim64}/src/wallet/api/libwallet_merged.a -o $tmpdir/lib/libwallet_merged.a
+
+# Collect all the headers
+# Loki core:
+cd src
+find . \( -name '*.h' -or -name '*.hpp' \) -exec cp -v --parents {} ../$tmpdir/include \;
+cp -v daemonizer/posix_daemonizer.inl ../$tmpdir/include/daemonizer
+cd ..
+# epee:
+cp -rv contrib/epee/include/epee $tmpdir/include
+# external libs:
+mkdir $tmpdir/include/lokimq
+cp -v external/{easylogging++/*.h,db_drivers/liblmdb/lmdb.h,randomx/src/randomx.h} $tmpdir/include
+cp -v external/loki-mq/lokimq/*.h $tmpdir/include/lokimq
+cp -rv external/{boost,cpr/include/cpr,ghc-filesystem/include/ghc,libuv/include/*,rapidjson/include/rapidjson} $tmpdir/include
+cp -rv build/arm64/external/uWebSockets/* $tmpdir/include
+# static libs:
+cp -rv build/arm64/static-deps/include/* $tmpdir/include
+
 
 filename=ios-deps-${DRONE_COMMIT}.tar.xz
 XZ_OPTS="--threads=6" tar --dereference -cJvf $filename $tmpdir
