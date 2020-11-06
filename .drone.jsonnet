@@ -193,9 +193,34 @@ local android_build_steps(android_abi, android_platform=21, jobs=6, cmake_extra=
                     + android_build_steps('x86_64', cmake_extra='-DARCH="x86-64 -msse4.2 -mpopcnt" -DARCH_ID=x86-64')
                     + android_build_steps('x86', cmake_extra='-DARCH="i686 -mssse3 -mfpmath=sse" -DARCH_ID=i386')
                     + [
-                    './utils/build_scripts/android-static-upload.sh armeabi-v7a arm64-v8a x86_64 x86'
+                    './utils/build_scripts/drone-android-static-upload.sh armeabi-v7a arm64-v8a x86_64 x86'
                 ]
             }
         ]
-    }
+    },
+
+    // iOS build
+    {   name: 'iOS wallet_api', kind: 'pipeline', type: 'exec', platform: { os: 'darwin', arch: 'amd64' },
+        steps: [{
+            name: 'build',
+            environment: { SSH_KEY: { from_secret: "SSH_KEY" } },
+            commands: submodules_commands + [
+                'mkdir -p build/{arm64,sim64}',
+                'cd build/arm64',
+                'cmake ../.. -G Ninja ' +
+                    '-DCMAKE_TOOLCHAIN_FILE=../../cmake/ios.toolchain.cmake -DPLATFORM=OS -DDEPLOYMENT_TARGET=11 -DENABLE_VISIBILITY=ON -DENABLE_BITCODE=OFF ' +
+                    '-DSTATIC=ON -DBUILD_STATIC_DEPS=ON -DUSE_LTO=OFF -DCMAKE_BUILD_TYPE=Release ' +
+                    '-DRANDOMX_ENABLE_JIT=OFF -DCMAKE_CXX_FLAGS=-fcolor-diagnostics',
+                'ninja -j6 -v wallet_merged',
+                'cd ../sim64',
+                'cmake ../.. -G Ninja ' +
+                    '-DCMAKE_TOOLCHAIN_FILE=../../cmake/ios.toolchain.cmake -DPLATFORM=SIMULATOR64 -DDEPLOYMENT_TARGET=11 -DENABLE_VISIBILITY=ON -DENABLE_BITCODE=OFF ' +
+                    '-DSTATIC=ON -DBUILD_STATIC_DEPS=ON -DUSE_LTO=OFF -DCMAKE_BUILD_TYPE=Release ' +
+                    '-DRANDOMX_ENABLE_JIT=OFF -DCMAKE_CXX_FLAGS=-fcolor-diagnostics',
+                'ninja -j6 -v wallet_merged',
+                'cd ../..',
+                './utils/build_scripts/drone-ios-static-upload.sh'
+            ]
+        }]
+    },
 ]
