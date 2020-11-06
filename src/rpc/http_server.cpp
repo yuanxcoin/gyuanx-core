@@ -135,24 +135,20 @@ namespace cryptonote::rpc {
 
       std::vector<us_listen_socket_t*> listening;
       try {
-        bool bad = false; // True if any required bind fails
-        int good = 0; // How many binds succeeded; we require at least 1
+        bool required_bind_failed = false;
         for (const auto& [addr, port, required] : bind)
-          http.listen(addr, port, [&listening, req=required, &good, &bad](us_listen_socket_t* sock) {
-            listening.push_back(sock);
-            if (sock != nullptr) good++;
-            else if (req) bad = true;
+          http.listen(addr, port, [&listening, req=required, &required_bind_failed](us_listen_socket_t* sock) {
+            if (sock) listening.push_back(sock);
+            else if (req) required_bind_failed = true;
           });
 
-        if (!good || bad) {
+        if (listening.empty() || required_bind_failed) {
           std::ostringstream error;
           error << "RPC HTTP server failed to bind; ";
           if (listening.empty()) error << "no valid bind address(es) given";
-          else {
-            error << "tried to bind to:";
-            for (const auto& [addr, port, required] : bind)
-              error << ' ' << addr << ':' << port;
-          }
+          error << "tried to bind to:";
+          for (const auto& [addr, port, required] : bind)
+            error << ' ' << addr << ':' << port;
           throw std::runtime_error(error.str());
         }
       } catch (...) {
@@ -616,6 +612,7 @@ namespace cryptonote::rpc {
           MTRACE("closing " << m_listen_socks.size() << " listening sockets");
           for (auto* s : m_listen_socks)
             us_listen_socket_close(/*ssl=*/false, s);
+          m_listen_socks.clear();
 
           m_closing = true;
 
