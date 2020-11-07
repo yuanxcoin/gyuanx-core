@@ -46,7 +46,8 @@ local debian_pipeline(name, image,
                 apt_get_quiet + ' update',
                 apt_get_quiet + ' install -y eatmydata',
                 'eatmydata ' + apt_get_quiet + ' dist-upgrade -y',
-                'eatmydata ' + apt_get_quiet + ' install -y --no-install-recommends cmake git ca-certificates ninja-build ccache ' + deps,
+                'eatmydata ' + apt_get_quiet + ' install -y --no-install-recommends cmake git ca-certificates ninja-build ccache '
+                    + deps + (if test_lokid then ' gdb' else ''),
                 'mkdir build',
                 'cd build',
                 'cmake .. -G Ninja -DCMAKE_CXX_FLAGS=-fdiagnostics-color=always -DCMAKE_BUILD_TYPE='+build_type+' ' +
@@ -62,7 +63,7 @@ local debian_pipeline(name, image,
                     ['ninja -j' + jobs + ' -v']
             ) + (
                 if test_lokid then [
-                    '(sleep 3; echo "status\ndiff\nexit") | TERM=xterm ./bin/lokid --offline --data-dir=startuptest'
+                    '(sleep 3; echo "status\ndiff\nexit") | TERM=xterm ../utils/build_scripts/drone-gdb.sh ./bin/lokid --offline --data-dir=startuptest'
                 ] else []
             ) + (
                 if run_tests then [
