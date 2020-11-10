@@ -851,14 +851,11 @@ struct Wallet
 
     /*!
      * \brief Estimates transaction fee.
-     * \param destinations Vector consisting of <address, amount> pairs.
-     * \return Estimated fee.
+     * \param priority - the tx priority. 1 = low priority, 5 = blink.
+     * \param recipients - number of recipients *not* counting the return address for change. Defaults to 1.
+     * \return Estimated fee in atomic units.
      */
-    // TODO(loki): Implement
-#if 0
-    virtual uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations,
-                                            uint32_t priority) const = 0;
-#endif
+    virtual uint64_t estimateTransactionFee(uint32_t priority, uint32_t recipients = 1) const = 0;
 
    /*!
     * \brief exportKeyImages - exports key images to file
