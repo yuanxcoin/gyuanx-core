@@ -1,3 +1,69 @@
+loki (8.1.3-1~ubuntu1804) bionic; urgency=medium
+
+  [ Jason Rhinelander ]
+  * Remove uptime proof workaround (patch is in 8.1.2)
+  * Rediff patches
+  * update required lokimq version
+  * Remove staging repo for building debs
+  * Fix key image import error
+  * Fix key image import error
+  * Make untagged stable builds add -<n>-<tag> suffix
+  * Use sid more; crank clang version to 11
+  * std::filesystem
+  * Remove boost filesystem/date-time from deps
+  * Code cleanups (epee, boost::lexical_cast)
+  * Rename wallet api namespace Monero:: -> Wallet::
+  * Remove deprecated wallet api functions
+  * wallet_api code cleanups
+  * Move test suite timings code out of main src
+  * Remove deprecated epee code
+  * Move epee includes under "epee/..."
+  * Fix segfault when HOME not set
+  * Default to current_path instead of "/"
+  * Fix mempool txes showing up as "failed"
+
+  [ doy-lee ]
+  * Don't use mlocker on android because root permissions(?)
+
+  [ Jason Rhinelander ]
+  * Move -march=...+crypto into cmake
+  * Android build infrastructure updates
+  * Add android build to drone steps
+  * Update static deps library versions
+  * Force -fPIC for zlib
+  * wallet_api: unexpose fs:: in api; remove more deprecations; clean dirt
+  * Retitle build pipeline
+  * Package merged wallet_api rather than plain wallet_api
+  * Add more crap into merged library
+
+  [ Doyle ]
+  * Add monero's original cn_slow_hash for android keystore hashing
+
+  [ Jason Rhinelander ]
+  * Change create_address_file default to true
+  * Fix compiler over-optimization
+  * Fix long poll thread handling in wallet_api
+  * Clean up submodule commands
+  * Remove BUILD_GUI_DEPS, enable FORCE_USE_HEAP on android
+  * Update RandomX with jit-disabling support
+  * Downgrade libuv to 1.38.1
+  * Remove useless source directory pollution
+  * Replace CMakeLists_IOS.txt hack job with proper toolchain file
+  * Lots of build hacks for iOS
+  * Add ios build & upload
+  * ios build hack for unbound
+  * Build hack for curl
+  * Also build simulator library
+  * Merge arm/sim libs and collect headers in ios deps package
+  * Allow vector cli options to have defaults
+  * Overhaul http rpc cli options
+  * Run lokid test under gdb
+  * Fix segfault in rpc shutdown
+  * Add tx fee estimate to wallet api
+  * Bump version
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Wed, 11 Nov 2020 18:46:30 -0400
+
 loki (8.1.2-1~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
