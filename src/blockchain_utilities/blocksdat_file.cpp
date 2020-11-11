@@ -43,14 +43,14 @@ namespace
 
 
 
-bool BlocksdatFile::open_writer(const boost::filesystem::path& file_path, uint64_t block_stop)
+bool BlocksdatFile::open_writer(const fs::path& file_path, uint64_t block_stop)
 {
-  const boost::filesystem::path dir_path = file_path.parent_path();
+  const fs::path dir_path = file_path.parent_path();
   if (!dir_path.empty())
   {
-    if (boost::filesystem::exists(dir_path))
+    if (fs::exists(dir_path))
     {
-      if (!boost::filesystem::is_directory(dir_path))
+      if (!fs::is_directory(dir_path))
       {
         MFATAL("export directory path is a file: " << dir_path);
         return false;
@@ -58,7 +58,7 @@ bool BlocksdatFile::open_writer(const boost::filesystem::path& file_path, uint64
     }
     else
     {
-      if (!boost::filesystem::create_directory(dir_path))
+      if (!fs::create_directory(dir_path))
       {
         MFATAL("Failed to create directory " << dir_path);
         return false;
@@ -124,7 +124,7 @@ bool BlocksdatFile::close()
 }
 
 
-bool BlocksdatFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_memory_pool* _tx_pool, boost::filesystem::path& output_file, uint64_t requested_block_stop)
+bool BlocksdatFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_memory_pool* _tx_pool, fs::path& output_file, uint64_t requested_block_stop)
 {
   uint64_t num_blocks_written = 0;
   m_blockchain_storage = _blockchain_storage;

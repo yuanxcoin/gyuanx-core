@@ -36,6 +36,7 @@
 #include <memory>
 #include <optional>
 #include <system_error>
+#include "fs.h"
 
 #ifdef _WIN32
 #include "windows.h"
@@ -63,9 +64,9 @@ namespace tools {
   //! A file restricted to process owner AND process. Deletes file on destruction.
   class private_file {
     std::unique_ptr<std::FILE, close_file> m_handle;
-    std::string m_filename;
+    fs::path m_filename;
 
-    private_file(std::FILE* handle, std::string&& filename) noexcept;
+    private_file(std::FILE* handle, fs::path filename) noexcept;
   public:
 
     //! `handle() == nullptr && filename.empty()`.
@@ -73,7 +74,7 @@ namespace tools {
 
     /*! \return File only readable by owner and only used by this process
       OR `private_file{}` on error. */
-    static private_file create(std::string filename);
+    static private_file create(fs::path filename);
 
     private_file(private_file&&) = default;
     private_file& operator=(private_file&&) = default;
@@ -82,13 +83,13 @@ namespace tools {
     ~private_file() noexcept;
 
     std::FILE* handle() const noexcept { return m_handle.get(); }
-    const std::string& filename() const noexcept { return m_filename; }
+    const fs::path& filename() const noexcept { return m_filename; }
   };
 
   class file_locker
   {
   public:
-    file_locker(const std::string &filename);
+    file_locker(const fs::path& filename);
     ~file_locker();
     bool locked() const;
   private:
@@ -109,7 +110,7 @@ namespace tools {
    *
    * Unix: ~/.CRYPTONOTE_NAME
    */
-  std::string get_default_data_dir();
+  fs::path get_default_data_dir();
 
 #ifdef WIN32
   /**
@@ -120,21 +121,24 @@ namespace tools {
    *
    * @return 
    */
-  std::string get_special_folder_path(int nfolder, bool iscreate);
+  fs::path get_special_folder_path(int nfolder, bool iscreate);
 #endif
 
   /*! \brief creates directories for a path
    *
-   *  wrapper around boost::filesyste::create_directories.  
-   *  (ensure-directory-exists): greenspun's tenth rule in action!
+   *  wrapper around fs::create_directories.  
    */
-  bool create_directories_if_necessary(const std::string& path);
-  /*! \brief std::rename wrapper for nix and something strange for windows.
-   */
-  std::error_code replace_file(const std::string& old_name, const std::string& new_name);
+  bool create_directories_if_necessary(const fs::path& path);
 
   void set_strict_default_file_permissions(bool strict);
 
   void closefrom(int fd);
+
+  /// Reads a (binary) file from disk into the string `contents`. Aborts if the file is larger than
+  /// `max_size`.
+  bool slurp_file(const fs::path& filename, std::string& contents);
+
+  /// Dumps (binary) string contents to disk. The file is overwritten if it already exists.
+  bool dump_file(const fs::path& filename, std::string_view contents);
 
 }

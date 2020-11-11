@@ -26,7 +26,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#if defined __GNUC__ && !defined _WIN32
+#if defined __GNUC__ && !defined _WIN32 && !defined __ANDROID__
 #define HAVE_MLOCK 1
 #endif
 
@@ -34,8 +34,8 @@
 #if defined HAVE_MLOCK
 #include <sys/mman.h>
 #endif
-#include "misc_log_ex.h"
-#include "mlocker.h"
+#include "epee/misc_log_ex.h"
+#include "epee/mlocker.h"
 
 #include <atomic>
 #include <cerrno>
@@ -111,25 +111,34 @@ namespace epee
 
   size_t mlocker::get_page_size()
   {
+#if defined(HAVE_MLOCK)
     std::lock_guard lock{mutex()};
     if (page_size == 0)
       page_size = query_page_size();
     return page_size;
+#else
+    return 0;
+#endif
   }
 
   mlocker::mlocker(void *ptr, size_t len): ptr(ptr), len(len)
   {
+#if defined(HAVE_MLOCK)
     lock(ptr, len);
+#endif
   }
 
   mlocker::~mlocker()
   {
+#if defined(HAVE_MLOCK)
     try { unlock(ptr, len); }
     catch (...) { /* ignore and do not propagate through the dtor */ }
+#endif
   }
 
   void mlocker::lock(void *ptr, size_t len)
   {
+#if defined(HAVE_MLOCK)
     TRY_ENTRY();
 
     size_t page_size = get_page_size();
@@ -144,10 +153,12 @@ namespace epee
     ++num_locked_objects;
 
     CATCH_ENTRY_L1("mlocker::lock", void());
+#endif
   }
 
   void mlocker::unlock(void *ptr, size_t len)
   {
+#if defined(HAVE_MLOCK)
     TRY_ENTRY();
 
     size_t page_size = get_page_size();
@@ -161,22 +172,32 @@ namespace epee
     --num_locked_objects;
 
     CATCH_ENTRY_L1("mlocker::lock", void());
+#endif
   }
 
   size_t mlocker::get_num_locked_pages()
   {
+#if defined(HAVE_MLOCK)
     std::lock_guard lock{mutex()};
     return map().size();
+#else
+    return 0;
+#endif
   }
 
   size_t mlocker::get_num_locked_objects()
   {
+#if defined(HAVE_MLOCK)
     std::lock_guard lock{mutex()};
     return num_locked_objects;
+#else
+    return 0;
+#endif
   }
 
   void mlocker::lock_page(size_t page)
   {
+#if defined(HAVE_MLOCK)
     std::pair<std::map<size_t, unsigned int>::iterator, bool> p = map().insert(std::make_pair(page, 1));
     if (p.second)
     {
@@ -186,10 +207,12 @@ namespace epee
     {
       ++p.first->second;
     }
+#endif
   }
 
   void mlocker::unlock_page(size_t page)
   {
+#if defined(HAVE_MLOCK)
     std::map<size_t, unsigned int>::iterator i = map().find(page);
     if (i == map().end())
     {
@@ -203,5 +226,6 @@ namespace epee
         do_unlock((void*)(page * page_size), page_size);
       }
     }
+#endif
   }
 }

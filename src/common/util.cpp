@@ -37,16 +37,14 @@
 
 #include "unbound.h"
 
-#include "include_base_utils.h"
-#include "string_tools.h"
-#include "wipeable_string.h"
+#include "epee/string_tools.h"
+#include "epee/wipeable_string.h"
 #include "crypto/crypto.h"
 #include "util.h"
 #include "stack_trace.h"
-#include "misc_os_dependent.h"
-#include "readline_buffer.h"
+#include "epee/misc_os_dependent.h"
+#include "epee/readline_buffer.h"
 #include "string_util.h"
-#include <boost/filesystem/path.hpp>
 
 #include "i18n.h"
 
@@ -74,29 +72,6 @@ namespace tools
     ub_ctx_delete(ctx);
     MINFO("libunbound was built " << (with_threads ? "with" : "without") << " threads");
     return with_threads;
-  }
-
-  bool sanitize_locale()
-  {
-    // boost::filesystem throws for "invalid" locales, such as en_US.UTF-8, or kjsdkfs,
-    // so reset it here before any calls to it
-    try
-    {
-      boost::filesystem::path p {std::string("test")};
-      p /= std::string("test");
-    }
-    catch (...)
-    {
-#if defined(__MINGW32__) || defined(__MINGW__)
-      putenv("LC_ALL=C");
-      putenv("LANG=C");
-#else
-      setenv("LC_ALL", "C", 1);
-      setenv("LANG", "C", 1);
-#endif
-      return true;
-    }
-    return false;
   }
 
 #ifdef STACK_TRACE
@@ -169,8 +144,6 @@ namespace tools
     mlog_configure("", true);
 
     setup_crash_dump();
-
-    sanitize_locale();
 
 #ifdef __GLIBC__
     const char *ver = ::gnu_get_libc_version();

@@ -57,7 +57,6 @@ namespace cryptonote
       const command_line::arg_descriptor<std::string> rpc_login;
       const command_line::arg_descriptor<bool> confirm_external_bind;
       const command_line::arg_descriptor<std::string> rpc_access_control_origins;
-      const command_line::arg_descriptor<bool> rpc_public_node;
       const command_line::arg_descriptor<std::string> zmq_rpc_bind_ip;   // Deprecated & ignored
       const command_line::arg_descriptor<std::string> zmq_rpc_bind_port; // Deprecated & ignored
     };
@@ -68,8 +67,9 @@ namespace cryptonote
     //! \return Arguments specified by user.  Throws on error.
     static rpc_args process(const boost::program_options::variables_map& vm);
 
-    std::string bind_ip;
-    std::string bind_ipv6_address;
+    // std::nullopt if not explicitly specified
+    std::optional<std::string> bind_ip;
+    std::optional<std::string> bind_ipv6_address;
     bool use_ipv6;
     bool require_ipv4;
     std::vector<std::string> access_control_origins;

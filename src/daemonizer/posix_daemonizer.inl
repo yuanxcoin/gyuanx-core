@@ -33,9 +33,6 @@
 #include "common/file.h"
 #include "common/command_line.h"
 
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
-
 namespace daemonizer
 {
   namespace
@@ -59,16 +56,16 @@ namespace daemonizer
     command_line::add_arg(normal_options, arg_non_interactive);
   }
 
-  inline boost::filesystem::path get_default_data_dir()
+  inline fs::path get_default_data_dir()
   {
-    return boost::filesystem::absolute(tools::get_default_data_dir());
+    return fs::absolute(tools::get_default_data_dir());
   }
 
-  inline boost::filesystem::path get_relative_path_base(
+  inline fs::path get_relative_path_base(
       boost::program_options::variables_map const & vm
     )
   {
-    return boost::filesystem::current_path();
+    return fs::current_path();
   }
 
   template <typename Application, typename... Args>

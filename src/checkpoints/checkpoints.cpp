@@ -31,9 +31,9 @@
 
 #include "checkpoints.h"
 
-#include "string_tools.h"
-#include "storages/portable_storage_template_helper.h" // epee json include
-#include "serialization/keyvalue_serialization.h"
+#include "epee/string_tools.h"
+#include "epee/storages/portable_storage_template_helper.h" // epee json include
+#include "epee/serialization/keyvalue_serialization.h"
 #include "cryptonote_core/service_node_rules.h"
 #include <vector>
 #include "blockchain_db/blockchain_db.h"
@@ -41,6 +41,8 @@
 
 #include "common/loki_integration_test_hooks.h"
 #include "common/loki.h"
+#include "common/file.h"
+#include "common/hex.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "checkpoints"
@@ -82,23 +84,24 @@ namespace cryptonote
       uint64_t last_index         = loki::array_count(HARDCODED_MAINNET_CHECKPOINTS) - 1;
       height_to_hash const &entry = HARDCODED_MAINNET_CHECKPOINTS[last_index];
 
-      if (epee::string_tools::hex_to_pod(entry.hash, result))
+      if (tools::hex_to_type(entry.hash, result))
         *height = entry.height;
     }
     return result;
   }
 
-  bool load_checkpoints_from_json(const std::string &json_hashfile_fullpath, std::vector<height_to_hash> &checkpoint_hashes)
+  bool load_checkpoints_from_json(const fs::path& json_hashfile_fullpath, std::vector<height_to_hash>& checkpoint_hashes)
   {
-    boost::system::error_code errcode;
-    if (! (boost::filesystem::exists(json_hashfile_fullpath, errcode)))
+    if (std::error_code ec; !fs::exists(json_hashfile_fullpath, ec))
     {
       LOG_PRINT_L1("Blockchain checkpoints file not found");
       return true;
     }
 
     height_to_hash_json hashes;
-    if (!epee::serialization::load_t_from_json_file(hashes, json_hashfile_fullpath))
+    if (std::string contents;
+        !tools::slurp_file(json_hashfile_fullpath, contents) ||
+        !epee::serialization::load_t_from_json(hashes, contents))
     {
       MERROR("Error loading checkpoints from " << json_hashfile_fullpath);
       return false;
@@ -125,7 +128,7 @@ namespace cryptonote
   bool checkpoints::add_checkpoint(uint64_t height, const std::string& hash_str)
   {
     crypto::hash h = crypto::null_hash;
-    bool r         = epee::string_tools::hex_to_pod(hash_str, h);
+    bool r         = tools::hex_to_type(hash_str, h);
     CHECK_AND_ASSERT_MES(r, false, "Failed to parse checkpoint hash string into binary representation!");
 
     checkpoint_t checkpoint = {};

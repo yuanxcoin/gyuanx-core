@@ -26,24 +26,27 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <cstdio>
 #include <iostream>
 #include <chrono>
+#include <random>
 #include <thread>
 
 #include "gtest/gtest.h"
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "blockchain_db/blockchain_db.h"
 #include "blockchain_db/lmdb/db_lmdb.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "common/fs.h"
+#include "common/hex.h"
+
+#include "random_path.h"
 
 using namespace cryptonote;
-using epee::string_tools::pod_to_hex;
 
-#define ASSERT_HASH_EQ(a,b) ASSERT_EQ(pod_to_hex(a), pod_to_hex(b))
+#define ASSERT_HASH_EQ(a,b) ASSERT_EQ(tools::type_to_hex(a), tools::type_to_hex(b))
 
 namespace {  // anonymous namespace
 
@@ -84,8 +87,8 @@ const std::vector<std::vector<std::string>> t_transactions =
 // from std::string, this might break.
 bool compare_blocks(const block& a, const block& b)
 {
-  auto hash_a = pod_to_hex(get_block_hash(a));
-  auto hash_b = pod_to_hex(get_block_hash(b));
+  auto hash_a = tools::type_to_hex(get_block_hash(a));
+  auto hash_b = tools::type_to_hex(get_block_hash(b));
 
   return hash_a == hash_b;
 }
@@ -94,8 +97,8 @@ bool compare_blocks(const block& a, const block& b)
 void print_block(const block& blk, const std::string& prefix = "")
 {
   std::cerr << prefix << ": " << std::endl
-            << "\thash - " << pod_to_hex(get_block_hash(blk)) << std::endl
-            << "\tparent - " << pod_to_hex(blk.prev_id) << std::endl
+            << "\thash - " << tools::type_to_hex(get_block_hash(blk)) << std::endl
+            << "\tparent - " << tools::type_to_hex(blk.prev_id) << std::endl
             << "\ttimestamp - " << blk.timestamp << std::endl
   ;
 }
@@ -183,10 +186,10 @@ protected:
 
   BlockchainDB* m_db;
   HardFork m_hardfork;
-  std::string m_prefix;
+  fs::path m_prefix;
   std::vector<std::pair<block, blobdata>> m_blocks;
   std::vector<std::vector<std::pair<transaction, blobdata>>> m_txs;
-  std::vector<std::string> m_filenames;
+  std::vector<fs::path> m_filenames;
 
   void init_hard_fork()
   {
@@ -208,9 +211,9 @@ protected:
     // remove each file the db created, making sure it starts with fname.
     for (auto& f : m_filenames)
     {
-      if (boost::starts_with(f, m_prefix))
+      if (tools::starts_with(f.u8string(), m_prefix.u8string()))
       {
-        boost::filesystem::remove(f);
+        fs::remove(f);
       }
       else
       {
@@ -219,12 +222,12 @@ protected:
     }
 
     // remove directory if it still exists
-    boost::filesystem::remove_all(m_prefix);
+    fs::remove_all(m_prefix);
   }
 
   void set_prefix(const std::string& prefix)
   {
-    m_prefix = prefix;
+    m_prefix = fs::u8path(prefix);
   }
 };
 
@@ -236,7 +239,7 @@ TYPED_TEST_CASE(BlockchainDBTest, implementations);
 
 TYPED_TEST(BlockchainDBTest, OpenAndClose)
 {
-  boost::filesystem::path tempPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  fs::path tempPath = random_tmp_file();
   std::string dirPath = tempPath.string();
 
   this->set_prefix(dirPath);
@@ -254,7 +257,7 @@ TYPED_TEST(BlockchainDBTest, OpenAndClose)
 TYPED_TEST(BlockchainDBTest, AddBlock)
 {
 
-  boost::filesystem::path tempPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  fs::path tempPath = random_tmp_file();
   std::string dirPath = tempPath.string();
 
   this->set_prefix(dirPath);
@@ -302,7 +305,7 @@ TYPED_TEST(BlockchainDBTest, AddBlock)
 
 TYPED_TEST(BlockchainDBTest, RetrieveBlockData)
 {
-  boost::filesystem::path tempPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  fs::path tempPath = random_tmp_file();
   std::string dirPath = tempPath.string();
 
   this->set_prefix(dirPath);

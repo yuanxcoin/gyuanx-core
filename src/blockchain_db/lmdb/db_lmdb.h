@@ -31,6 +31,7 @@
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/blobdatatype.h" // for type blobdata
 #include "ringct/rctTypes.h"
+#include "common/fs.h"
 #include <boost/thread/thread.hpp>
 #include <boost/thread/tss.hpp>
 
@@ -177,7 +178,7 @@ public:
   BlockchainLMDB(bool batch_transactions=true);
   ~BlockchainLMDB();
 
-  void open(const std::string& filename, cryptonote::network_type nettype, const int mdb_flags=0) override;
+  void open(const fs::path& filename, cryptonote::network_type nettype, const int mdb_flags=0) override;
 
   void close() override;
 
@@ -187,9 +188,9 @@ public:
 
   void reset() override;
 
-  std::vector<std::string> get_filenames() const override;
+  std::vector<fs::path> get_filenames() const override;
 
-  bool remove_data_file(const std::string& folder) const override;
+  bool remove_data_file(const fs::path& folder) const override;
 
   std::string get_db_name() const override;
 
@@ -490,7 +491,7 @@ private:
 
   mutable uint64_t m_cum_size;	// used in batch size estimation
   mutable unsigned int m_cum_count;
-  std::string m_folder;
+  fs::path m_folder;
   mdb_txn_safe* m_write_txn; // may point to either a short-lived txn or a batch txn
   mdb_txn_safe* m_write_batch_txn; // persist batch txn outside of BlockchainLMDB
   boost::thread::id m_writer;

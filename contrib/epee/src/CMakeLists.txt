@@ -64,11 +64,9 @@ endif()
 target_link_libraries(epee
   PUBLIC
     easylogging
+    lokimq::lokimq
   PRIVATE
     lokimq::lokimq
-    Boost::filesystem
+    filesystem
     Boost::thread
     extra)
-
-target_include_directories(epee PUBLIC ../include)
-

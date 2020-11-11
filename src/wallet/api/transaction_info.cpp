@@ -31,12 +31,12 @@
 #include "transaction_info.h"
 
 
-namespace Monero {
+namespace Wallet {
 
 TransactionInfo::~TransactionInfo() {}
 
-TransactionInfo::Transfer::Transfer(uint64_t _amount, const std::string &_address)
-    : amount(_amount), address(_address) {}
+TransactionInfo::Transfer::Transfer(uint64_t _amount, std::string _address)
+    : amount(_amount), address(std::move(_address)) {}
 
 
 TransactionInfoImpl::TransactionInfoImpl()
@@ -147,5 +147,3 @@ uint64_t TransactionInfoImpl::unlockTime() const
 }
 
 } // namespace
-
-namespace Bitmonero = Monero;

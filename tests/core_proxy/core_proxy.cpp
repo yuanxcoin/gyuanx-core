@@ -32,7 +32,6 @@
 //
 
 
-#include "include_base_utils.h"
 #include "version.h"
 #include <iostream>
 #include <sstream>
@@ -40,7 +39,7 @@
 #include <boost/program_options.hpp>
 
 #include "common/command_line.h"
-#include "console_handler.h"
+#include "epee/console_handler.h"
 #include "p2p/net_node.h"
 #include "p2p/net_node.inl"
 //#include "cryptonote_core/cryptonote_core.h"
@@ -172,7 +171,7 @@ std::vector<cryptonote::core::tx_verification_batch_info> tests::proxy_core::par
             std::cout << txi.tx_hash << "\n";
             std::cout << tx_prefix_hash << "\n";
             std::cout << tx_blobs[i].size() << "\n";
-            //std::cout << string_tools::buff_to_hex_nodelimer(tx_blob) << "\n\n";
+            //std::cout << lokimq::to_hex(tx_blob) << "\n\n";
             std::cout << obj_to_json_str(txi.tx) << "\n";
             std::cout << "\nENDTX\n";
             txi.result = txi.parsed = true;

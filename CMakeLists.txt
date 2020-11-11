@@ -33,15 +33,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(INSERT CMAKE_MODULE_PATH 0
   "${CMAKE_SOURCE_DIR}/cmake")
-include(CheckCCompilerFlag)
-include(CheckCXXCompilerFlag)
-include(CheckLinkerFlag)
-include(CheckLibraryExists)
-include(CheckFunctionExists)
-
-if (IOS)
-    INCLUDE(CmakeLists_IOS.txt)
-endif()
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -60,7 +51,7 @@ message(STATUS "CMake version ${CMAKE_VERSION}")
 set(CMAKE_OSX_DEPLOYMENT_TARGET 10.12 CACHE STRING "macOS deployment target (Apple clang only)")
 
 project(loki
-    VERSION 8.1.2
+    VERSION 8.1.3
     LANGUAGES CXX C)
 set(LOKI_RELEASE_CODENAME "Salty Saga")
 
@@ -84,6 +75,12 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+
+include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
+include(CheckLinkerFlag)
+include(CheckLibraryExists)
+include(CheckFunctionExists)
 
 function (add_c_flag_if_supported flag var)
   string(REPLACE "-" "_" supported ${flag}_c)
@@ -147,7 +144,7 @@ endif()
 
 cmake_policy(SET CMP0069 NEW)
 SET(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
-if(CMAKE_BUILD_TYPE STREQUAL Release AND NOT MINGW)
+if(CMAKE_BUILD_TYPE STREQUAL Release AND NOT MINGW AND NOT ANDROID)
   set(USE_LTO_DEFAULT ON)
 else()
   set(USE_LTO_DEFAULT OFF)
@@ -284,6 +281,7 @@ if(NOT MANUAL_SUBMODULES)
       check_submodule(external/googletest)
     endif()
     check_submodule(external/uWebSockets uSockets)
+    check_submodule(external/ghc-filesystem)
   endif()
 endif()
 
@@ -334,6 +332,8 @@ endif()
 #   set(NETBSD TRUE)
 # elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
 #   set(BSDI TRUE)
+
+include(cmake/check_for_std_filesystem.cmake)
 
 include_directories(external/rapidjson/include src external)
 
@@ -742,7 +742,7 @@ else()
 
   endif(ARM)
 
-  if(ANDROID AND NOT BUILD_GUI_DEPS STREQUAL "ON" OR IOS)
+  if(ANDROID OR IOS)
     #From Android 5: "only position independent executables (PIE) are supported" 
     message(STATUS "Enabling PIE executable")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIE")
@@ -792,10 +792,8 @@ set(Boost_USE_MULTITHREADED TRUE) # Needed for macOS, at least, and won't hurt e
 
 if(BUILD_STATIC_DEPS)
   # StaticBuild.cmake sets Boost targets up for us
-elseif (WIN32)
-  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time serialization program_options locale)
 else()
-  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time serialization program_options)
+  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system thread serialization program_options)
 endif()
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES ${OLD_LIB_SUFFIXES})
@@ -947,9 +945,6 @@ if(BUILD_DOCUMENTATION)
   endif()
 endif()
 
-# when ON - will install libwallet_merged into "lib"
-option(BUILD_GUI_DEPS "Build GUI dependencies." OFF)
-
 find_package(PythonInterp)
 find_program(iwyu_tool_path NAMES iwyu_tool.py iwyu_tool)
 if (iwyu_tool_path AND PYTHONINTERP_FOUND)
@@ -988,7 +983,16 @@ set(git_tag "-unknown")
 if(GIT_FOUND)
   execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --abbrev-ref HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE branch OUTPUT_STRIP_TRAILING_WHITESPACE)
   if(NOT ret AND branch STREQUAL "stable")
-    set(git_tag "") # No tag if we're building the stable branch
+    # Get the tag description; for a tagged release this will be just the tag (v1.2.3); for
+    # something following a tag this will be something like "v1.2.3-2-abcdef" for something 2
+    # commits beyond the tag, currently at commit "abcdef".
+    execute_process(COMMAND "${GIT_EXECUTABLE}" describe --tags --abbrev=6 HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE tag OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT ret AND tag MATCHES "v[0-9]+\\.[0-9]+\\.[0-9]+(-.*)")
+      # We're building something following a tagged release, so append the post-version git tag info
+      set(git_tag "${CMAKE_MATCH_1}")
+    else()
+      set(git_tag "") # No tag appended if we're building a tagged stable branch release
+    endif()
   else()
     execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=9 HEAD RESULT_VARIABLE ret OUTPUT_VARIABLE commithash OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(NOT ret)

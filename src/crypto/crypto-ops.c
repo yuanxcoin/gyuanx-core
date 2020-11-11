@@ -30,7 +30,7 @@
 
 #include <assert.h>
 
-#include "warnings.h"
+#include "epee/warnings.h"
 #include "crypto-ops.h"
 
 DISABLE_VS_WARNINGS(4146 4244)

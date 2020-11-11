@@ -35,7 +35,7 @@
 #include <vector>
 
 
-namespace Monero {
+namespace Wallet {
 
 class WalletImpl;
 class UnsignedTransactionImpl : public UnsignedTransaction
@@ -43,8 +43,8 @@ class UnsignedTransactionImpl : public UnsignedTransaction
 public:
     UnsignedTransactionImpl(WalletImpl &wallet);
     ~UnsignedTransactionImpl();
-    int status() const override;
-    std::string errorString() const override;
+    bool good() const override { return m_status.first == Status_Ok; }
+    std::pair<int, std::string> status() const override { return m_status; }
     std::vector<uint64_t> amount() const override;
     std::vector<uint64_t> fee() const override;
     std::vector<uint64_t> mixin() const override;
@@ -52,7 +52,7 @@ public:
     std::vector<std::string> recipientAddress() const override;
     uint64_t txCount() const override;
     // sign txs and save to file
-    bool sign(const std::string &signedFileName) override;
+    bool sign(std::string_view signedFileName) override;
     std::string confirmationMessage() const override {return m_confirmationMessage;}
     uint64_t minMixinCount() const override;
 
@@ -63,13 +63,10 @@ private:
     friend class WalletImpl;
     WalletImpl &m_wallet;
 
-    int  m_status;
-    std::string m_errorString;
+    std::pair<int, std::string> m_status;
     tools::wallet2::unsigned_tx_set m_unsigned_tx_set;
     std::string m_confirmationMessage;
 };
 
 
 }
-
-namespace Bitmonero = Monero;

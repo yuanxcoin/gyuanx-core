@@ -40,8 +40,8 @@
 
 #include <cpr/session.h>
 
-#include "wipeable_string.h"
-#include "misc_log_ex.h"
+#include "epee/wipeable_string.h"
+#include "epee/misc_log_ex.h"
 
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"

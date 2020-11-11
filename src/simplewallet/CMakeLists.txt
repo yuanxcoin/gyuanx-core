@@ -38,11 +38,7 @@ target_link_libraries(simplewallet
     cryptonote_core
     mnemonics
     Boost::program_options
-    Boost::filesystem
+    filesystem
     icu
     Boost::thread
     extra)
-
-if (WIN32)
-    target_link_libraries(simplewallet PRIVATE Boost::locale)
-endif()

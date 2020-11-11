@@ -515,7 +515,7 @@ bool gen_rct2_tx_clsag_malleability::generate(std::vector<test_event_entry>& eve
     CHECK_TEST_CONDITION(tx.rct_signatures.type == rct::RCTTypeCLSAG);
     CHECK_TEST_CONDITION(!tx.rct_signatures.p.CLSAGs.empty());
     rct::key x;
-    CHECK_TEST_CONDITION(epee::string_tools::hex_to_pod("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", x));
+    CHECK_TEST_CONDITION(tools::hex_to_type("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa", x));
     tx.rct_signatures.p.CLSAGs[0].D = rct::addKeys(tx.rct_signatures.p.CLSAGs[0].D, x);
     return true;
   });

@@ -30,14 +30,15 @@
 
 #include "gtest/gtest.h"
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "ringct/rctOps.h"
 #include "ringct/rctSigs.h"
 #include "ringct/bulletproofs.h"
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "device/device.hpp"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
+#include "common/hex.h"
 
 TEST(bulletproofs, valid_zero)
 {
@@ -197,7 +198,7 @@ TEST(bulletproofs, invalid_torsion)
   for (const auto &xs: torsion_elements)
   {
     rct::key x;
-    ASSERT_TRUE(epee::string_tools::hex_to_pod(xs, x));
+    ASSERT_TRUE(tools::hex_to_type(xs, x));
     ASSERT_FALSE(rct::isInMainSubgroup(x));
     for (auto &k: proof.V)
     {

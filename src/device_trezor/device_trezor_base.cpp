@@ -28,7 +28,7 @@
 //
 
 #include "device_trezor_base.hpp"
-#include "memwipe.h"
+#include "epee/memwipe.h"
 #include "common/lock.h"
 #include "common/string_util.h"
 

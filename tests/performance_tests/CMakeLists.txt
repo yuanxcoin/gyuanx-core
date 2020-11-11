@@ -27,7 +27,8 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_executable(performance_tests
-  main.cpp)
+  main.cpp
+  timings.cc)
 target_link_libraries(performance_tests
   PRIVATE
     wallet

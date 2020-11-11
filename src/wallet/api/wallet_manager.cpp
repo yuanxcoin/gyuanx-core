@@ -38,24 +38,24 @@
 #include "common/dns_utils.h"
 #include "common/util.h"
 #include "version.h"
-#include <boost/filesystem.hpp>
+#include "common/fs.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "WalletAPI"
 
-namespace Monero {
+namespace Wallet {
 
-Wallet *WalletManagerImpl::createWallet(const std::string &path, const std::string &password,
+Wallet* WalletManagerImpl::createWallet(std::string_view path, const std::string &password,
                                     const std::string &language, NetworkType nettype, uint64_t kdf_rounds)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     wallet->create(path, password, language);
     return wallet;
 }
 
-Wallet *WalletManagerImpl::openWallet(const std::string &path, const std::string &password, NetworkType nettype, uint64_t kdf_rounds, WalletListener * listener)
+Wallet* WalletManagerImpl::openWallet(std::string_view path, const std::string &password, NetworkType nettype, uint64_t kdf_rounds, WalletListener * listener)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     wallet->setListener(listener);
     if (listener){
         listener->onSetWallet(wallet);
@@ -67,24 +67,7 @@ Wallet *WalletManagerImpl::openWallet(const std::string &path, const std::string
     return wallet;
 }
 
-Wallet *WalletManagerImpl::recoveryWallet(const std::string &path, const std::string &mnemonic, NetworkType nettype, uint64_t restoreHeight)
-{
-    return recoveryWallet(path, "", mnemonic, nettype, restoreHeight);
-}
-
-Wallet *WalletManagerImpl::createWalletFromKeys(const std::string &path,
-                                                const std::string &language,
-                                                NetworkType nettype,
-                                                uint64_t restoreHeight,
-                                                const std::string &addressString,
-                                                const std::string &viewKeyString,
-                                                const std::string &spendKeyString)
-{
-    return createWalletFromKeys(path, "", language, nettype, restoreHeight,
-                                addressString, viewKeyString, spendKeyString);
-}
-
-Wallet *WalletManagerImpl::recoveryWallet(const std::string &path,
+Wallet* WalletManagerImpl::recoveryWallet(std::string_view path,
                                                 const std::string &password,
                                                 const std::string &mnemonic,
                                                 NetworkType nettype,
@@ -92,7 +75,7 @@ Wallet *WalletManagerImpl::recoveryWallet(const std::string &path,
                                                 uint64_t kdf_rounds,
                                                 const std::string &seed_offset/* = {}*/)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     if(restoreHeight > 0){
         wallet->setRefreshFromBlockHeight(restoreHeight);
     }
@@ -100,7 +83,7 @@ Wallet *WalletManagerImpl::recoveryWallet(const std::string &path,
     return wallet;
 }
 
-Wallet *WalletManagerImpl::createWalletFromKeys(const std::string &path,
+Wallet* WalletManagerImpl::createWalletFromKeys(std::string_view path,
                                                 const std::string &password,
                                                 const std::string &language,
                                                 NetworkType nettype, 
@@ -110,7 +93,7 @@ Wallet *WalletManagerImpl::createWalletFromKeys(const std::string &path,
                                                 const std::string &spendKeyString,
                                                 uint64_t kdf_rounds)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     if(restoreHeight > 0){
         wallet->setRefreshFromBlockHeight(restoreHeight);
     }
@@ -118,7 +101,7 @@ Wallet *WalletManagerImpl::createWalletFromKeys(const std::string &path,
     return wallet;
 }
 
-Wallet *WalletManagerImpl::createWalletFromDevice(const std::string &path,
+Wallet* WalletManagerImpl::createWalletFromDevice(std::string_view path,
                                                   const std::string &password,
                                                   NetworkType nettype,
                                                   const std::string &deviceName,
@@ -127,7 +110,7 @@ Wallet *WalletManagerImpl::createWalletFromDevice(const std::string &path,
                                                   uint64_t kdf_rounds,
                                                   WalletListener * listener)
 {
-    WalletImpl * wallet = new WalletImpl(nettype, kdf_rounds);
+    WalletImpl* wallet = new WalletImpl(nettype, kdf_rounds);
     wallet->setListener(listener);
     if (listener){
         listener->onSetWallet(wallet);
@@ -147,67 +130,66 @@ Wallet *WalletManagerImpl::createWalletFromDevice(const std::string &path,
     return wallet;
 }
 
-bool WalletManagerImpl::closeWallet(Wallet *wallet, bool store)
+bool WalletManagerImpl::closeWallet(Wallet* wallet, bool store)
 {
-    WalletImpl * wallet_ = dynamic_cast<WalletImpl*>(wallet);
+    WalletImpl* wallet_ = dynamic_cast<WalletImpl*>(wallet);
     if (!wallet_)
         return false;
     bool result = wallet_->close(store);
     if (!result) {
-        m_errorString = wallet_->errorString();
+        m_errorString = wallet_->status().second;
     } else {
         delete wallet_;
     }
     return result;
 }
 
-bool WalletManagerImpl::walletExists(const std::string &path)
+bool WalletManagerImpl::walletExists(std::string_view path)
 {
     bool keys_file_exists;
     bool wallet_file_exists;
-    tools::wallet2::wallet_exists(path, keys_file_exists, wallet_file_exists);
+    tools::wallet2::wallet_exists(fs::u8path(path), keys_file_exists, wallet_file_exists);
     if(keys_file_exists){
         return true;
     }
     return false;
 }
 
-bool WalletManagerImpl::verifyWalletPassword(const std::string &keys_file_name, const std::string &password, bool no_spend_key, uint64_t kdf_rounds) const
+bool WalletManagerImpl::verifyWalletPassword(std::string_view keys_file_name, const std::string &password, bool no_spend_key, uint64_t kdf_rounds) const
 {
-	    return tools::wallet2::verify_password(keys_file_name, password, no_spend_key, hw::get_device("default"), kdf_rounds);
+	    return tools::wallet2::verify_password(fs::u8path(keys_file_name), password, no_spend_key, hw::get_device("default"), kdf_rounds);
 }
 
-bool WalletManagerImpl::queryWalletDevice(Wallet::Device& device_type, const std::string &keys_file_name, const std::string &password, uint64_t kdf_rounds) const
+bool WalletManagerImpl::queryWalletDevice(Wallet::Device& device_type, std::string_view keys_file_name, const std::string &password, uint64_t kdf_rounds) const
 {
     hw::device::device_type type;
-    bool r = tools::wallet2::query_device(type, keys_file_name, password, kdf_rounds);
+    bool r = tools::wallet2::query_device(type, fs::u8path(keys_file_name), password, kdf_rounds);
     device_type = static_cast<Wallet::Device>(type);
     return r;
 }
 
-std::vector<std::string> WalletManagerImpl::findWallets(const std::string &path)
+std::vector<std::string> WalletManagerImpl::findWallets(std::string_view path_)
 {
+    auto path = fs::u8path(path_);
     std::vector<std::string> result;
-    boost::filesystem::path work_dir(path);
     // return empty result if path doesn't exist
-    if(!boost::filesystem::is_directory(path)){
+    if (!fs::is_directory(path)){
         return result;
     }
-    boost::filesystem::recursive_directory_iterator end_itr; // Default ctor yields past-the-end
-    for (boost::filesystem::recursive_directory_iterator itr(path); itr != end_itr; ++itr) {
+    for (auto& p : fs::recursive_directory_iterator{path}) {
         // Skip if not a file
-        if (!boost::filesystem::is_regular_file(itr->status()))
+        if (!p.is_regular_file())
             continue;
-        std::string filename = itr->path().filename().string();
+        auto filename = p.path();
 
         LOG_PRINT_L3("Checking filename: " << filename);
 
-        if (tools::ends_with(filename, ".keys")) {
+        if (filename.extension() == ".keys") {
             // if keys file found, checking if there's wallet file itself
-            filename.erase(filename.size() - 5);
-            if (boost::filesystem::exists(filename)) {
+            filename.replace_extension();
+            if (fs::exists(filename)) {
                 LOG_PRINT_L3("Found wallet: " << filename);
-                result.push_back(std::move(filename));
+                result.push_back(filename.u8string());
             }
         }
     }
@@ -341,5 +323,3 @@ void WalletManagerFactory::setLogCategories(const std::string &categories)
 
 
 }
-
-namespace Bitmonero = Monero;

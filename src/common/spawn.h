@@ -29,10 +29,11 @@
 #pragma once 
 #include <vector>
 #include <string>
+#include "common/fs.h"
 
 namespace tools
 {
 
-int spawn(const char *filename, const std::vector<std::string>& args, bool wait);
+int spawn(const fs::path& filename, const std::vector<std::string>& args, bool wait);
 
 }

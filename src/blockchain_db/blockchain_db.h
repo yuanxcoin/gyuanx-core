@@ -34,6 +34,7 @@
 #include <exception>
 #include <boost/program_options.hpp>
 #include "common/command_line.h"
+#include "common/fs.h"
 #include "crypto/hash.h"
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_basic/cryptonote_basic.h"
@@ -589,10 +590,6 @@ public:
    * The subclass implementing this will handle all file opening/creation,
    * and is responsible for maintaining its state.
    *
-   * The parameter <filename> may not refer to a file name, necessarily, but
-   * could be an IP:PORT for a database which needs it, and so on.  Calling it
-   * <filename> is convenient and should be descriptive enough, however.
-   *
    * For now, db_flags are
    * specific to the subclass being instantiated.  This is subject to change,
    * and the db_flags parameter may be deprecated.
@@ -600,10 +597,10 @@ public:
    * If any of this cannot be done, the subclass should throw the corresponding
    * subclass of DB_EXCEPTION
    *
-   * @param filename a string referring to the BlockchainDB to open
+   * @param filename a path referring to the BlockchainDB to open
    * @param db_flags flags relevant to how to open/use the BlockchainDB
    */
-  virtual void open(const std::string& filename, cryptonote::network_type nettype, const int db_flags = 0) = 0;
+  virtual void open(const fs::path& filename, cryptonote::network_type nettype, const int db_flags = 0) = 0;
 
   /**
    * @brief Gets the current open/ready state of the BlockchainDB
@@ -665,7 +662,7 @@ public:
    *
    * @return a list of filenames
    */
-  virtual std::vector<std::string> get_filenames() const = 0;
+  virtual std::vector<fs::path> get_filenames() const = 0;
 
   /**
    * @brief remove file(s) storing the database
@@ -679,7 +676,7 @@ public:
    *
    * @return          true if the operation is succesfull
    */
-  virtual bool remove_data_file(const std::string& folder) const = 0;
+  virtual bool remove_data_file(const fs::path& folder) const = 0;
 
   // return the name of the folder the db's file(s) should reside in
   /**

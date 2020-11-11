@@ -5,8 +5,8 @@
 #include "common/string_util.h"
 
 // epee:
-#include "net/jsonrpc_structs.h"
-#include "storages/portable_storage_template_helper.h"
+#include "epee/net/jsonrpc_structs.h"
+#include "epee/storages/portable_storage_template_helper.h"
 
 namespace cryptonote::rpc {
 

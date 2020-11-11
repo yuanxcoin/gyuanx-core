@@ -44,11 +44,9 @@ namespace daemon_args
   , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }}
   , [](std::array<bool, 2> testnet_devnet, bool defaulted, std::string val)->std::string {
       if (testnet_devnet[0] && defaulted)
-        return (daemonizer::get_default_data_dir() / "testnet" /
-                std::string(CRYPTONOTE_NAME ".conf")).string();
+        return (daemonizer::get_default_data_dir() / "testnet" / (CRYPTONOTE_NAME ".conf")).u8string();
       else if (testnet_devnet[1] && defaulted)
-        return (daemonizer::get_default_data_dir() / "devnet" /
-                std::string(CRYPTONOTE_NAME ".conf")).string();
+        return (daemonizer::get_default_data_dir() / "devnet" / (CRYPTONOTE_NAME ".conf")).u8string();
       return val;
     }
   };
@@ -59,11 +57,9 @@ namespace daemon_args
   , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }}
   , [](std::array<bool, 2> testnet_devnet, bool defaulted, std::string val)->std::string {
       if (testnet_devnet[0] && defaulted)
-        return (daemonizer::get_default_data_dir() / "testnet" /
-                std::string(CRYPTONOTE_NAME ".log")).string();
+        return (daemonizer::get_default_data_dir() / "testnet" / (CRYPTONOTE_NAME ".log")).u8string();
       else if (testnet_devnet[1] && defaulted)
-        return (daemonizer::get_default_data_dir() / "devnet" /
-                std::string(CRYPTONOTE_NAME ".log")).string();
+        return (daemonizer::get_default_data_dir() / "devnet" / (CRYPTONOTE_NAME ".log")).u8string();
       return val;
     }
   };

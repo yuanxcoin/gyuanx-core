@@ -27,7 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "message_transporter.h"
-#include "string_coding.h"
+#include "epee/string_coding.h"
 #include <boost/format.hpp>
 #include "wallet_errors.h"
 #include <algorithm>
@@ -196,7 +196,7 @@ std::string message_transporter::derive_transport_address(const std::string &see
   // case of a PyBitmessage instance used by multiple unrelated people
   // If an auto-config token gets hashed in another context use different salt instead of "chan"
   std::string salted_seed = seed + "chan";
-  std::string chan_name = epee::string_tools::pod_to_hex(crypto::cn_fast_hash(salted_seed.data(), salted_seed.size()));
+  std::string chan_name = tools::type_to_hex(crypto::cn_fast_hash(salted_seed.data(), salted_seed.size()));
 
   // Calculate the Bitmessage address that the chan will get for being able to
   // use 'joinChain', as 'createChan' will fail and not tell the address if the chan

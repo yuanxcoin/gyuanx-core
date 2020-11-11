@@ -32,7 +32,7 @@
 #include <string>
 #include <cstdio>
 #include <cstdint>
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 
 namespace tools
 {

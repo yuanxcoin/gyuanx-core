@@ -27,7 +27,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/filesystem.hpp>
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/tx_extra.h"
 #include "cryptonote_core/blockchain.h"
@@ -47,10 +46,10 @@ using namespace cryptonote;
 static std::string extra_nonce_to_string(const cryptonote::tx_extra_nonce &extra_nonce)
 {
   if (extra_nonce.nonce.size() == 9 && extra_nonce.nonce[0] == TX_EXTRA_NONCE_ENCRYPTED_PAYMENT_ID)
-    return "encrypted payment ID: " + epee::string_tools::buff_to_hex_nodelimer(extra_nonce.nonce.substr(1));
+    return "encrypted payment ID: " + lokimq::to_hex(extra_nonce.nonce.begin() + 1, extra_nonce.nonce.end());
   if (extra_nonce.nonce.size() == 33 && extra_nonce.nonce[0] == TX_EXTRA_NONCE_PAYMENT_ID)
-    return "plaintext payment ID: " + epee::string_tools::buff_to_hex_nodelimer(extra_nonce.nonce.substr(1));
-  return epee::string_tools::buff_to_hex_nodelimer(extra_nonce.nonce);
+    return "plaintext payment ID: " + lokimq::to_hex(extra_nonce.nonce.begin() + 1, extra_nonce.nonce.end());
+  return lokimq::to_hex(extra_nonce.nonce);
 }
 
 struct extra_printer {
@@ -125,8 +124,6 @@ int main(int argc, char* argv[])
   std::string input;
 
   tools::on_startup();
-
-  boost::filesystem::path output_file_path;
 
   po::options_description desc_cmd_only("Command line options");
   po::options_description desc_cmd_sett("Command line options and settings options");

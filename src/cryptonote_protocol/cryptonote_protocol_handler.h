@@ -40,8 +40,8 @@
 #include <unordered_map>
 
 #include "common/periodic_task.h"
-#include "storages/levin_abstract_invoke2.h"
-#include "warnings.h"
+#include "epee/storages/levin_abstract_invoke2.h"
+#include "epee/warnings.h"
 #include "cryptonote_protocol_defs.h"
 #include "cryptonote_protocol_handler_common.h"
 #include "block_queue.h"

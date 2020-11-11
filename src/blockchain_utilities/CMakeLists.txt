@@ -32,7 +32,7 @@ target_link_libraries(blockchain_tools_common_libs INTERFACE
     cryptonote_core
     blockchain_db
     version
-    Boost::filesystem
+    filesystem
     Boost::program_options
     extra)
 
@@ -110,7 +110,7 @@ target_link_libraries(blockchain_stats PRIVATE blockchain_tools_common_libs)
 
 if (TARGET sodium_vendor OR NOT SODIUM_VERSION VERSION_LESS 1.0.17)
     loki_add_executable(sn_key_tool "loki-sn-keys" sn_key_tool.cpp)
-    target_link_libraries(sn_key_tool PRIVATE sodium lokimq)
+    target_link_libraries(sn_key_tool PRIVATE sodium lokimq filesystem)
 else()
     message(STATUS "Not building loki-sn-keys tool (requires libsodium >= 1.0.17)")
 endif()

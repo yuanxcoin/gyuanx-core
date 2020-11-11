@@ -31,17 +31,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
-#include <boost/filesystem.hpp>
+#include "common/fs.h"
 
 #include "gtest/gtest.h"
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "crypto/crypto.h"
 #include "crypto/random.h"
 #include "crypto/chacha.h"
 #include "ringct/rctOps.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "wallet/ringdb.h"
+
+#include "random_path.h"
 
 namespace {
 
@@ -86,27 +88,8 @@ lazy_init &get_context()
 class RingDB: public tools::ringdb
 {
 public:
-  RingDB(const char *genesis = ""): tools::ringdb(make_filename(), genesis) { }
-  ~RingDB() { close(); boost::filesystem::remove_all(filename); free(filename); }
-
-private:
-  std::string make_filename()
-  {
-    boost::filesystem::path path =
-      boost::filesystem::temp_directory_path();
-#if defined(__MINGW32__) || defined(__MINGW__)
-    filename = tempnam(path.string().c_str(), "monero-ringdb-test-");
-    EXPECT_TRUE(filename != NULL);
-#else
-    path /= "monero-ringdb-test-XXXXXX";
-    filename = strdup(path.string().c_str());
-    EXPECT_TRUE(mkdtemp(filename) != NULL);
-#endif
-    return filename;
-  }
-
-private:
-  char *filename;
+  RingDB(const char *genesis = ""): tools::ringdb(random_tmp_file(), genesis) { }
+  ~RingDB() { close(); fs::remove_all(filename()); }
 };
 
 TEST(ringdb, not_found)

@@ -38,15 +38,15 @@
 #include <iomanip>
 #include <algorithm>
 
-#include "net/net_utils_base.h" 
-#include "misc_log_ex.h" 
-#include "misc_language.h"
-#include "pragma_comp_defs.h"
+#include "epee/net/net_utils_base.h"
+#include "epee/misc_log_ex.h"
+#include "epee/misc_language.h"
+#include "epee/pragma_comp_defs.h"
 
-#include "net/abstract_tcp_server2.h"
+#include "epee/net/abstract_tcp_server2.h"
 
 // TODO:
-#include "net/network_throttle-detail.hpp"
+#include "epee/net/network_throttle-detail.hpp"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net.throttle"

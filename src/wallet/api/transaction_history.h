@@ -31,7 +31,7 @@
 #include "wallet/api/wallet2_api.h"
 #include <shared_mutex>
 
-namespace Monero {
+namespace Wallet {
 
 class WalletImpl;
 
@@ -40,11 +40,11 @@ class TransactionHistoryImpl : public TransactionHistory
 public:
     TransactionHistoryImpl(WalletImpl * wallet);
     ~TransactionHistoryImpl();
-    virtual int count() const;
-    virtual TransactionInfo * transaction(int index)  const;
-    virtual TransactionInfo * transaction(const std::string &id) const;
-    virtual std::vector<TransactionInfo*> getAll() const;
-    virtual void refresh();
+    int count() const override;
+    TransactionInfo* transaction(int index) const override;
+    TransactionInfo* transaction(std::string_view id) const override;
+    std::vector<TransactionInfo*> getAll() const override;
+    void refresh() override;
 
 private:
 
@@ -55,6 +55,3 @@ private:
 };
 
 }
-
-namespace Bitmonero = Monero;
-

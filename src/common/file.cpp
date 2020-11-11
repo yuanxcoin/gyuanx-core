@@ -30,12 +30,12 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 //
 #include "file.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include <unistd.h>
 #include <cstdio>
 
 #ifdef WIN32
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #ifndef STRSAFE_NO_DEPRECATE
 #define STRSAFE_NO_DEPRECATE
 #endif
@@ -47,7 +47,6 @@
   #include <sys/utsname.h>
   #include <sys/stat.h>
 #endif
-#include <boost/filesystem.hpp>
 
 #ifdef __GLIBC__
 #include <sys/types.h>
@@ -85,10 +84,10 @@ namespace tools {
 
   private_file::private_file() noexcept : m_handle(), m_filename() {}
 
-  private_file::private_file(std::FILE* handle, std::string&& filename) noexcept
+  private_file::private_file(std::FILE* handle, fs::path filename) noexcept
     : m_handle(handle), m_filename(std::move(filename)) {}
 
-  private_file private_file::create(std::string name)
+  private_file private_file::create(fs::path name)
   {
 #ifdef WIN32
     struct close_handle
@@ -137,7 +136,7 @@ namespace tools {
 
     SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES), std::addressof(descriptor), false};
     std::unique_ptr<void, close_handle> file{
-      CreateFile(
+      CreateFileW(
         name.c_str(),
         GENERIC_WRITE, FILE_SHARE_READ,
         std::addressof(attributes),
@@ -193,29 +192,15 @@ namespace tools {
 
   private_file::~private_file() noexcept
   {
-    try
-    {
-      boost::system::error_code ec{};
-      boost::filesystem::remove(filename(), ec);
-    }
-    catch (...) {}
+    std::error_code ignored;
+    fs::remove(filename(), ignored);
   }
 
-  file_locker::file_locker(const std::string &filename)
+  file_locker::file_locker(const fs::path& filename)
   {
 #ifdef WIN32
     m_fd = INVALID_HANDLE_VALUE;
-    std::wstring filename_wide;
-    try
-    {
-      filename_wide = epee::string_tools::utf8_to_utf16(filename);
-    }
-    catch (const std::exception &e)
-    {
-      MERROR("Failed to convert path \"" << filename << "\" to UTF-16: " << e.what());
-      return;
-    }
-    m_fd = CreateFileW(filename_wide.c_str(), GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    m_fd = CreateFileW(filename.c_str(), GENERIC_READ, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (m_fd != INVALID_HANDLE_VALUE)
     {
       OVERLAPPED ov;
@@ -270,64 +255,43 @@ namespace tools {
 
 
 #ifdef WIN32
-  std::string get_special_folder_path(int nfolder, bool iscreate)
+  fs::path get_special_folder_path(int nfolder, bool iscreate)
   {
     WCHAR psz_path[MAX_PATH] = L"";
 
     if (SHGetSpecialFolderPathW(NULL, psz_path, nfolder, iscreate))
     {
-      try
-      {
-        return epee::string_tools::utf16_to_utf8(psz_path);
-      }
-      catch (const std::exception &e)
-      {
-        MERROR("utf16_to_utf8 failed: " << e.what());
-        return "";
-      }
+      return fs::path{psz_path};
     }
 
     LOG_ERROR("SHGetSpecialFolderPathW() failed, could not obtain requested path.");
     return "";
   }
-#endif
-  
-  std::string get_default_data_dir()
+
+  // Windows < Vista: C:\Documents and Settings\Username\Application Data\CRYPTONOTE_NAME
+  // Windows >= Vista: C:\Users\Username\AppData\Roaming\CRYPTONOTE_NAME
+  fs::path get_default_data_dir()
   {
-    /* Please for the love of god refactor  the ifdefs out of this */
-
-    // namespace fs = boost::filesystem;
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\CRYPTONOTE_NAME
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\CRYPTONOTE_NAME
-    // Unix & Mac: ~/.CRYPTONOTE_NAME
-    std::string config_folder;
-
-#ifdef WIN32
-    config_folder = get_special_folder_path(CSIDL_COMMON_APPDATA, true) + "\\" + CRYPTONOTE_NAME;
-#else
-    std::string pathRet;
-    char* pszHome = getenv("HOME");
-    if (pszHome == NULL || strlen(pszHome) == 0)
-      pathRet = "/";
-    else
-      pathRet = pszHome;
-    config_folder = (pathRet + "/." + CRYPTONOTE_NAME);
-#endif
-
-    return config_folder;
+    return get_special_folder_path(CSIDL_COMMON_APPDATA, true) / fs::u8path(CRYPTONOTE_NAME);
   }
-
-  bool create_directories_if_necessary(const std::string& path)
+#else
+  // Non-windows: ~/.CRYPTONOTE_NAME
+  fs::path get_default_data_dir()
   {
-    namespace fs = boost::filesystem;
-    boost::system::error_code ec;
-    fs::path fs_path(path);
-    if (fs::is_directory(fs_path, ec))
+    char* home = std::getenv("HOME");
+    return (home && std::strlen(home) ? fs::u8path(home) : fs::current_path()) / fs::u8path("." CRYPTONOTE_NAME);
+  }
+#endif
+
+  bool create_directories_if_necessary(const fs::path& path)
+  {
+    std::error_code ec;
+    if (fs::is_directory(path, ec))
     {
       return true;
     }
 
-    bool res = fs::create_directories(fs_path, ec);
+    bool res = fs::create_directories(path, ec);
     if (res)
     {
       LOG_PRINT_L2("Created directory: " << path);
@@ -340,33 +304,6 @@ namespace tools {
     return res;
   }
 
-  std::error_code replace_file(const std::string& old_name, const std::string& new_name)
-  {
-    int code;
-#if defined(WIN32)
-    // Maximizing chances for success
-    std::wstring wide_replacement_name;
-    try { wide_replacement_name = epee::string_tools::utf8_to_utf16(old_name); }
-    catch (...) { return std::error_code(GetLastError(), std::system_category()); }
-    std::wstring wide_replaced_name;
-    try { wide_replaced_name = epee::string_tools::utf8_to_utf16(new_name); }
-    catch (...) { return std::error_code(GetLastError(), std::system_category()); }
-
-    DWORD attributes = ::GetFileAttributesW(wide_replaced_name.c_str());
-    if (INVALID_FILE_ATTRIBUTES != attributes)
-    {
-      ::SetFileAttributesW(wide_replaced_name.c_str(), attributes & (~FILE_ATTRIBUTE_READONLY));
-    }
-
-    bool ok = 0 != ::MoveFileExW(wide_replacement_name.c_str(), wide_replaced_name.c_str(), MOVEFILE_REPLACE_EXISTING);
-    code = ok ? 0 : static_cast<int>(::GetLastError());
-#else
-    bool ok = 0 == std::rename(old_name.c_str(), new_name.c_str());
-    code = ok ? 0 : errno;
-#endif
-    return std::error_code(code, std::system_category());
-  }
-
   void set_strict_default_file_permissions(bool strict)
   {
 #if defined(__MINGW32__) || defined(__MINGW__)
@@ -375,6 +312,38 @@ namespace tools {
     mode_t mode = strict ? 077 : 0;
     umask(mode);
 #endif
+  }
+
+  bool slurp_file(const fs::path& filename, std::string& contents)
+  {
+    fs::ifstream in;
+    in.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    try {
+      in.open(filename, std::ios::binary | std::ios::in | std::ios::ate);
+      contents.clear();
+      contents.resize(in.tellg());
+      in.seekg(0);
+      in.read(contents.data(), contents.size());
+      auto bytes_read = in.gcount();
+      if (static_cast<size_t>(bytes_read) < contents.size())
+        contents.resize(bytes_read);
+      return true;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  bool dump_file(const fs::path& filename, std::string_view contents)
+  {
+    fs::ofstream out;
+    out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    try {
+      out.open(filename, std::ios::binary | std::ios::out | std::ios::trunc);
+      out.write(contents.data(), contents.size());
+      return true;
+    } catch (...) {
+      return false;
+    }
   }
 
 }
