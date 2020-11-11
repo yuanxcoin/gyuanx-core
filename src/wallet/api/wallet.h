@@ -156,8 +156,7 @@ public:
     bool importKeyImages(std::string_view filename) override;
 
     void disposeTransaction(PendingTransaction * t) override;
-    // TODO(loki): Implement
-    // uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations, PendingTransaction::Priority priority) const override;
+    uint64_t estimateTransactionFee(uint32_t priority, uint32_t recipients = 1) const override;
     TransactionHistory * history() override;
     AddressBook * addressBook() override;
     Subaddress * subaddress() override;
