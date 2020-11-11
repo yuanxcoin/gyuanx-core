@@ -1,5 +1,5 @@
-#include "readline_buffer.h"
-#include "readline_suspend.h"
+#include "epee/readline_buffer.h"
+#include "epee/readline_suspend.h"
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <algorithm>

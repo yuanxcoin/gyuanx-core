@@ -32,13 +32,13 @@
 
 #include <boost/uuid/uuid.hpp>
 #include <boost/serialization/version.hpp>
-#include "serialization/keyvalue_serialization.h"
-#include "net/net_utils_base.h"
+#include "epee/serialization/keyvalue_serialization.h"
+#include "epee/net/net_utils_base.h"
 #include "net/tor_address.h" // needed for serialization
 #include "net/i2p_address.h" // needed for serialization
-#include "misc_language.h"
-#include "string_tools.h"
-#include "time_helper.h"
+#include "epee/misc_language.h"
+#include "epee/string_tools.h"
+#include "epee/time_helper.h"
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 

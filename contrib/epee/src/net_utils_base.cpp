@@ -1,10 +1,10 @@
 
-#include "net/net_utils_base.h"
+#include "epee/net/net_utils_base.h"
 
 #include <boost/uuid/uuid_io.hpp>
 
-#include "string_tools.h"
-#include "net/local_ip.h"
+#include "epee/string_tools.h"
+#include "epee/net/local_ip.h"
 
 namespace epee { namespace net_utils
 {

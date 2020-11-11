@@ -47,9 +47,9 @@
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "wallet/wallet2.h"
-#include "console_handler.h"
+#include "epee/console_handler.h"
 #include "common/periodic_task.h"
-#include "wipeable_string.h"
+#include "epee/wipeable_string.h"
 #include "common/i18n.h"
 #include "common/password.h"
 #include "crypto/crypto.h"  // for definition of crypto::secret_key
@@ -402,16 +402,15 @@ namespace cryptonote
     };
 
   private:
-    std::string m_wallet_file;
-    std::string m_generate_new;
-    std::string m_generate_from_device;
-    std::string m_generate_from_view_key;
-    std::string m_generate_from_spend_key;
-    std::string m_generate_from_keys;
-    std::string m_generate_from_multisig_keys;
-    std::string m_generate_from_json;
+    fs::path m_wallet_file;
+    fs::path m_generate_new;
+    fs::path m_generate_from_device;
+    fs::path m_generate_from_view_key;
+    fs::path m_generate_from_spend_key;
+    fs::path m_generate_from_keys;
+    fs::path m_generate_from_multisig_keys;
+    fs::path m_generate_from_json;
     std::string m_mnemonic_language;
-    std::string m_import_path;
     std::string m_subaddress_lookahead;
     std::string m_restore_date;  // optional - converted to m_restore_height
 

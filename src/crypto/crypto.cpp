@@ -39,7 +39,7 @@
 #include <stdexcept>
 
 #include "common/varint.h"
-#include "warnings.h"
+#include "epee/warnings.h"
 #include "crypto.h"
 #include "hash.h"
 

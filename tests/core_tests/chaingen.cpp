@@ -39,7 +39,7 @@
 #include <fstream>
 
 #include "common/string_util.h"
-#include "console_handler.h"
+#include "epee/console_handler.h"
 #include "common/rules.h"
 
 #include "cryptonote_config.h"

@@ -43,18 +43,19 @@
 
 #include "cryptonote_config.h"
 #include "cryptonote_protocol/levin_notify.h"
-#include "warnings.h"
-#include "net/abstract_tcp_server2.h"
-#include "net/levin_protocol_handler.h"
-#include "net/levin_protocol_handler_async.h"
+#include "epee/warnings.h"
+#include "epee/net/abstract_tcp_server2.h"
+#include "epee/net/levin_protocol_handler.h"
+#include "epee/net/levin_protocol_handler_async.h"
 #include "p2p_protocol_defs.h"
-#include "storages/levin_abstract_invoke2.h"
+#include "epee/storages/levin_abstract_invoke2.h"
 #include "net_peerlist.h"
 #include "net_node_common.h"
-#include "net/enums.h"
+#include "epee/net/enums.h"
 #include "net/fwd.h"
 #include "common/command_line.h"
 #include "common/periodic_task.h"
+#include "common/fs.h"
 
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
@@ -415,7 +416,7 @@ namespace nodetool
     }
 
   private:
-    std::string m_config_folder;
+    fs::path m_config_folder;
 
     bool m_have_address;
     bool m_first_connection_maker_call;

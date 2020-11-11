@@ -26,8 +26,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "include_base_utils.h"
-#include "file_io_utils.h"
+#include "common/file.h"
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
@@ -45,7 +44,7 @@ int BulletproofFuzzer::run(const std::string &filename)
 {
   std::string s;
 
-  if (!epee::file_io_utils::load_file_to_string(filename, s))
+  if (!tools::slurp_file(filename, s))
   {
     std::cout << "Error: failed to load file " << filename << std::endl;
     return 1;

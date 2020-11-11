@@ -39,7 +39,6 @@
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
-#include "include_base_utils.h"
 #include "crypto/crypto.h"  // for crypto::secret_key definition
 #include "common/i18n.h"
 #include "common/command_line.h"
@@ -77,7 +76,7 @@ namespace
   const command_line::arg_descriptor< std::vector<std::string> > arg_command = {"command", ""};
 }
 
-static bool generate_multisig(uint32_t threshold, uint32_t total, const std::string &basename, network_type nettype, bool create_address_file)
+static bool generate_multisig(uint32_t threshold, uint32_t total, const fs::path& basename, network_type nettype, bool create_address_file)
 {
   tools::msg_writer() << (boost::format(genms::tr("Generating %u %u/%u multisig wallets")) % total % threshold % total).str();
 
@@ -89,7 +88,8 @@ static bool generate_multisig(uint32_t threshold, uint32_t total, const std::str
     std::vector<std::shared_ptr<tools::wallet2>> wallets(total);
     for (size_t n = 0; n < total; ++n)
     {
-      std::string name = basename + "-" + std::to_string(n + 1);
+      fs::path name = basename;
+      name += "-" + std::to_string(n + 1);
       wallets[n].reset(new tools::wallet2(nettype, 1, false));
       wallets[n]->init("");
       wallets[n]->generate(name, pwd_container->password(), rct::rct2sk(rct::skGen()), false, false, create_address_file);
@@ -114,7 +114,8 @@ static bool generate_multisig(uint32_t threshold, uint32_t total, const std::str
     std::stringstream ss;
     for (size_t n = 0; n < total; ++n)
     {
-      std::string name = basename + "-" + std::to_string(n + 1);
+      fs::path name = basename;
+      name += "-" + std::to_string(n + 1);
       std::vector<crypto::secret_key> skn;
       std::vector<crypto::public_key> pkn;
       for (size_t k = 0; k < total; ++k)
@@ -190,7 +191,6 @@ int main(int argc, char* argv[])
 
   bool testnet, devnet;
   uint32_t threshold = 0, total = 0;
-  std::string basename;
 
   testnet = command_line::get_arg(*vm, arg_testnet);
   devnet = command_line::get_arg(*vm, arg_devnet);
@@ -230,9 +230,10 @@ int main(int argc, char* argv[])
     tools::fail_msg_writer() << (boost::format(genms::tr("Error: expected N > 1 and N <= M, but got N==%u and M==%d")) % threshold % total).str();
     return 1;
   }
+  fs::path basename;
   if (!(*vm)["filename-base"].defaulted() && !command_line::get_arg(*vm, arg_filename_base).empty())
   {
-    basename = command_line::get_arg(*vm, arg_filename_base);
+    basename = fs::u8path(command_line::get_arg(*vm, arg_filename_base));
   }
   else
   {

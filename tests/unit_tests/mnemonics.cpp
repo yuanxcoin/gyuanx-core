@@ -27,7 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "gtest/gtest.h"
-#include "wipeable_string.h"
+#include "epee/wipeable_string.h"
 #include "mnemonics/language_base.h"
 #include "mnemonics/electrum-words.h"
 #include "crypto/crypto.h"

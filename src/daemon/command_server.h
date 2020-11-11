@@ -31,7 +31,7 @@
 
 #include <optional>
 #include "common/common_fwd.h"
-#include "console_handler.h"
+#include "epee/console_handler.h"
 #include "daemon/command_parser_executor.h"
 
 namespace daemonize {

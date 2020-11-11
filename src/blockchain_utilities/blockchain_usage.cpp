@@ -82,8 +82,6 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  boost::filesystem::path output_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
@@ -160,7 +158,7 @@ int main(int argc, char* argv[])
   }
   LOG_PRINT_L0("database: LMDB");
 
-  const std::string filename = input;
+  const fs::path filename = fs::u8path(input);
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
 
   try

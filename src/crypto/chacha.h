@@ -39,8 +39,8 @@
 #if defined(__cplusplus)
 #include <memory.h>
 
-#include "memwipe.h"
-#include "mlocker.h"
+#include "epee/memwipe.h"
+#include "epee/mlocker.h"
 #include "hash.h"
 #include "cn_heavy_hash.hpp"
 

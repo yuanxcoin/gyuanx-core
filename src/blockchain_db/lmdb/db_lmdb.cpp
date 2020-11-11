@@ -28,21 +28,19 @@
 
 #include "db_lmdb.h"
 
-#include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/endian/conversion.hpp>
 #include <memory>
 #include <cstring>
 
-#include "string_tools.h"
-#include "file_io_utils.h"
+#include "epee/string_tools.h"
 #include "common/file.h"
 #include "common/pruning.h"
 #include "common/hex.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "crypto/crypto.h"
-#include "profile_tools.h"
+#include "epee/profile_tools.h"
 #include "ringct/rctOps.h"
 
 #include "checkpoints/checkpoints.h"
@@ -54,7 +52,6 @@
 #define LOKI_DEFAULT_LOG_CATEGORY "blockchain.db.lmdb"
 
 
-using epee::string_tools::pod_to_hex;
 using namespace crypto;
 using namespace boost::endian;
 
@@ -260,10 +257,10 @@ constexpr unsigned int LMDB_DB_COUNT = 23; // Should agree with the number of db
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
 
-const std::string lmdb_error(const std::string& error_string, int mdb_res)
+const std::string lmdb_error(std::string error_string, int mdb_res)
 {
-  const std::string full_string = error_string + mdb_strerror(mdb_res);
-  return full_string;
+  error_string += mdb_strerror(mdb_res);
+  return error_string;
 }
 
 void lmdb_db_open(MDB_txn* txn, const char* name, int flags, MDB_dbi& dbi, const std::string& error_string)
@@ -608,8 +605,7 @@ void BlockchainLMDB::do_resize(uint64_t increase_size)
   // check disk capacity
   try
   {
-    boost::filesystem::path path(m_folder);
-    boost::filesystem::space_info si = boost::filesystem::space(path);
+    auto si = fs::space(m_folder);
     if(si.available < add_size)
     {
       MERROR("!! WARNING: Insufficient free space to extend database !!: " <<
@@ -957,9 +953,9 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   result = mdb_cursor_get(m_cur_tx_indices, (MDB_val *)&zerokval, &val_h, MDB_GET_BOTH);
   if (result == 0) {
     txindex *tip = (txindex *)val_h.mv_data;
-    throw1(TX_EXISTS(std::string("Attempting to add transaction that's already in the db (tx id ").append(boost::lexical_cast<std::string>(tip->data.tx_id)).append(")").c_str()));
+    throw1(TX_EXISTS(std::string("Attempting to add transaction that's already in the db (tx id ").append(std::to_string(tip->data.tx_id)).append(")").c_str()));
   } else if (result != MDB_NOTFOUND) {
-    throw1(DB_ERROR(lmdb_error(std::string("Error checking if tx index exists for tx hash ") + epee::string_tools::pod_to_hex(tx_hash) + ": ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Error checking if tx index exists for tx hash " + tools::type_to_hex(tx_hash) + ": ", result)));
   }
 
   const cryptonote::transaction &tx = txp.first;
@@ -1243,12 +1239,12 @@ void BlockchainLMDB::remove_output(const uint64_t amount, const uint64_t& out_in
   }
   result = mdb_cursor_del(m_cur_output_txs, 0);
   if (result)
-    throw0(DB_ERROR(lmdb_error(std::string("Error deleting output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+    throw0(DB_ERROR(lmdb_error(std::string("Error deleting output index ").append(std::to_string(out_index).append(": ")).c_str(), result).c_str()));
 
   // now delete the amount
   result = mdb_cursor_del(m_cur_output_amounts, 0);
   if (result)
-    throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount for output index ").append(boost::lexical_cast<std::string>(out_index).append(": ")).c_str(), result).c_str()));
+    throw0(DB_ERROR(lmdb_error(std::string("Error deleting amount for output index ").append(std::to_string(out_index).append(": ")).c_str(), result).c_str()));
 }
 
 void BlockchainLMDB::prune_outputs(uint64_t amount)
@@ -1375,7 +1371,7 @@ BlockchainLMDB::BlockchainLMDB(bool batch_transactions): BlockchainDB()
   m_hardfork = nullptr;
 }
 
-void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type nettype, const int db_flags)
+void BlockchainLMDB::open(const fs::path& filename, cryptonote::network_type nettype, const int db_flags)
 {
   int result;
   int mdb_flags = MDB_NORDAHEAD;
@@ -1385,24 +1381,23 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
   if (m_open)
     throw0(DB_OPEN_FAILURE("Attempted to open db, but it's already open"));
 
-  boost::filesystem::path direc(filename);
-  if (boost::filesystem::exists(direc))
+  if (fs::exists(filename))
   {
-    if (!boost::filesystem::is_directory(direc))
+    if (!fs::is_directory(filename))
       throw0(DB_OPEN_FAILURE("LMDB needs a directory path, but a file was passed"));
   }
   else
   {
-    if (!boost::filesystem::create_directories(direc))
-      throw0(DB_OPEN_FAILURE(std::string("Failed to create directory ").append(filename).c_str()));
+    if (std::error_code ec; !fs::create_directories(filename, ec))
+      throw0(DB_OPEN_FAILURE("Failed to create directory " + filename.u8string()));
   }
 
   // check for existing LMDB files in base directory
-  boost::filesystem::path old_files = direc.parent_path();
-  if (boost::filesystem::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_FILENAME)
-      || boost::filesystem::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME))
+  auto old_files = filename.parent_path();
+  if (fs::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_FILENAME)
+      || fs::exists(old_files / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME))
   {
-    LOG_PRINT_L0("Found existing LMDB files in " << old_files.string());
+    LOG_PRINT_L0("Found existing LMDB files in " << old_files.u8string());
     LOG_PRINT_L0("Move " << CRYPTONOTE_BLOCKCHAINDATA_FILENAME << " and/or " << CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME << " to " << filename << ", or delete them, and then restart");
     throw DB_ERROR("Database could not be opened");
   }
@@ -1437,7 +1432,9 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
   if (db_flags & DBF_SALVAGE)
     mdb_flags |= MDB_PREVSNAPSHOT;
 
-  if (auto result = mdb_env_open(m_env, filename.c_str(), mdb_flags, 0644))
+  // This .string() is probably just going to hard fail on Windows with non-ASCII unicode filenames,
+  // but lmdb doesn't support anything else (and so really we're just hitting an underlying lmdb bug).
+  if (auto result = mdb_env_open(m_env, filename.string().c_str(), mdb_flags, 0644))
     throw0(DB_ERROR(lmdb_error("Failed to open lmdb environment: ", result).c_str()));
 
   MDB_envinfo mei;
@@ -1705,28 +1702,21 @@ void BlockchainLMDB::reset()
   m_cum_count = 0;
 }
 
-std::vector<std::string> BlockchainLMDB::get_filenames() const
+std::vector<fs::path> BlockchainLMDB::get_filenames() const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  std::vector<std::string> filenames;
-
-  boost::filesystem::path datafile(m_folder);
-  datafile /= CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
-  boost::filesystem::path lockfile(m_folder);
-  lockfile /= CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME;
-
-  filenames.push_back(datafile.string());
-  filenames.push_back(lockfile.string());
-
-  return filenames;
+  std::vector<fs::path> paths;
+  paths.push_back(m_folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME);
+  paths.push_back(m_folder / CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME);
+  return paths;
 }
 
-bool BlockchainLMDB::remove_data_file(const std::string& folder) const
+bool BlockchainLMDB::remove_data_file(const fs::path& folder) const
 {
-  const std::string filename = folder + "/data.mdb";
+  auto filename = folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
   try
   {
-    boost::filesystem::remove(filename);
+    fs::remove(filename);
   }
   catch (const std::exception &e)
   {
@@ -1740,7 +1730,7 @@ std::string BlockchainLMDB::get_db_name() const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
 
-  return std::string("lmdb");
+  return "lmdb"s;
 }
 
 void BlockchainLMDB::lock()
@@ -2498,7 +2488,7 @@ bool BlockchainLMDB::block_exists(const crypto::hash& h, uint64_t *height) const
   auto get_result = mdb_cursor_get(m_cur_block_heights, (MDB_val *)&zerokval, &key, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    LOG_PRINT_L3("Block with hash " << epee::string_tools::pod_to_hex(h) << " not found in db");
+    LOG_PRINT_L3("Block with hash " << tools::type_to_hex(h) << " not found in db");
   }
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("DB error attempting to fetch block index from hash", get_result).c_str()));
@@ -2623,7 +2613,7 @@ uint64_t BlockchainLMDB::get_block_timestamp(const uint64_t& height) const
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get timestamp from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- timestamp not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get timestamp from height ").append(std::to_string(height)).append(" failed -- timestamp not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a timestamp from the db"));
@@ -2721,7 +2711,7 @@ size_t BlockchainLMDB::get_block_weight(const uint64_t& height) const
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get block size from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- block size not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get block size from height ").append(std::to_string(height)).append(" failed -- block size not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a block size from the db"));
@@ -2857,7 +2847,7 @@ difficulty_type BlockchainLMDB::get_block_cumulative_difficulty(const uint64_t& 
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get cumulative difficulty from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- difficulty not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get cumulative difficulty from height ").append(std::to_string(height)).append(" failed -- difficulty not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a cumulative difficulty from the db"));
@@ -2896,7 +2886,7 @@ uint64_t BlockchainLMDB::get_block_already_generated_coins(const uint64_t& heigh
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get generated coins from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- block size not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get generated coins from height ").append(std::to_string(height)).append(" failed -- block size not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a total generated coins from the db"));
@@ -2918,7 +2908,7 @@ uint64_t BlockchainLMDB::get_block_long_term_weight(const uint64_t& height) cons
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get block long term weight from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- block info not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get block long term weight from height ").append(std::to_string(height)).append(" failed -- block info not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR("Error attempting to retrieve a long term block weight from the db"));
@@ -2940,7 +2930,7 @@ crypto::hash BlockchainLMDB::get_block_hash_from_height(const uint64_t& height) 
   auto get_result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &result, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
   {
-    throw0(BLOCK_DNE(std::string("Attempt to get hash from height ").append(boost::lexical_cast<std::string>(height)).append(" failed -- hash not in db").c_str()));
+    throw0(BLOCK_DNE(std::string("Attempt to get hash from height ").append(std::to_string(height)).append(" failed -- hash not in db").c_str()));
   }
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("Error attempting to retrieve a block hash from the db: ", get_result).c_str()));
@@ -3060,14 +3050,14 @@ bool BlockchainLMDB::tx_exists(const crypto::hash& h) const
   if (get_result == 0)
     tx_found = true;
   else if (get_result != MDB_NOTFOUND)
-    throw0(DB_ERROR(lmdb_error(std::string("DB error attempting to fetch transaction index from hash ") + epee::string_tools::pod_to_hex(h) + ": ", get_result).c_str()));
+    throw0(DB_ERROR(lmdb_error(std::string("DB error attempting to fetch transaction index from hash ") + tools::type_to_hex(h) + ": ", get_result).c_str()));
 
   TIME_MEASURE_FINISH(time1);
   time_tx_exists += time1;
 
   if (! tx_found)
   {
-    LOG_PRINT_L1("transaction with hash " << epee::string_tools::pod_to_hex(h) << " not found in db");
+    LOG_PRINT_L1("transaction with hash " << tools::type_to_hex(h) << " not found in db");
     return false;
   }
 
@@ -3096,7 +3086,7 @@ bool BlockchainLMDB::tx_exists(const crypto::hash& h, uint64_t& tx_id) const
   bool ret = false;
   if (get_result == MDB_NOTFOUND)
   {
-    LOG_PRINT_L1("transaction with hash " << epee::string_tools::pod_to_hex(h) << " not found in db");
+    LOG_PRINT_L1("transaction with hash " << tools::type_to_hex(h) << " not found in db");
   }
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("DB error attempting to fetch transaction from hash", get_result).c_str()));
@@ -3117,7 +3107,7 @@ uint64_t BlockchainLMDB::get_tx_unlock_time(const crypto::hash& h) const
   MDB_val_set(v, h);
   auto get_result = mdb_cursor_get(m_cur_tx_indices, (MDB_val *)&zerokval, &v, MDB_GET_BOTH);
   if (get_result == MDB_NOTFOUND)
-    throw1(TX_DNE(lmdb_error(std::string("tx data with hash ") + epee::string_tools::pod_to_hex(h) + " not found in db: ", get_result).c_str()));
+    throw1(TX_DNE(lmdb_error(std::string("tx data with hash ") + tools::type_to_hex(h) + " not found in db: ", get_result).c_str()));
   else if (get_result)
     throw0(DB_ERROR(lmdb_error("DB error attempting to fetch tx data from hash: ", get_result).c_str()));
 
@@ -4302,7 +4292,7 @@ void BlockchainLMDB::get_output_key(const epee::span<const uint64_t> &amounts, c
         MDEBUG("Partial result: " << outputs.size() << "/" << offsets.size());
         break;
       }
-      throw1(OUTPUT_DNE((std::string("Attempting to get output pubkey by global index (amount ") + boost::lexical_cast<std::string>(amount) + ", index " + boost::lexical_cast<std::string>(offsets[i]) + ", count " + boost::lexical_cast<std::string>(get_num_outputs(amount)) + "), but key does not exist (current height " + boost::lexical_cast<std::string>(height()) + ")").c_str()));
+      throw1(OUTPUT_DNE((std::string("Attempting to get output pubkey by global index (amount ") + std::to_string(amount) + ", index " + std::to_string(offsets[i]) + ", count " + std::to_string(get_num_outputs(amount)) + "), but key does not exist (current height " + std::to_string(height()) + ")").c_str()));
     }
     else if (get_result)
       throw0(DB_ERROR(lmdb_error("Error attempting to retrieve an output pubkey from the db", get_result).c_str()));
@@ -4610,7 +4600,7 @@ uint8_t BlockchainLMDB::get_hard_fork_version(uint64_t height) const
   MDB_val val_ret;
   auto result = mdb_cursor_get(m_cur_hf_versions, &val_key, &val_ret, MDB_SET);
   if (result == MDB_NOTFOUND || result)
-    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve a hard fork version at height " + boost::lexical_cast<std::string>(height) + " from the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve a hard fork version at height " + std::to_string(height) + " from the db: ", result).c_str()));
 
   uint8_t ret = *(const uint8_t*)val_ret.mv_data;
   return ret;
@@ -4674,7 +4664,7 @@ bool BlockchainLMDB::get_alt_block(const crypto::hash &blkid, alt_block_data_t *
     return false;
 
   if (result)
-    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve alternate block " + epee::string_tools::pod_to_hex(blkid) + " from the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error attempting to retrieve alternate block " + tools::type_to_hex(blkid) + " from the db: ", result).c_str()));
   if (!read_alt_block_data_from_mdb_val(v, data, block, checkpoint))
     throw0(DB_ERROR("Record size is less than expected"));
   return true;
@@ -4692,10 +4682,10 @@ void BlockchainLMDB::remove_alt_block(const crypto::hash &blkid)
   MDB_val v;
   int result = mdb_cursor_get(m_cur_alt_blocks, &k, &v, MDB_SET);
   if (result)
-    throw0(DB_ERROR(lmdb_error("Error locating alternate block " + epee::string_tools::pod_to_hex(blkid) + " in the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error locating alternate block " + tools::type_to_hex(blkid) + " in the db: ", result).c_str()));
   result = mdb_cursor_del(m_cur_alt_blocks, 0);
   if (result)
-    throw0(DB_ERROR(lmdb_error("Error deleting alternate block " + epee::string_tools::pod_to_hex(blkid) + " from the db: ", result).c_str()));
+    throw0(DB_ERROR(lmdb_error("Error deleting alternate block " + tools::type_to_hex(blkid) + " from the db: ", result).c_str()));
 }
 
 uint64_t BlockchainLMDB::get_alt_block_count()
@@ -4747,12 +4737,7 @@ bool BlockchainLMDB::is_read_only() const
 
 uint64_t BlockchainLMDB::get_database_size() const
 {
-  uint64_t size = 0;
-  boost::filesystem::path datafile(m_folder);
-  datafile /= CRYPTONOTE_BLOCKCHAINDATA_FILENAME;
-  if (!epee::file_io_utils::get_file_size(datafile.string(), size))
-    size = 0;
-  return size;
+  return fs::file_size(m_folder / CRYPTONOTE_BLOCKCHAINDATA_FILENAME);
 }
 
 void BlockchainLMDB::fixup(cryptonote::network_type nettype)

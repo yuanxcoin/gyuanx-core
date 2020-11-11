@@ -1,5 +1,5 @@
-#include "net/net_utils_base.h"
-#include "storages/portable_storage.h"
+#include "epee/net/net_utils_base.h"
+#include "epee/storages/portable_storage.h"
 #include "tor_address.h"
 #include "i2p_address.h"
 

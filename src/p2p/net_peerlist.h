@@ -45,10 +45,11 @@
 
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
-#include "net/enums.h"
-#include "net/local_ip.h"
+#include "epee/net/enums.h"
+#include "epee/net/local_ip.h"
 #include "p2p_protocol_defs.h"
 #include "common/random.h"
+#include "common/fs.h"
 
 namespace nodetool
 {
@@ -70,7 +71,7 @@ namespace nodetool
     static std::optional<peerlist_storage> open(std::istream& src, const bool new_format);
 
     //! \return Peers stored in file at `path`
-    static std::optional<peerlist_storage> open(const std::string& path);
+    static std::optional<peerlist_storage> open(const fs::path& path);
 
     peerlist_storage(peerlist_storage&&) = default;
     peerlist_storage(const peerlist_storage&) = delete;
@@ -84,7 +85,7 @@ namespace nodetool
     bool store(std::ostream& dest, const peerlist_types& other) const;
 
     //! Save peers from `this` and `other` in one file at `path`.
-    bool store(const std::string& path, const peerlist_types& other) const;
+    bool store(const fs::path& path, const peerlist_types& other) const;
 
     //! \return Peers in `zone` and from remove from `this`.
     peerlist_types take_zone(epee::net_utils::zone zone);

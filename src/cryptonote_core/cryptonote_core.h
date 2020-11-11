@@ -40,7 +40,7 @@
 #include <lokimq/lokimq.h>
 
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
-#include "storages/portable_storage_template_helper.h"
+#include "epee/storages/portable_storage_template_helper.h"
 #include "common/command_line.h"
 #include "tx_pool.h"
 #include "blockchain.h"
@@ -50,7 +50,7 @@
 #include "pulse.h"
 #include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
-#include "warnings.h"
+#include "epee/warnings.h"
 #include "crypto/hash.h"
 #include "cryptonote_protocol/quorumnet.h"
 PUSH_WARNINGS
@@ -1020,7 +1020,7 @@ namespace cryptonote
      /**
       * @brief returns the lokid config directory
       */
-     const std::string& get_config_directory() const { return m_config_folder; }
+     const fs::path& get_config_directory() const { return m_config_folder; }
 
  private:
 
@@ -1188,7 +1188,7 @@ namespace cryptonote
      //m_miner and m_miner_addres are probably temporary here
      miner m_miner; //!< miner instance
 
-     std::string m_config_folder; //!< folder to look in for configs and other files
+     fs::path m_config_folder; //!< folder to look in for configs and other files
 
 
      tools::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
@@ -1208,7 +1208,7 @@ namespace cryptonote
 
      network_type m_nettype; //!< which network are we on?
 
-     std::string m_checkpoints_path; //!< path to json checkpoints file
+     fs::path m_checkpoints_path; //!< path to json checkpoints file
      time_t m_last_json_checkpoints_update; //!< time when json checkpoints were last updated
 
      std::atomic_flag m_checkpoints_updating; //!< set if checkpoints are currently updating to avoid multiple threads attempting to update at once

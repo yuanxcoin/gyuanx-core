@@ -35,9 +35,10 @@
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "checkpoints/checkpoints.h"
 #include "common/util.h"
+#include "common/hex.h"
 
-#include "misc_log_ex.h"
-#include "string_tools.h"
+#include "epee/misc_log_ex.h"
+#include "epee/string_tools.h"
 
 #include <string>
 #include <vector>
@@ -329,7 +330,7 @@ namespace service_nodes
 
       if (unique_vote_set[quorum_signature.voter_index]++)
       {
-        MGINFO("Voter: " << epee::string_tools::pod_to_hex(key) << ", quorum index is duplicated: " << quorum_signature.voter_index << ", failed verification at height: " << height);
+        MGINFO("Voter: " << tools::type_to_hex(key) << ", quorum index is duplicated: " << quorum_signature.voter_index << ", failed verification at height: " << height);
         return false;
       }
 

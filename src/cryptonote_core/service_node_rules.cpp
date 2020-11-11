@@ -1,6 +1,6 @@
 #include "cryptonote_config.h"
 #include "common/loki.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 #include <limits>
 #include <vector>
 #include <boost/lexical_cast.hpp>

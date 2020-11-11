@@ -5,24 +5,24 @@
 
 set(LOCAL_MIRROR "" CACHE STRING "local mirror path/URL for lib downloads")
 
-set(OPENSSL_VERSION 1.1.1g CACHE STRING "openssl version")
+set(OPENSSL_VERSION 1.1.1h CACHE STRING "openssl version")
 set(OPENSSL_MIRROR ${LOCAL_MIRROR} https://www.openssl.org/source CACHE STRING "openssl download mirror(s)")
 set(OPENSSL_SOURCE openssl-${OPENSSL_VERSION}.tar.gz)
-set(OPENSSL_HASH SHA256=ddb04774f1e32f0c49751e21b67216ac87852ceb056b75209af2443400636d46
+set(OPENSSL_HASH SHA256=5c9ca8774bd7b03e5784f26ae9e9e6d749c9da2438545077e6b3d755a06595d9
     CACHE STRING "openssl source hash")
 
-set(EXPAT_VERSION 2.2.9 CACHE STRING "expat version")
+set(EXPAT_VERSION 2.2.10 CACHE STRING "expat version")
 string(REPLACE "." "_" EXPAT_TAG "R_${EXPAT_VERSION}")
 set(EXPAT_MIRROR ${LOCAL_MIRROR} https://github.com/libexpat/libexpat/releases/download/${EXPAT_TAG}
     CACHE STRING "expat download mirror(s)")
 set(EXPAT_SOURCE expat-${EXPAT_VERSION}.tar.xz)
-set(EXPAT_HASH SHA512=e082874efcc4b00709e2c0192c88fb15dfc4f33fc3a2b09e619b010ea93baaf7e7572683f738463db0ce2350cab3de48a0c38af6b74d1c4f5a9e311f499edab0
+set(EXPAT_HASH SHA512=a8e0c8a9cf7e6fbacdc6e709f3c99c533ab550fba52557d24259bb8b360f9697624c7500c0e9886fa57ee2b529aadd0d1835d66fe8112e15c20df75cd3eb090f
     CACHE STRING "expat source hash")
 
-set(UNBOUND_VERSION 1.11.0 CACHE STRING "unbound version")
+set(UNBOUND_VERSION 1.12.0 CACHE STRING "unbound version")
 set(UNBOUND_MIRROR ${LOCAL_MIRROR} https://nlnetlabs.nl/downloads/unbound CACHE STRING "unbound download mirror(s)")
 set(UNBOUND_SOURCE unbound-${UNBOUND_VERSION}.tar.gz)
-set(UNBOUND_HASH SHA256=9f2f0798f76eb8f30feaeda7e442ceed479bc54db0e3ac19c052d68685e51ef7
+set(UNBOUND_HASH SHA256=5b9253a97812f24419bf2e6b3ad28c69287261cf8c8fa79e3e9f6d3bf7ef5835
     CACHE STRING "unbound source hash")
 
 set(BOOST_VERSION 1.74.0 CACHE STRING "boost version")
@@ -125,6 +125,29 @@ file(MAKE_DIRECTORY ${DEPS_DESTDIR}/include)
 
 set(deps_cc "${CMAKE_C_COMPILER}")
 set(deps_cxx "${CMAKE_CXX_COMPILER}")
+if (ANDROID)
+  if(NOT ANDROID_TOOLCHAIN_NAME)
+    message(FATAL_ERROR "ANDROID_TOOLCHAIN_NAME not set; did you run with the proper android toolchain options?")
+  endif()
+  if(CMAKE_ANDROID_ARCH_ABI MATCHES x86_64)
+    set(android_clang x86_64-linux-android${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine x86_64)
+  elseif(CMAKE_ANDROID_ARCH_ABI MATCHES x86)
+    set(android_clang i686-linux-android${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine i686)
+  elseif(CMAKE_ANDROID_ARCH_ABI MATCHES armeabi-v7a)
+    set(android_clang armv7a-linux-androideabi${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine armv7)
+  elseif(CMAKE_ANDROID_ARCH_ABI MATCHES arm64-v8a)
+    set(android_clang aarch64-linux-android${ANDROID_PLATFORM_LEVEL}-clang)
+    set(openssl_machine aarch64)
+  else()
+    message(FATAL_ERROR "Don't know how to build for android arch abi ${CMAKE_ANDROID_ARCH_ABI}")
+  endif()
+  set(deps_cc "${ANDROID_TOOLCHAIN_ROOT}/bin/${android_clang}")
+  set(deps_cxx "${deps_cc}++")
+endif()
+
 if(CMAKE_C_COMPILER_LAUNCHER)
   set(deps_cc "${CMAKE_C_COMPILER_LAUNCHER} ${deps_cc}")
 endif()
@@ -157,20 +180,38 @@ else()
 endif()
 
 set(cross_host "")
-set(cross_rc "")
-if(CMAKE_CROSSCOMPILING)
-  set(cross_host "--host=${ARCH_TRIPLET}")
-  if (ARCH_TRIPLET MATCHES mingw AND CMAKE_RC_COMPILER)
-    set(cross_rc "WINDRES=${CMAKE_RC_COMPILER}")
+set(cross_extra "")
+if (ANDROID)
+  set(cross_host "--host=${CMAKE_LIBRARY_ARCHITECTURE}")
+  set(cross_extra "LD=${ANDROID_TOOLCHAIN_ROOT}/bin/${CMAKE_LIBRARY_ARCHITECTURE}-ld" "RANLIB=${CMAKE_RANLIB}" "AR=${CMAKE_AR}")
+elseif(CMAKE_CROSSCOMPILING)
+  if(APPLE)
+    set(cross_host "--host=${APPLE_TARGET_TRIPLE}")
+  else()
+    set(cross_host "--host=${ARCH_TRIPLET}")
+    if (ARCH_TRIPLET MATCHES mingw AND CMAKE_RC_COMPILER)
+      set(cross_extra "WINDRES=${CMAKE_RC_COMPILER}")
+    endif()
   endif()
 endif()
 
+
+
 set(deps_CFLAGS "-O2 ${flto}")
 set(deps_CXXFLAGS "-O2 ${flto}")
+set(deps_noarch_CFLAGS "${deps_CFLAGS}")
+set(deps_noarch_CXXFLAGS "${deps_CXXFLAGS}")
 
 if(APPLE)
-  set(deps_CFLAGS "${deps_CFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
-  set(deps_CXXFLAGS "${deps_CXXFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  foreach(lang C CXX)
+    string(APPEND deps_${lang}FLAGS " ${CMAKE_${lang}_SYSROOT_FLAG} ${CMAKE_OSX_SYSROOT} ${CMAKE_${lang}_OSX_DEPLOYMENT_TARGET_FLAG}${CMAKE_OSX_DEPLOYMENT_TARGET}")
+
+    set(deps_noarch_${lang}FLAGS "${deps_${lang}FLAGS}")
+
+    foreach(arch ${CMAKE_OSX_ARCHITECTURES})
+      string(APPEND deps_${lang}FLAGS " -arch ${arch}")
+    endforeach()
+  endforeach()
 endif()
 
 # Builds a target; takes the target name (e.g. "readline") and builds it in an external project with
@@ -180,13 +221,14 @@ endif()
 set(build_def_DEPENDS "")
 set(build_def_PATCH_COMMAND "")
 set(build_def_CONFIGURE_COMMAND ./configure ${cross_host} --disable-shared --prefix=${DEPS_DESTDIR} --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}" ${cross_rc})
+    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}" ${cross_extra})
 set(build_def_BUILD_COMMAND make)
 set(build_def_INSTALL_COMMAND make install)
 set(build_def_BUILD_BYPRODUCTS ${DEPS_DESTDIR}/lib/lib___TARGET___.a ${DEPS_DESTDIR}/include/___TARGET___.h)
+set(build_dep_TARGET_SUFFIX "")
 
 function(build_external target)
-  set(options DEPENDS PATCH_COMMAND CONFIGURE_COMMAND BUILD_COMMAND INSTALL_COMMAND BUILD_BYPRODUCTS)
+  set(options TARGET_SUFFIX DEPENDS PATCH_COMMAND CONFIGURE_COMMAND BUILD_COMMAND INSTALL_COMMAND BUILD_BYPRODUCTS)
   cmake_parse_arguments(PARSE_ARGV 1 arg "" "" "${options}")
   foreach(o ${options})
     if(NOT DEFINED arg_${o})
@@ -197,7 +239,7 @@ function(build_external target)
 
   string(TOUPPER "${target}" prefix)
   expand_urls(urls ${${prefix}_SOURCE} ${${prefix}_MIRROR})
-  ExternalProject_Add("${target}_external"
+  ExternalProject_Add("${target}${arg_TARGET_SUFFIX}_external"
     DEPENDS ${arg_DEPENDS}
     BUILD_IN_SOURCE ON
     PREFIX ${DEPS_SOURCEDIR}
@@ -215,7 +257,7 @@ endfunction()
 
 
 build_external(zlib
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}" ./configure --prefix=${DEPS_DESTDIR} --static
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS} -fPIC" ${cross_extra} ./configure --prefix=${DEPS_DESTDIR} --static
   BUILD_BYPRODUCTS
     ${DEPS_DESTDIR}/lib/libz.a
     ${DEPS_DESTDIR}/include/zlib.h
@@ -224,17 +266,31 @@ add_static_target(zlib zlib_external libz.a)
 
 
 
+set(openssl_configure ./config)
 set(openssl_system_env "")
+set(openssl_cc "${deps_cc}")
 if(CMAKE_CROSSCOMPILING)
   if(ARCH_TRIPLET STREQUAL x86_64-w64-mingw32)
     set(openssl_system_env SYSTEM=MINGW64 RC=${CMAKE_RC_COMPILER})
   elseif(ARCH_TRIPLET STREQUAL i686-w64-mingw32)
     set(openssl_system_env SYSTEM=MINGW64 RC=${CMAKE_RC_COMPILER})
+  elseif(ANDROID)
+    set(openssl_system_env SYSTEM=Linux MACHINE=${openssl_machine} ${cross_extra})
+    set(openssl_extra_opts no-asm)
+  elseif(IOS)
+    get_filename_component(apple_toolchain "${CMAKE_C_COMPILER}" DIRECTORY)
+    get_filename_component(apple_sdk "${CMAKE_OSX_SYSROOT}" NAME)
+    if(NOT ${apple_toolchain} MATCHES Xcode OR NOT ${apple_sdk} MATCHES "iPhone(OS|Simulator)")
+      message(FATAL_ERROR "didn't find your toolchain and sdk correctly from ${CMAKE_C_COMPILER}/${CMAKE_OSX_SYSROOT}: found toolchain=${apple_toolchain}, sdk=${apple_sdk}")
+    endif()
+    set(openssl_system_env CROSS_COMPILE=${apple_toolchain}/ CROSS_TOP=${CMAKE_DEVELOPER_ROOT} CROSS_SDK=${apple_sdk})
+    set(openssl_configure ./Configure iphoneos-cross)
+    set(openssl_cc "clang")
   endif()
 endif()
 build_external(openssl
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env CC=${deps_cc} ${openssl_system_env} ./config
-    --prefix=${DEPS_DESTDIR} no-shared no-capieng no-dso no-dtls1 no-ec_nistp_64_gcc_128 no-gost
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env CC=${openssl_cc} ${openssl_system_env} ${openssl_configure}
+    --prefix=${DEPS_DESTDIR} ${openssl_extra_opts} no-shared no-capieng no-dso no-dtls1 no-ec_nistp_64_gcc_128 no-gost
     no-heartbeats no-md2 no-rc5 no-rdrand no-rfc3779 no-sctp no-ssl-trace no-ssl2 no-ssl3
     no-static-engine no-tests no-weak-ssl-ciphers no-zlib-dynamic "CFLAGS=${deps_CFLAGS}"
   INSTALL_COMMAND make install_sw
@@ -257,13 +313,19 @@ build_external(expat
 add_static_target(expat expat_external libexpat.a)
 
 
+set(unbound_extra)
+if(APPLE AND IOS)
+  # I have no idea why this is necessary: without this it runs `clang -E` which should work, but
+  # doesn't because... hurray ios is wonderful?
+  set(unbound_extra CPP=cpp)
+endif()
 build_external(unbound
   DEPENDS openssl_external expat_external
-  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_rc} --prefix=${DEPS_DESTDIR} --disable-shared
-  --enable-static --with-libunbound-only --with-pic
+  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_extra} --prefix=${DEPS_DESTDIR} --disable-shared
+  --enable-static --with-libunbound-only --with-pic --disable-gost
   --$<IF:$<BOOL:${USE_LTO}>,enable,disable>-flto --with-ssl=${DEPS_DESTDIR}
   --with-libexpat=${DEPS_DESTDIR}
-  "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}"
+  "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}" ${unbound_extra}
 )
 add_static_target(libunbound unbound_external libunbound.a)
 if(WIN32)
@@ -289,6 +351,8 @@ if(CMAKE_CROSSCOMPILING)
     else()
       list(APPEND boost_extra "address-model=32")
     endif()
+  elseif(ANDROID)
+    set(boost_bootstrap_cxx "CXX=c++")
   endif()
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
@@ -298,15 +362,33 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "^(Apple)?Clang$")
 else()
   message(FATAL_ERROR "don't know how to build boost with ${CMAKE_CXX_COMPILER_ID}")
 endif()
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam "using ${boost_toolset} : : ${deps_cxx} ;")
+
+if(IOS)
+  set(boost_arch_flags)
+    foreach(arch ${CMAKE_OSX_ARCHITECTURES})
+      string(APPEND boost_arch_flags " -arch ${arch}")
+    endforeach()
+  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam "using darwin : : ${deps_cxx} :
+  <architecture>arm
+  <target-os>iphone
+  <compileflags>\"-fPIC ${boost_arch_flags} ${CMAKE_CXX_OSX_DEPLOYMENT_TARGET_FLAG}${CMAKE_OSX_DEPLOYMENT_TARGET} -isysroot ${CMAKE_OSX_SYSROOT}\"
+  <threading>multi
+  ;")
+else()
+  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam "using ${boost_toolset} : : ${deps_cxx} ;")
+endif()
 
 set(boost_patch_commands "")
-if(APPLE AND BOOST_VERSION VERSION_LESS 1.74.0)
+if(IOS)
+  set(boost_patch_commands PATCH_COMMAND patch -p1 -i ${PROJECT_SOURCE_DIR}/utils/build_scripts/boost-darwin-libtool-path.patch)
+elseif(APPLE AND BOOST_VERSION VERSION_LESS 1.74.0)
   set(boost_patch_commands PATCH_COMMAND patch -p1 -d tools/build -i ${PROJECT_SOURCE_DIR}/utils/build_scripts/boostorg-build-pr560-macos-build-fix.patch)
 endif()
 
 set(boost_buildflags "cxxflags=-fPIC")
-if(APPLE)
+if(IOS)
+  set(boost_buildflags)
+elseif(APPLE)
   set(boost_buildflags "cxxflags=-fPIC -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}" "cflags=-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
 endif()
 
@@ -316,7 +398,7 @@ build_external(boost
   CONFIGURE_COMMAND
     ${CMAKE_COMMAND} -E env ${boost_bootstrap_cxx}
     ./bootstrap.sh --without-icu --prefix=${DEPS_DESTDIR} --with-toolset=${boost_toolset}
-      --with-libraries=filesystem,program_options,system,thread,date_time,serialization,locale,atomic
+      --with-libraries=program_options,system,thread,serialization
   BUILD_COMMAND true
   INSTALL_COMMAND
     ./b2 -d0 variant=release link=static runtime-link=static optimization=speed ${boost_extra}
@@ -324,10 +406,6 @@ build_external(boost
       --disable-icu --user-config=${CMAKE_CURRENT_BINARY_DIR}/user-config.bjam
       install
   BUILD_BYPRODUCTS
-    ${DEPS_DESTDIR}/lib/libboost_atomic.a
-    ${DEPS_DESTDIR}/lib/libboost_date_time.a
-    ${DEPS_DESTDIR}/lib/libboost_filesystem.a
-    ${DEPS_DESTDIR}/lib/libboost_locale.a
     ${DEPS_DESTDIR}/lib/libboost_program_options.a
     ${DEPS_DESTDIR}/lib/libboost_serialization.a
     ${DEPS_DESTDIR}/lib/libboost_system.a
@@ -338,22 +416,23 @@ add_library(boost_core INTERFACE)
 add_dependencies(boost_core INTERFACE boost_external)
 target_include_directories(boost_core SYSTEM INTERFACE ${DEPS_DESTDIR}/include)
 add_library(Boost::boost ALIAS boost_core)
-foreach(boostlib atomic date_time filesystem locale program_options serialization system thread)
+foreach(boostlib program_options serialization system thread)
   add_static_target(Boost::${boostlib} boost_external libboost_${boostlib}.a)
   target_link_libraries(Boost::${boostlib} INTERFACE boost_core)
 endforeach()
-target_link_libraries(Boost::locale INTERFACE Boost::thread)
 set(Boost_FOUND ON)
 set(Boost_VERSION ${BOOST_VERSION})
 
 
 
-build_external(sqlite3)
+build_external(sqlite3
+  BUILD_COMMAND true
+  INSTALL_COMMAND make install-includeHEADERS install-libLTLIBRARIES)
 add_static_target(sqlite3 sqlite3_external libsqlite3.a)
 
 
 
-if (NOT WIN32)
+if (NOT (WIN32 OR ANDROID OR IOS))
   build_external(ncurses
     CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --without-debug --without-ada
       --without-cxx-binding --without-cxx --without-ticlib --without-tic --without-progs
@@ -394,7 +473,7 @@ endif()
 
 
 
-if(APPLE OR WIN32)
+if(APPLE OR WIN32 OR ANDROID OR IOS)
   add_library(libudev INTERFACE)
   set(maybe_eudev "")
 else()
@@ -411,53 +490,65 @@ endif()
 
 
 
-build_external(libusb
-  CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --disable-udev --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
-  BUILD_BYPRODUCTS
-    ${DEPS_DESTDIR}/lib/libusb-1.0.a
-    ${DEPS_DESTDIR}/include/libusb-1.0
-    ${DEPS_DESTDIR}/include/libusb-1.0/libusb.h
-)
-add_static_target(libusb_vendor libusb_external libusb-1.0.a)
-set_target_properties(libusb_vendor PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DEPS_DESTDIR}/include/libusb-1.0)
+if(NOT (ANDROID OR IOS))
+  build_external(libusb
+    CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --disable-udev --with-pic
+      "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
+    BUILD_BYPRODUCTS
+      ${DEPS_DESTDIR}/lib/libusb-1.0.a
+      ${DEPS_DESTDIR}/include/libusb-1.0
+      ${DEPS_DESTDIR}/include/libusb-1.0/libusb.h
+  )
+  add_static_target(libusb_vendor libusb_external libusb-1.0.a)
+  set_target_properties(libusb_vendor PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${DEPS_DESTDIR}/include/libusb-1.0)
+endif()
 
 
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(hidapi_libusb_lib libhidapi-libusb.a)
-  set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi-libusb.a ${DEPS_DESTDIR}/lib/libhidapi-hidraw.a)
+if(ANDROID OR IOS)
+  set(HIDAPI_FOUND FALSE)
 else()
-  set(hidapi_libusb_lib libhidapi.a)
-  set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi.a)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(hidapi_libusb_lib libhidapi-libusb.a)
+    set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi-libusb.a ${DEPS_DESTDIR}/lib/libhidapi-hidraw.a)
+  else()
+    set(hidapi_libusb_lib libhidapi.a)
+    set(hidapi_lib_byproducts ${DEPS_DESTDIR}/lib/libhidapi.a)
+  endif()
+  build_external(hidapi
+    DEPENDS ${maybe_eudev} libusb_external
+    CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --enable-static --with-pic
+      "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
+      ${cross_extra}
+      "libudev_CFLAGS=-I${DEPS_DESTDIR}/include" "libudev_LIBS=-L${DEPS_DESTDIR}/lib -ludev"
+      "libusb_CFLAGS=-I${DEPS_DESTDIR}/include/libusb-1.0" "libusb_LIBS=-L${DEPS_DESTDIR}/lib -lusb-1.0"
+    BUILD_BYPRODUCTS
+      ${hidapi_lib_byproducts}
+      ${DEPS_DESTDIR}/include/hidapi
+      ${DEPS_DESTDIR}/include/hidapi/hidapi.h
+  )
+  set(HIDAPI_FOUND TRUE)
+  add_static_target(hidapi_libusb hidapi_external ${hidapi_libusb_lib})
+  set(hidapi_links "libusb_vendor;libudev")
+  if(WIN32)
+    list(APPEND hidapi_links setupapi)
+  endif()
+  set_target_properties(hidapi_libusb PROPERTIES
+      INTERFACE_LINK_LIBRARIES "${hidapi_links}"
+      INTERFACE_COMPILE_DEFINITIONS HAVE_HIDAPI)
 endif()
-build_external(hidapi
-  DEPENDS ${maybe_eudev} libusb_external
-  CONFIGURE_COMMAND autoreconf -ivf && ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --disable-shared --enable-static --with-pic
-    "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
-    "libudev_CFLAGS=-I${DEPS_DESTDIR}/include" "libudev_LIBS=-L${DEPS_DESTDIR}/lib -ludev"
-    "libusb_CFLAGS=-I${DEPS_DESTDIR}/include/libusb-1.0" "libusb_LIBS=-L${DEPS_DESTDIR}/lib -lusb-1.0"
-  BUILD_BYPRODUCTS
-    ${hidapi_lib_byproducts}
-    ${DEPS_DESTDIR}/include/hidapi
-    ${DEPS_DESTDIR}/include/hidapi/hidapi.h
-)
-set(HIDAPI_FOUND TRUE)
-add_static_target(hidapi_libusb hidapi_external ${hidapi_libusb_lib})
-set(hidapi_links "libusb_vendor;libudev")
-if(WIN32)
-  list(APPEND hidapi_links setupapi)
+
+
+
+set(protobuf_extra "")
+if(ANDROID)
+  set(protobuf_extra "LDFLAGS=-llog")
 endif()
-set_target_properties(hidapi_libusb PROPERTIES
-    INTERFACE_LINK_LIBRARIES "${hidapi_links}"
-    INTERFACE_COMPILE_DEFINITIONS HAVE_HIDAPI)
-
-
-
 build_external(protobuf
   CONFIGURE_COMMAND
     ./configure ${cross_host} --disable-shared --prefix=${DEPS_DESTDIR} --with-pic
       "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=${deps_CFLAGS}" "CXXFLAGS=${deps_CXXFLAGS}"
+      ${cross_extra} ${protobuf_extra}
       "CPP=${deps_cc} -E" "CXXCPP=${deps_cxx} -E"
       "CC_FOR_BUILD=${deps_cc}" "CXX_FOR_BUILD=${deps_cxx}"  # Thanks Google for making people hunt for undocumented magic variables
   BUILD_BYPRODUCTS
@@ -478,13 +569,21 @@ add_static_target(sodium sodium_external libsodium.a)
 if(ZMQ_VERSION VERSION_LESS 4.3.4 AND CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES mingw)
   set(zmq_patch PATCH_COMMAND patch -p1 -i ${PROJECT_SOURCE_DIR}/utils/build_scripts/libzmq-mingw-closesocket.patch)
 endif()
+
+set(zmq_cross_host "${cross_host}")
+if(IOS AND cross_host MATCHES "-ios$")
+  # zmq doesn't like "-ios" for the host, so replace it with -darwin
+  string(REGEX REPLACE "-ios$" "-darwin" zmq_cross_host ${cross_host})
+endif()
+
 build_external(zmq
   DEPENDS sodium_external
   ${zmq_patch}
-  CONFIGURE_COMMAND ./configure ${cross_host} --prefix=${DEPS_DESTDIR} --enable-static --disable-shared
+  CONFIGURE_COMMAND ./configure ${zmq_cross_host} --prefix=${DEPS_DESTDIR} --enable-static --disable-shared
     --disable-curve-keygen --enable-curve --disable-drafts --disable-libunwind --with-libsodium
     --without-pgm --without-norm --without-vmci --without-docs --with-pic --disable-Werror
     "CC=${deps_cc}" "CXX=${deps_cxx}" "CFLAGS=-fstack-protector ${deps_CFLAGS}" "CXXFLAGS=-fstack-protector ${deps_CXXFLAGS}"
+    ${cross_extra}
     "sodium_CFLAGS=-I${DEPS_DESTDIR}/include" "sodium_LIBS=-L${DEPS_DESTDIR}/lib -lsodium"
 )
 add_static_target(libzmq zmq_external libzmq.a)
@@ -500,33 +599,83 @@ set_target_properties(libzmq PROPERTIES
 
 
 
-set(curl_LIBS "")
+set(curl_extra)
 if(WIN32)
   set(curl_ssl_opts --without-ssl --with-schannel)
 elseif(APPLE)
   set(curl_ssl_opts --without-ssl --with-secure-transport)
+  if(IOS)
+    # This CPP crap shouldn't be necessary but is because Apple's toolchain is trash
+    set(curl_extra "LDFLAGS=-L${DEPS_DESTDIR}/lib -isysroot ${CMAKE_OSX_SYSROOT}" CPP=cpp)
+  endif()
 else()
   set(curl_ssl_opts --with-ssl=${DEPS_DESTDIR})
-  set(curl_LIBS "LIBS=-pthread")
+  set(curl_extra "LIBS=-pthread")
 endif()
 
-build_external(curl
-  DEPENDS openssl_external zlib_external
-  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_rc} --prefix=${DEPS_DESTDIR} --disable-shared
-  --enable-static --disable-ares --disable-ftp --disable-ldap --disable-laps --disable-rtsp
-  --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb
-  --disable-smtp --disable-gopher --disable-manual --disable-libcurl-option --enable-http
-  --enable-ipv6 --disable-threaded-resolver --disable-pthreads --disable-verbose --disable-sspi
-  --enable-crypto-auth --disable-ntlm-wb --disable-tls-srp --disable-unix-sockets --disable-cookies
-  --enable-http-auth --enable-doh --disable-mime --enable-dateparse --disable-netrc --without-libidn2
-  --disable-progress-meter --without-brotli --with-zlib=${DEPS_DESTDIR} ${curl_ssl_opts}
-  --without-libmetalink --without-librtmp --disable-versioned-symbols --enable-hidden-symbols
-  --without-zsh-functions-dir --without-fish-functions-dir
-  "CC=${deps_cc}" "CFLAGS=${deps_CFLAGS}" ${curl_LIBS}
-  BUILD_BYPRODUCTS
-    ${DEPS_DESTDIR}/lib/libcurl.a
-    ${DEPS_DESTDIR}/include/curl/curl.h
-)
+set(curl_arches default)
+set(curl_lib_outputs)
+if(IOS)
+  # On iOS things get a little messy: curl won't build a multi-arch library (with `clang -arch arch1
+  # -arch arch2`) so we have to build them separately then glue them together if we're building
+  # multiple.
+  set(curl_arches ${CMAKE_OSX_ARCHITECTURES})
+  list(GET curl_arches 0 curl_arch0)
+  list(LENGTH CMAKE_OSX_ARCHITECTURES num_arches)
+endif()
+
+foreach(curl_arch ${curl_arches})
+  set(curl_target_suffix "")
+  set(curl_prefix "${DEPS_DESTDIR}")
+  if(curl_arch STREQUAL "default")
+    set(curl_cflags_extra "")
+  elseif(IOS)
+    set(cflags_extra " -arch ${curl_arch}")
+    if(num_arches GREATER 1)
+      set(curl_target_suffix "-${curl_arch}")
+      set(curl_prefix "${DEPS_DESTDIR}/tmp/${curl_arch}")
+    endif()
+  else()
+    message(FATAL_ERROR "unexpected curl_arch=${curl_arch}")
+  endif()
+
+  build_external(curl
+    TARGET_SUFFIX ${curl_target_suffix}
+    DEPENDS openssl_external zlib_external
+    CONFIGURE_COMMAND ./configure ${cross_host} ${cross_extra} --prefix=${curl_prefix} --disable-shared
+    --enable-static --disable-ares --disable-ftp --disable-ldap --disable-laps --disable-rtsp
+    --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb
+    --disable-smtp --disable-gopher --disable-manual --disable-libcurl-option --enable-http
+    --enable-ipv6 --disable-threaded-resolver --disable-pthreads --disable-verbose --disable-sspi
+    --enable-crypto-auth --disable-ntlm-wb --disable-tls-srp --disable-unix-sockets --disable-cookies
+    --enable-http-auth --enable-doh --disable-mime --enable-dateparse --disable-netrc --without-libidn2
+    --disable-progress-meter --without-brotli --with-zlib=${DEPS_DESTDIR} ${curl_ssl_opts}
+    --without-libmetalink --without-librtmp --disable-versioned-symbols --enable-hidden-symbols
+    --without-zsh-functions-dir --without-fish-functions-dir
+    "CC=${deps_cc}" "CFLAGS=${deps_noarch_CFLAGS}${cflags_extra}" ${curl_extra}
+    BUILD_COMMAND true
+    INSTALL_COMMAND make -C lib install && make -C include install
+    BUILD_BYPRODUCTS
+      ${curl_prefix}/lib/libcurl.a
+      ${curl_prefix}/include/curl/curl.h
+  )
+  list(APPEND curl_lib_targets curl${curl_target_suffix}_external)
+  list(APPEND curl_lib_outputs ${curl_prefix}/lib/libcurl.a)
+endforeach()
+
+message(STATUS "TARGETS: ${curl_lib_targets}")
+
+if(IOS AND num_arches GREATER 1)
+  # We are building multiple architectures for different iOS devices, so we need to glue the
+  # separate libraries into one. (Normally multiple -arch values passed to clang does this for us,
+  # but curl refuses to build that way).
+  add_custom_target(curl_external
+    COMMAND lipo ${curl_lib_outputs} -create -output ${DEPS_DESTDIR}/libcurl.a
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${DEPS_DESTDIR}/tmp/${curl_arch0}/include/curl ${DEPS_DESTDIR}/include/curl
+    BYPRODUCTS ${DEPS_DESTDIR}/lib/libcurl.a ${DEPS_DESTDIR}/include/curl/curl.h
+    DEPENDS ${curl_lib_targets})
+endif()
+
 add_static_target(CURL::libcurl curl_external libcurl.a)
 set(libcurl_link_libs zlib)
 if(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES mingw)

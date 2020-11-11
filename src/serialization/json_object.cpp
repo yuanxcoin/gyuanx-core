@@ -30,7 +30,7 @@
 
 #include <limits>
 #include <type_traits>
-#include "string_tools.h"
+#include "epee/string_tools.h"
 
 namespace cryptonote
 {

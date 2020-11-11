@@ -38,7 +38,7 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include "include_base_utils.h"
+#include "epee/misc_log_ex.h"
 #include "common/string_util.h"
 #include "common/i18n.h"
 
@@ -69,7 +69,7 @@ namespace command_line
   template<typename T>
   struct arg_descriptor<T, false>
   {
-    typedef T value_type;
+    using value_type = T;
 
     const char* name;
     const char* description;
@@ -78,20 +78,11 @@ namespace command_line
   };
 
   template<typename T>
-  struct arg_descriptor<std::vector<T>, false>
-  {
-    typedef std::vector<T> value_type;
-
-    const char* name;
-    const char* description;
-  };
-
-  template<typename T>
   struct arg_descriptor<T, true>
   {
     static_assert(!std::is_same_v<T, bool>, "Boolean switch can't be required");
 
-    typedef T value_type;
+    using value_type = T;
 
     const char* name;
     const char* description;
@@ -100,7 +91,7 @@ namespace command_line
   template<typename T>
   struct arg_descriptor<T, false, true>
   {
-    typedef T value_type;
+    using value_type = T;
 
     const char* name;
     const char* description;
@@ -116,7 +107,7 @@ namespace command_line
   template<typename T, int NUM_DEPS>
   struct arg_descriptor<T, false, true, NUM_DEPS>
   {
-    typedef T value_type;
+    using value_type = T;
 
     const char* name;
     const char* description;
@@ -144,14 +135,37 @@ namespace command_line
     return semantic;
   }
 
+  namespace {
+    template <typename T>
+    struct arg_stringify {
+      const T& v;
+      arg_stringify(const T& val) : v{val} {}
+    };
+    template <typename T>
+    std::ostream& operator<<(std::ostream& o, const arg_stringify<T>& a) {
+      return o << a.v;
+    }
+    template <typename T>
+    std::ostream& operator<<(std::ostream& o, const arg_stringify<std::vector<T>>& a) {
+      o << '{';
+      bool first = true;
+      for (auto& x : a.v) {
+        if (first) first = false;
+        else o << ",";
+        o << x;
+      }
+      return o << '}';
+    }
+  }
+
   template<typename T>
   boost::program_options::typed_value<T, char>* make_semantic(const arg_descriptor<T, false, true>& arg)
   {
     auto semantic = boost::program_options::value<T>();
     if (!arg.not_use_default) {
       std::ostringstream format;
-      format << arg.depf(false, true, arg.default_value) << ", "
-             << arg.depf(true, true, arg.default_value) << " if '"
+      format << arg_stringify{arg.depf(false, true, arg.default_value)} << ", "
+             << arg_stringify{arg.depf(true, true, arg.default_value)} << " if '"
              << arg.ref.name << "'";
       semantic->default_value(arg.depf(arg.ref.default_value, true, arg.default_value), format.str());
     }
@@ -166,12 +180,12 @@ namespace command_line
       std::array<bool, NUM_DEPS> depval;
       depval.fill(false);
       std::ostringstream format;
-      format << arg.depf(depval, true, arg.default_value);
+      format << arg_stringify{arg.depf(depval, true, arg.default_value)};
       for (size_t i = 0; i < depval.size(); ++i)
       {
         depval.fill(false);
         depval[i] = true;
-        format << ", " << arg.depf(depval, true, arg.default_value) << " if '" << arg.ref[i]->name << "'";
+        format << ", " << arg_stringify{arg.depf(depval, true, arg.default_value)} << " if '" << arg.ref[i]->name << "'";
       }
       for (size_t i = 0; i < depval.size(); ++i)
         depval[i] = arg.ref[i]->default_value;

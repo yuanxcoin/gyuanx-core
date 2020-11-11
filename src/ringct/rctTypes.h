@@ -44,8 +44,8 @@ extern "C" {
 #include "crypto/generic-ops.h"
 #include "crypto/crypto.h"
 
-#include "hex.h"
-#include "span.h"
+#include "epee/hex.h"
+#include "epee/span.h"
 #include "serialization/variant.h"
 #include "common/util.h"
 

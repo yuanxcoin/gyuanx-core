@@ -30,6 +30,7 @@
 
 #include <string>
 #include <vector>
+#include "fs.h"
 
 namespace tools
 {
@@ -42,7 +43,7 @@ public:
   int notify(const char *tag, const char *s, ...);
 
 private:
-  std::string filename;
+  fs::path filename;
   std::vector<std::string> args;
 };
 

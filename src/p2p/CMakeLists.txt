@@ -41,6 +41,6 @@ target_link_libraries(p2p
     net
     miniupnpc
     Boost::program_options
-    Boost::filesystem
+    filesystem
     Boost::serialization
     extra)

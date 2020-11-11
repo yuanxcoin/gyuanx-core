@@ -45,16 +45,16 @@
 
 #include "boost/archive/portable_binary_iarchive.hpp"
 #include "boost/archive/portable_binary_oarchive.hpp"
-#include "shared_sv.h"
+#include "epee/shared_sv.h"
 #include "crypto/crypto.h"
-#include "hex.h"
-#include "net/net_utils_base.h"
-#include "net/local_ip.h"
-#include "net/buffer.h"
+#include "epee/hex.h"
+#include "epee/net/net_utils_base.h"
+#include "epee/net/local_ip.h"
+#include "epee/net/buffer.h"
 #include "p2p/net_peerlist_boost_serialization.h"
-#include "span.h"
-#include "string_tools.h"
-#include "storages/parserse_base_utils.h"
+#include "epee/span.h"
+#include "epee/string_tools.h"
+#include "epee/storages/parserse_base_utils.h"
 
 namespace
 {
@@ -500,40 +500,6 @@ TEST(ToHex, Formatted)
   expected.append("<").append(std_to_hex(all_bytes)).append(">");
   epee::to_hex::formatted(out, epee::to_span(all_bytes));
   EXPECT_EQ(expected, out.str());
-}
-
-TEST(StringTools, BuffToHex)
-{
-  const std::vector<unsigned char> all_bytes = get_all_bytes();
-
-  EXPECT_EQ(
-    std_to_hex(all_bytes),
-    (epee::string_tools::buff_to_hex_nodelimer(
-      std::string{reinterpret_cast<const char*>(all_bytes.data()), all_bytes.size()}
-    ))
-  );
-}
-
-TEST(StringTools, PodToHex)
-{
-  struct some_pod { unsigned char data[4]; };
-  EXPECT_EQ(
-    std::string{"ffab0100"},
-    (epee::string_tools::pod_to_hex(some_pod{{0xFF, 0xAB, 0x01, 0x00}}))
-  );
-}
-
-TEST(StringTools, ParseHex)
-{
-  static const char data[] = "a10b68c2";
-  for (size_t i = 0; i < sizeof(data); i += 2)
-  {
-    std::string res;
-    ASSERT_TRUE(epee::string_tools::parse_hexstr_to_binbuff(std::string(data, i), res));
-    std::string hex = epee::string_tools::buff_to_hex_nodelimer(res);
-    ASSERT_EQ(hex.size(), i);
-    ASSERT_EQ(memcmp(data, hex.data(), i), 0);
-  }
 }
 
 TEST(StringTools, ParseNotHex)

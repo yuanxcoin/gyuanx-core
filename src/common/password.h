@@ -35,7 +35,7 @@
 #include <optional>
 #include <functional>
 #include <cstddef>
-#include "wipeable_string.h"
+#include "epee/wipeable_string.h"
 
 namespace tools
 {

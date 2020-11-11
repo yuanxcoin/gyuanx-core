@@ -34,7 +34,7 @@
 #include <utility>
 
 #include "lmdb/value_stream.h"
-#include "span.h"
+#include "epee/span.h"
 
 namespace lmdb
 {

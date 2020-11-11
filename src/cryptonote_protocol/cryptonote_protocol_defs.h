@@ -31,9 +31,9 @@
 #pragma once
 
 #include <list>
-#include "serialization/keyvalue_serialization.h"
+#include "epee/serialization/keyvalue_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
-#include "net/net_utils_base.h"
+#include "epee/net/net_utils_base.h"
 #include "cryptonote_basic/blobdatatype.h"
 
 #include "common/loki.h"

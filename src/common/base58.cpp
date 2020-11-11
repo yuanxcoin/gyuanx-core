@@ -36,7 +36,7 @@
 #include <string_view>
 
 #include "crypto/hash.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 #include "varint.h"
 
 namespace tools

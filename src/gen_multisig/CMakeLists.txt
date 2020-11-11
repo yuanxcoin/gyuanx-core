@@ -38,6 +38,6 @@ target_link_libraries(gen_multisig
     cryptonote_core
     epee
     Boost::program_options
-    Boost::filesystem
+    filesystem
     version
     extra)

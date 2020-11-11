@@ -2,7 +2,7 @@
 #include "sha256sum.h"
 #include <fstream>
 #include "crypto/hash.h"
-#include "file_io_utils.h" // epee
+#include "fs.h"
 
 extern "C" {
 #include <openssl/sha.h>
@@ -22,11 +22,11 @@ namespace tools {
     return true;
   }
 
-  bool sha256sum_file(const std::string &filename, crypto::hash &hash)
+  bool sha256sum_file(const fs::path& filename, crypto::hash& hash)
   {
-    if (!epee::file_io_utils::is_file_exist(filename))
+    if (std::error_code ec; !fs::exists(filename, ec) || ec)
       return false;
-    std::ifstream f;
+    fs::ifstream f;
     f.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     f.open(filename, std::ios_base::binary | std::ios_base::in | std::ios::ate);
     if (!f)

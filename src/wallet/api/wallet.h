@@ -28,8 +28,7 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#ifndef WALLET_IMPL_H
-#define WALLET_IMPL_H
+#pragma once
 
 #include "wallet/api/wallet2_api.h"
 #include "wallet/wallet2.h"
@@ -40,7 +39,7 @@
 #include <thread>
 
 
-namespace Monero {
+namespace Wallet {
 class TransactionHistoryImpl;
 class PendingTransactionImpl;
 class UnsignedTransactionImpl;
@@ -54,29 +53,20 @@ class WalletImpl : public Wallet
 public:
     WalletImpl(NetworkType nettype = MAINNET, uint64_t kdf_rounds = 1);
     ~WalletImpl();
-    bool create(const std::string &path, const std::string &password,
+    bool create(const std::string_view path, const std::string &password,
                 const std::string &language);
-    bool createWatchOnly(const std::string &path, const std::string &password,
+    bool createWatchOnly(std::string_view path, const std::string &password,
                             const std::string &language) const override;
-    bool open(const std::string &path, const std::string &password);
-    bool recover(const std::string &path,const std::string &password,
+    bool open(std::string_view path, const std::string &password);
+    bool recover(std::string_view path,const std::string &password,
                             const std::string &seed, const std::string &seed_offset = {});
-    bool recoverFromKeysWithPassword(const std::string &path,
+    bool recoverFromKeysWithPassword(std::string_view path,
                             const std::string &password,
                             const std::string &language,
                             const std::string &address_string,
                             const std::string &viewkey_string,
                             const std::string &spendkey_string = "");
-    // following two methods are deprecated since they create passwordless wallets
-    // use the two equivalent methods above
-    bool recover(const std::string &path, const std::string &seed);
-    // deprecated: use recoverFromKeysWithPassword() instead
-    bool recoverFromKeys(const std::string &path,
-                            const std::string &language,
-                            const std::string &address_string, 
-                            const std::string &viewkey_string,
-                            const std::string &spendkey_string = "");
-    bool recoverFromDevice(const std::string &path,
+    bool recoverFromDevice(std::string_view path,
                            const std::string &password,
                            const std::string &device_name);
     Device getDeviceType() const override;
@@ -84,10 +74,8 @@ public:
     std::string seed() const override;
     std::string getSeedLanguage() const override;
     void setSeedLanguage(const std::string &arg) override;
-    // void setListener(Listener *) {}
-    int status() const override;
-    std::string errorString() const override;
-    void statusWithErrorString(int& status, std::string& errorString) const override;
+    bool good() const override;
+    std::pair<int, std::string> status() const override;
     bool setPassword(const std::string &password) override;
     bool setDevicePin(const std::string &password) override;
     bool setDevicePassphrase(const std::string &password) override;
@@ -99,7 +87,7 @@ public:
     std::string publicSpendKey() const override;
     std::string publicMultisigSignerKey() const override;
     std::string path() const override;
-    bool store(const std::string &path) override;
+    bool store(std::string_view path) override;
     std::string filename() const override;
     std::string keysFilename() const override;
     bool init(const std::string &daemon_address, uint64_t upper_transaction_size_limit = 0, const std::string &daemon_username = "", const std::string &daemon_password = "", bool use_ssl = false, bool lightWallet = false) override;
@@ -149,27 +137,26 @@ public:
     bool exportMultisigImages(std::string& images) override;
     size_t importMultisigImages(const std::vector<std::string>& images) override;
     bool hasMultisigPartialKeyImages() const override;
-    PendingTransaction*  restoreMultisigTransaction(const std::string& signData) override;
+    PendingTransaction* restoreMultisigTransaction(const std::string& signData) override;
 
-    PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
+    PendingTransaction* createTransactionMultDest(const std::vector<std::string> &dst_addr,
                                         std::optional<std::vector<uint64_t>> amount,
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
                                         std::set<uint32_t> subaddr_indices = {}) override;
-    PendingTransaction * createTransaction(const std::string &dst_addr, const std::string &payment_id,
+    PendingTransaction* createTransaction(const std::string &dst_addr,
                                         std::optional<uint64_t> amount,
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
                                         std::set<uint32_t> subaddr_indices = {}) override;
-    virtual PendingTransaction * createSweepUnmixableTransaction() override;
-    bool submitTransaction(const std::string &fileName) override;
-    virtual UnsignedTransaction * loadUnsignedTx(const std::string &unsigned_filename) override;
-    bool exportKeyImages(const std::string &filename) override;
-    bool importKeyImages(const std::string &filename) override;
+    PendingTransaction* createSweepUnmixableTransaction() override;
+    bool submitTransaction(std::string_view filename) override;
+    UnsignedTransaction* loadUnsignedTx(std::string_view unsigned_filename) override;
+    bool exportKeyImages(std::string_view filename) override;
+    bool importKeyImages(std::string_view filename) override;
 
     void disposeTransaction(PendingTransaction * t) override;
-    // TODO(loki): Implement
-    // uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations, PendingTransaction::Priority priority) const override;
+    uint64_t estimateTransactionFee(uint32_t priority, uint32_t recipients = 1) const override;
     TransactionHistory * history() override;
     AddressBook * addressBook() override;
     Subaddress * subaddress() override;
@@ -180,7 +167,7 @@ public:
     bool setUserNote(const std::string &txid, const std::string &note) override;
     std::string getUserNote(const std::string &txid) const override;
     std::string getTxKey(const std::string &txid) const override;
-    bool checkTxKey(const std::string &txid, std::string tx_key, const std::string &address, uint64_t &received, bool &in_pool, uint64_t &confirmations) override;
+    bool checkTxKey(const std::string &txid, std::string_view tx_key, const std::string &address, uint64_t &received, bool &in_pool, uint64_t &confirmations) override;
     std::string getTxProof(const std::string &txid, const std::string &address, const std::string &message) const override;
     bool checkTxProof(const std::string &txid, const std::string &address, const std::string &message, const std::string &signature, bool &good, uint64_t &received, bool &in_pool, uint64_t &confirmations) override;
     std::string getSpendProof(const std::string &txid, const std::string &message) const override;
@@ -214,9 +201,9 @@ public:
 
 private:
     void clearStatus() const;
-    void setStatusError(const std::string& message) const;
-    void setStatusCritical(const std::string& message) const;
-    void setStatus(int status, const std::string& message) const;
+    bool setStatusError(std::string message) const;
+    bool setStatusCritical(std::string message) const;
+    bool setStatus(int status, std::string message) const;
     void refreshThreadFunc();
     void doRefresh();
     bool daemonSynced() const;
@@ -236,8 +223,7 @@ private:
 
     std::unique_ptr<tools::wallet2> m_wallet;
     mutable std::mutex m_statusMutex;
-    mutable int m_status;
-    mutable std::string m_errorString;
+    mutable std::pair<int, std::string> m_status;
     std::string m_password;
     std::unique_ptr<TransactionHistoryImpl> m_history;
     std::unique_ptr<Wallet2CallbackImpl> m_wallet2Callback;
@@ -273,8 +259,3 @@ private:
 
 
 } // namespace
-
-namespace Bitmonero = Monero;
-
-#endif
-

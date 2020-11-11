@@ -33,7 +33,6 @@
 
 #include <algorithm>
 #include <optional>
-#include <boost/filesystem/operations.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <atomic>
 #include <functional>
@@ -42,24 +41,27 @@
 #include <tuple>
 #include <vector>
 
+#include "cryptonote_config.h"
 #include "version.h"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "common/file.h"
 #include "common/dns_utils.h"
 #include "common/pruning.h"
 #include "net/error.h"
 #include "common/periodic_task.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "p2p_protocol_defs.h"
-#include "net/local_ip.h"
+#include "epee/net/local_ip.h"
 #include "crypto/crypto.h"
-#include "storages/levin_abstract_invoke2.h"
+#include "epee/storages/levin_abstract_invoke2.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "net/parse.h"
 
+#ifndef WITHOUT_MINIUPNPC
 #include <miniupnp/miniupnpc/miniupnpc.h>
 #include <miniupnp/miniupnpc/upnpcommands.h>
 #include <miniupnp/miniupnpc/upnperrors.h>
+#endif
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "net.p2p"
@@ -119,7 +121,7 @@ namespace nodetool
   bool node_server<t_payload_net_handler>::init_config()
   {
     TRY_ENTRY();
-    auto storage = peerlist_storage::open(m_config_folder + "/" + P2P_NET_DATA_FILENAME);
+    auto storage = peerlist_storage::open(m_config_folder / P2P_NET_DATA_FILENAME);
     if (storage)
       m_peerlist_storage = std::move(*storage);
 
@@ -708,14 +710,11 @@ namespace nodetool
       memcpy(&m_network_id, &::config::NETWORK_ID, 16);
     }
 
-    m_config_folder = command_line::get_arg(vm, cryptonote::arg_data_dir);
+    m_config_folder = fs::u8path(command_line::get_arg(vm, cryptonote::arg_data_dir));
     network_zone& public_zone = m_network_zones.at(epee::net_utils::zone::public_);
 
-    if ((m_nettype == cryptonote::MAINNET && public_zone.m_port != std::to_string(::config::P2P_DEFAULT_PORT))
-        || (m_nettype == cryptonote::TESTNET && public_zone.m_port != std::to_string(::config::testnet::P2P_DEFAULT_PORT))
-        || (m_nettype == cryptonote::DEVNET && public_zone.m_port != std::to_string(::config::devnet::P2P_DEFAULT_PORT))) {
-      m_config_folder = m_config_folder + "/" + public_zone.m_port;
-    }
+    if (public_zone.m_port != std::to_string(cryptonote::get_config(m_nettype).P2P_DEFAULT_PORT))
+      m_config_folder /= public_zone.m_port;
 
     res = init_config();
     CHECK_AND_ASSERT_MES(res, false, "Failed to init config.");
@@ -905,7 +904,7 @@ namespace nodetool
 
     if (!tools::create_directories_if_necessary(m_config_folder))
     {
-      MWARNING("Failed to create data directory \"" << m_config_folder);
+      MWARNING("Failed to create data directory " << m_config_folder);
       return false;
     }
 
@@ -913,7 +912,7 @@ namespace nodetool
     for (auto& zone : m_network_zones)
       zone.second.m_peerlist.get_peerlist(active);
 
-    const std::string state_file_path = m_config_folder + "/" + P2P_NET_DATA_FILENAME;
+    const auto state_file_path = m_config_folder / P2P_NET_DATA_FILENAME;
     if (!m_peerlist_storage.store(state_file_path, active))
     {
       MWARNING("Failed to save config to file " << state_file_path);
@@ -2060,7 +2059,7 @@ namespace nodetool
     if(!zone.m_peerlist.is_host_allowed(context.m_remote_address))
       return false;
 
-    std::string port = epee::string_tools::num_to_string_fast(node_data.my_port);
+    std::string port = std::to_string(node_data.my_port);
 
     epee::net_utils::network_address address;
     if (ipv4_addr)
@@ -2657,6 +2656,10 @@ namespace nodetool
   template<class t_payload_net_handler>
   void node_server<t_payload_net_handler>::add_upnp_port_mapping_impl(uint32_t port, bool ipv6) // if ipv6 false, do ipv4
   {
+#ifdef WITHOUT_MINIUPNPC
+    (void) port;
+    (void) ipv6;
+#else
     std::string ipversion = ipv6 ? "(IPv6)" : "(IPv4)";
     MDEBUG("Attempting to add IGD port mapping " << ipversion << ".");
     int result;
@@ -2701,6 +2704,7 @@ namespace nodetool
     } else {
       MINFO("No IGD was found.");
     }
+#endif
   }
 
   template<class t_payload_net_handler>
@@ -2726,6 +2730,10 @@ namespace nodetool
   template<class t_payload_net_handler>
   void node_server<t_payload_net_handler>::delete_upnp_port_mapping_impl(uint32_t port, bool ipv6)
   {
+#ifdef WITHOUT_MINIUPNPC
+    (void) port;
+    (void) ipv6;
+#else
     std::string ipversion = ipv6 ? "(IPv6)" : "(IPv4)";
     MDEBUG("Attempting to delete IGD port mapping " << ipversion << ".");
     int result;
@@ -2766,6 +2774,7 @@ namespace nodetool
     } else {
       MINFO("No IGD was found.");
     }
+#endif
   }
 
   template<class t_payload_net_handler>
@@ -2817,13 +2826,13 @@ namespace nodetool
     {
       const epee::net_utils::ipv4_network_address &ipv4 = na.as<const epee::net_utils::ipv4_network_address>();
       address = epee::string_tools::get_ip_string_from_int32(ipv4.ip());
-      port = epee::string_tools::num_to_string_fast(ipv4.port());
+      port = std::to_string(ipv4.port());
     }
     else
     {
       const epee::net_utils::ipv6_network_address &ipv6 = na.as<const epee::net_utils::ipv6_network_address>();
       address = ipv6.ip().to_string();
-      port = epee::string_tools::num_to_string_fast(ipv6.port());
+      port = std::to_string(ipv6.port());
     }
 
     typename net_server::t_connection_context con{};

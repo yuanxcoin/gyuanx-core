@@ -37,7 +37,7 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <cstdio>
-#include "include_base_utils.h"
+#include "epee/misc_log_ex.h"
 #include "common/threadpool.h"
 #include "crypto/crypto.h"
 

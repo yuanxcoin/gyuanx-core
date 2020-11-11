@@ -5,8 +5,11 @@
 #include <lokimq/base64.h>
 #include <boost/endian/conversion.hpp>
 #include <lokimq/variant.h>
+#include "common/command_line.h"
 #include "common/string_util.h"
-#include "net/jsonrpc_structs.h" // epee
+#include "cryptonote_config.h"
+#include "cryptonote_core/cryptonote_core.h"
+#include "epee/net/jsonrpc_structs.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "rpc/rpc_args.h"
 #include "version.h"
@@ -16,47 +19,64 @@
 
 namespace cryptonote::rpc {
 
-  const command_line::arg_descriptor<uint16_t, false, true, 2> http_server::arg_rpc_bind_port = {
-      "rpc-bind-port"
-    , "Port for RPC server"
-    , config::RPC_DEFAULT_PORT
-    , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }}
-    , [](std::array<bool, 2> testnet_devnet, bool defaulted, uint16_t val) {
-        auto [testnet, devnet] = testnet_devnet;
-        return
-          (defaulted && testnet) ? config::testnet::RPC_DEFAULT_PORT :
-          (defaulted && devnet) ? config::devnet::RPC_DEFAULT_PORT :
-          val;
+  const command_line::arg_descriptor<std::vector<std::string>> http_server::arg_rpc_public{
+    "rpc-public",
+    "Specifies an IP:PORT to listen on for public (restricted) RPC requests; can be specified multiple times."
+  };
+
+  const command_line::arg_descriptor<std::vector<std::string>, false, true, 2> http_server::arg_rpc_admin{
+    "rpc-admin",
+    "Specifies an IP:PORT to listen on for admin (unrestricted) RPC requests; can be specified multiple times. Specify \"none\" to disable.",
+    {"127.0.0.1:" + std::to_string(config::RPC_DEFAULT_PORT), "[::1]:" + std::to_string(config::RPC_DEFAULT_PORT)},
+    {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }},
+    [](std::array<bool, 2> testnet_devnet, bool defaulted, std::vector<std::string> val) {
+      auto& [testnet, devnet] = testnet_devnet;
+      if (defaulted && (testnet || devnet)) {
+        auto port = std::to_string(testnet ? config::testnet::RPC_DEFAULT_PORT : config::devnet::RPC_DEFAULT_PORT);
+        val = {"127.0.0.1:" + port, "[::1]:" + port};
       }
-    };
+      return val;
+    }
+  };
+
+  const command_line::arg_descriptor<uint16_t> http_server::arg_rpc_bind_port = {
+      "rpc-bind-port",
+      "Port for RPC server; deprecated, use --rpc-public or --rpc-admin instead.",
+      0
+  };
 
   const command_line::arg_descriptor<uint16_t> http_server::arg_rpc_restricted_bind_port = {
       "rpc-restricted-bind-port"
-    , "Port for restricted RPC server"
+    , "Port for restricted RPC server; deprecated, use --rpc-public instead"
     , 0
     };
 
   const command_line::arg_descriptor<bool> http_server::arg_restricted_rpc = {
       "restricted-rpc"
-    , "Restrict RPC to view only commands and do not return privacy sensitive data in RPC calls"
+    , "Deprecated, use --rpc-public instead"
     , false
     };
 
+  // This option doesn't do anything anymore, but keep it here for now in case people added it to
+  // config files/startup flags.
   const command_line::arg_descriptor<bool> http_server::arg_public_node = {
       "public-node"
-    , "Allow other users to use the node as a remote (restricted RPC mode, view-only commands) and advertise it over P2P"
+    , "Deprecated; use --rpc-public option instead"
     , false
     };
 
   namespace { void long_poll_trigger(cryptonote::tx_memory_pool&); }
 
   //-----------------------------------------------------------------------------------
-  void http_server::init_options(boost::program_options::options_description& desc)
+  void http_server::init_options(boost::program_options::options_description& desc, boost::program_options::options_description& hidden)
   {
-    command_line::add_arg(desc, arg_rpc_bind_port);
-    command_line::add_arg(desc, arg_rpc_restricted_bind_port);
-    command_line::add_arg(desc, arg_restricted_rpc);
-    command_line::add_arg(desc, arg_public_node);
+    command_line::add_arg(desc, arg_rpc_public);
+    command_line::add_arg(desc, arg_rpc_admin);
+
+    command_line::add_arg(hidden, arg_rpc_bind_port);
+    command_line::add_arg(hidden, arg_rpc_restricted_bind_port);
+    command_line::add_arg(hidden, arg_restricted_rpc);
+    command_line::add_arg(hidden, arg_public_node);
 
     cryptonote::long_poll_trigger = long_poll_trigger;
   }
@@ -64,10 +84,10 @@ namespace cryptonote::rpc {
   //------------------------------------------------------------------------------------------------------------------------------
   http_server::http_server(
       core_rpc_server& server,
-      const boost::program_options::variables_map& vm,
-      const bool restricted,
-      uint16_t port
-      ) : m_server{server}, m_restricted{restricted}
+      rpc_args rpc_config,
+      bool restricted,
+      std::vector<std::tuple<std::string, uint16_t, bool>> bind)
+    : m_server{server}, m_restricted{restricted}
   {
     // uWS is designed to work from a single thread, which is good (we pull off the requests and
     // then stick them into the LMQ job queue to be scheduled along with other jobs).  But as a
@@ -93,7 +113,7 @@ namespace cryptonote::rpc {
     //   start()).
     //m_startup_promise
 
-    m_rpc_thread = std::thread{[this, rpc_config=cryptonote::rpc_args::process(vm), port] (
+    m_rpc_thread = std::thread{[this, rpc_config=std::move(rpc_config), bind=std::move(bind)] (
         std::promise<uWS::Loop*> loop_promise,
         std::future<bool> startup_future,
         std::promise<std::vector<us_listen_socket_t*>> startup_success) {
@@ -102,17 +122,12 @@ namespace cryptonote::rpc {
         create_rpc_endpoints(http);
       } catch (...) {
         loop_promise.set_exception(std::current_exception());
+        return;
       }
       loop_promise.set_value(uWS::Loop::get());
       if (!startup_future.get())
         // False means cancel, i.e. we got destroyed/shutdown without start() being called
         return;
-
-      std::vector<std::pair<std::string /*addr*/, bool /*required*/>> bind_addr;
-      if (!rpc_config.bind_ip.empty())
-        bind_addr.emplace_back(rpc_config.bind_ip, rpc_config.require_ipv4);
-      if (rpc_config.use_ipv6 && !rpc_config.bind_ipv6_address.empty())
-        bind_addr.emplace_back(rpc_config.bind_ipv6_address, true);
 
       m_login = rpc_config.login;
 
@@ -120,24 +135,20 @@ namespace cryptonote::rpc {
 
       std::vector<us_listen_socket_t*> listening;
       try {
-        bool bad = false;
-        int good = 0;
-        for (const auto& [addr, required] : bind_addr)
-          http.listen(addr, port, [&listening, req=required, &good, &bad](us_listen_socket_t* sock) {
-            listening.push_back(sock);
-            if (sock != nullptr) good++;
-            else if (req) bad = true;
+        bool required_bind_failed = false;
+        for (const auto& [addr, port, required] : bind)
+          http.listen(addr, port, [&listening, req=required, &required_bind_failed](us_listen_socket_t* sock) {
+            if (sock) listening.push_back(sock);
+            else if (req) required_bind_failed = true;
           });
 
-        if (!good || bad) {
+        if (listening.empty() || required_bind_failed) {
           std::ostringstream error;
           error << "RPC HTTP server failed to bind; ";
           if (listening.empty()) error << "no valid bind address(es) given";
-          else {
-            error << "tried to bind to:";
-            for (const auto& [addr, required] : bind_addr)
-              error << ' ' << addr << ':' << port;
-          }
+          error << "tried to bind to:";
+          for (const auto& [addr, port, required] : bind)
+            error << ' ' << addr << ':' << port;
           throw std::runtime_error(error.str());
         }
       } catch (...) {
@@ -601,6 +612,7 @@ namespace cryptonote::rpc {
           MTRACE("closing " << m_listen_socks.size() << " listening sockets");
           for (auto* s : m_listen_socks)
             us_listen_socket_close(/*ssl=*/false, s);
+          m_listen_socks.clear();
 
           m_closing = true;
 

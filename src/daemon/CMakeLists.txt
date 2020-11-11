@@ -46,8 +46,7 @@ target_link_libraries(daemon
     serialization
     daemon_rpc_server
     version
-    Boost::filesystem
+    filesystem
     Boost::program_options
-    Boost::system
     systemd
     extra)

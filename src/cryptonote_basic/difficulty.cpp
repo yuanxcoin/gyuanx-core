@@ -32,7 +32,7 @@
 #include <algorithm>
 
 #include "common/loki.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 #include "crypto/hash.h"
 #include "difficulty.h"
 #include "hardfork.h"

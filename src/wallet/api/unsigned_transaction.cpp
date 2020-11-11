@@ -40,17 +40,14 @@
 #include <sstream>
 #include <boost/format.hpp>
 
-using namespace std;
-
-namespace Monero {
+namespace Wallet {
 
 UnsignedTransaction::~UnsignedTransaction() {}
 
 
 UnsignedTransactionImpl::UnsignedTransactionImpl(WalletImpl &wallet)
-    : m_wallet(wallet)
+    : m_wallet(wallet), m_status{Status_Ok, ""}
 {
-  m_status = Status_Ok;
 }
 
 UnsignedTransactionImpl::~UnsignedTransactionImpl()
@@ -58,23 +55,13 @@ UnsignedTransactionImpl::~UnsignedTransactionImpl()
     LOG_PRINT_L3("Unsigned tx deleted");
 }
 
-int UnsignedTransactionImpl::status() const
+bool UnsignedTransactionImpl::sign(std::string_view signedFileName_)
 {
-    return m_status;
-}
-
-string UnsignedTransactionImpl::errorString() const
-{
-    return m_errorString;
-}
-
-bool UnsignedTransactionImpl::sign(const std::string &signedFileName)
-{
+  auto signedFileName = fs::u8path(signedFileName_);
   if(m_wallet.watchOnly())
   {
-     m_errorString = tr("This is a watch only wallet");
-     m_status = Status_Error;
-     return false;
+    m_status = {Status_Error, tr("This is a watch only wallet")};
+    return false;
   }
   std::vector<tools::wallet2::pending_tx> ptx;
   try
@@ -82,15 +69,13 @@ bool UnsignedTransactionImpl::sign(const std::string &signedFileName)
     bool r = m_wallet.m_wallet->sign_tx(m_unsigned_tx_set, signedFileName, ptx);
     if (!r)
     {
-      m_errorString = tr("Failed to sign transaction");
-      m_status = Status_Error;
+      m_status = {Status_Error, tr("Failed to sign transaction")};
       return false;
     }
   }
   catch (const std::exception &e)
   {
-    m_errorString = string(tr("Failed to sign transaction")) + e.what();
-    m_status = Status_Error;
+    m_status = {Status_Error, std::string(tr("Failed to sign transaction")) + e.what()};
     return false;
   }
   return true;
@@ -122,14 +107,14 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
         {
           if (!payment_id_string.empty())
             payment_id_string += ", ";
-          payment_id_string = std::string("encrypted payment ID ") + epee::string_tools::pod_to_hex(payment_id8);
+          payment_id_string = std::string("encrypted payment ID ") + tools::type_to_hex(payment_id8);
           has_encrypted_payment_id = true;
         }
         else if (cryptonote::get_payment_id_from_tx_extra_nonce(extra_nonce.nonce, payment_id))
         {
           if (!payment_id_string.empty())
             payment_id_string += ", ";
-          payment_id_string = std::string("unencrypted payment ID ") + epee::string_tools::pod_to_hex(payment_id);
+          payment_id_string = std::string("unencrypted payment ID ") + tools::type_to_hex(payment_id);
         }
       }
     }
@@ -148,7 +133,7 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
       if (has_encrypted_payment_id && !entry.is_subaddress)
       {
         address = get_account_integrated_address_as_str(m_wallet.m_wallet->nettype(), entry.addr, payment_id8);
-        address += std::string(" (" + standard_address + " with encrypted payment id " + epee::string_tools::pod_to_hex(payment_id8) + ")");
+        address += std::string(" (" + standard_address + " with encrypted payment id " + tools::type_to_hex(payment_id8) + ")");
       }
       else
         address = standard_address;
@@ -164,15 +149,13 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
       auto it = dests.find(cd.change_dts.addr);
       if (it == dests.end())
       {
-        m_status = Status_Error;
-        m_errorString = tr("Claimed change does not go to a paid address");
+        m_status = {Status_Error, tr("Claimed change does not go to a paid address")};
         return false;
       }
       if (it->second.second < cd.change_dts.amount)
       {
-        m_status = Status_Error;
-        m_errorString = tr("Claimed change is larger than payment to the change address");
-        return  false;
+        m_status = {Status_Error, tr("Claimed change is larger than payment to the change address")};
+        return false;
       }
       if (cd.change_dts.amount > 0)
       {
@@ -180,8 +163,7 @@ bool UnsignedTransactionImpl::checkLoadedTx(const std::function<size_t()> get_nu
           first_known_non_zero_change_index = n;
         if (memcmp(&cd.change_dts.addr, &get_tx(first_known_non_zero_change_index).change_dts.addr, sizeof(cd.change_dts.addr)))
         {
-          m_status = Status_Error;
-          m_errorString = tr("Change goes to more than one address");
+          m_status = {Status_Error, tr("Change goes to more than one address")};
           return false;
         }
       }
@@ -261,7 +243,7 @@ uint64_t UnsignedTransactionImpl::txCount() const
 
 std::vector<std::string> UnsignedTransactionImpl::paymentId() const 
 {
-    std::vector<string> result;
+    std::vector<std::string> result;
     for (const auto &utx: m_unsigned_tx_set.txes) {     
         crypto::hash payment_id = crypto::null_hash;
         cryptonote::tx_extra_nonce extra_nonce;
@@ -281,7 +263,7 @@ std::vector<std::string> UnsignedTransactionImpl::paymentId() const
           }      
         }
         if(payment_id != crypto::null_hash)
-            result.push_back(epee::string_tools::pod_to_hex(payment_id));
+            result.push_back(tools::type_to_hex(payment_id));
         else
             result.push_back("");
     }
@@ -291,7 +273,7 @@ std::vector<std::string> UnsignedTransactionImpl::paymentId() const
 std::vector<std::string> UnsignedTransactionImpl::recipientAddress() const 
 {
     // TODO: return integrated address if short payment ID exists
-    std::vector<string> result;
+    std::vector<std::string> result;
     for (const auto &utx: m_unsigned_tx_set.txes) {
         if (utx.dests.empty()) {
           MERROR("empty destinations, skipped");
@@ -316,6 +298,3 @@ uint64_t UnsignedTransactionImpl::minMixinCount() const
 }
 
 } // namespace
-
-namespace Bitmonero = Monero;
-

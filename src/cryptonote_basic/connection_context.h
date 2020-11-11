@@ -32,8 +32,8 @@
 #include <unordered_set>
 #include <atomic>
 #include <chrono>
-#include "net/net_utils_base.h"
-#include "copyable_atomic.h"
+#include "epee/net/net_utils_base.h"
+#include "epee/copyable_atomic.h"
 #include "crypto/hash.h"
 
 namespace cryptonote

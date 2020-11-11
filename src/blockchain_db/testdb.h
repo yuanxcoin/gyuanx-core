@@ -35,6 +35,7 @@
 #include <map>
 #include "blockchain_db.h"
 #include "cryptonote_core/service_node_list.h"
+#include "cryptonote_basic/cryptonote_format_utils.h"
 
 namespace cryptonote
 {
@@ -42,13 +43,13 @@ namespace cryptonote
 class BaseTestDB: public cryptonote::BlockchainDB {
 public:
   BaseTestDB() {}
-  virtual void open(const std::string& filename, network_type nettype = FAKECHAIN, const int db_flags = 0) override { }
+  virtual void open(const fs::path& filename, network_type nettype = FAKECHAIN, const int db_flags = 0) override { }
   virtual void close() override {}
   virtual void sync() override {}
   virtual void safesyncmode(const bool onoff) override {}
   virtual void reset() override {}
-  virtual std::vector<std::string> get_filenames() const override { return std::vector<std::string>(); }
-  virtual bool remove_data_file(const std::string& folder) const override { return true; }
+  virtual std::vector<fs::path> get_filenames() const override { return {}; }
+  virtual bool remove_data_file(const fs::path& folder) const override { return true; }
   virtual std::string get_db_name() const override { return std::string(); }
   virtual void lock() override { }
   virtual bool try_lock() override { return true; }

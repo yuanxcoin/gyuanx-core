@@ -2,9 +2,9 @@
 #include <mutex>
 #include <chrono>
 
-#include "wipeable_string.h"
-#include "memwipe.h"
-#include "misc_log_ex.h"
+#include "epee/wipeable_string.h"
+#include "epee/memwipe.h"
+#include "epee/misc_log_ex.h"
 #include "common/random.h"
 
 #include "cryptonote_core.h"

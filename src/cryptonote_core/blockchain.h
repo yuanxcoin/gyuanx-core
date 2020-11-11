@@ -49,9 +49,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "span.h"
-#include "string_tools.h"
-#include "rolling_median.h"
+#include "epee/span.h"
+#include "epee/string_tools.h"
+#include "epee/rolling_median.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "common/util.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
@@ -769,7 +769,7 @@ namespace cryptonote
      *
      * @return false if any enforced checkpoint type fails to load, otherwise true
      */
-    bool update_checkpoints_from_json_file(const std::string& file_path);
+    bool update_checkpoints_from_json_file(const fs::path& file_path);
 
     bool update_checkpoint(checkpoint_t const &checkpoint);
 
