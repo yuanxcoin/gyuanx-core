@@ -9,7 +9,7 @@ Subject: Add check for -latomic (needed for armhf build)
  create mode 100644 cmake/check_atomic.cmake
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index aca878f..fe1e27c 100644
+index 961d769..fbf05af 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -759,6 +759,9 @@ else()

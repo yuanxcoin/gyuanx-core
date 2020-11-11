@@ -9,13 +9,13 @@ override it to x86-64 when compiled with the deb default `westmere`.
  1 file changed, 4 insertions(+)
 
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 682cb92..2d52d53 100644
+index 366f42d..c66ae0a 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
-@@ -89,6 +89,10 @@ endif()
+@@ -101,6 +101,10 @@ endif()
  
  add_subdirectory(db_drivers)
- add_subdirectory(easylogging++)
+ add_subdirectory(easylogging++ easyloggingpp)
 +
 +if(ARCH_ID STREQUAL "westmere")
 +  set(ARCH_ID "x86-64")  # deb workaround: randomx doesn't like ARCH_ID=westmere

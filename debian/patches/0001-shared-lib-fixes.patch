@@ -5,16 +5,16 @@ Subject: Make loki build and install shared libs
 Patch the loki cmake files to properly build and install shared libs.
 ---
  CMakeLists.txt              | 17 +++++++++++++++--
- contrib/epee/CMakeLists.txt |  5 +++++
+ contrib/epee/CMakeLists.txt |  6 ++++++
  external/CMakeLists.txt     |  8 +++++++-
  src/CMakeLists.txt          |  6 +++++-
- 4 files changed, 32 insertions(+), 4 deletions(-)
+ 4 files changed, 33 insertions(+), 4 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 371240d..aca878f 100644
+index abd8c0f..961d769 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -53,7 +53,7 @@ if(CCACHE_PROGRAM)
+@@ -44,7 +44,7 @@ if(CCACHE_PROGRAM)
    endforeach()
  endif()
  
@@ -24,8 +24,8 @@ index 371240d..aca878f 100644
  
  # Has to be set before `project()`, and ignored on non-macos:
 @@ -335,7 +335,9 @@ endif()
- # elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
- #   set(BSDI TRUE)
+ 
+ include(cmake/check_for_std_filesystem.cmake)
  
 -include_directories(external/rapidjson/include src external)
 +include(Version)
@@ -34,7 +34,7 @@ index 371240d..aca878f 100644
  
  if(APPLE)
    include_directories(SYSTEM /usr/include/malloc)
-@@ -947,6 +949,17 @@ if(BUILD_DOCUMENTATION)
+@@ -945,6 +947,17 @@ if(BUILD_DOCUMENTATION)
    endif()
  endif()
  
@@ -49,27 +49,28 @@ index 371240d..aca878f 100644
 +set_target_properties(${lokilibs} PROPERTIES
 +    VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 +
- # when ON - will install libwallet_merged into "lib"
- option(BUILD_GUI_DEPS "Build GUI dependencies." OFF)
- 
+ find_package(PythonInterp)
+ find_program(iwyu_tool_path NAMES iwyu_tool.py iwyu_tool)
+ if (iwyu_tool_path AND PYTHONINTERP_FOUND)
 diff --git a/contrib/epee/CMakeLists.txt b/contrib/epee/CMakeLists.txt
-index 035b24b..357984d 100644
+index 2af962a..c7a707a 100644
 --- a/contrib/epee/CMakeLists.txt
 +++ b/contrib/epee/CMakeLists.txt
-@@ -28,3 +28,8 @@
+@@ -28,3 +28,9 @@
  
  add_subdirectory(src)
- 
+ target_include_directories(epee PUBLIC include)
++
 +install(
 +    DIRECTORY include/
 +    DESTINATION include${LOKI_INSTALL_INCLUDEDIR_SUFFIX}
 +    COMPONENT development
 +    FILES_MATCHING PATTERN "*.h" PATTERN "*.inl")
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
-index 4177eeb..682cb92 100644
+index 7a90f57..366f42d 100644
 --- a/external/CMakeLists.txt
 +++ b/external/CMakeLists.txt
-@@ -61,7 +61,7 @@ endif()
+@@ -73,7 +73,7 @@ endif()
  
  
  if(NOT LOKIMQ_FOUND)
@@ -78,8 +79,8 @@ index 4177eeb..682cb92 100644
    if (DEPENDS)
      # The depends system builds a static libzmq so set up a target loki-mq can use to avoid building
      add_library(libzmq STATIC IMPORTED GLOBAL)
-@@ -91,6 +91,12 @@ add_subdirectory(db_drivers)
- add_subdirectory(easylogging++)
+@@ -103,6 +103,12 @@ add_subdirectory(db_drivers)
+ add_subdirectory(easylogging++ easyloggingpp)
  add_subdirectory(randomx EXCLUDE_FROM_ALL)
  
 +install(
@@ -92,7 +93,7 @@ index 4177eeb..682cb92 100644
  # ourselves.
  if (NOT CMAKE_VERSION VERSION_LESS 3.12)
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index bff4259..45c2f16 100644
+index 05c04a7..93ee994 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -58,7 +58,6 @@ function (loki_add_executable target binary)
@@ -103,7 +104,7 @@ index bff4259..45c2f16 100644
  add_library(version ${CMAKE_BINARY_DIR}/version.cpp)
  add_dependencies(version genversion)
  
-@@ -106,3 +105,8 @@ endif()
+@@ -104,3 +103,8 @@ endif()
  
  add_subdirectory(device)
  add_subdirectory(device_trezor)
