@@ -28,8 +28,8 @@
 
 #include <random>
 #include "gtest/gtest.h"
-#include "misc_language.h"
-#include "rolling_median.h"
+#include "epee/misc_language.h"
+#include "epee/rolling_median.h"
 #include "crypto/crypto.h"
 
 TEST(rolling_median, one)

@@ -28,7 +28,6 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include "include_base_utils.h"
 #include "wallet/wallet2.h"
 
 using namespace cryptonote;
@@ -135,7 +134,7 @@ bool make_tx(blockchain_storage& bch)
   }
 
   rpc::SEND_RAW_TX::request req;
-  req.tx_as_hex = epee::string_tools::buff_to_hex_nodelimer(tx_to_blob(tx));
+  req.tx_as_hex = lokimq::to_hex(tx_to_blob(tx));
   rpc::SEND_RAW_TX::response daemon_send_resp;
   r = net_utils::http::invoke_http_json_remote_command(m_daemon_address + "/sendrawtransaction", req, daemon_send_resp, m_http_client);
   CHECK_AND_ASSERT_MES(r, false, "failed to send transaction");

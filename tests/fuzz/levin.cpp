@@ -26,12 +26,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "include_base_utils.h"
-#include "file_io_utils.h"
-#include "net/net_utils_base.h"
-#include "net/abstract_tcp_server2.h"
-#include "storages/levin_abstract_invoke2.h"
-#include "net/levin_protocol_handler_async.h"
+#include "common/file.h"
+#include "epee/net/net_utils_base.h"
+#include "epee/net/abstract_tcp_server2.h"
+#include "epee/storages/levin_abstract_invoke2.h"
+#include "epee/net/levin_protocol_handler_async.h"
 #include "fuzzer.h"
 
 namespace
@@ -313,7 +312,7 @@ int LevinFuzzer::run(const std::string &filename)
   fwrite(&req_head,sizeof(req_head),1, f);
   fclose(f);
 #endif
-  if (!epee::file_io_utils::load_file_to_string(filename, s))
+  if (!tools::slurp_file(filename, s))
   {
     std::cout << "Error: failed to load file " << filename << std::endl;
     return 1;

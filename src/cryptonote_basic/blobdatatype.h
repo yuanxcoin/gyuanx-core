@@ -31,7 +31,7 @@
 #pragma once
 
 #include <string>
-#include "span.h"
+#include "epee/span.h"
 
 namespace cryptonote
 {

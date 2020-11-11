@@ -36,10 +36,10 @@
 #include <regex>
 #include <chrono>
 
-#include "misc_language.h"
-#include "stats.h"
+#include "epee/misc_language.h"
+#include "epee/stats.h"
 #include "common/perf_timer.h"
-#include "common/timings.h"
+#include "timings.h"
 
 struct Params
 {

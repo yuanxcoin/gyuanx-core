@@ -37,14 +37,14 @@
 
 #include <vector>
 
-namespace Monero {
+namespace Wallet {
   
 AddressBook::~AddressBook() {}
   
 AddressBookImpl::AddressBookImpl(WalletImpl *wallet)
     : m_wallet(wallet), m_errorCode(Status_Ok) {}
 
-bool AddressBookImpl::addRow(const std::string &dst_addr , const std::string &payment_id_str, const std::string &description)
+bool AddressBookImpl::addRow(const std::string &dst_addr, const std::string &description)
 {
   clearStatus();
   
@@ -52,13 +52,6 @@ bool AddressBookImpl::addRow(const std::string &dst_addr , const std::string &pa
   if(!cryptonote::get_account_address_from_str(info, m_wallet->m_wallet->nettype(), dst_addr)) {
     m_errorString = tr("Invalid destination address");
     m_errorCode = Invalid_Address;
-    return false;
-  }
-
-  if (!payment_id_str.empty())
-  {
-    m_errorString = tr("Payment ID supplied: this is obsolete");
-    m_errorCode = Invalid_Payment_Id;
     return false;
   }
 
@@ -86,7 +79,7 @@ void AddressBookImpl::refresh()
       address = cryptonote::get_account_integrated_address_as_str(m_wallet->m_wallet->nettype(), row->m_address, row->m_payment_id);
     else
       address = get_account_address_as_str(m_wallet->m_wallet->nettype(), row->m_is_subaddress, row->m_address);
-    AddressBookRow * abr = new AddressBookRow(i, address, "", row->m_description);
+    AddressBookRow* abr = new AddressBookRow(i, address, row->m_description);
     m_rows.push_back(abr);
   }
   
@@ -100,28 +93,6 @@ bool AddressBookImpl::deleteRow(std::size_t rowId)
     refresh();
   return r;
 } 
-
-int AddressBookImpl::lookupPaymentID(const std::string &payment_id) const
-{
-    // turn short ones into long ones for comparison
-    const std::string long_payment_id = payment_id + std::string(64 - payment_id.size(), '0');
-
-    int idx = -1;
-    for (const auto &row: m_rows) {
-        ++idx;
-        // this does short/short and long/long
-        if (payment_id == row->getPaymentId())
-            return idx;
-        // short/long
-        if (long_payment_id == row->getPaymentId())
-            return idx;
-        // one case left: payment_id was long, row's is short
-        const std::string long_row_payment_id = row->getPaymentId() + std::string(64 - row->getPaymentId().size(), '0');
-        if (payment_id == long_row_payment_id)
-            return idx;
-    }
-    return -1;
-}
 
 void AddressBookImpl::clearRows() {
    for (auto r : m_rows) {
@@ -147,5 +118,3 @@ AddressBookImpl::~AddressBookImpl()
 }
 
 } // namespace
-
-namespace Bitmonero = Monero;

@@ -35,17 +35,17 @@
 #include <limits>
 #include <set>
 
-#include "shared_sv.h"
+#include "epee/shared_sv.h"
 #include "crypto/crypto.h"
 #include "cryptonote_basic/connection_context.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "cryptonote_protocol/levin_notify.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 #include "p2p/net_node.h"
 #include "net/dandelionpp.h"
-#include "net/levin_base.h"
-#include "span.h"
+#include "epee/net/levin_base.h"
+#include "epee/span.h"
 
 namespace
 {

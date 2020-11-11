@@ -31,10 +31,6 @@
 
 #if defined(__aarch64__)
 
-#ifndef __clang__
-#  pragma GCC target ("+crypto")
-#endif
-
 #include "cn_heavy_hash.hpp"
 extern "C" {
 #include "keccak.h"
@@ -42,13 +38,19 @@ extern "C" {
 #include "skein.h"
 }
 
+#if !defined(__APPLE__)
 #include <sys/auxv.h>
 #include <asm/hwcap.h>
+#endif
 #include <arm_neon.h>
 
 static bool hw_check_aes()
 {
+#if !defined(__APPLE__)
 	return (getauxval(AT_HWCAP) & HWCAP_AES) != 0;
+#else
+    return true;
+#endif
 }
 
 extern "C" const bool cpu_aes_enabled = hw_check_aes() && !force_software_aes();

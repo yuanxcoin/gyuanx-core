@@ -34,9 +34,10 @@
 #include "common/scoped_message_writer.h"
 #include "common/password.h"
 #include "common/util.h"
+#include "common/fs.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "daemonizer/daemonizer.h"
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "p2p/net_node.h"
 #include "rpc/rpc_args.h"
 #include "rpc/core_rpc_server.h"
@@ -54,7 +55,6 @@
 #define LOKI_DEFAULT_LOG_CATEGORY "daemon"
 
 namespace po = boost::program_options;
-namespace bf = boost::filesystem;
 
 using namespace std::literals;
 
@@ -133,15 +133,16 @@ int main(int argc, char const * argv[])
       return 0;
     }
 
-    std::string config = command_line::get_arg(vm, daemon_args::arg_config_file);
-    boost::filesystem::path config_path(config);
-    boost::system::error_code ec;
-    if (bf::exists(config_path, ec))
+    auto config = fs::u8path(command_line::get_arg(vm, daemon_args::arg_config_file));
+    if (std::error_code ec; fs::exists(config, ec))
     {
       try
       {
+        fs::ifstream cfg{config};
+        if (!cfg.is_open())
+          throw std::runtime_error{"Unable to open file"};
         po::store(po::parse_config_file<char>(
-                    config_path.string<std::string>().c_str(),
+                    cfg,
                     po::options_description{}.add(core_settings).add(hidden_options)),
                 vm);
       }
@@ -174,12 +175,11 @@ int main(int argc, char const * argv[])
     //     relative path: relative to cwd
 
     // Create data dir if it doesn't exist
-    boost::filesystem::path data_dir = boost::filesystem::absolute(
-        command_line::get_arg(vm, cryptonote::arg_data_dir));
+    auto data_dir = fs::absolute(fs::u8path(command_line::get_arg(vm, cryptonote::arg_data_dir)));
 
     // FIXME: not sure on windows implementation default, needs further review
-    //bf::path relative_path_base = daemonizer::get_relative_path_base(vm);
-    bf::path relative_path_base = data_dir;
+    //fs::path relative_path_base = daemonizer::get_relative_path_base(vm);
+    fs::path relative_path_base = data_dir;
 
     po::notify(vm);
 
@@ -188,11 +188,11 @@ int main(int argc, char const * argv[])
     //   if log-file argument given:
     //     absolute path
     //     relative path: relative to data_dir
-    bf::path log_file_path {data_dir / std::string(CRYPTONOTE_NAME ".log")};
+    auto log_file_path = data_dir / CRYPTONOTE_NAME ".log";
     if (!command_line::is_arg_defaulted(vm, daemon_args::arg_log_file))
       log_file_path = command_line::get_arg(vm, daemon_args::arg_log_file);
-    if (!log_file_path.has_parent_path())
-      log_file_path = bf::absolute(log_file_path, relative_path_base);
+    if (log_file_path.is_relative())
+      log_file_path = fs::absolute(fs::relative(log_file_path, relative_path_base));
     mlog_configure(log_file_path.string(), true, command_line::get_arg(vm, daemon_args::arg_max_log_file_size), command_line::get_arg(vm, daemon_args::arg_max_log_files));
 
     // Set log level
@@ -202,7 +202,7 @@ int main(int argc, char const * argv[])
     }
 
     // after logs initialized
-    tools::create_directories_if_necessary(data_dir.string());
+    tools::create_directories_if_necessary(data_dir);
 
 #ifdef STACK_TRACE
     tools::set_stack_trace_log(log_file_path.filename().string());

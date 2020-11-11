@@ -35,6 +35,7 @@
 #include "common/password.h"
 #include "core_rpc_server.h"
 #include "http_server_base.h"
+#include "rpc/rpc_args.h"
 
 namespace cryptonote::rpc {
 
@@ -44,18 +45,22 @@ namespace cryptonote::rpc {
   class http_server : public http_server_base
   {
   public:
-    static const command_line::arg_descriptor<uint16_t, false, true, 2> arg_rpc_bind_port;
+    static const command_line::arg_descriptor<std::vector<std::string>> arg_rpc_public;
+    static const command_line::arg_descriptor<std::vector<std::string>, false, true, 2> arg_rpc_admin;
+
+    // Deprecated:
+    static const command_line::arg_descriptor<uint16_t> arg_rpc_bind_port;
     static const command_line::arg_descriptor<uint16_t> arg_rpc_restricted_bind_port;
     static const command_line::arg_descriptor<bool> arg_restricted_rpc;
     static const command_line::arg_descriptor<bool> arg_public_node;
 
-    static void init_options(boost::program_options::options_description& desc);
+    static void init_options(boost::program_options::options_description& desc, boost::program_options::options_description& hidden);
 
     http_server(
         core_rpc_server& server,
-        const boost::program_options::variables_map& vm,
-        const bool restricted,
-        uint16_t port
+        rpc_args rpc_config,
+        bool restricted,
+        std::vector<std::tuple<std::string, uint16_t, bool>> bind // {IP,port,required}
         );
 
     ~http_server();

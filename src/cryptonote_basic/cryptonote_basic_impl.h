@@ -65,18 +65,6 @@ namespace cryptonote {
   public:
     virtual bool alt_block_added(const block &block, const std::vector<transaction>& txs, struct checkpoint_t const *checkpoint) = 0;
   };
-  /************************************************************************/
-  /*                                                                      */
-  /************************************************************************/
-  template<class t_array>
-  struct array_hasher: std::unary_function<t_array&, std::size_t>
-  {
-    std::size_t operator()(const t_array& val) const
-    {
-      return boost::hash_range(&val.data[0], &val.data[sizeof(val.data)]);
-    }
-  };
-
 
 #pragma pack(push, 1)
   struct public_address_outer_blob

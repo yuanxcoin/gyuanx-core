@@ -38,7 +38,6 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
 #include "rpc/core_rpc_server_commands_defs.h"
-#include "include_base_utils.h"
 
 
 namespace tools
@@ -249,24 +248,17 @@ namespace tools
     template<int msg_index>
     struct file_error_base : public wallet_logic_error
     {
-      explicit file_error_base(std::string&& loc, const std::string& file)
-        : wallet_logic_error(std::move(loc), std::string(file_error_messages[msg_index]) +  " \"" + file + '\"')
-        , m_file(file)
+      file_error_base(std::string loc, fs::path file, std::error_code e = {})
+        : wallet_logic_error(std::move(loc), std::string(file_error_messages[msg_index]) + " \"" + file.u8string() + '"'
+                + (e ? ": " + e.message() : ""))
+        , m_file(std::move(file))
       {
       }
 
-      explicit file_error_base(std::string&& loc, const std::string& file, const std::error_code &e)
-        : wallet_logic_error(std::move(loc), std::string(file_error_messages[msg_index]) +  " \"" + file + "\": " + e.message())
-        , m_file(file)
-      {
-      }
-
-      const std::string& file() const { return m_file; }
-
-      std::string to_string() const { return wallet_logic_error::to_string(); }
+      const fs::path& file() const { return m_file; }
 
     private:
-      std::string m_file;
+      fs::path m_file;
     };
     //----------------------------------------------------------------------------------------------------
     typedef file_error_base<file_exists_message_index> file_exists;
@@ -604,12 +596,12 @@ namespace tools
           // It's not good, if logs will contain such much data
           //ss << "\n    real_output: " << src.real_output;
           //ss << "\n    real_output_in_tx_index: " << src.real_output_in_tx_index;
-          //ss << "\n    real_out_tx_key: " << epee::string_tools::pod_to_hex(src.real_out_tx_key);
+          //ss << "\n    real_out_tx_key: " << tools::type_to_hex(src.real_out_tx_key);
           //ss << "\n    outputs:";
           //for (size_t j = 0; j < src.outputs.size(); ++j)
           //{
           //  const cryptonote::tx_source_entry::output_entry& out = src.outputs[j];
-          //  ss << "\n      " << j << ": " << out.first << ", " << epee::string_tools::pod_to_hex(out.second);
+          //  ss << "\n      " << j << ": " << out.first << ", " << tools::type_to_hex(out.second);
           //}
         }
 
@@ -847,19 +839,10 @@ namespace tools
     //----------------------------------------------------------------------------------------------------
     struct wallet_files_doesnt_correspond : public wallet_logic_error
     {
-      explicit wallet_files_doesnt_correspond(std::string&& loc, const std::string& keys_file, const std::string& wallet_file)
-        : wallet_logic_error(std::move(loc), "File " + wallet_file + " does not correspond to " + keys_file)
+      explicit wallet_files_doesnt_correspond(std::string&& loc, const fs::path& keys_file, const fs::path& wallet_file)
+        : wallet_logic_error(std::move(loc), "File " + wallet_file.u8string() + " does not correspond to " + keys_file.u8string())
       {
       }
-
-      const std::string& keys_file() const { return m_keys_file; }
-      const std::string& wallet_file() const { return m_wallet_file; }
-
-      std::string to_string() const { return wallet_logic_error::to_string(); }
-
-    private:
-      std::string m_keys_file;
-      std::string m_wallet_file;
     };
     //----------------------------------------------------------------------------------------------------
     struct mms_error : public wallet_logic_error

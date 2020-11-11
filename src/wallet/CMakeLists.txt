@@ -49,7 +49,7 @@ target_link_libraries(wallet
     lmdb
     rpc_http_client
     Boost::serialization
-    Boost::filesystem
+    filesystem
     Boost::thread
   PRIVATE
     OpenSSL::SSL
@@ -69,60 +69,5 @@ target_link_libraries(wallet_rpc_server
     Boost::program_options
     extra)
 
-
-function(combine_archives output_archive)
-    set(mri_file ${CMAKE_CURRENT_BINARY_DIR}/${output_archive}.mri)
-    set(FULL_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/lib${output_archive}.a)
-    set(mri_content "create ${FULL_OUTPUT_PATH}\n")
-    FOREACH(in_archive ${ARGN})
-        string(APPEND mri_content "addlib $<TARGET_FILE:${in_archive}>\n")
-    ENDFOREACH()
-    string(APPEND mri_content "save\nend\n")
-    file(GENERATE OUTPUT ${mri_file} CONTENT "${mri_content}")
-
-    set(output_archive_dummy_file ${CMAKE_CURRENT_BINARY_DIR}/${output_archive}.dummy.cpp)
-    add_custom_command(OUTPUT ${output_archive_dummy_file}
-                       COMMAND touch ${output_archive_dummy_file}
-                       DEPENDS ${ARGN})
-
-    add_library(${output_archive} STATIC ${output_archive_dummy_file})
-    add_custom_command(TARGET ${output_archive}
-                       POST_BUILD
-                       COMMAND ar -M < ${mri_file})
-endfunction(combine_archives)
-
-# build and install libwallet_merged only if we building for GUI
-if (BUILD_GUI_DEPS AND STATIC)
-    combine_archives(wallet_merged
-            wallet_api
-            wallet
-            multisig
-            cryptonote_core
-            cryptonote_basic
-            mnemonics
-            common
-            cncrypto
-            device
-            ringct
-            ringct_basic
-            checkpoints
-            version
-            net
-            device_trezor)
-
-    if(IOS)
-        set(lib_folder lib-${ARCH})
-    else()
-        set(lib_folder lib)
-    endif()
-    install(TARGETS wallet_merged
-        ARCHIVE DESTINATION ${lib_folder})
-
-    install(FILES ${TREZOR_DEP_LIBS}
-            DESTINATION ${lib_folder})
-    file(WRITE "trezor_link_flags.txt" ${TREZOR_DEP_LINKER})
-    install(FILES "trezor_link_flags.txt"
-            DESTINATION ${lib_folder})
-endif()
 
 add_subdirectory(api)

@@ -63,7 +63,7 @@ add_subdirectory(block_weight)
 add_subdirectory(hash)
 add_subdirectory(net_load_tests)
 add_subdirectory(network_tests)
-if (BUILD_GUI_DEPS)
+if (ANDROID)
 # Currently failed to compile
 #  add_subdirectory(libwallet_api_tests)
 endif()

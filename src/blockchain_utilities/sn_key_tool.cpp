@@ -12,6 +12,7 @@ extern "C" {
 #include <array>
 #include <cstring>
 #include <optional>
+#include "common/fs.h"
 
 std::string_view arg0;
 
@@ -115,11 +116,8 @@ int generate(bool ed25519, std::list<std::string_view> args) {
     if (pubkey_pos != std::string::npos)
         overwrite = true;
 
-    if (!overwrite) {
-        std::ifstream f{filename};
-        if (f.good())
-            return error(2, filename + " to generate already exists, pass `--overwrite' if you want to overwrite it");
-    }
+    if (!overwrite && fs::exists(fs::u8path(filename)))
+        return error(2, filename + " to generate already exists, pass `--overwrite' if you want to overwrite it");
 
     std::array<unsigned char, crypto_sign_PUBLICKEYBYTES> pubkey;
     std::array<unsigned char, crypto_sign_SECRETKEYBYTES> seckey;
@@ -140,7 +138,7 @@ int generate(bool ed25519, std::list<std::string_view> args) {
 
     if (pubkey_pos != std::string::npos)
         filename.replace(pubkey_pos, 6, lokimq::to_hex(pubkey.begin(), pubkey.end()));
-    std::ofstream out{filename, std::ios::trunc | std::ios::binary};
+    fs::ofstream out{fs::u8path(filename), std::ios::trunc | std::ios::binary};
     if (!out.good())
         return error(2, "Failed to open output file '" + filename + "': " + std::strerror(errno));
     if (ed25519)
@@ -191,10 +189,10 @@ int show(std::list<std::string_view> args) {
     else if (args.size() > 1)
         return error(2, "unknown arguments to 'show'");
 
-    std::string filename{args.front()};
-    std::ifstream in{filename, std::ios::binary};
+    fs::path filename = fs::u8path(args.front());
+    fs::ifstream in{filename, std::ios::binary};
     if (!in.good())
-        return error(2, "Unable to open '" + filename + "': " + std::strerror(errno));
+        return error(2, "Unable to open '" + filename.u8string() + "': " + std::strerror(errno));
 
     in.seekg(0, std::ios::end);
     auto size = in.tellg();
@@ -216,12 +214,12 @@ int show(std::list<std::string_view> args) {
     std::array<unsigned char, crypto_sign_SECRETKEYBYTES> seckey;
     in.read(reinterpret_cast<char*>(seckey.data()), size >= 64 ? 64 : 32);
     if (!in.good())
-        return error(2, "Failed to read from " + filename + ": " + std::strerror(errno));
+        return error(2, "Failed to read from " + filename.u8string() + ": " + std::strerror(errno));
 
     if (legacy) {
         pubkey = pubkey_from_privkey(seckey);
 
-        std::cout << filename << " (legacy SN keypair)" << "\n==========" <<
+        std::cout << filename.u8string() << " (legacy SN keypair)" << "\n==========" <<
             "\nPrivate key: " << lokimq::to_hex(seckey.begin(), seckey.begin() + 32) <<
             "\nPublic key:  " << lokimq::to_hex(pubkey.begin(), pubkey.end()) << "\n\n";
         return 0;
@@ -318,13 +316,11 @@ int restore(bool ed25519, std::list<std::string_view> args) {
     if (pubkey_pos != std::string::npos)
         filename.replace(pubkey_pos, 6, lokimq::to_hex(pubkey.begin(), pubkey.end()));
 
-    if (!overwrite) {
-        std::ifstream f{filename};
-        if (f.good())
-            return error(2, filename + " to generate already exists, pass `--overwrite' if you want to overwrite it");
-    }
+    auto filepath = fs::u8path(filename);
+    if (!overwrite && fs::exists(filepath))
+        return error(2, filename + " to generate already exists, pass `--overwrite' if you want to overwrite it");
 
-    std::ofstream out{filename, std::ios::trunc | std::ios::binary};
+    fs::ofstream out{filepath, std::ios::trunc | std::ios::binary};
     if (!out.good())
         return error(2, "Failed to open output file '" + filename + "': " + std::strerror(errno));
     if (ed25519)

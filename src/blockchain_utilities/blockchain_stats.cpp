@@ -35,7 +35,7 @@
 #include "blockchain_objects.h"
 #include "blockchain_db/blockchain_db.h"
 #include "version.h"
-#include "misc_os_dependent.h"
+#include "epee/misc_os_dependent.h"
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
 #define LOKI_DEFAULT_LOG_CATEGORY "bcutil"
@@ -56,8 +56,6 @@ int main(int argc, char* argv[])
   uint64_t block_stop = 0;
 
   tools::on_startup();
-
-  boost::filesystem::path output_file_path;
 
   auto opt_size = command_line::boost_option_sizes();
 
@@ -133,7 +131,7 @@ int main(int argc, char* argv[])
     throw std::runtime_error("Failed to initialize a database");
   }
 
-  const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
+  const fs::path filename = fs::u8path(opt_data_dir) / db->get_db_name();
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
 
   try

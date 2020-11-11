@@ -49,8 +49,6 @@ int main(int argc, char* argv[])
 
   tools::on_startup();
 
-  boost::filesystem::path output_file_path;
-
   auto opt_size = command_line::boost_option_sizes();
 
   po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
@@ -98,7 +96,6 @@ int main(int argc, char* argv[])
 
   LOG_PRINT_L0("Starting...");
 
-  std::string opt_data_dir = command_line::get_arg(vm, cryptonote::arg_data_dir);
   bool opt_testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
   bool opt_devnet = command_line::get_arg(vm, cryptonote::arg_devnet_on);
   network_type net_type = opt_testnet ? TESTNET : opt_devnet ? DEVNET : MAINNET;
@@ -114,7 +111,7 @@ int main(int argc, char* argv[])
   crypto::hash opt_txid = crypto::null_hash;
   if (!opt_txid_string.empty())
   {
-    if (!epee::string_tools::hex_to_pod(opt_txid_string, opt_txid))
+    if (!tools::hex_to_type(opt_txid_string, opt_txid))
     {
       std::cerr << "Invalid txid" << std::endl;
       return 1;
@@ -132,7 +129,7 @@ int main(int argc, char* argv[])
   }
   LOG_PRINT_L0("database: LMDB");
 
-  const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
+  const fs::path filename = fs::u8path(command_line::get_arg(vm, cryptonote::arg_data_dir)) / db->get_db_name();
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
 
   try

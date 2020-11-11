@@ -1,5 +1,5 @@
-#include "time_helper.h"
-#include "pragma_comp_defs.h"
+#include "epee/time_helper.h"
+#include "epee/pragma_comp_defs.h"
 
 namespace epee::misc_utils
 {

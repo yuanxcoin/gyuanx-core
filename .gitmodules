@@ -25,3 +25,6 @@
 [submodule "external/cpr"]
 	path = external/cpr
 	url = https://github.com/whoshuu/cpr.git
+[submodule "external/ghc-filesystem"]
+	path = external/ghc-filesystem
+	url = https://github.com/gulrak/filesystem.git

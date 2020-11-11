@@ -38,7 +38,7 @@
 #include "serialization/binary_archive.h"
 #include "serialization/json_archive.h"
 #include "serialization/crypto.h"
-#include "serialization/keyvalue_serialization.h" // eepe named serialization
+#include "epee/serialization/keyvalue_serialization.h" // eepe named serialization
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"

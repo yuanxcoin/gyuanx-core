@@ -33,12 +33,12 @@
 #include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <sstream>
-#include "file_io_utils.h"
 #include "wallet_errors.h"
 #include "serialization/binary_utils.h"
 #include "common/base58.h"
 #include "common/util.h"
-#include "string_tools.h"
+#include "common/file.h"
+#include "epee/string_tools.h"
 
 
 #undef LOKI_DEFAULT_LOG_CATEGORY
@@ -336,7 +336,7 @@ std::string message_store::create_auto_config_token()
   const crypto::hash &hash = crypto::cn_fast_hash(token_bytes.data(), token_bytes.size());
   token_bytes += hash.data[0];
   std::string prefix(AUTO_CONFIG_TOKEN_PREFIX);
-  return prefix + epee::string_tools::buff_to_hex_nodelimer(token_bytes);
+  return prefix + lokimq::to_hex(token_bytes);
 }
 
 // Add a message for sending "me" address data to the auto-config transport address
@@ -688,7 +688,7 @@ void message_store::get_sanitized_message_text(const message &m, std::string &sa
   }
 }
 
-void message_store::write_to_file(const multisig_wallet_state &state, const std::string &filename)
+void message_store::write_to_file(const multisig_wallet_state &state, const fs::path &filename)
 {
   std::stringstream oss;
   boost::archive::portable_binary_oarchive ar(oss);
@@ -711,15 +711,13 @@ void message_store::write_to_file(const multisig_wallet_state &state, const std:
   boost::archive::portable_binary_oarchive file_ar(file_oss);
   file_ar << write_file_data;
 
-  bool success = epee::file_io_utils::save_string_to_file(filename, file_oss.str());
+  bool success = tools::dump_file(filename, file_oss.str());
   THROW_WALLET_EXCEPTION_IF(!success, tools::error::file_save_error, filename);
 }
 
-void message_store::read_from_file(const multisig_wallet_state &state, const std::string &filename)
+void message_store::read_from_file(const multisig_wallet_state &state, const fs::path &filename)
 {
-  boost::system::error_code ignored_ec;
-  bool file_exists = boost::filesystem::exists(filename, ignored_ec);
-  if (!file_exists)
+  if (std::error_code ec; !fs::exists(filename, ec))
   {
     // Simply do nothing if the file is not there; allows e.g. easy recovery
     // from problems with the MMS by deleting the file
@@ -728,7 +726,7 @@ void message_store::read_from_file(const multisig_wallet_state &state, const std
   }
 
   std::string buf;
-  bool success = epee::file_io_utils::load_file_to_string(filename, buf);
+  bool success = tools::slurp_file(filename, buf);
   THROW_WALLET_EXCEPTION_IF(!success, tools::error::file_read_error, filename);
 
   file_data read_file_data;

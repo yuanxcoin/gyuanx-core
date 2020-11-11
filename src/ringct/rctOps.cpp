@@ -29,7 +29,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <boost/lexical_cast.hpp>
-#include "misc_log_ex.h"
+#include "epee/misc_log_ex.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "rctOps.h"
 using namespace crypto;

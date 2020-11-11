@@ -51,13 +51,13 @@ add_library(cncrypto
   cn_heavy_hash_soft.cpp
   cn_turtle_hash.c
   rx-slow-hash.c
+  cn_monero_slow_hash.c
   tree-hash.c)
 
 target_link_libraries(cncrypto
   PUBLIC
     epee
     randomx
-    Boost::system
     Boost::thread
     sodium
   PRIVATE
@@ -74,16 +74,26 @@ if (CMAKE_CXX_COMPILER_ID MATCHES Clang OR CMAKE_CXX_COMPILER_ID STREQUAL GNU)
     check_cxx_compiler_flag(-maes COMPILER_SUPPORTS_AES)
     if(COMPILER_SUPPORTS_AES)
       set_source_files_properties(cn_heavy_hash_hard_intel.cpp PROPERTIES COMPILE_FLAGS "-maes -msse2")
+      set_source_files_properties(cn_monero_slow_hash.c PROPERTIES COMPILE_FLAGS "-maes -msse2")
     endif()
   endif()
 endif()
+
+if (ARCH STREQUAL "armv8-a" AND (CMAKE_CXX_COMPILER_ID MATCHES Clang OR CMAKE_CXX_COMPILER_ID STREQUAL GNU))
+  # Similarly use +crypto extensions for the arm hash code (it also has a run-time check before
+  # enabling).
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag(-march=armv8-a+crypto COMPILER_SUPPORTS_PLUS_CRYPTO)
+  if (COMPILER_SUPPORTS_PLUS_CRYPTO)
+    set_source_files_properties(cn_heavy_hash_hard_arm.cpp PROPERTIES COMPILE_FLAGS "-march=armv8-a+crypto")
+  endif()
+endif()
+
 
 # Because of the way Qt works on android with JNI, the code does not live in the main android thread
 # So this code runs with a 1 MB default stack size. 
 # This will force the use of the heap for the allocation of the scratchpad
 if (ANDROID OR IOS)
-  if( BUILD_GUI_DEPS )
-    target_compile_definitions(cncrypto PUBLIC FORCE_USE_HEAP=1)
-  endif()
+  target_compile_definitions(cncrypto PUBLIC FORCE_USE_HEAP=1)
 endif()
 

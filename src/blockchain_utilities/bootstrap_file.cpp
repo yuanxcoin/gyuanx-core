@@ -51,14 +51,14 @@ namespace
 
 
 
-bool BootstrapFile::open_writer(const boost::filesystem::path& file_path)
+bool BootstrapFile::open_writer(const fs::path& file_path)
 {
-  const boost::filesystem::path dir_path = file_path.parent_path();
+  const auto dir_path = file_path.parent_path();
   if (!dir_path.empty())
   {
-    if (boost::filesystem::exists(dir_path))
+    if (fs::exists(dir_path))
     {
-      if (!boost::filesystem::is_directory(dir_path))
+      if (!fs::is_directory(dir_path))
       {
         MFATAL("export directory path is a file: " << dir_path);
         return false;
@@ -66,7 +66,7 @@ bool BootstrapFile::open_writer(const boost::filesystem::path& file_path)
     }
     else
     {
-      if (!boost::filesystem::create_directory(dir_path))
+      if (!fs::create_directory(dir_path))
       {
         MFATAL("Failed to create directory " << dir_path);
         return false;
@@ -79,7 +79,7 @@ bool BootstrapFile::open_writer(const boost::filesystem::path& file_path)
   bool do_initialize_file = false;
   uint64_t num_blocks = 0;
 
-  if (! boost::filesystem::exists(file_path))
+  if (! fs::exists(file_path))
   {
     MDEBUG("creating file");
     do_initialize_file = true;
@@ -264,7 +264,7 @@ bool BootstrapFile::close()
 }
 
 
-bool BootstrapFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_memory_pool* _tx_pool, boost::filesystem::path& output_file, uint64_t requested_block_stop)
+bool BootstrapFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_memory_pool* _tx_pool, fs::path& output_file, uint64_t requested_block_stop)
 {
   uint64_t num_blocks_written = 0;
   m_max_chunk = 0;
@@ -326,7 +326,7 @@ bool BootstrapFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_mem
   return BootstrapFile::close();
 }
 
-uint64_t BootstrapFile::seek_to_first_chunk(std::ifstream& import_file)
+uint64_t BootstrapFile::seek_to_first_chunk(fs::ifstream& import_file)
 {
   uint32_t file_magic;
 
@@ -386,7 +386,7 @@ uint64_t BootstrapFile::seek_to_first_chunk(std::ifstream& import_file)
   return full_header_size;
 }
 
-uint64_t BootstrapFile::count_bytes(std::ifstream& import_file, uint64_t blocks, uint64_t& h, bool& quit)
+uint64_t BootstrapFile::count_bytes(fs::ifstream& import_file, uint64_t blocks, uint64_t& h, bool& quit)
 {
   uint64_t bytes_read = 0;
   uint32_t chunk_size;
@@ -445,7 +445,7 @@ uint64_t BootstrapFile::count_bytes(std::ifstream& import_file, uint64_t blocks,
   return bytes_read;
 }
 
-uint64_t BootstrapFile::count_blocks(const std::string& import_file_path)
+uint64_t BootstrapFile::count_blocks(const fs::path& import_file_path)
 {
   std::streampos dummy_pos;
   uint64_t dummy_height = 0;
@@ -455,17 +455,14 @@ uint64_t BootstrapFile::count_blocks(const std::string& import_file_path)
 // If seek_height is non-zero on entry, return a stream position <= this height when finished.
 // And return the actual height corresponding to this position. Allows the caller to locate its
 // starting position without having to reread the entire file again.
-uint64_t BootstrapFile::count_blocks(const std::string& import_file_path, std::streampos &start_pos, uint64_t& seek_height)
+uint64_t BootstrapFile::count_blocks(const fs::path& import_file_path, std::streampos &start_pos, uint64_t& seek_height)
 {
-  boost::filesystem::path raw_file_path(import_file_path);
-  boost::system::error_code ec;
-  if (!boost::filesystem::exists(raw_file_path, ec))
+  if (std::error_code ec; !fs::exists(import_file_path, ec))
   {
-    MFATAL("bootstrap file not found: " << raw_file_path);
+    MFATAL("bootstrap file not found: " << import_file_path);
     throw std::runtime_error("Aborting");
   }
-  std::ifstream import_file;
-  import_file.open(import_file_path, std::ios_base::binary | std::ifstream::in);
+  fs::ifstream import_file{import_file_path, std::ios::binary};
 
   uint64_t start_height = seek_height;
   uint64_t h = 0;

@@ -2,14 +2,15 @@
 #include <type_traits>
 #include <string>
 #include <string_view>
+#include "fs.h"
 
 namespace crypto { struct hash; }
 
 namespace tools {
 
   // This used to be really dangerously overloaded with very different purposes:
-  //bool sha256sum(const uint8_t *data, size_t len, crypto::hash &hash);
-  //bool sha256sum(const std::string &filename, crypto::hash &hash);
+  //bool sha256sum(const uint8_t* data, size_t len, crypto::hash& hash);
+  //bool sha256sum(const fs::path& filename, crypto::hash& hash);
   // which is incredibly dangerous if you happen to have a string you want to hash and see that
   // there is both a pointer+size and std::string overload.  Renamed *both* of these to prevent any
   // existing code from compiling.
@@ -34,6 +35,6 @@ namespace tools {
   }
 
   // Opens the given file and calculates a sha256sum of its contents
-  bool sha256sum_file(const std::string &filename, crypto::hash& hash);
+  bool sha256sum_file(const fs::path& filename, crypto::hash& hash);
 
 }

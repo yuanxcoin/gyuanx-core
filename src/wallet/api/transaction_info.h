@@ -32,7 +32,7 @@
 #include <string>
 #include <ctime>
 
-namespace Monero {
+namespace Wallet {
 
 enum class reward_type {
     unspecified,
@@ -90,5 +90,3 @@ private:
 };
 
 } // namespace
-
-namespace Bitmonero = Monero;

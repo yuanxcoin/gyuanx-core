@@ -29,13 +29,13 @@
 //
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include "common/password.h"
 #include "common/scoped_message_writer.h"
 #include "common/pruning.h"
 #include "common/hex.h"
 #include "daemon/rpc_command_executor.h"
-#include "int-util.h"
+#include "epee/int-util.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_core/service_node_rules.h"
@@ -44,8 +44,6 @@
 #include <boost/format.hpp>
 
 #include "common/loki_integration_test_hooks.h"
-
-#include <boost/format.hpp>
 
 #include <fstream>
 #include <ctime>
@@ -138,9 +136,7 @@ namespace {
 
     std::string elapsed = peer.last_seen == 0 ? "never" : epee::misc_utils::get_time_interval_string(now - last_seen);
     std::string id_str = epee::string_tools::pad_string(epee::string_tools::to_string_hex(peer.id), 16, '0', true);
-    std::string port_str;
-    epee::string_tools::xtype_to_string(peer.port, port_str);
-    std::string addr_str = peer.host + ":" + port_str;
+    std::string addr_str = peer.host + ":" + std::to_string(peer.port);
     std::string rpc_port = peer.rpc_port ? std::to_string(peer.rpc_port) : "-";
     std::string pruning_seed = epee::string_tools::to_string_hex(peer.pruning_seed);
     tools::msg_writer() << boost::format("%-10s %-25s %-25s %-5s %-4s %s") % prefix % id_str % addr_str % rpc_port % pruning_seed % elapsed;
@@ -149,15 +145,15 @@ namespace {
   void print_block_header(block_header_response const & header)
   {
     tools::success_msg_writer()
-      << "timestamp: " << boost::lexical_cast<std::string>(header.timestamp) << " (" << tools::get_human_readable_timestamp(header.timestamp) << ")" << "\n"
+      << "timestamp: " << header.timestamp << " (" << tools::get_human_readable_timestamp(header.timestamp) << ")" << "\n"
       << "previous hash: " << header.prev_hash << "\n"
-      << "nonce: " << boost::lexical_cast<std::string>(header.nonce) << "\n"
+      << "nonce: " << header.nonce << "\n"
       << "is orphan: " << header.orphan_status << "\n"
-      << "height: " << boost::lexical_cast<std::string>(header.height) << "\n"
-      << "depth: " << boost::lexical_cast<std::string>(header.depth) << "\n"
+      << "height: " << header.height << "\n"
+      << "depth: " << header.depth << "\n"
       << "hash: " << header.hash << "\n"
-      << "difficulty: " << boost::lexical_cast<std::string>(header.difficulty) << "\n"
-      << "cumulative_difficulty: " << boost::lexical_cast<std::string>(header.cumulative_difficulty) << "\n"
+      << "difficulty: " << header.difficulty << "\n"
+      << "cumulative_difficulty: " << header.cumulative_difficulty << "\n"
       << "POW hash: " << header.pow_hash.value_or("N/A") << "\n"
       << "block size: " << header.block_size << "\n"
       << "block weight: " << header.block_weight << "\n"
@@ -176,7 +172,7 @@ namespace {
     time_t dt = t > now ? t - now : now - t;
     std::string s;
     if (dt < 90)
-      s = boost::lexical_cast<std::string>(dt) + (abbreviate ? "sec" : dt == 1 ? " second" : " seconds");
+      s = std::to_string(dt) + (abbreviate ? "sec" : dt == 1 ? " second" : " seconds");
     else if (dt < 90 * 60)
       s = (boost::format(abbreviate ? "%.1fmin" : "%.1f minutes") % ((float)dt/60)).str();
     else if (dt < 36 * 3600)
@@ -822,7 +818,7 @@ bool rpc_command_executor::print_block(GET_BLOCK::request&& req, bool include_he
 
 bool rpc_command_executor::print_block_by_hash(const crypto::hash& block_hash, bool include_hex) {
   GET_BLOCK::request req{};
-  req.hash = epee::string_tools::pod_to_hex(block_hash);
+  req.hash = tools::type_to_hex(block_hash);
   return print_block(std::move(req), include_hex);
 }
 
@@ -902,7 +898,7 @@ bool rpc_command_executor::print_transaction(const crypto::hash& transaction_has
 
 bool rpc_command_executor::is_key_image_spent(const crypto::key_image &ki) {
   IS_KEY_IMAGE_SPENT::response res{};
-  if (!invoke<IS_KEY_IMAGE_SPENT>({{epee::string_tools::pod_to_hex(ki)}}, res, "Failed to retrieve key image status"))
+  if (!invoke<IS_KEY_IMAGE_SPENT>({{tools::type_to_hex(ki)}}, res, "Failed to retrieve key image status"))
     return false;
 
   if (1 == res.spent_status.size())
@@ -937,7 +933,7 @@ static void print_pool(const std::vector<cryptonote::rpc::tx_info> &transactions
       /// (we can't back out the individual per_out and per_byte that got used anyway).
       << "fee/byte: " << cryptonote::print_money(tx_info.fee / (double)tx_info.weight) << "\n"
       << "receive_time: " << tx_info.receive_time << " (" << get_human_time_ago(tx_info.receive_time, now) << ")\n"
-      << "relayed: " << (tx_info.relayed ? boost::lexical_cast<std::string>(tx_info.last_relayed_time) + " (" + get_human_time_ago(tx_info.last_relayed_time, now) + ")" : "no") << "\n"
+      << "relayed: " << (tx_info.relayed ? std::to_string(tx_info.last_relayed_time) + " (" + get_human_time_ago(tx_info.last_relayed_time, now) + ")" : "no") << "\n"
       << std::boolalpha
       << "do_not_relay: " << tx_info.do_not_relay << "\n"
       << "blink: " << tx_info.blink << "\n"
@@ -1338,7 +1334,7 @@ bool rpc_command_executor::alt_chain_info(const std::string &tip, size_t above, 
         continue;
       display.push_back(i);
     }
-    tools::msg_writer() << boost::lexical_cast<std::string>(display.size()) << " alternate chains found:";
+    tools::msg_writer() << display.size() << " alternate chains found:";
     for (const size_t idx: display)
     {
       const auto &chain = chains[idx];

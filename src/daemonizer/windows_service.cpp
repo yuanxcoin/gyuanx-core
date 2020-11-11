@@ -31,7 +31,7 @@
 
 #include "common/scoped_message_writer.h"
 #include "daemonizer/windows_service.h"
-#include "string_tools.h"
+#include "epee/string_tools.h"
 #include <chrono>
 #include <iostream>
 #include <utility>

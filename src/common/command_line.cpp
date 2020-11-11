@@ -32,7 +32,7 @@
 #include "common/i18n.h"
 #include "common/string_util.h"
 #ifdef HAVE_READLINE
-#  include "readline_buffer.h"
+#  include "epee/readline_buffer.h"
 #endif
 
 namespace command_line

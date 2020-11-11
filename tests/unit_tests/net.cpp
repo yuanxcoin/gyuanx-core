@@ -55,12 +55,12 @@
 #include "net/dandelionpp.h"
 #include "net/error.h"
 #include "net/i2p_address.h"
-#include "net/net_utils_base.h"
+#include "epee/net/net_utils_base.h"
 #include "net/parse.h"
 #include "net/tor_address.h"
 #include "p2p/net_peerlist_boost_serialization.h"
-#include "serialization/keyvalue_serialization.h"
-#include "storages/portable_storage.h"
+#include "epee/serialization/keyvalue_serialization.h"
+#include "epee/storages/portable_storage.h"
 
 namespace
 {

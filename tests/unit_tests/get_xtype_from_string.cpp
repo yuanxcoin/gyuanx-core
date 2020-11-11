@@ -30,7 +30,7 @@
 
 #include "gtest/gtest.h"
 
-#include "string_tools.h"
+#include "epee/string_tools.h"
 
 namespace
 {
