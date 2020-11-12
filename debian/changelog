@@ -1,3 +1,13 @@
+loki (8.1.3-2~ubuntu1804) bionic; urgency=medium
+
+  * Rediff patches & fix drone conflicts
+  * Print CI machine at beginning of build
+  * Fix rpc commands invoked via `lokid COMMAND`
+  * Misc fixes to `lokid status` output
+  * Check before trying to create directory
+
+ -- Jason Rhinelander <jason@imaginary.ca>  Thu, 12 Nov 2020 17:12:16 -0400
+
 loki (8.1.3-1~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
