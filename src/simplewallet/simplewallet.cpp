@@ -8166,7 +8166,7 @@ bool simple_wallet::check_tx_proof(const std::vector<std::string> &args)
     uint64_t confirmations;
     if (m_wallet->check_tx_proof(txid, info.address, info.is_subaddress, args.size() == 4 ? args[3] : "", sig_str, received, in_pool, confirmations))
     {
-      success_msg_writer() << tr("Good signature");
+      success_msg_writer(true) << tr("Good signature");
       if (received > 0)
       {
         success_msg_writer() << get_account_address_as_str(m_wallet->nettype(), info.is_subaddress, info.address) << " " << tr("received") << " " << print_money(received) << " " << tr("in txid") << " " << txid;
@@ -8276,7 +8276,7 @@ bool simple_wallet::check_spend_proof(const std::vector<std::string> &args)
   try
   {
     if (m_wallet->check_spend_proof(txid, args.size() == 3 ? args[2] : "", sig_str))
-      success_msg_writer() << tr("Good signature");
+      success_msg_writer(true) << tr("Good signature");
     else
       fail_msg_writer() << tr("Bad signature");
   }
@@ -8374,7 +8374,7 @@ bool simple_wallet::check_reserve_proof(const std::vector<std::string> &args)
     uint64_t total, spent;
     if (m_wallet->check_reserve_proof(info.address, args.size() == 3 ? args[2] : "", sig_str, total, spent))
     {
-      success_msg_writer() << boost::format(tr("Good signature -- total: %s, spent: %s, unspent: %s")) % print_money(total) % print_money(spent) % print_money(total - spent);
+      success_msg_writer(true) << boost::format(tr("Good signature -- total: %s, spent: %s, unspent: %s")) % print_money(total) % print_money(spent) % print_money(total - spent);
     }
     else
     {
@@ -9674,7 +9674,7 @@ bool simple_wallet::verify_string(std::string_view value, std::string_view addre
   else if (!m_wallet->verify(value, info.address, signature))
     fail_msg_writer() << tr("Bad signature from ") << address;
   else
-    success_msg_writer() << tr("Good signature from ") << address;
+    success_msg_writer(true) << tr("Good signature from ") << address;
 
   return true;
 }
