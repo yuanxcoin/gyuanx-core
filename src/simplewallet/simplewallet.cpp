@@ -9629,8 +9629,18 @@ bool simple_wallet::sign_string(std::string_view value, const subaddress_index& 
   {
     SCOPED_WALLET_UNLOCK();
 
+    std::string addr = get_account_address_as_str(m_wallet->nettype(), !index.is_zero(), m_wallet->get_subaddress(index));
     std::string signature = m_wallet->sign(value, index);
-    success_msg_writer() << signature;
+    // Print the string directly if it's ascii without control characters, up to 100 bytes, and
+    // doesn't contain any doubled, leading, or trailing spaces (because we can't feed those back
+    // into verify_value in the cli wallet).
+    bool printable = value.size() <= 100 && !tools::starts_with(value, " ") && !tools::ends_with(value, " ") && value.find("  ") == std::string::npos &&
+        std::all_of(value.begin(), value.end(), [](char x) { return x >= ' ' && x <= '~'; });
+
+    success_msg_writer()
+        << "Address:   " << addr << "\n"
+        << "Value:     " << (printable ? std::string{value} : "(" + std::to_string(value.size()) + " bytes)") << "\n"
+        << "Signature: " << signature;
   }
   return true;
 }
