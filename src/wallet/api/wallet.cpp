@@ -2463,6 +2463,20 @@ PendingTransaction* WalletImpl::stakePending(const std::string& sn_key_str, cons
   return transaction;
 }
 
+stake_result createStakeTx(const crypto::public_key& service_node_key, const cryptonote::address_parse_info& addr_info, uint64_t amount, double amount_fraction = 0, uint32_t priority = 0, uint32_t subaddr_account = 0, std::set<uint32_t> subaddr_indices = {})
+{
+    return m_wallet->create_stake_tx(service_node_key, addr_info, amount, amount_fraction, priority, subaddr_account, subaddr_indices);
+}
+
+stake_result canRequestStakeUnlock(const crypto::public_key &sn_key)
+{
+    return m_wallet->request_stake_unlock(sn_key);
+}
+
+bool requestStakeUnlock(const crypto::public_key &sn_key)
+{
+    return m_wallet->request_stake_unlock(sn_key);
+}
 
 uint64_t WalletImpl::coldKeyImageSync(uint64_t &spent, uint64_t &unspent)
 {
