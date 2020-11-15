@@ -1005,6 +1005,12 @@ struct Wallet
     /// Prepare a staking transaction; return nullptr on failure
     virtual PendingTransaction* stakePending(const std::string& service_node_key, const std::string& address, const std::string& amount, std::string& error_msg) = 0;
 
+    virtual stake_result createStakeTx(const crypto::public_key& service_node_key, const cryptonote::address_parse_info& addr_info, uint64_t amount, double amount_fraction = 0, uint32_t priority = 0, uint32_t subaddr_account = 0, std::set<uint32_t> subaddr_indices = {}) = 0;
+
+    virtual request_stake_unlock_result canRequestStakeUnlock(const crypto::public_key &sn_key) = 0;
+
+    virtual request_stake_unlock_result requestStakeUnlock(const crypto::public_key &sn_key) = 0;
+
     //! cold-device protocol key image sync
     virtual uint64_t coldKeyImageSync(uint64_t &spent, uint64_t &unspent) = 0;
 
