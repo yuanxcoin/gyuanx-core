@@ -43,6 +43,7 @@ namespace Wallet {
 class TransactionHistoryImpl;
 class PendingTransactionImpl;
 class UnsignedTransactionImpl;
+class StakeUnlockResultImpl;
 class AddressBookImpl;
 class SubaddressImpl;
 class SubaddressAccountImpl;
@@ -129,43 +130,9 @@ public:
 
     PendingTransaction* stakePending(const std::string& service_node_key, const std::string& address, const std::string& amount, std::string& error_msg) override;
 
-    enum struct stake_result_status
-    {
-      invalid,
-      success,
-      exception_thrown,
-      payment_id_disallowed,
-      subaddress_disallowed,
-      address_must_be_primary,
-      service_node_list_query_failed,
-      service_node_not_registered,
-      network_version_query_failed,
-      network_height_query_failed,
-      service_node_contribution_maxed,
-      service_node_contributors_maxed,
-      service_node_insufficient_contribution,
-      too_many_transactions_constructed,
-      no_blink,
-    };
+    StakeUnlockResult canRequestStakeUnlock(const std::string &sn_key) override;
 
-    struct stake_result
-    {
-      stake_result_status status;
-      std::string         msg;
-      pending_tx          ptx;
-    };
-
-    stake_result createStakeTx(const crypto::public_key& service_node_key, const cryptonote::address_parse_info& addr_info, uint64_t amount, double amount_fraction = 0, uint32_t priority = 0, uint32_t subaddr_account = 0, std::set<uint32_t> subaddr_indices = {}) override;
-
-    struct request_stake_unlock_result
-    {
-      bool        success;
-      std::string msg;
-      pending_tx  ptx;
-    };
-    request_stake_unlock_result canRequestStakeUnlock(const crypto::public_key &sn_key) override;
-
-    request_stake_unlock_result requestStakeUnlock(const crypto::public_key &sn_key) override;
+    StakeUnlockResult requestStakeUnlock(const std::string &sn_key) override;
 
     MultisigState multisig() const override;
     std::string getMultisigInfo() const override;
