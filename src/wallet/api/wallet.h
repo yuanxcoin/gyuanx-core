@@ -130,9 +130,9 @@ public:
 
     PendingTransaction* stakePending(const std::string& service_node_key, const std::string& address, const std::string& amount, std::string& error_msg) override;
 
-    StakeUnlockResult canRequestStakeUnlock(const std::string &sn_key) override;
+    StakeUnlockResult* canRequestStakeUnlock(const std::string &sn_key) override;
 
-    StakeUnlockResult requestStakeUnlock(const std::string &sn_key) override;
+    StakeUnlockResult* requestStakeUnlock(const std::string &sn_key) override;
 
     MultisigState multisig() const override;
     std::string getMultisigInfo() const override;

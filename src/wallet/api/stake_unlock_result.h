@@ -10,13 +10,16 @@ class WalletImpl;
 class StakeUnlockResultImpl : public StakeUnlockResult
 {
 public:
-    StakeUnlockResultImpl(tools::wallet2::request_stake_unlock_result result);
+    StakeUnlockResultImpl(tools::wallet2::request_stake_unlock_result res);
     StakeUnlockResultImpl();
     ~StakeUnlockResultImpl();
 
-    bool success;
-    std::string msg;
-    PendingTransaction * ptx;
+    bool success();
+    std::string msg();
+    PendingTransaction * ptx();
+
+private:
+    tools::wallet2::request_stake_unlock_result &result;
 };
 
 

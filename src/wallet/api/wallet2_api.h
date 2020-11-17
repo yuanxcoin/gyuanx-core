@@ -112,9 +112,9 @@ struct PendingTransaction
 
 struct StakeUnlockResult
 {
-  bool success;
-  std::string msg;
-  PendingTransaction * ptx;
+  virtual bool success() = 0;
+  virtual std::string msg() = 0;
+  virtual PendingTransaction * ptx() = 0;
 };
 
 /**
@@ -1011,9 +1011,9 @@ struct Wallet
     /// Prepare a staking transaction; return nullptr on failure
     virtual PendingTransaction* stakePending(const std::string& service_node_key, const std::string& address, const std::string& amount, std::string& error_msg) = 0;
 
-    virtual StakeUnlockResult canRequestStakeUnlock(const std::string &sn_key) = 0;
+    virtual StakeUnlockResult* canRequestStakeUnlock(const std::string &sn_key) = 0;
 
-    virtual StakeUnlockResult requestStakeUnlock(const std::string &sn_key) = 0;
+    virtual StakeUnlockResult* requestStakeUnlock(const std::string &sn_key) = 0;
 
     //! cold-device protocol key image sync
     virtual uint64_t coldKeyImageSync(uint64_t &spent, uint64_t &unspent) = 0;
