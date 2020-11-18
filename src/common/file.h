@@ -134,8 +134,7 @@ namespace tools {
 
   void closefrom(int fd);
 
-  /// Reads a (binary) file from disk into the string `contents`. Aborts if the file is larger than
-  /// `max_size`.
+  /// Reads a (binary) file from disk into the string `contents`.
   bool slurp_file(const fs::path& filename, std::string& contents);
 
   /// Dumps (binary) string contents to disk. The file is overwritten if it already exists.

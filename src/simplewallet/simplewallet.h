@@ -40,6 +40,7 @@
 #include <optional>
 #include <mutex>
 #include <condition_variable>
+#include <string_view>
 #include <thread>
 
 #include <boost/program_options/variables_map.hpp>
@@ -233,8 +234,12 @@ namespace cryptonote
     bool status(const std::vector<std::string> &args);
     bool wallet_info(const std::vector<std::string> &args);
     bool set_default_priority(const std::vector<std::string> &args);
+    bool sign_string(std::string_view value, const subaddress_index& index);
+    bool verify_string(std::string_view value, std::string_view address, std::string_view signature);
     bool sign(const std::vector<std::string> &args);
     bool verify(const std::vector<std::string> &args);
+    bool sign_value(const std::vector<std::string> &args);
+    bool verify_value(const std::vector<std::string> &args);
     bool export_key_images(const std::vector<std::string> &args);
     bool import_key_images(const std::vector<std::string> &args);
     bool hw_key_images_sync(const std::vector<std::string> &args);
