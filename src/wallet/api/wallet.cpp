@@ -2473,12 +2473,10 @@ StakeUnlockResult* WalletImpl::canRequestStakeUnlock(const std::string &sn_key)
     {
       res.success = false;
       res.msg = "Failed to Parse Service Node Key";
-      StakeUnlockResultImpl stake_unlock_result(res);
-      return &stake_unlock_result;
+      return new StakeUnlockResultImpl(res);
     }
 
-    StakeUnlockResultImpl stake_unlock_result(m_wallet->can_request_stake_unlock(snode_key));
-    return &stake_unlock_result;
+    return new StakeUnlockResultImpl(m_wallet->can_request_stake_unlock(snode_key));
 }
 
 StakeUnlockResult* WalletImpl::requestStakeUnlock(const std::string &sn_key)
@@ -2490,8 +2488,7 @@ StakeUnlockResult* WalletImpl::requestStakeUnlock(const std::string &sn_key)
     {
       res.success = false;
       res.msg = "Failed to Parse Service Node Key";
-      StakeUnlockResultImpl stake_unlock_result(res);
-      return &stake_unlock_result;
+      return new StakeUnlockResultImpl(res);
     }
     tools::wallet2::request_stake_unlock_result unlock_result = m_wallet->can_request_stake_unlock(snode_key);
     if (unlock_result.success)
@@ -2504,20 +2501,17 @@ StakeUnlockResult* WalletImpl::requestStakeUnlock(const std::string &sn_key)
       {
         res.success = false;
         res.msg = "Failed to commit tx.";
-        StakeUnlockResultImpl stake_unlock_result(res);
-        return &stake_unlock_result;
+        return new StakeUnlockResultImpl(res);
       }
     }
     else
     {
       res.success = false;
       res.msg = tr("Cannot request stake unlock: " + unlock_result.msg);
-      StakeUnlockResultImpl stake_unlock_result(res);
-      return &stake_unlock_result;
+      return new StakeUnlockResultImpl(res);
     }
 
-    StakeUnlockResultImpl stake_unlock_result(unlock_result);
-    return &stake_unlock_result;
+    return new StakeUnlockResultImpl(unlock_result);
 }
 
 uint64_t WalletImpl::coldKeyImageSync(uint64_t &spent, uint64_t &unspent)

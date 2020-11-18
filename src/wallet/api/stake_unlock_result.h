@@ -14,12 +14,12 @@ public:
     StakeUnlockResultImpl();
     ~StakeUnlockResultImpl();
 
-    bool success();
-    std::string msg();
-    PendingTransaction * ptx();
+    bool success() override;
+    std::string msg() override;
+    PendingTransaction* ptx() override;
 
 private:
-    tools::wallet2::request_stake_unlock_result &result;
+    tools::wallet2::request_stake_unlock_result result;
 };
 
 

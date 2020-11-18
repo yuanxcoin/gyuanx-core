@@ -4,8 +4,8 @@ namespace Wallet {
 
 StakeUnlockResult::~StakeUnlockResult() {}
 
-StakeUnlockResultImpl::StakeUnlockResultImpl(tools::wallet2::request_stake_unlock_result& res)
-    : result(res)
+StakeUnlockResultImpl::StakeUnlockResultImpl(tools::wallet2::request_stake_unlock_result res)
+    : result(std::move(res))
 {
 }
 

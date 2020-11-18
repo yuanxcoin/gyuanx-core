@@ -114,7 +114,7 @@ struct StakeUnlockResult
 {
   virtual bool success() = 0;
   virtual std::string msg() = 0;
-  virtual PendingTransaction * ptx() = 0;
+  virtual PendingTransaction* ptx() = 0;
 };
 
 /**
@@ -803,7 +803,7 @@ struct Wallet
      *                                  after object returned
      */
 
-    virtual PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr,
+    virtual PendingTransaction* createTransactionMultDest(const std::vector<std::string> &dst_addr,
                                                    std::optional<std::vector<uint64_t>> amount,
                                                    uint32_t priority = 0,
                                                    uint32_t subaddr_account = 0,
@@ -832,14 +832,14 @@ struct Wallet
      *                          after object returned
      */
 
-    virtual PendingTransaction * createSweepUnmixableTransaction() = 0;
+    virtual PendingTransaction* createSweepUnmixableTransaction() = 0;
     
    /*!
     * \brief loadUnsignedTx  - creates transaction from unsigned tx file (utf8 filename)
     * \return                - UnsignedTransaction object. caller is responsible to check UnsignedTransaction::status()
     *                          after object returned
     */
-    virtual UnsignedTransaction * loadUnsignedTx(std::string_view unsigned_filename) = 0;
+    virtual UnsignedTransaction* loadUnsignedTx(std::string_view unsigned_filename) = 0;
     
    /*!
     * \brief submitTransaction - submits transaction in signed tx file (utf8 filename)
