@@ -30,7 +30,6 @@
 
 #pragma once
 
-
 #include <string>
 #include <string_view>
 #include <vector>
@@ -109,6 +108,13 @@ struct PendingTransaction
      * @return vector of base58-encoded signers' public keys
      */
     virtual std::vector<std::string> signersKeys() const = 0;
+};
+
+struct StakeUnlockResult
+{
+  virtual bool success() = 0;
+  virtual std::string msg() = 0;
+  virtual PendingTransaction* ptx() = 0;
 };
 
 /**
@@ -797,7 +803,7 @@ struct Wallet
      *                                  after object returned
      */
 
-    virtual PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr,
+    virtual PendingTransaction* createTransactionMultDest(const std::vector<std::string> &dst_addr,
                                                    std::optional<std::vector<uint64_t>> amount,
                                                    uint32_t priority = 0,
                                                    uint32_t subaddr_account = 0,
@@ -826,14 +832,14 @@ struct Wallet
      *                          after object returned
      */
 
-    virtual PendingTransaction * createSweepUnmixableTransaction() = 0;
+    virtual PendingTransaction* createSweepUnmixableTransaction() = 0;
     
    /*!
     * \brief loadUnsignedTx  - creates transaction from unsigned tx file (utf8 filename)
     * \return                - UnsignedTransaction object. caller is responsible to check UnsignedTransaction::status()
     *                          after object returned
     */
-    virtual UnsignedTransaction * loadUnsignedTx(std::string_view unsigned_filename) = 0;
+    virtual UnsignedTransaction* loadUnsignedTx(std::string_view unsigned_filename) = 0;
     
    /*!
     * \brief submitTransaction - submits transaction in signed tx file (utf8 filename)
@@ -1004,6 +1010,10 @@ struct Wallet
 
     /// Prepare a staking transaction; return nullptr on failure
     virtual PendingTransaction* stakePending(const std::string& service_node_key, const std::string& address, const std::string& amount, std::string& error_msg) = 0;
+
+    virtual StakeUnlockResult* canRequestStakeUnlock(const std::string &sn_key) = 0;
+
+    virtual StakeUnlockResult* requestStakeUnlock(const std::string &sn_key) = 0;
 
     //! cold-device protocol key image sync
     virtual uint64_t coldKeyImageSync(uint64_t &spent, uint64_t &unspent) = 0;
