@@ -193,7 +193,9 @@ namespace
   const char* USAGE_GET_DESCRIPTION("get_description");
   const char* USAGE_SET_DESCRIPTION("set_description [free text note]");
   const char* USAGE_SIGN("sign [<account_index>,<address_index>] <filename>");
+  const char* USAGE_SIGN_VALUE("sign_value [<account_index>,<address_index>] <value>");
   const char* USAGE_VERIFY("verify <filename> <address> <signature>");
+  const char* USAGE_VERIFY_VALUE("verify_value <address> <signature> <value>");
   const char* USAGE_EXPORT_KEY_IMAGES("export_key_images <filename> [requested-only]");
   const char* USAGE_IMPORT_KEY_IMAGES("import_key_images <filename>");
   const char* USAGE_HW_KEY_IMAGES_SYNC("hw_key_images_sync");
@@ -2884,10 +2886,18 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
                            [this](const auto& x) { return sign(x); },
                            tr(USAGE_SIGN),
                            tr("Sign the contents of a file with the given subaddress (or the main address if not specified)"));
+  m_cmd_binder.set_handler("sign_value",
+                           [this](const auto& x) { return sign_value(x); },
+                           tr(USAGE_SIGN_VALUE),
+                           tr("Sign a short string value with the given subaddress (or the main address if not specified)"));
   m_cmd_binder.set_handler("verify",
                            [this](const auto& x) { return verify(x); },
                            tr(USAGE_VERIFY),
                            tr("Verify a signature on the contents of a file."));
+  m_cmd_binder.set_handler("verify_value",
+                           [this](const auto& x) { return verify_value(x); },
+                           tr(USAGE_VERIFY_VALUE),
+                           tr("Verify a signature on the given short string value."));
   m_cmd_binder.set_handler("export_key_images",
                            [this](const auto& x) { return export_key_images(x); },
                            tr(USAGE_EXPORT_KEY_IMAGES),
@@ -8156,7 +8166,7 @@ bool simple_wallet::check_tx_proof(const std::vector<std::string> &args)
     uint64_t confirmations;
     if (m_wallet->check_tx_proof(txid, info.address, info.is_subaddress, args.size() == 4 ? args[3] : "", sig_str, received, in_pool, confirmations))
     {
-      success_msg_writer() << tr("Good signature");
+      success_msg_writer(true) << tr("Good signature");
       if (received > 0)
       {
         success_msg_writer() << get_account_address_as_str(m_wallet->nettype(), info.is_subaddress, info.address) << " " << tr("received") << " " << print_money(received) << " " << tr("in txid") << " " << txid;
@@ -8266,7 +8276,7 @@ bool simple_wallet::check_spend_proof(const std::vector<std::string> &args)
   try
   {
     if (m_wallet->check_spend_proof(txid, args.size() == 3 ? args[2] : "", sig_str))
-      success_msg_writer() << tr("Good signature");
+      success_msg_writer(true) << tr("Good signature");
     else
       fail_msg_writer() << tr("Bad signature");
   }
@@ -8364,7 +8374,7 @@ bool simple_wallet::check_reserve_proof(const std::vector<std::string> &args)
     uint64_t total, spent;
     if (m_wallet->check_reserve_proof(info.address, args.size() == 3 ? args[2] : "", sig_str, total, spent))
     {
-      success_msg_writer() << boost::format(tr("Good signature -- total: %s, spent: %s, unspent: %s")) % print_money(total) % print_money(spent) % print_money(total - spent);
+      success_msg_writer(true) << boost::format(tr("Good signature -- total: %s, spent: %s, unspent: %s")) % print_money(total) % print_money(spent) % print_money(total - spent);
     }
     else
     {
@@ -9606,58 +9616,79 @@ bool simple_wallet::wallet_info(const std::vector<std::string> &args)
     m_wallet->nettype() == cryptonote::DEVNET ? tr("Devnet") : tr("Mainnet"));
   return true;
 }
+
+bool simple_wallet::sign_string(std::string_view value, const subaddress_index& index)
+{
+  if (m_wallet->key_on_device())
+    fail_msg_writer() << tr("command not supported by HW wallet");
+  else if (m_wallet->watch_only())
+    fail_msg_writer() << tr("wallet is watch-only and cannot sign");
+  else if (m_wallet->multisig())
+    fail_msg_writer() << tr("This wallet is multisig and cannot sign");
+  else
+  {
+    SCOPED_WALLET_UNLOCK();
+
+    std::string addr = get_account_address_as_str(m_wallet->nettype(), !index.is_zero(), m_wallet->get_subaddress(index));
+    std::string signature = m_wallet->sign(value, index);
+    // Print the string directly if it's ascii without control characters, up to 100 bytes, and
+    // doesn't contain any doubled, leading, or trailing spaces (because we can't feed those back
+    // into verify_value in the cli wallet).
+    bool printable = value.size() <= 100 && !tools::starts_with(value, " ") && !tools::ends_with(value, " ") && value.find("  ") == std::string::npos &&
+        std::all_of(value.begin(), value.end(), [](char x) { return x >= ' ' && x <= '~'; });
+
+    success_msg_writer()
+        << "Address:   " << addr << "\n"
+        << "Value:     " << (printable ? std::string{value} : "(" + std::to_string(value.size()) + " bytes)") << "\n"
+        << "Signature: " << signature;
+  }
+  return true;
+}
+
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::sign(const std::vector<std::string> &args)
 {
-  if (m_wallet->key_on_device())
-  {
-    fail_msg_writer() << tr("command not supported by HW wallet");
-    return true;
-  }
   if (args.size() != 1 && args.size() != 2)
   {
     PRINT_USAGE(USAGE_SIGN);
-    return true;
-  }
-  if (m_wallet->watch_only())
-  {
-    fail_msg_writer() << tr("wallet is watch-only and cannot sign");
-    return true;
-  }
-  if (m_wallet->multisig())
-  {
-    fail_msg_writer() << tr("This wallet is multisig and cannot sign");
     return true;
   }
 
   subaddress_index index{0, 0};
   if (args.size() == 2)
   {
-    unsigned int a, b;
-    if (sscanf(args[0].c_str(), "%u,%u", &a, &b) != 2)
+    auto pieces = tools::split(args[0], ",");
+    if (pieces.size() != 2 || !tools::parse_int(pieces[0], index.major) || !tools::parse_int(pieces[1], index.minor))
     {
       fail_msg_writer() << tr("Invalid subaddress index format");
       return true;
     }
-    index.major = a;
-    index.minor = b;
   }
 
   const fs::path filename = fs::u8path(args.back());
   std::string data;
-  bool r = m_wallet->load_from_file(filename, data);
-  if (!r)
+  if (!m_wallet->load_from_file(filename, data))
   {
     fail_msg_writer() << tr("failed to read file ") << filename.u8string();
     return true;
   }
 
-  SCOPED_WALLET_UNLOCK();
+  return sign_string(data, index);
+}
 
-  std::string signature = m_wallet->sign(data, index);
-  success_msg_writer() << signature;
+bool simple_wallet::verify_string(std::string_view value, std::string_view address, std::string_view signature)
+{
+  cryptonote::address_parse_info info;
+  if(!cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), address, oa_prompter))
+    fail_msg_writer() << tr("failed to parse address");
+  else if (!m_wallet->verify(value, info.address, signature))
+    fail_msg_writer() << tr("Bad signature from ") << address;
+  else
+    success_msg_writer(true) << tr("Good signature from ") << address;
+
   return true;
 }
+
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::verify(const std::vector<std::string> &args)
 {
@@ -9667,35 +9698,61 @@ bool simple_wallet::verify(const std::vector<std::string> &args)
     return true;
   }
   fs::path filename = fs::u8path(args[0]);
-  std::string address_string = args[1];
-  std::string signature= args[2];
-
   std::string data;
-  bool r = m_wallet->load_from_file(filename, data);
-  if (!r)
+  if (!m_wallet->load_from_file(filename, data))
   {
     fail_msg_writer() << tr("failed to read file ") << filename.u8string();
     return true;
   }
+  return verify_string(data, args[1], args[2]);
+}
 
-  cryptonote::address_parse_info info;
-  if(!cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), address_string, oa_prompter))
+bool simple_wallet::sign_value(const std::vector<std::string> &args)
+{
+  if (args.size() < 1)
   {
-    fail_msg_writer() << tr("failed to parse address");
+    PRINT_USAGE(USAGE_SIGN_VALUE);
     return true;
   }
 
-  r = m_wallet->verify(data, info.address, signature);
-  if (!r)
+  auto begin = args.begin(), end = args.end();
+
+  subaddress_index index{0, 0};
+  if (args[0].find(',') != std::string::npos && args[0].find_first_not_of(",0123456789") == std::string::npos)
   {
-    fail_msg_writer() << tr("Bad signature from ") << address_string;
+    // First argument is a x,y account/subaddress string, so consume it.
+    auto pieces = tools::split(args[0], ",");
+    if (pieces.size() != 2 || !tools::parse_int(pieces[0], index.major) || !tools::parse_int(pieces[1], index.minor))
+    {
+      fail_msg_writer() << tr("Invalid subaddress index format");
+      return true;
+    }
+    begin++;
   }
-  else
+
+  if (begin == end)
   {
-    success_msg_writer() << tr("Good signature from ") << address_string;
+    PRINT_USAGE(USAGE_SIGN_VALUE);
+    return true;
   }
-  return true;
+
+  // Argument parsing has split it up on spaces, so rejoin it.  This will break if you have multiple
+  // sequential spaces or tabs or something, but in that case you should be using the `sign` (file)
+  // command.
+  std::string value = tools::join(" ", begin, end);
+  return sign_string(value, index);
 }
+
+bool simple_wallet::verify_value(const std::vector<std::string> &args)
+{
+  if (args.size() < 3)
+  {
+    PRINT_USAGE(USAGE_VERIFY_VALUE);
+    return true;
+  }
+  return verify_string(tools::join(" ", args.begin()+2, args.end()), args[0], args[1]);
+}
+
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::export_key_images(const std::vector<std::string> &args)
 {
