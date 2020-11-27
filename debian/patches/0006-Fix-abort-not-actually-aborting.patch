@@ -1,0 +1,32 @@
+From: Jason Rhinelander <jason@imaginary.ca>
+Date: Fri, 27 Nov 2020 13:25:25 -0400
+Subject: Fix abort not actually aborting
+
+If the input gets EOF it was printing "Aborted" but then going ahead
+anyway.
+---
+ src/blockchain_utilities/sn_key_tool.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/blockchain_utilities/sn_key_tool.cpp b/src/blockchain_utilities/sn_key_tool.cpp
+index 16b980d..6597bd6 100644
+--- a/src/blockchain_utilities/sn_key_tool.cpp
++++ b/src/blockchain_utilities/sn_key_tool.cpp
+@@ -76,7 +76,7 @@ restore-legacy [--overwrite] FILENAME
+     return exit_code;
+ }
+ 
+-int error(int exit_code, std::string_view msg) {
++[[nodiscard]] int error(int exit_code, std::string_view msg) {
+     std::cout << "\n" << msg << "\n\n";
+     return exit_code;
+ }
+@@ -310,7 +310,7 @@ int restore(bool ed25519, std::list<std::string_view> args) {
+         std::cout << "\nIs this correct?  Press Enter to continue, Ctrl-C to cancel.\n";
+         std::cin.getline(buf, 129);
+         if (!std::cin.good())
+-            error(99, "Aborted");
++            return error(99, "Aborted");
+     }
+ 
+     if (pubkey_pos != std::string::npos)
