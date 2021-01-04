@@ -25,3 +25,6 @@
 [submodule "external/ghc-filesystem"]
 	path = external/ghc-filesystem
 	url = https://github.com/gulrak/filesystem.git
+[submodule "external/gyuanx-mq"]
+	path = external/gyuanx-mq
+	url = https://github.com/loki-project/loki-mq
