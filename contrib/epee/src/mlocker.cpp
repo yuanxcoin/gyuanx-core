@@ -45,8 +45,8 @@
 #include <mutex>
 #include <utility>
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "mlocker"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "mlocker"
 
 // did an mlock operation previously fail? we only
 // want to log an error once and be done with it

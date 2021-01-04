@@ -79,7 +79,7 @@ constexpr int16_t NON_DETERMINISTIC      = -43;
 constexpr int16_t INVALID_LOG_LEVEL      = -44;
 constexpr int16_t ATTRIBUTE_NOT_FOUND    = -45;
 
-// Loki:
+// Gyuanx:
 constexpr int16_t BLINK_FAILED           = -1000;
 constexpr int16_t HF_QUERY_FAILED        = -1001;
 constexpr int16_t WRONG_LNS_TYPE         = -1002;

@@ -1,0 +1,3 @@
+/usr/lib/*/gyuanx-core/lib[a-ce-vx-z]*.so.@LIBGYUANX_VER@
+/usr/lib/*/gyuanx-core/libdevice.so.@LIBGYUANX_VER@
+/usr/lib/*/gyuanx-core/libd[a-df-z]*.so.@LIBGYUANX_VER@

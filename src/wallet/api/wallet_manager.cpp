@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -40,8 +40,8 @@
 #include "version.h"
 #include "common/fs.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "WalletAPI"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "WalletAPI"
 
 namespace Wallet {
 

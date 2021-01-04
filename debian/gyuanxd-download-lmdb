@@ -1,0 +1,69 @@
+#!/bin/bash
+
+set -e
+
+if [ "$UID" != 0 ]; then
+    echo "Error: must run this script as root (e.g. with sudo)" >&2
+    exit 1
+fi
+
+if [ "$#" != 1 ] || [[ "$1" == -* ]]; then
+    echo "Error: usage: $0 https://url/for/mainnet/data.mdb"
+    exit 1
+fi
+
+if ! [ -e /var/lib/gyuanx ]; then
+    echo "/var/lib/gyuanx does not exist; did you properly install the gyuanxd package?"
+    exit 1
+fi
+
+if ! [ -e /var/lib/gyuanx/lmdb ]; then
+    mkdir /var/lib/gyuanx/lmdb
+    chown _gyuanx:_gyuanx /var/lib/gyuanx/lmdb
+fi
+
+node_active=
+ss_active=
+if systemctl -q is-active gyuanx-node.service; then node_active=y; fi
+if systemctl -q is-active gyuanx-storage-server.service; then ss_active=y; fi
+
+echo "Ready to download lmdb from $1."
+if [ -e /var/lib/gyuanx/lmdb/data.mdb ]; then
+    echo "Will overwrite existing data.mdb:"
+    ls -l --si /var/lib/gyuanx/lmdb/data.mdb
+fi
+if [ -n "$node_active" ]; then
+    echo -n "gyuanx-node.service"
+    if [ -n "$ss_active" ]; then echo -n " and gyuanx-storage-server.service"; fi
+    echo " will be stopped, then restarted when the lmdb download is complete"
+else
+    echo "gyuanx-node.service is not currently running and will be left stopped.  (Do not attempt to start it or the storage server until the download is complete!)"
+fi
+
+echo
+
+read -p "Press enter to continue, ^C to abort"
+
+if [ -n "$node_active" ]; then
+    if [ -n "$ss_active" ]; then
+        systemctl stop gyuanx-node.service gyuanx-storage-server.service
+    else
+        systemctl stop gyuanx-node.service
+    fi
+fi
+
+curl "$1" >/var/lib/gyuanx/lmdb/data.mdb
+
+chown _gyuanx:_gyuanx /var/lib/gyuanx/lmdb/data.mdb
+echo "Downloaded data.mdb:"
+ls -l --si /var/lib/gyuanx/lmdb/data.mdb
+
+if [ -n "$node_active" ]; then
+    if [ -n "$ss_active" ]; then
+        echo "Starting gyuanx-node.service, gyuanx-storage-server.service"
+        systemctl start gyuanx-node.service gyuanx-storage-server.service
+    else
+        echo "Starting gyuanx-node.service"
+        systemctl start gyuanx-node.service
+    fi
+fi

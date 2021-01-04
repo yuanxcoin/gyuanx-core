@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# Script used with Drone CI to check that a statically build loki only links against the expected
+# Script used with Drone CI to check that a statically build gyuanx only links against the expected
 # base system libraries.  Expects to be run with pwd of the build directory.
 
 set -o errexit
 
 anybad=
-for bin in lokid loki-{wallet-{cli,rpc},gen-trusted-multisig,blockchain-{ancestry,depth,export,import,mark-spent-outputs,stats,usage}}; do
+for bin in gyuanxd gyuanx-{wallet-{cli,rpc},gen-trusted-multisig,blockchain-{ancestry,depth,export,import,mark-spent-outputs,stats,usage}}; do
     bad=
     if [ "$DRONE_STAGE_OS" == "darwin" ]; then
         if otool -L bin/$bin | grep -Ev '^bin/'$bin':|^\t(/usr/lib/libSystem\.|/usr/lib/libc\+\+\.|/System/Library/Frameworks/(CoreFoundation|IOKit|Security))'; then

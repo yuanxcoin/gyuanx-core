@@ -2,9 +2,9 @@
 #include "http_server.h"
 #include <chrono>
 #include <exception>
-#include <lokimq/base64.h>
+#include <gyuanxmq/base64.h>
 #include <boost/endian/conversion.hpp>
-#include <lokimq/variant.h>
+#include <gyuanxmq/variant.h>
 #include "common/command_line.h"
 #include "common/string_util.h"
 #include "cryptonote_config.h"
@@ -14,8 +14,8 @@
 #include "rpc/rpc_args.h"
 #include "version.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "daemon.rpc"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "daemon.rpc"
 
 namespace cryptonote::rpc {
 
@@ -283,7 +283,7 @@ namespace cryptonote::rpc {
 
   void invoke_txpool_hashes_bin(std::shared_ptr<call_data> data);
 
-  // Invokes the actual RPC request; this is called (via lokimq) from some random LMQ worker thread,
+  // Invokes the actual RPC request; this is called (via gyuanxmq) from some random LMQ worker thread,
   // which means we can't just write our reply; instead we have to post it to the uWS loop.
   void invoke_rpc(std::shared_ptr<call_data> dataptr)
   {
@@ -573,7 +573,7 @@ namespace cryptonote::rpc {
     });
   }
 
-  static std::unordered_set<lokimq::LokiMQ*> timer_started;
+  static std::unordered_set<gyuanxmq::GyuanxMQ*> timer_started;
 
   void http_server::start()
   {
@@ -581,7 +581,7 @@ namespace cryptonote::rpc {
       throw std::logic_error{"Cannot call http_server::start() more than once"};
 
     auto net = m_server.nettype();
-    m_server_header = "lokid/"s + (m_restricted ? std::to_string(LOKI_VERSION[0]) : LOKI_VERSION_FULL)
+    m_server_header = "gyuanxd/"s + (m_restricted ? std::to_string(GYUANX_VERSION[0]) : GYUANX_VERSION_FULL)
       + (net == MAINNET ? " mainnet" : net == TESTNET ? " testnet" : net == DEVNET ? " devnet" : net == FAKECHAIN ? " fakenet" : " unknown net");
 
     m_startup_promise.set_value(true);

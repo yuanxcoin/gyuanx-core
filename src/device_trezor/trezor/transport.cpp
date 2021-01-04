@@ -38,14 +38,14 @@
 #include <boost/endian/conversion.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/udp.hpp>
-#include <lokimq/hex.h>
+#include <gyuanxmq/hex.h>
 #include "common/apply_permutation.h"
 #include "common/string_util.h"
 #include "transport.hpp"
 #include "messages/messages-common.pb.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "device.trezor.transport"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "device.trezor.transport"
 
 using namespace std;
 using json = rapidjson::Document;
@@ -458,7 +458,7 @@ namespace trezor{
     epee::wipeable_string res_hex;
     epee::wipeable_string req_hex;
     req_hex.reserve(buff_size * 2);
-    lokimq::to_hex(req_buff_raw, req_buff_raw + buff_size, std::back_inserter(req_hex));
+    gyuanxmq::to_hex(req_buff_raw, req_buff_raw + buff_size, std::back_inserter(req_hex));
 
     bool req_status = invoke_bridge_http(uri, req_hex, res_hex);
     if (!req_status){
@@ -515,13 +515,13 @@ namespace trezor{
     m_http_session.SetUrl(std::string{url});
     m_http_session.SetTimeout(HTTP_TIMEOUT);
     m_http_session.SetHeader({
-      {"Origin", "https://monero.trezor.io"}, // FIXME (loki) - does this matter to the bridge?
+      {"Origin", "https://monero.trezor.io"}, // FIXME (gyuanx) - does this matter to the bridge?
       {"Content-Type", "application/json; charset=utf-8"}
     });
     m_http_session.SetBody(body);
 
     cpr::Response res;
-    LOKI_DEFER {
+    GYUANX_DEFER {
       if (!res.text.empty())
         memwipe(res.text.data(), res.text.size());
     };
@@ -852,11 +852,11 @@ namespace trezor{
 #  define TREZOR_LIBUSB_SET_DEBUG(ctx, level) libusb_set_debug(ctx, level)
 #endif
 
-    if (ELPP->vRegistry()->allowed(el::Level::Debug, LOKI_DEFAULT_LOG_CATEGORY))
+    if (ELPP->vRegistry()->allowed(el::Level::Debug, GYUANX_DEFAULT_LOG_CATEGORY))
       TREZOR_LIBUSB_SET_DEBUG(ctx, 3);
-    else if (ELPP->vRegistry()->allowed(el::Level::Warning, LOKI_DEFAULT_LOG_CATEGORY))
+    else if (ELPP->vRegistry()->allowed(el::Level::Warning, GYUANX_DEFAULT_LOG_CATEGORY))
       TREZOR_LIBUSB_SET_DEBUG(ctx, 2);
-    else if (ELPP->vRegistry()->allowed(el::Level::Error, LOKI_DEFAULT_LOG_CATEGORY))
+    else if (ELPP->vRegistry()->allowed(el::Level::Error, GYUANX_DEFAULT_LOG_CATEGORY))
       TREZOR_LIBUSB_SET_DEBUG(ctx, 1);
 
 #undef TREZOR_LIBUSB_SET_DEBUG

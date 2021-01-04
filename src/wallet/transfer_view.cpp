@@ -12,7 +12,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(transfer_view)
   KV_SERIALIZE(note);
   KV_SERIALIZE(destinations);
 
-  // TODO(loki): This discrepancy between having to use pay_type if type is
+  // TODO(gyuanx): This discrepancy between having to use pay_type if type is
   // empty and type if pay type is neither is super unintuitive.
   if (this_ref.type.empty())
   {

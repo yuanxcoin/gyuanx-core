@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The Loki Project
+// Copyright (c) 2018-2020, The Gyuanx Project
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -59,8 +59,8 @@
 
 #include "cryptonote_config.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "util"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "util"
 
 namespace tools {
 

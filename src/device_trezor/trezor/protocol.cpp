@@ -150,7 +150,7 @@ namespace ki {
                       bool need_all_additionals)
   {
     for(auto & td : transfers){
-      // TODO(doyle): TODO(loki): We should use td.m_pk_index!!
+      // TODO(doyle): TODO(gyuanx): We should use td.m_pk_index!!
       ::crypto::public_key tx_pub_key = wallet->get_tx_pub_key_from_received_outs(td);
       const std::vector<::crypto::public_key> additional_tx_pub_keys = cryptonote::get_additional_tx_pub_keys_from_extra(td.m_tx);
 
@@ -558,7 +558,7 @@ namespace tx {
     tsx_data.set_num_inputs(static_cast<google::protobuf::uint32>(input_size));
     tsx_data.set_mixin(static_cast<google::protobuf::uint32>(tx.sources[0].outputs.size() - 1));
     tsx_data.set_account(tx.subaddr_account);
-    tsx_data.set_monero_version(std::string(LOKI_VERSION_STR) + "|" + LOKI_VERSION_TAG);
+    tsx_data.set_monero_version(std::string(GYUANX_VERSION_STR) + "|" + GYUANX_VERSION_TAG);
     tsx_data.set_hard_fork(m_aux_data->hard_fork ? *m_aux_data->hard_fork : 0);
 
     if (client_version() <= 1){

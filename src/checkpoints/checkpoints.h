@@ -34,7 +34,7 @@
 #include "epee/misc_log_ex.h"
 #include "crypto/hash.h"
 #include "cryptonote_config.h"
-#include "cryptonote_core/service_node_voting.h"
+#include "cryptonote_core/gnode_voting.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "common/fs.h"
 
@@ -46,7 +46,7 @@ namespace cryptonote
   enum struct checkpoint_type
   {
     hardcoded,
-    service_node,
+    gnode,
     count,
   };
 
@@ -56,7 +56,7 @@ namespace cryptonote
     checkpoint_type                                type;
     uint64_t                                       height;
     crypto::hash                                   block_hash;
-    std::vector<service_nodes::quorum_signature>   signatures; // Only service node checkpoints use signatures
+    std::vector<gnodes::quorum_signature>   signatures; // Only service node checkpoints use signatures
     uint64_t                                       prev_height; // TODO(doyle): Unused
 
     bool               check         (crypto::hash const &block_hash) const;
@@ -65,7 +65,7 @@ namespace cryptonote
       switch(type)
       {
         case checkpoint_type::hardcoded:    return "Hardcoded";
-        case checkpoint_type::service_node: return "ServiceNode";
+        case checkpoint_type::gnode: return "ServiceNode";
         default: assert(false);             return "XXUnhandledVersion";
       }
     }
@@ -162,7 +162,7 @@ namespace cryptonote
      *         true if the passed parameters match the stored checkpoint,
      *         false otherwise
      */
-    bool check_block(uint64_t height, const crypto::hash& h, bool *is_a_checkpoint = nullptr, bool *service_node_checkpoint = nullptr) const;
+    bool check_block(uint64_t height, const crypto::hash& h, bool *is_a_checkpoint = nullptr, bool *gnode_checkpoint = nullptr) const;
 
     /**
      * @brief checks if alternate chain blocks should be kept for a given height and updates
@@ -179,7 +179,7 @@ namespace cryptonote
      * @return true if alternate blocks are allowed given the parameters,
      *         otherwise false
      */
-    bool is_alternative_block_allowed(uint64_t blockchain_height, uint64_t block_height, bool *service_node_checkpoint = nullptr);
+    bool is_alternative_block_allowed(uint64_t blockchain_height, uint64_t block_height, bool *gnode_checkpoint = nullptr);
 
     /**
      * @brief gets the highest checkpoint height

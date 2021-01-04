@@ -97,7 +97,7 @@
  *   KEY_IMAGE_EXISTS
  */
 
-namespace service_nodes {
+namespace gnodes {
 struct proof_info;
 }
 
@@ -1842,23 +1842,23 @@ public:
 
   virtual void get_output_blacklist(std::vector<uint64_t> &blacklist) const   = 0;
   virtual void add_output_blacklist(std::vector<uint64_t> const &blacklist)   = 0;
-  virtual void set_service_node_data(const std::string& data, bool long_term) = 0;
-  virtual bool get_service_node_data(std::string &data, bool long_term) const = 0;
-  virtual void clear_service_node_data()                                      = 0;
+  virtual void set_gnode_data(const std::string& data, bool long_term) = 0;
+  virtual bool get_gnode_data(std::string &data, bool long_term) const = 0;
+  virtual void clear_gnode_data()                                      = 0;
 
   /// Updates the given proof data with the latest stored info for the given service node.  Returns
   /// true if found (and fields updated), false otherwise.
-  virtual bool get_service_node_proof(const crypto::public_key &pubkey, service_nodes::proof_info &proof) const = 0;
+  virtual bool get_gnode_proof(const crypto::public_key &pubkey, gnodes::proof_info &proof) const = 0;
 
   /// Returns pubkeys and proof data for all currently stored service nodes.
-  virtual std::unordered_map<crypto::public_key, service_nodes::proof_info> get_all_service_node_proofs() const = 0;
+  virtual std::unordered_map<crypto::public_key, gnodes::proof_info> get_all_gnode_proofs() const = 0;
 
   /// Creates or updates the proof data for a service node from a proof.
-  virtual void set_service_node_proof(const crypto::public_key &pubkey, const service_nodes::proof_info &proof) = 0;
+  virtual void set_gnode_proof(const crypto::public_key &pubkey, const gnodes::proof_info &proof) = 0;
 
   /// Removes stored serialized proof sn data associated with the given pubkey.  Returns true if
   /// found, false if not found.
-  virtual bool remove_service_node_proof(const crypto::public_key &pubkey) = 0;
+  virtual bool remove_gnode_proof(const crypto::public_key &pubkey) = 0;
 
   // This function accepts an empty timestamps/difficulties array to fill, or
   // a prior timestamps/difficulties array that was filled by a previous call to

@@ -2,7 +2,7 @@
 /// @author rfree (current maintainer/user in monero.cc project - most of code is from CryptoNote)
 /// @brief This is the original cryptonote protocol network-events handler, modified by us
 
-// Copyright (c) 2018-2020, The Loki Project
+// Copyright (c) 2018-2020, The Gyuanx Project
 // Copyright (c) 2014-2019, The Monero Project
 //
 // All rights reserved.
@@ -53,8 +53,8 @@
 #include "common/lock.h"
 #include "common/util.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "net.cn"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "net.cn"
 
 #define MLOG_P2P_MESSAGE(x) MCINFO("net.p2p.msg", context << x)
 #define MLOGIF_P2P_MESSAGE(init, test, x) \
@@ -69,7 +69,7 @@
   } while(0)
 
 #define MLOG_PEER_STATE(x) \
-  MCINFO(LOKI_DEFAULT_LOG_CATEGORY, context << "[" << epee::string_tools::to_string_hex(context.m_pruning_seed) << "] state: " << x << " in state " << cryptonote::get_protocol_state_string(context.m_state))
+  MCINFO(GYUANX_DEFAULT_LOG_CATEGORY, context << "[" << epee::string_tools::to_string_hex(context.m_pruning_seed) << "] state: " << x << " in state " << cryptonote::get_protocol_state_string(context.m_state))
 
 namespace cryptonote
 {
@@ -690,7 +690,7 @@ namespace cryptonote
           LOG_ERROR_CCONTEXT
           (
             "sent wrong tx: failed to parse and validate transaction: "
-            << lokimq::to_hex(tx_blob) 
+            << gyuanxmq::to_hex(tx_blob) 
             << ", dropping connection"
           );
             
@@ -832,7 +832,7 @@ namespace cryptonote
       LOG_ERROR_CCONTEXT
       (
         "sent wrong block: failed to parse and validate block: "
-        << lokimq::to_hex(arg.b.block) 
+        << gyuanxmq::to_hex(arg.b.block) 
         << ", dropping connection"
       );
         
@@ -879,7 +879,7 @@ namespace cryptonote
 
   //------------------------------------------------------------------------------------------------------------------------  
   template<class t_core>
-  int t_cryptonote_protocol_handler<t_core>::handle_notify_new_service_node_vote(int command, NOTIFY_NEW_SERVICE_NODE_VOTE::request& arg, cryptonote_connection_context& context)
+  int t_cryptonote_protocol_handler<t_core>::handle_notify_new_gnode_vote(int command, NOTIFY_NEW_SERVICE_NODE_VOTE::request& arg, cryptonote_connection_context& context)
   {
     MLOG_P2P_MESSAGE("Received NOTIFY_NEW_SERVICE_NODE_VOTE (" << arg.votes.size() << " txes)");
 
@@ -895,7 +895,7 @@ namespace cryptonote
     for(auto it = arg.votes.begin(); it != arg.votes.end();)
     {
       cryptonote::vote_verification_context vvc = {};
-      m_core.add_service_node_vote(*it, vvc);
+      m_core.add_gnode_vote(*it, vvc);
 
       if (vvc.m_verification_failed)
       {
@@ -915,7 +915,7 @@ namespace cryptonote
     }
 
     if (arg.votes.size())
-      relay_service_node_votes(arg, context);
+      relay_gnode_votes(arg, context);
 
     return 1;
   }
@@ -1220,7 +1220,7 @@ namespace cryptonote
       if(!parse_and_validate_block_from_blob(block_entry.block, b, block_hash))
       {
         LOG_ERROR_CCONTEXT("sent wrong block: failed to parse and validate block: "
-          << lokimq::to_hex(block_entry.block) << ", dropping connection");
+          << gyuanxmq::to_hex(block_entry.block) << ", dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
         return 1;
@@ -1228,7 +1228,7 @@ namespace cryptonote
       if (b.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(b.miner_tx.vin.front()))
       {
         LOG_ERROR_CCONTEXT("sent wrong block: block: miner tx does not have exactly one txin_gen input"
-          << lokimq::to_hex(block_entry.block) << ", dropping connection");
+          << gyuanxmq::to_hex(block_entry.block) << ", dropping connection");
         drop_connection(context, false, false);
         ++m_sync_bad_spans_downloaded;
         return 1;
@@ -1359,7 +1359,7 @@ namespace cryptonote
         m_core.pause_mine();
         m_add_timer.resume();
         bool starting = true;
-        LOKI_DEFER
+        GYUANX_DEFER
         {
           m_add_timer.pause();
           m_core.resume_mine();
@@ -1475,7 +1475,7 @@ namespace cryptonote
 
           {
             bool remove_spans = false;
-            LOKI_DEFER
+            GYUANX_DEFER
             {
               if (!m_core.cleanup_handle_incoming_blocks())
                 LOG_PRINT_CCONTEXT_L0("Failure in cleanup_handle_incoming_blocks");
@@ -2325,7 +2325,7 @@ skip:
         }
       }
       MGINFO_YELLOW("\n**********************************************************************\n"
-        << "You are now synchronized with the network. You may now start loki-wallet-cli.\n"
+        << "You are now synchronized with the network. You may now start gyuanx-wallet-cli.\n"
         << "\n"
         << "Use the \"help\" command to see the list of available commands.\n"
         << "**********************************************************************");
@@ -2526,11 +2526,11 @@ skip:
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core>
-  bool t_cryptonote_protocol_handler<t_core>::relay_service_node_votes(NOTIFY_NEW_SERVICE_NODE_VOTE::request& arg, cryptonote_connection_context& exclude_context)
+  bool t_cryptonote_protocol_handler<t_core>::relay_gnode_votes(NOTIFY_NEW_SERVICE_NODE_VOTE::request& arg, cryptonote_connection_context& exclude_context)
   {
     bool result = relay_to_synchronized_peers<NOTIFY_NEW_SERVICE_NODE_VOTE>(arg, exclude_context);
     if (result)
-      m_core.set_service_node_votes_relayed(arg.votes);
+      m_core.set_gnode_votes_relayed(arg.votes);
     return result;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -2687,7 +2687,7 @@ skip:
       MINFO("Target height decreasing from " << previous_target << " to " << target);
       m_core.set_target_blockchain_height(target);
       if (target == 0 && context.m_state > cryptonote_connection_context::state_before_handshake && !m_stopping)
-        MCWARNING("global", "lokid is now disconnected from the network");
+        MCWARNING("global", "gyuanxd is now disconnected from the network");
     }
 
     m_block_queue.flush_spans(context.m_connection_id, false);

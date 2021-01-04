@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -34,18 +34,18 @@
 #include "epee/string_tools.h"
 #include "epee/storages/portable_storage_template_helper.h" // epee json include
 #include "epee/serialization/keyvalue_serialization.h"
-#include "cryptonote_core/service_node_rules.h"
+#include "cryptonote_core/gnode_rules.h"
 #include <vector>
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 
-#include "common/loki_integration_test_hooks.h"
-#include "common/loki.h"
+#include "common/gyuanx_integration_test_hooks.h"
+#include "common/gyuanx.h"
 #include "common/file.h"
 #include "common/hex.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "checkpoints"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "checkpoints"
 
 namespace cryptonote
 {
@@ -59,17 +59,7 @@ namespace cryptonote
 
   height_to_hash const HARDCODED_MAINNET_CHECKPOINTS[] =
   {
-    {0,      "08ff156d993012b0bdf2816c4bee47c9bbc7930593b70ee02574edddf15ee933"},
-    {1,      "647997953a5ea9b5ab329c2291d4cbb08eed587c287e451eeeb2c79bab9b940f"},
-    {10,     "4a7cd8b9bff380d48d6f3533a5e0509f8589cc77d18218b3f7218846e77738fc"},
-    {100,    "01b8d33a50713ff837f8ad7146021b8e3060e0316b5e4afc407e46cdb50b6760"},
-    {1000,   "5e3b0a1f931885bc0ab1d6ecdc625816576feae29e2f9ac94c5ccdbedb1465ac"},
-    {86535,  "52b7c5a60b97bf1efbf0d63a0aa1a313e8f0abe4627eb354b0c5a73cb1f4391e"},
-    {97407,  "504af73abbaba85a14ddc16634658bf4dcc241dc288b1eaad09e216836b71023"},
-    {98552,  "2058d5c675bd91284f4996435593499c9ab84a5a0f569f57a86cde2e815e57da"},
-    {144650, "a1ab207afc790675070ecd7aac874eb0691eb6349ea37c44f8f58697a5d6cbc4"},
-    {266284, "c42801a37a41e3e9f934a266063483646072a94bfc7269ace178e93c91414b1f"},
-    {301187, "e23e4cf3a2fe3e9f0ffced5cc76426e5bdffd3aad822268f4ad63d82cb958559"},
+    {0,      "418015bb9ae982a1975da7d79277c2705727a56894ba0fb246adaabb1f4632e3"},
   };
 
   crypto::hash get_newest_hardcoded_checkpoint(cryptonote::network_type nettype, uint64_t *height)
@@ -81,7 +71,7 @@ namespace cryptonote
 
     if (nettype == MAINNET)
     {
-      uint64_t last_index         = loki::array_count(HARDCODED_MAINNET_CHECKPOINTS) - 1;
+      uint64_t last_index         = gyuanx::array_count(HARDCODED_MAINNET_CHECKPOINTS) - 1;
       height_to_hash const &entry = HARDCODED_MAINNET_CHECKPOINTS[last_index];
 
       if (tools::hex_to_type(entry.hash, result))
@@ -149,7 +139,7 @@ namespace cryptonote
   }
   bool checkpoints::update_checkpoint(checkpoint_t const &checkpoint)
   {
-    // NOTE(loki): Assumes checkpoint is valid
+    // NOTE(gyuanx): Assumes checkpoint is valid
     bool result        = true;
     bool batch_started = false;
     try
@@ -171,7 +161,7 @@ namespace cryptonote
   bool checkpoints::block_added(const cryptonote::block& block, const std::vector<cryptonote::transaction>& txs, checkpoint_t const *checkpoint)
   {
     uint64_t const height = get_block_height(block);
-    if (height < service_nodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL || block.major_version < network_version_12_checkpointing)
+    if (height < gnodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL || block.major_version < network_version_12_checkpointing)
       return true;
 
     uint64_t end_cull_height = 0;
@@ -180,18 +170,18 @@ namespace cryptonote
       if (m_db->get_immutable_checkpoint(&immutable_checkpoint, height + 1))
         end_cull_height = immutable_checkpoint.height;
     }
-    uint64_t start_cull_height = (end_cull_height < service_nodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL)
+    uint64_t start_cull_height = (end_cull_height < gnodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL)
                                      ? 0
-                                     : end_cull_height - service_nodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL;
+                                     : end_cull_height - gnodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL;
 
-    if ((start_cull_height % service_nodes::CHECKPOINT_INTERVAL) > 0)
-      start_cull_height += (service_nodes::CHECKPOINT_INTERVAL - (start_cull_height % service_nodes::CHECKPOINT_INTERVAL));
+    if ((start_cull_height % gnodes::CHECKPOINT_INTERVAL) > 0)
+      start_cull_height += (gnodes::CHECKPOINT_INTERVAL - (start_cull_height % gnodes::CHECKPOINT_INTERVAL));
 
     m_last_cull_height = std::max(m_last_cull_height, start_cull_height);
     auto guard         = db_wtxn_guard(m_db);
-    for (; m_last_cull_height < end_cull_height; m_last_cull_height += service_nodes::CHECKPOINT_INTERVAL)
+    for (; m_last_cull_height < end_cull_height; m_last_cull_height += gnodes::CHECKPOINT_INTERVAL)
     {
-      if (m_last_cull_height % service_nodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL == 0)
+      if (m_last_cull_height % gnodes::CHECKPOINT_STORE_PERSISTENTLY_INTERVAL == 0)
         continue;
 
       try
@@ -220,8 +210,8 @@ namespace cryptonote
     {
       uint64_t start_height = top_checkpoint.height;
       for (size_t delete_height = start_height;
-           delete_height >= height && delete_height >= service_nodes::CHECKPOINT_INTERVAL;
-           delete_height -= service_nodes::CHECKPOINT_INTERVAL)
+           delete_height >= height && delete_height >= gnodes::CHECKPOINT_INTERVAL;
+           delete_height -= gnodes::CHECKPOINT_INTERVAL)
       {
         try
         {
@@ -245,27 +235,27 @@ namespace cryptonote
     return height <= top_checkpoint_height;
   }
   //---------------------------------------------------------------------------
-  bool checkpoints::check_block(uint64_t height, const crypto::hash& h, bool* is_a_checkpoint, bool *service_node_checkpoint) const
+  bool checkpoints::check_block(uint64_t height, const crypto::hash& h, bool* is_a_checkpoint, bool *gnode_checkpoint) const
   {
     checkpoint_t checkpoint;
     bool found = get_checkpoint(height, checkpoint);
     if (is_a_checkpoint) *is_a_checkpoint = found;
-    if (service_node_checkpoint) *service_node_checkpoint = false;
+    if (gnode_checkpoint) *gnode_checkpoint = false;
 
     if(!found)
       return true;
 
     bool result = checkpoint.check(h);
-    if (service_node_checkpoint)
-      *service_node_checkpoint = (checkpoint.type == checkpoint_type::service_node);
+    if (gnode_checkpoint)
+      *gnode_checkpoint = (checkpoint.type == checkpoint_type::gnode);
 
     return result;
   }
   //---------------------------------------------------------------------------
-  bool checkpoints::is_alternative_block_allowed(uint64_t blockchain_height, uint64_t block_height, bool *service_node_checkpoint)
+  bool checkpoints::is_alternative_block_allowed(uint64_t blockchain_height, uint64_t block_height, bool *gnode_checkpoint)
   {
-    if (service_node_checkpoint)
-      *service_node_checkpoint = false;
+    if (gnode_checkpoint)
+      *gnode_checkpoint = false;
 
     if (0 == block_height)
       return false;
@@ -281,8 +271,8 @@ namespace cryptonote
     if (m_db->get_immutable_checkpoint(&immutable_checkpoint, blockchain_height))
     {
       immutable_height = immutable_checkpoint.height;
-      if (service_node_checkpoint)
-        *service_node_checkpoint = (immutable_checkpoint.type == checkpoint_type::service_node);
+      if (gnode_checkpoint)
+        *gnode_checkpoint = (immutable_checkpoint.type == checkpoint_type::gnode);
     }
 
     m_immutable_height = std::max(immutable_height, m_immutable_height);
@@ -309,10 +299,10 @@ namespace cryptonote
     if (db->is_read_only())
       return true;
 
-#if !defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if !defined(GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
     if (nettype == MAINNET)
     {
-      for (size_t i = 0; i < loki::array_count(HARDCODED_MAINNET_CHECKPOINTS); ++i)
+      for (size_t i = 0; i < gyuanx::array_count(HARDCODED_MAINNET_CHECKPOINTS); ++i)
       {
         height_to_hash const &checkpoint = HARDCODED_MAINNET_CHECKPOINTS[i];
         ADD_CHECKPOINT(checkpoint.height, checkpoint.hash);

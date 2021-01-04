@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2019, The Loki Project
+// Copyright (c)      2019, The Gyuanx Project
 //
 
 // All rights reserved.
@@ -31,7 +31,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <numeric>
-#include <lokimq/base64.h>
+#include <gyuanxmq/base64.h>
 #include "epee/misc_language.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "epee/misc_os_dependent.h"
@@ -43,8 +43,8 @@
 #include "epee/string_tools.h"
 #include "epee/storages/portable_storage_template_helper.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "miner"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "miner"
 
 #define AUTODETECT_WINDOW 10 // seconds
 #define AUTODETECT_GAIN_THRESHOLD 1.02f  // 2%
@@ -254,13 +254,13 @@ namespace cryptonote
         tools::trim(extra_vec[i]);
         if(!extra_vec[i].size())
           continue;
-        if (!lokimq::is_base64(extra_vec[i]))
+        if (!gyuanxmq::is_base64(extra_vec[i]))
         {
           MWARNING("Invalid (non-base64) extra message `" << extra_vec[i] << "'");
           continue;
         }
 
-        std::string buff = lokimq::from_base64(extra_vec[i]);
+        std::string buff = gyuanxmq::from_base64(extra_vec[i]);
         if(buff != "0")
           m_extra_messages[i] = buff;
       }

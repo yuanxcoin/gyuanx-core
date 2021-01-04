@@ -1,0 +1,20 @@
+[Unit]
+Description=Gyuanx network node
+After=network-online.target
+Before=gyuanx-testnet-storage.service
+
+[Service]
+User=_gyuanx
+Type=notify
+TimeoutStartSec=infinity
+WatchdogSec=5min
+WorkingDirectory=/var/lib/gyuanx
+Restart=always
+RestartSec=5s
+ExecStart=/usr/bin/gyuanxd --non-interactive --config-file /etc/gyuanx/testnet.conf
+# Enable coloured daemon output:
+Environment=TERM=xterm
+
+[Install]
+WantedBy=multi-user.target
+

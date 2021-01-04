@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The Loki Project
+// Copyright (c) 2018-2020, The Gyuanx Project
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -66,7 +66,7 @@ namespace cryptonote::rpc {
     ~http_server();
 
     /// Starts the event loop in the thread handling http requests.  Core must have been initialized
-    /// and LokiMQ started.  Will propagate an exception from the thread if startup fails.
+    /// and GyuanxMQ started.  Will propagate an exception from the thread if startup fails.
     void start();
 
     /// Closes the http server connection.  Can safely be called multiple times, or to abort a

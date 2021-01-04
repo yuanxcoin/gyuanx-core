@@ -42,7 +42,7 @@
 #include <type_traits>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <lokimq/hex.h>
+#include <gyuanxmq/hex.h>
 #include "storages/parserse_base_utils.h"
 #include "hex.h"
 #include "mlocker.h"

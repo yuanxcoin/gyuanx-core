@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The Loki Project
+// Copyright (c) 2019, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -30,13 +30,13 @@
 
 #include "../cryptonote_basic/cryptonote_basic.h"
 #include "../common/util.h"
-#include "service_node_rules.h"
+#include "gnode_rules.h"
 #include <iostream>
 #include <shared_mutex>
 #include <variant>
 
-namespace service_nodes {
-class service_node_list;
+namespace gnodes {
+class gnode_list;
 }
 
 namespace cryptonote {
@@ -120,7 +120,7 @@ public:
      * present; true if the signature was accepted and stored; and throws a
      * `blink_tx::signature_verification_error` if the signature fails validation.
      */
-    bool add_signature(subquorum q, int position, bool approved, const crypto::signature &sig, const service_nodes::service_node_list &snl);
+    bool add_signature(subquorum q, int position, bool approved, const crypto::signature &sig, const gnodes::gnode_list &snl);
 
     /**
      * Adds a signature for the given quorum and position without checking it for validity (i.e.
@@ -151,8 +151,8 @@ public:
     /// Returns the quorum height for the given height and quorum (base or future); returns 0 at the
     /// beginning of the chain (before there are enough blocks for a blink quorum).
     static uint64_t quorum_height(uint64_t h, subquorum q) {
-        uint64_t bh = h - (h % service_nodes::BLINK_QUORUM_INTERVAL) - service_nodes::BLINK_QUORUM_LAG
-            + static_cast<uint8_t>(q) * service_nodes::BLINK_QUORUM_INTERVAL;
+        uint64_t bh = h - (h % gnodes::BLINK_QUORUM_INTERVAL) - gnodes::BLINK_QUORUM_LAG
+            + static_cast<uint8_t>(q) * gnodes::BLINK_QUORUM_INTERVAL;
         return bh > h /*overflow*/ ? 0 : bh;
     }
 
@@ -162,7 +162,7 @@ public:
     uint64_t quorum_height(subquorum q) const { return quorum_height(height, q); }
 
     /// Returns the pubkey of the referenced service node, or null if there is no such service node.
-    crypto::public_key get_sn_pubkey(subquorum q, int position, const service_nodes::service_node_list &snl) const;
+    crypto::public_key get_sn_pubkey(subquorum q, int position, const gnodes::gnode_list &snl) const;
 
     /// Returns the hashed signing value for this blink TX for a tx with status `approved`.  The
     /// result is a fast hash of the height + tx hash + approval value.  Lock not required.
@@ -194,7 +194,7 @@ private:
                 s.status = signature_status::none;
     }
 
-    std::array<std::array<quorum_signature, service_nodes::BLINK_SUBQUORUM_SIZE>, tools::enum_count<subquorum>> signatures_;
+    std::array<std::array<quorum_signature, gnodes::BLINK_SUBQUORUM_SIZE>, tools::enum_count<subquorum>> signatures_;
     std::shared_mutex mutex_;
 };
 

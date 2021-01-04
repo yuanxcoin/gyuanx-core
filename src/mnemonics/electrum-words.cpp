@@ -44,7 +44,7 @@
 #include "epee/misc_language.h"
 #include "epee/int-util.h"
 #include "mnemonics/electrum-words.h"
-#include "common/loki.h"
+#include "common/gyuanx.h"
 #include <boost/crc.hpp>
 
 #include "chinese_simplified.h"
@@ -63,8 +63,8 @@
 #include "language_base.h"
 #include "singleton.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "mnemonic"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "mnemonic"
 
 namespace crypto
 {
@@ -293,7 +293,7 @@ namespace crypto
       }
 
       std::vector<uint32_t> matched_indices;
-      LOKI_DEFER { memwipe(matched_indices.data(), matched_indices.size() * sizeof(matched_indices[0])); };
+      GYUANX_DEFER { memwipe(matched_indices.data(), matched_indices.size() * sizeof(matched_indices[0])); };
       Language::Base *language;
       if (!find_seed_language(seed, has_checksum, matched_indices, &language))
       {

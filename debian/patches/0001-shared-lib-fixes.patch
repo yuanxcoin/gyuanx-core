@@ -1,8 +1,8 @@
 From: Jason Rhinelander <jason@imaginary.ca>
 Date: Sun, 5 May 2019 01:27:17 -0300
-Subject: Make loki build and install shared libs
+Subject: Make gyuanx build and install shared libs
 
-Patch the loki cmake files to properly build and install shared libs.
+Patch the gyuanx cmake files to properly build and install shared libs.
 ---
  CMakeLists.txt              | 17 +++++++++++++++--
  contrib/epee/CMakeLists.txt |  6 ++++++
@@ -38,15 +38,15 @@ index c3aabe5..79dea27 100644
    endif()
  endif()
  
-+set(lokilibs epee blockchain_db checkpoints common cncrypto cryptonote_basic
++set(gyuanxlibs epee blockchain_db checkpoints common cncrypto cryptonote_basic
 +        cryptonote_core cryptonote_protocol device device_trezor lmdb_lib mnemonics
 +        multisig net p2p ringct_basic ringct
 +        rpc_server_base rpc rpc_http_client rpc_commands daemon_messages daemon_rpc_server
 +        serialization wallet easylogging lmdb randomx blocks version)
-+install(TARGETS ${lokilibs}
-+    ARCHIVE DESTINATION lib${LOKI_INSTALL_LIBDIR_SUFFIX}
-+    LIBRARY DESTINATION lib${LOKI_INSTALL_LIBDIR_SUFFIX})
-+set_target_properties(${lokilibs} PROPERTIES
++install(TARGETS ${gyuanxlibs}
++    ARCHIVE DESTINATION lib${GYUANX_INSTALL_LIBDIR_SUFFIX}
++    LIBRARY DESTINATION lib${GYUANX_INSTALL_LIBDIR_SUFFIX})
++set_target_properties(${gyuanxlibs} PROPERTIES
 +    VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 +
  find_package(PythonInterp)
@@ -63,7 +63,7 @@ index 2af962a..c7a707a 100644
 +
 +install(
 +    DIRECTORY include/
-+    DESTINATION include${LOKI_INSTALL_INCLUDEDIR_SUFFIX}
++    DESTINATION include${GYUANX_INSTALL_INCLUDEDIR_SUFFIX}
 +    COMPONENT development
 +    FILES_MATCHING PATTERN "*.h" PATTERN "*.inl")
 diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
@@ -73,11 +73,11 @@ index 7a90f57..366f42d 100644
 @@ -73,7 +73,7 @@ endif()
  
  
- if(NOT LOKIMQ_FOUND)
--  message(STATUS "Using in-tree lokimq")
-+  message(FATAL_ERROR "Using in-tree lokimq")
+ if(NOT GYUANXMQ_FOUND)
+-  message(STATUS "Using in-tree gyuanxmq")
++  message(FATAL_ERROR "Using in-tree gyuanxmq")
    if (DEPENDS)
-     # The depends system builds a static libzmq so set up a target loki-mq can use to avoid building
+     # The depends system builds a static libzmq so set up a target gyuanx-mq can use to avoid building
      add_library(libzmq STATIC IMPORTED GLOBAL)
 @@ -103,6 +103,12 @@ add_subdirectory(db_drivers)
  add_subdirectory(easylogging++ easyloggingpp)
@@ -85,7 +85,7 @@ index 7a90f57..366f42d 100644
  
 +install(
 +  DIRECTORY boost
-+  DESTINATION include${LOKI_INSTALL_INCLUDEDIR_SUFFIX}
++  DESTINATION include${GYUANX_INSTALL_INCLUDEDIR_SUFFIX}
 +  COMPONENT   development
 +  FILES_MATCHING PATTERN "*.hpp")
 +
@@ -96,8 +96,8 @@ diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
 index 05c04a7..93ee994 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
-@@ -58,7 +58,6 @@ function (loki_add_executable target binary)
-   set_property(GLOBAL PROPERTY loki_executable_targets "${exec_tgt}")
+@@ -58,7 +58,6 @@ function (gyuanx_add_executable target binary)
+   set_property(GLOBAL PROPERTY gyuanx_executable_targets "${exec_tgt}")
  endfunction ()
  
 -include(Version)
@@ -111,5 +111,5 @@ index 05c04a7..93ee994 100644
 +
 +install(
 +    DIRECTORY   "${CMAKE_CURRENT_SOURCE_DIR}/"
-+    DESTINATION "include${LOKI_INSTALL_INCLUDEDIR_SUFFIX}"
++    DESTINATION "include${GYUANX_INSTALL_INCLUDEDIR_SUFFIX}"
 +    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")

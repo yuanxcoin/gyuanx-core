@@ -21,18 +21,18 @@ chmod 600 ssh_key
 
 branch_or_tag=${DRONE_BRANCH:-${DRONE_TAG:-unknown}}
 
-upload_to="builds.lokinet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
+upload_to="builds.gyuanxnet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
 
 filename=
-for f in loki-*.tar.xz loki-*.zip; do
-    if [[ $f != loki-\** ]]; then
+for f in gyuanx-*.tar.xz gyuanx-*.zip; do
+    if [[ $f != gyuanx-\** ]]; then
         filename=$f
         break
     fi
 done
 
 if [ -z "$filename" ]; then
-    echo "Did not find expected loki-*.tar.xz or .zip!"
+    echo "Did not find expected gyuanx-*.tar.xz or .zip!"
     ls -l
     exit 1
 fi
@@ -49,7 +49,7 @@ for p in "${upload_dirs[@]}"; do
 -mkdir $dir_tmp"
 done
 
-sftp -i ssh_key -b - -o StrictHostKeyChecking=off drone@builds.lokinet.dev <<SFTP
+sftp -i ssh_key -b - -o StrictHostKeyChecking=off drone@builds.gyuanxnet.dev <<SFTP
 $mkdirs
 put $filename $upload_to
 SFTP

@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -30,7 +30,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #ifdef _WIN32
- #define __STDC_FORMAT_MACROS // NOTE(loki): Explicitly define the PRIu64 macro on Mingw
+ #define __STDC_FORMAT_MACROS // NOTE(gyuanx): Explicitly define the PRIu64 macro on Mingw
 #endif
 
 #include "wallet.h"
@@ -54,8 +54,8 @@
 
 using namespace cryptonote;
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "WalletAPI"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "WalletAPI"
 
 namespace Wallet {
 
@@ -71,7 +71,7 @@ namespace {
     fs::path get_default_ringdb_path(cryptonote::network_type nettype)
     {
       auto dir = tools::get_default_data_dir();
-      // remove .loki, replace with .shared-ringdb
+      // remove .gyuanx, replace with .shared-ringdb
       dir.replace_filename(".shared-ringdb");
       if (nettype == cryptonote::TESTNET)
         dir /= "testnet";
@@ -319,13 +319,13 @@ std::string Wallet::genPaymentId()
 
 bool Wallet::paymentIdValid(const std::string &payment_id)
 {
-    return payment_id.size() == 16 && lokimq::is_hex(payment_id);
+    return payment_id.size() == 16 && gyuanxmq::is_hex(payment_id);
 }
 
 bool Wallet::serviceNodePubkeyValid(const std::string &str)
 {
     crypto::public_key sn_key;
-    return str.size() == 64 && lokimq::is_hex(str);
+    return str.size() == 64 && gyuanxmq::is_hex(str);
 }
 
 bool Wallet::addressValid(const std::string &str, NetworkType nettype)
@@ -391,19 +391,19 @@ void Wallet::init(const char *argv0, const char *default_log_base_name, const st
 }
 
 void Wallet::debug(const std::string &category, const std::string &str) {
-    MCDEBUG(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCDEBUG(category.empty() ? GYUANX_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 void Wallet::info(const std::string &category, const std::string &str) {
-    MCINFO(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCINFO(category.empty() ? GYUANX_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 void Wallet::warning(const std::string &category, const std::string &str) {
-    MCWARNING(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCWARNING(category.empty() ? GYUANX_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 void Wallet::error(const std::string &category, const std::string &str) {
-    MCERROR(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCERROR(category.empty() ? GYUANX_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 ///////////////////////// WalletImpl implementation ////////////////////////
@@ -1317,7 +1317,7 @@ bool WalletImpl::exportMultisigImages(std::string& images) {
         checkMultisigWalletReady(m_wallet);
 
         auto blob = m_wallet->export_multisig();
-        images = lokimq::to_hex(blob);
+        images = gyuanxmq::to_hex(blob);
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Error on exporting multisig images: " << e.what());
@@ -1476,7 +1476,7 @@ PendingTransaction *WalletImpl::createTransactionMultDest(const std::vector<std:
             }
 
             if (amount) {
-                loki_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
+                gyuanx_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
                 transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, 0 /* unlock_time */,
                                                                             priority,
                                                                             extra, subaddr_account, subaddr_indices, tx_params);

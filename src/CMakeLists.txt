@@ -1,4 +1,4 @@
-# Copyright (c) 2018, The Loki Project
+# Copyright (c) 2018, The Gyuanx Project
 # Copyright (c) 2014-2019, The Monero Project
 #
 # All rights reserved.
@@ -44,8 +44,8 @@ function (enable_stack_trace target)
   endif()
 endfunction()
 
-set_property(GLOBAL PROPERTY loki_executable_targets "")
-function (loki_add_executable target binary)
+set_property(GLOBAL PROPERTY gyuanx_executable_targets "")
+function (gyuanx_add_executable target binary)
   add_executable("${target}" ${ARGN})
   target_link_libraries("${target}" PRIVATE extra)
   enable_stack_trace("${target}")
@@ -53,9 +53,9 @@ function (loki_add_executable target binary)
     OUTPUT_NAME "${binary}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
   install(TARGETS "${target}" DESTINATION bin)
-  get_property(exec_tgt GLOBAL PROPERTY loki_executable_targets)
+  get_property(exec_tgt GLOBAL PROPERTY gyuanx_executable_targets)
   list(APPEND exec_tgt "${target}")
-  set_property(GLOBAL PROPERTY loki_executable_targets "${exec_tgt}")
+  set_property(GLOBAL PROPERTY gyuanx_executable_targets "${exec_tgt}")
 endfunction ()
 
 include(Version)

@@ -111,62 +111,62 @@ int main(int argc, char* argv[])
   {
     list_tests = command_line::get_arg(vm, arg_list_tests);
 
-    // NOTE: Loki Tests
-    GENERATE_AND_PLAY(loki_checkpointing_alt_chain_handle_alt_blocks_at_tip);
-    GENERATE_AND_PLAY(loki_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtakes);
-    GENERATE_AND_PLAY(loki_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back);
-    GENERATE_AND_PLAY(loki_checkpointing_alt_chain_too_old_should_be_dropped);
-    GENERATE_AND_PLAY(loki_checkpointing_alt_chain_with_increasing_service_node_checkpoints);
-    GENERATE_AND_PLAY(loki_checkpointing_service_node_checkpoint_from_votes);
-    GENERATE_AND_PLAY(loki_checkpointing_service_node_checkpoints_check_reorg_windows);
-    GENERATE_AND_PLAY(loki_core_block_reward_unpenalized_pre_pulse);
-    GENERATE_AND_PLAY(loki_core_block_reward_unpenalized_post_pulse);
-    GENERATE_AND_PLAY(loki_core_block_rewards_lrc6);
-    GENERATE_AND_PLAY(loki_core_fee_burning);
-    GENERATE_AND_PLAY(loki_core_governance_batched_reward);
-    GENERATE_AND_PLAY(loki_core_test_deregister_preferred);
-    GENERATE_AND_PLAY(loki_core_test_deregister_safety_buffer);
-    GENERATE_AND_PLAY(loki_core_test_deregister_too_old);
-    GENERATE_AND_PLAY(loki_core_test_deregister_zero_fee);
-    GENERATE_AND_PLAY(loki_core_test_deregister_on_split);
-    GENERATE_AND_PLAY(loki_core_test_state_change_ip_penalty_disallow_dupes);
-    GENERATE_AND_PLAY(loki_name_system_disallow_reserved_type);
-    GENERATE_AND_PLAY(loki_name_system_expiration);
-    GENERATE_AND_PLAY(loki_name_system_get_mappings_by_owner);
-    GENERATE_AND_PLAY(loki_name_system_get_mappings_by_owners);
-    GENERATE_AND_PLAY(loki_name_system_get_mappings);
-    GENERATE_AND_PLAY(loki_name_system_handles_duplicate_in_lns_db);
-    GENERATE_AND_PLAY(loki_name_system_handles_duplicate_in_tx_pool);
-    GENERATE_AND_PLAY(loki_name_system_invalid_tx_extra_params);
-    GENERATE_AND_PLAY(loki_name_system_large_reorg);
-    GENERATE_AND_PLAY(loki_name_system_name_renewal);
-    GENERATE_AND_PLAY(loki_name_system_name_value_max_lengths);
-    GENERATE_AND_PLAY(loki_name_system_update_mapping_after_expiry_fails);
-    GENERATE_AND_PLAY(loki_name_system_update_mapping);
-    GENERATE_AND_PLAY(loki_name_system_update_mapping_argon2);
-    GENERATE_AND_PLAY(loki_name_system_update_mapping_multiple_owners);
-    GENERATE_AND_PLAY(loki_name_system_update_mapping_non_existent_name_fails);
-    GENERATE_AND_PLAY(loki_name_system_update_mapping_invalid_signature);
-    GENERATE_AND_PLAY(loki_name_system_update_mapping_replay);
-    GENERATE_AND_PLAY(loki_name_system_wrong_burn);
-    GENERATE_AND_PLAY(loki_name_system_wrong_version);
-    GENERATE_AND_PLAY(loki_service_nodes_alt_quorums);
-    GENERATE_AND_PLAY(loki_service_nodes_checkpoint_quorum_size);
-    GENERATE_AND_PLAY(loki_service_nodes_gen_nodes);
-    GENERATE_AND_PLAY(loki_service_nodes_insufficient_contribution);
-    GENERATE_AND_PLAY(loki_service_nodes_test_rollback);
-    GENERATE_AND_PLAY(loki_service_nodes_test_swarms_basic);
-    GENERATE_AND_PLAY(loki_pulse_invalid_validator_bitset);
-    GENERATE_AND_PLAY(loki_pulse_invalid_signature);
-    GENERATE_AND_PLAY(loki_pulse_oob_voter_index);
-    GENERATE_AND_PLAY(loki_pulse_non_participating_validator);
-    GENERATE_AND_PLAY(loki_pulse_generate_all_rounds);
-    GENERATE_AND_PLAY(loki_pulse_out_of_order_voters);
-    GENERATE_AND_PLAY(loki_pulse_reject_miner_block);
-    GENERATE_AND_PLAY(loki_pulse_generate_blocks);
-    GENERATE_AND_PLAY(loki_pulse_fallback_to_pow_and_back);
-    GENERATE_AND_PLAY(loki_pulse_chain_split);
-    GENERATE_AND_PLAY(loki_pulse_chain_split_with_no_checkpoints);
+    // NOTE: Gyuanx Tests
+    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_handle_alt_blocks_at_tip);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtakes);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_too_old_should_be_dropped);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_with_increasing_service_node_checkpoints);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_service_node_checkpoint_from_votes);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_service_node_checkpoints_check_reorg_windows);
+    GENERATE_AND_PLAY(gyuanx_core_block_reward_unpenalized_pre_pulse);
+    GENERATE_AND_PLAY(gyuanx_core_block_reward_unpenalized_post_pulse);
+    GENERATE_AND_PLAY(gyuanx_core_block_rewards_lrc6);
+    GENERATE_AND_PLAY(gyuanx_core_fee_burning);
+    GENERATE_AND_PLAY(gyuanx_core_governance_batched_reward);
+    GENERATE_AND_PLAY(gyuanx_core_test_deregister_preferred);
+    GENERATE_AND_PLAY(gyuanx_core_test_deregister_safety_buffer);
+    GENERATE_AND_PLAY(gyuanx_core_test_deregister_too_old);
+    GENERATE_AND_PLAY(gyuanx_core_test_deregister_zero_fee);
+    GENERATE_AND_PLAY(gyuanx_core_test_deregister_on_split);
+    GENERATE_AND_PLAY(gyuanx_core_test_state_change_ip_penalty_disallow_dupes);
+    GENERATE_AND_PLAY(gyuanx_name_system_disallow_reserved_type);
+    GENERATE_AND_PLAY(gyuanx_name_system_expiration);
+    GENERATE_AND_PLAY(gyuanx_name_system_get_mappings_by_owner);
+    GENERATE_AND_PLAY(gyuanx_name_system_get_mappings_by_owners);
+    GENERATE_AND_PLAY(gyuanx_name_system_get_mappings);
+    GENERATE_AND_PLAY(gyuanx_name_system_handles_duplicate_in_lns_db);
+    GENERATE_AND_PLAY(gyuanx_name_system_handles_duplicate_in_tx_pool);
+    GENERATE_AND_PLAY(gyuanx_name_system_invalid_tx_extra_params);
+    GENERATE_AND_PLAY(gyuanx_name_system_large_reorg);
+    GENERATE_AND_PLAY(gyuanx_name_system_name_renewal);
+    GENERATE_AND_PLAY(gyuanx_name_system_name_value_max_lengths);
+    GENERATE_AND_PLAY(gyuanx_name_system_update_mapping_after_expiry_fails);
+    GENERATE_AND_PLAY(gyuanx_name_system_update_mapping);
+    GENERATE_AND_PLAY(gyuanx_name_system_update_mapping_argon2);
+    GENERATE_AND_PLAY(gyuanx_name_system_update_mapping_multiple_owners);
+    GENERATE_AND_PLAY(gyuanx_name_system_update_mapping_non_existent_name_fails);
+    GENERATE_AND_PLAY(gyuanx_name_system_update_mapping_invalid_signature);
+    GENERATE_AND_PLAY(gyuanx_name_system_update_mapping_replay);
+    GENERATE_AND_PLAY(gyuanx_name_system_wrong_burn);
+    GENERATE_AND_PLAY(gyuanx_name_system_wrong_version);
+    GENERATE_AND_PLAY(gyuanx_service_nodes_alt_quorums);
+    GENERATE_AND_PLAY(gyuanx_service_nodes_checkpoint_quorum_size);
+    GENERATE_AND_PLAY(gyuanx_service_nodes_gen_nodes);
+    GENERATE_AND_PLAY(gyuanx_service_nodes_insufficient_contribution);
+    GENERATE_AND_PLAY(gyuanx_service_nodes_test_rollback);
+    GENERATE_AND_PLAY(gyuanx_service_nodes_test_swarms_basic);
+    GENERATE_AND_PLAY(gyuanx_pulse_invalid_validator_bitset);
+    GENERATE_AND_PLAY(gyuanx_pulse_invalid_signature);
+    GENERATE_AND_PLAY(gyuanx_pulse_oob_voter_index);
+    GENERATE_AND_PLAY(gyuanx_pulse_non_participating_validator);
+    GENERATE_AND_PLAY(gyuanx_pulse_generate_all_rounds);
+    GENERATE_AND_PLAY(gyuanx_pulse_out_of_order_voters);
+    GENERATE_AND_PLAY(gyuanx_pulse_reject_miner_block);
+    GENERATE_AND_PLAY(gyuanx_pulse_generate_blocks);
+    GENERATE_AND_PLAY(gyuanx_pulse_fallback_to_pow_and_back);
+    GENERATE_AND_PLAY(gyuanx_pulse_chain_split);
+    GENERATE_AND_PLAY(gyuanx_pulse_chain_split_with_no_checkpoints);
 
     // NOTE: Monero Tests
     GENERATE_AND_PLAY(gen_simple_chain_001);
@@ -203,7 +203,7 @@ int main(int argc, char* argv[])
 
     GENERATE_AND_PLAY(gen_uint_overflow_1);
 
-    // TODO(loki): We also want to run these tx tests on deregistration tx's
+    // TODO(gyuanx): We also want to run these tx tests on deregistration tx's
     // as well because they special case and run under very different code
     // paths from the regular tx path
     // Transaction verification tests
@@ -216,7 +216,7 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_tx_invalid_input_amount);
     GENERATE_AND_PLAY(gen_tx_input_wo_key_offsets);
     GENERATE_AND_PLAY(gen_tx_key_offset_points_to_foreign_key);
-    GENERATE_AND_PLAY(gen_tx_sender_key_offset_not_exist); // TODO(loki): Revisit this test
+    GENERATE_AND_PLAY(gen_tx_sender_key_offset_not_exist); // TODO(gyuanx): Revisit this test
     GENERATE_AND_PLAY(gen_tx_key_image_not_derive_from_tx_key);
     GENERATE_AND_PLAY(gen_tx_key_image_is_invalid);
     GENERATE_AND_PLAY(gen_tx_txout_to_key_has_invalid_key);
@@ -261,13 +261,13 @@ int main(int argc, char* argv[])
 
     GENERATE_AND_PLAY(gen_rct2_tx_clsag_malleability);
 
-    // TODO(loki): Tests we need to fix
+    // TODO(gyuanx): Tests we need to fix
 #if 0
       //GENERATE_AND_PLAY(gen_ring_signature_big); // Takes up to XXX hours (if CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW == 10)
 
       // Transaction verification tests
-      GENERATE_AND_PLAY(gen_tx_mixed_key_offset_not_exist); // TODO(loki): See comment in the function
-      GENERATE_AND_PLAY(gen_tx_output_with_zero_amount); // TODO(loki): See comment in the function
+      GENERATE_AND_PLAY(gen_tx_mixed_key_offset_not_exist); // TODO(gyuanx): See comment in the function
+      GENERATE_AND_PLAY(gen_tx_output_with_zero_amount); // TODO(gyuanx): See comment in the function
 
       // Double spend
 
@@ -310,7 +310,7 @@ int main(int argc, char* argv[])
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_altered_extra);
       GENERATE_AND_PLAY(gen_rct_tx_rct_altered_extra);
 
-      // NOTE: For loki we should re-write this which is trivial to do with
+      // NOTE: For gyuanx we should re-write this which is trivial to do with
       // generating some funds and attempting to spend them immediately instead
       // of the minutia of the monero framework.
       GENERATE_AND_PLAY(gen_rct_tx_uses_output_too_early);

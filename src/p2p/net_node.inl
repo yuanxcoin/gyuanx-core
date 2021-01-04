@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c) 2018-2019, The Loki Project
+// Copyright (c) 2018-2019, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -63,8 +63,8 @@
 #include <miniupnp/miniupnpc/upnperrors.h>
 #endif
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "net.p2p"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "net.p2p"
 
 #define NET_MAKE_IP(b1,b2,b3,b4)  ((LPARAM)(((DWORD)(b1)<<24)+((DWORD)(b2)<<16)+((DWORD)(b3)<<8)+((DWORD)(b4))))
 
@@ -610,22 +610,22 @@ namespace nodetool
     std::set<std::string> full_addrs;
     if (nettype == cryptonote::TESTNET)
     {
-      full_addrs.insert("159.69.109.145:38156");
+      full_addrs.insert("149.28.24.5:48156");
     }
     else if (nettype == cryptonote::DEVNET)
     {
-      full_addrs.insert("144.76.164.202:38856");
+      full_addrs.insert("144.76.164.202:37856");
     }
     else if (nettype == cryptonote::FAKECHAIN)
     {
     }
     else
     {
-      full_addrs.insert("116.203.196.12:22022");  // Hetzner seed node
-      full_addrs.insert("149.56.165.115:22022");  // Jason's seed node
-      full_addrs.insert("192.250.236.196:22022"); // Rangeproof Test VPSC Box
-      full_addrs.insert("144.217.243.15:22022");  // OVH(1)
-      full_addrs.insert("51.38.133.145:22022");   // OVH(2)
+      full_addrs.insert("45.76.97.12:11011"); 
+      full_addrs.insert("45.76.213.253:11011"); 
+      full_addrs.insert("149.28.24.5:11011");
+      full_addrs.insert("172.20.49.81:11011");  
+     
     }
     return full_addrs;
   }
@@ -961,7 +961,7 @@ namespace nodetool
     bool r = epee::net_utils::async_invoke_remote_command2<typename COMMAND_HANDSHAKE::response>(context_.m_connection_id, COMMAND_HANDSHAKE::ID, arg, zone.m_net_server.get_config_object(),
       [this, &pi, &ev, &hsh_result, &just_take_peerlist, &context_, &timeout](int code, typename COMMAND_HANDSHAKE::response&& rsp, p2p_connection_context& context)
     {
-      LOKI_DEFER { ev.set_value(); };
+      GYUANX_DEFER { ev.set_value(); };
 
       if(code < 0)
       {
@@ -2251,7 +2251,7 @@ namespace nodetool
       return 1;
     }
 
-#if !defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if !defined(GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
     if(has_too_many_connections(context.m_remote_address))
     {
       LOG_PRINT_CCONTEXT_L1("CONNECTION FROM " << context.m_remote_address.host_str() << " REFUSED, too many connections from the same address");

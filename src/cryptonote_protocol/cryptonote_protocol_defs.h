@@ -36,9 +36,9 @@
 #include "epee/net/net_utils_base.h"
 #include "cryptonote_basic/blobdatatype.h"
 
-#include "common/loki.h"
+#include "common/gyuanx.h"
 
-namespace service_nodes
+namespace gnodes
 {
   struct quorum_vote_t;
 };
@@ -99,7 +99,7 @@ namespace cryptonote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  LOKI_RPC_DOC_INTROSPECT
+  GYUANX_RPC_DOC_INTROSPECT
   struct serializable_blink_metadata {
     crypto::hash tx_hash;
     uint64_t height;
@@ -112,7 +112,7 @@ namespace cryptonote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  LOKI_RPC_DOC_INTROSPECT
+  GYUANX_RPC_DOC_INTROSPECT
   struct block_complete_entry
   {
     blobdata block;
@@ -309,7 +309,7 @@ namespace cryptonote
     const static int ID = BC_COMMANDS_POOL_BASE + 16;
     struct request
     {
-      std::vector<service_nodes::quorum_vote_t> votes;
+      std::vector<gnodes::quorum_vote_t> votes;
 
       KV_MAP_SERIALIZABLE
     };

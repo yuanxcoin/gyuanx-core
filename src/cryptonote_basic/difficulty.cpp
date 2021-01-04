@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -31,14 +31,14 @@
 
 #include <algorithm>
 
-#include "common/loki.h"
+#include "common/gyuanx.h"
 #include "epee/int-util.h"
 #include "crypto/hash.h"
 #include "difficulty.h"
 #include "hardfork.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "difficulty"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "difficulty"
 
 namespace cryptonote {
 
@@ -169,7 +169,7 @@ namespace cryptonote {
     static const uint64_t hf16_height = cryptonote::HardFork::get_hardcoded_hard_fork_height(nettype, cryptonote::network_version_16_pulse);
     auto result = difficulty_calc_mode::normal;
 
-    if (hf_version <= cryptonote::network_version_9_service_nodes)
+    if (hf_version <= cryptonote::network_version_9_gnodes)
     {
       result = difficulty_calc_mode::use_old_lwma;
     }
@@ -236,7 +236,7 @@ namespace cryptonote {
     harmonic_mean_D = N / sum_inverse_D;
 
     // Keep LWMA sane in case something unforeseen occurs.
-    if (static_cast<int64_t>(loki::round(LWMA)) < T / 20)
+    if (static_cast<int64_t>(gyuanx::round(LWMA)) < T / 20)
       LWMA = static_cast<double>(T / 20);
 
     nextDifficulty = harmonic_mean_D * T / LWMA * adjust;

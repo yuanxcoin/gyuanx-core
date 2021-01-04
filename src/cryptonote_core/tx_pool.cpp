@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -36,7 +36,7 @@
 #include "tx_pool.h"
 #include "cryptonote_tx_utils.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
-#include "cryptonote_core/service_node_list.h"
+#include "cryptonote_core/gnode_list.h"
 #include "cryptonote_config.h"
 #include "blockchain.h"
 #include "blockchain_db/locked_txn.h"
@@ -50,8 +50,8 @@
 #include "common/perf_timer.h"
 #include "crypto/hash.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "txpool"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "txpool"
 
 DISABLE_VS_WARNINGS(4244 4345 4503) //'boost::foreach_detail_::or_' : decorated name length exceeded, name was truncated
 
@@ -97,26 +97,26 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::have_duplicated_non_standard_tx(transaction const &tx, uint8_t hard_fork_version) const
   {
-    auto &service_node_list = m_blockchain.get_service_node_list();
+    auto &gnode_list = m_blockchain.get_gnode_list();
     if (tx.type == txtype::state_change)
     {
-      tx_extra_service_node_state_change state_change;
-      if (!get_service_node_state_change_from_tx_extra(tx.extra, state_change, hard_fork_version))
+      tx_extra_gnode_state_change state_change;
+      if (!get_gnode_state_change_from_tx_extra(tx.extra, state_change, hard_fork_version))
       {
         MERROR("Could not get service node state change from tx: " << get_transaction_hash(tx) << ", possibly corrupt tx in your blockchain, rejecting malformed state change");
         return false;
       }
 
-      crypto::public_key service_node_to_change;
-      auto const quorum_type               = service_nodes::quorum_type::obligations;
-      auto const quorum_group              = service_nodes::quorum_group::worker;
+      crypto::public_key gnode_to_change;
+      auto const quorum_type               = gnodes::quorum_type::obligations;
+      auto const quorum_group              = gnodes::quorum_group::worker;
 
       // NOTE: We can fail to resolve a public key if we are popping blocks greater than the number of quorums we store.
-      bool const can_resolve_quorum_pubkey = service_node_list.get_quorum_pubkey(quorum_type,
+      bool const can_resolve_quorum_pubkey = gnode_list.get_quorum_pubkey(quorum_type,
                                                                                  quorum_group,
                                                                                  state_change.block_height,
-                                                                                 state_change.service_node_index,
-                                                                                 service_node_to_change);
+                                                                                 state_change.gnode_index,
+                                                                                 gnode_to_change);
 
       std::vector<transaction> pool_txs;
       get_transactions(pool_txs);
@@ -125,8 +125,8 @@ namespace cryptonote
         if (pool_tx.type != txtype::state_change)
           continue;
 
-        tx_extra_service_node_state_change pool_tx_state_change;
-        if (!get_service_node_state_change_from_tx_extra(pool_tx.extra, pool_tx_state_change, hard_fork_version))
+        tx_extra_gnode_state_change pool_tx_state_change;
+        if (!get_gnode_state_change_from_tx_extra(pool_tx.extra, pool_tx_state_change, hard_fork_version))
         {
           LOG_PRINT_L1("Could not get service node state change from tx: " << get_transaction_hash(pool_tx) << ", possibly corrupt tx in the pool");
           continue;
@@ -134,18 +134,18 @@ namespace cryptonote
 
         if (hard_fork_version >= cryptonote::network_version_12_checkpointing)
         {
-          crypto::public_key service_node_to_change_in_the_pool;
-          bool same_service_node = false;
-          if (can_resolve_quorum_pubkey && service_node_list.get_quorum_pubkey(quorum_type, quorum_group, pool_tx_state_change.block_height, pool_tx_state_change.service_node_index, service_node_to_change_in_the_pool))
+          crypto::public_key gnode_to_change_in_the_pool;
+          bool same_gnode = false;
+          if (can_resolve_quorum_pubkey && gnode_list.get_quorum_pubkey(quorum_type, quorum_group, pool_tx_state_change.block_height, pool_tx_state_change.gnode_index, gnode_to_change_in_the_pool))
           {
-            same_service_node = (service_node_to_change == service_node_to_change_in_the_pool);
+            same_gnode = (gnode_to_change == gnode_to_change_in_the_pool);
           }
           else
           {
-            same_service_node = (state_change == pool_tx_state_change);
+            same_gnode = (state_change == pool_tx_state_change);
           }
 
-          if (same_service_node && pool_tx_state_change.state == state_change.state)
+          if (same_gnode && pool_tx_state_change.state == state_change.state)
             return true;
         }
         else
@@ -186,9 +186,9 @@ namespace cryptonote
       }
 
     }
-    else if (tx.type == txtype::loki_name_system)
+    else if (tx.type == txtype::gyuanx_name_system)
     {
-      tx_extra_loki_name_system data;
+      tx_extra_gyuanx_name_system data;
       if (!cryptonote::get_field_from_tx_extra(tx.extra, data))
       {
         MERROR("Could not get acquire name service from tx: " << get_transaction_hash(tx) << ", tx to add is possibly invalid, rejecting");
@@ -202,7 +202,7 @@ namespace cryptonote
         if (pool_tx.type != tx.type)
           continue;
 
-        tx_extra_loki_name_system pool_data;
+        tx_extra_gyuanx_name_system pool_data;
         if (!cryptonote::get_field_from_tx_extra(pool_tx.extra, pool_data))
         {
           LOG_PRINT_L1("Could not get acquire name service from tx: " << get_transaction_hash(tx) << ", possibly corrupt tx in the pool");
@@ -220,7 +220,7 @@ namespace cryptonote
     {
       if (tx.type != txtype::standard && tx.type != txtype::stake)
       {
-        // NOTE(loki): This is a developer error. If we come across this in production, be conservative and just reject
+        // NOTE(gyuanx): This is a developer error. If we come across this in production, be conservative and just reject
         MERROR("Unrecognised transaction type: " << tx.type << " for tx: " << get_transaction_hash(tx));
         return true;
       }
@@ -1443,15 +1443,15 @@ namespace cryptonote
     // Otherwise multiple state changes can queue up until they are applicable
     // and be applied on the node.
     uint64_t const block_height = cryptonote::get_block_height(blk);
-    auto &service_node_list = m_blockchain.get_service_node_list();
+    auto &gnode_list = m_blockchain.get_gnode_list();
     for (transaction const &pool_tx : pool_txs)
     {
-      tx_extra_service_node_state_change state_change;
-      crypto::public_key service_node_pubkey;
+      tx_extra_gnode_state_change state_change;
+      crypto::public_key gnode_pubkey;
       if (pool_tx.type == txtype::state_change &&
-          get_service_node_state_change_from_tx_extra(pool_tx.extra, state_change, blk.major_version))
+          get_gnode_state_change_from_tx_extra(pool_tx.extra, state_change, blk.major_version))
       {
-        // TODO(loki): PERF(loki): On pop_blocks we return all the TXs to the
+        // TODO(gyuanx): PERF(gyuanx): On pop_blocks we return all the TXs to the
         // pool. The greater the pop_blocks, the more txs that are queued in the
         // pool, and for every subsequent block you sync, get_transactions has
         // to allocate these transactions and we have to search every
@@ -1463,11 +1463,11 @@ namespace cryptonote
         if (state_change.block_height >= block_height) // NOTE: Can occur if we pop_blocks and old popped state changes are returned to the pool.
           continue;
 
-        if (service_node_list.get_quorum_pubkey(service_nodes::quorum_type::obligations,
-                                                service_nodes::quorum_group::worker,
+        if (gnode_list.get_quorum_pubkey(gnodes::quorum_type::obligations,
+                                                gnodes::quorum_group::worker,
                                                 state_change.block_height,
-                                                state_change.service_node_index,
-                                                service_node_pubkey))
+                                                state_change.gnode_index,
+                                                gnode_pubkey))
         {
           crypto::hash tx_hash;
           if (!get_transaction_hash(pool_tx, tx_hash))
@@ -1486,9 +1486,9 @@ namespace cryptonote
           if (meta.kept_by_block) // Do not prune transaction if kept by block (belongs to alt block, so we need incase we switch to alt-chain)
             continue;
 
-          std::vector<service_nodes::service_node_pubkey_info> service_node_array = service_node_list.get_service_node_list_state({service_node_pubkey});
-          if (service_node_array.empty() ||
-              !service_node_array[0].info->can_transition_to_state(blk.major_version, state_change.block_height, state_change.state))
+          std::vector<gnodes::gnode_pubkey_info> gnode_array = gnode_list.get_gnode_list_state({gnode_pubkey});
+          if (gnode_array.empty() ||
+              !gnode_array[0].info->can_transition_to_state(blk.major_version, state_change.block_height, state_change.state))
           {
             transaction tx;
             cryptonote::blobdata blob;
@@ -1815,11 +1815,11 @@ end:
     uint64_t best_reward = 0;
     {
       // NOTE: Calculate base line empty block reward
-      loki_block_reward_context block_reward_context = {};
+      gyuanx_block_reward_context block_reward_context = {};
       block_reward_context.height                    = height;
 
       block_reward_parts reward_parts = {};
-      if (!get_loki_block_reward(median_weight, total_weight, already_generated_coins, version, reward_parts, block_reward_context))
+      if (!get_gyuanx_block_reward(median_weight, total_weight, already_generated_coins, version, reward_parts, block_reward_context))
       {
         MERROR("Failed to get block reward for empty block");
         return false;
@@ -1856,12 +1856,12 @@ end:
       }
 
       // NOTE: Calculate the next block reward for the block producer
-      loki_block_reward_context next_block_reward_context = {};
+      gyuanx_block_reward_context next_block_reward_context = {};
       next_block_reward_context.height                    = height;
       next_block_reward_context.fee                       = raw_fee + meta.fee;
 
       block_reward_parts next_reward_parts           = {};
-      if(!get_loki_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, next_reward_parts, next_block_reward_context))
+      if(!get_gyuanx_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, next_reward_parts, next_block_reward_context))
       {
         LOG_PRINT_L2("Block reward calculation bug");
         return false;

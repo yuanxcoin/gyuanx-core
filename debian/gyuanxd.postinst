@@ -1,0 +1,28 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = configure ]; then
+    # Create _gyuanx user if it doesn't exist
+    if ! getent passwd _gyuanx >/dev/null; then
+        adduser --force-badname --system --quiet --home /var/lib/gyuanx --group --gecos "Gyuanx node" _gyuanx
+    fi
+    # Make sure the group gets created (in case _gyuanx was preexisting)
+    if ! getent group _gyuanx >/dev/null; then
+        addgroup --force-badname --system --quiet _gyuanx
+    fi
+    # Make sure the _gyuanx user is part of the _gyuanx group
+    if ! id -Gn _gyuanx | grep -qw _gyuanx; then
+        adduser --force-badname --quiet _gyuanx _gyuanx
+    fi
+
+    mkdir -p /var/log/gyuanx
+    chown _gyuanx:_gyuanx /var/log/gyuanx
+
+    mkdir -p /var/lib/gyuanx
+    su -s /bin/sh _gyuanx -c "test -O /var/lib/gyuanx &&
+        test -G /var/lib/gyuanx" || \
+        chown _gyuanx:_gyuanx /var/lib/gyuanx
+fi
+
+#DEBHELPER#

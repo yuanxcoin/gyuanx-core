@@ -32,8 +32,8 @@
 #include "wallet_errors.h"
 #include <algorithm>
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "wallet.mms"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "wallet.mms"
 #define PYBITMESSAGE_DEFAULT_API_PORT 8442
 
 using namespace std::literals;

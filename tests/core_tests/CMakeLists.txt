@@ -37,7 +37,7 @@ add_executable(core_tests
   chaingen_main.cpp
   double_spend.cpp
   integer_overflow.cpp
-  loki_tests.cpp
+  gyuanx_tests.cpp
   multisig.cpp
   rct.cpp
   ring_signature_1.cpp

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, The Loki Project
+# Copyright (c) 2018, The Gyuanx Project
 # Copyright (c) 2014-2019, The Monero Project
 #
 # All rights reserved.
@@ -37,7 +37,7 @@ target_link_libraries(blockchain_tools_common_libs INTERFACE
     extra)
 
 
-loki_add_executable(blockchain_import "loki-blockchain-import"
+gyuanx_add_executable(blockchain_import "gyuanx-blockchain-import"
   blockchain_import.cpp
   bootstrap_file.cpp
   blocksdat_file.cpp
@@ -51,7 +51,7 @@ if(ARCH_WIDTH)
   target_compile_definitions(blockchain_import PRIVATE ARCH_WIDTH=${ARCH_WIDTH})
 endif()
 
-loki_add_executable(blockchain_export "loki-blockchain-export"
+gyuanx_add_executable(blockchain_export "gyuanx-blockchain-export"
   blockchain_export.cpp
   bootstrap_file.cpp
   blocksdat_file.cpp
@@ -59,7 +59,7 @@ loki_add_executable(blockchain_export "loki-blockchain-export"
 target_link_libraries(blockchain_export PRIVATE blockchain_tools_common_libs)
 
 
-loki_add_executable(blockchain_blackball "loki-blockchain-mark-spent-outputs"
+gyuanx_add_executable(blockchain_blackball "gyuanx-blockchain-mark-spent-outputs"
   blockchain_blackball.cpp
   )
 
@@ -69,28 +69,28 @@ target_link_libraries(blockchain_blackball
     wallet)
 
 
-loki_add_executable(blockchain_usage "loki-blockchain-usage"
+gyuanx_add_executable(blockchain_usage "gyuanx-blockchain-usage"
   blockchain_usage.cpp
   )
 target_link_libraries(blockchain_usage PRIVATE blockchain_tools_common_libs)
 
-loki_add_executable(blockchain_ancestry "loki-blockchain-ancestry"
+gyuanx_add_executable(blockchain_ancestry "gyuanx-blockchain-ancestry"
   blockchain_ancestry.cpp
   )
 target_link_libraries(blockchain_ancestry PRIVATE blockchain_tools_common_libs)
 
-loki_add_executable(blockchain_depth "loki-blockchain-depth"
+gyuanx_add_executable(blockchain_depth "gyuanx-blockchain-depth"
   blockchain_depth.cpp
   )
 target_link_libraries(blockchain_depth PRIVATE blockchain_tools_common_libs)
 
-loki_add_executable(blockchain_stats "loki-blockchain-stats"
+gyuanx_add_executable(blockchain_stats "gyuanx-blockchain-stats"
   blockchain_stats.cpp
   )
 target_link_libraries(blockchain_stats PRIVATE blockchain_tools_common_libs)
 
-# TODO(loki): Blockchain pruning not supported in Loki yet
-# loki_add_executable(blockchain_prune_known_spent_data "loki-blockchain-prune-known-spent-data"
+# TODO(gyuanx): Blockchain pruning not supported in Gyuanx yet
+# gyuanx_add_executable(blockchain_prune_known_spent_data "gyuanx-blockchain-prune-known-spent-data"
 #   blockchain_prune_known_spent_data.cpp
 #   )
 # 
@@ -99,7 +99,7 @@ target_link_libraries(blockchain_stats PRIVATE blockchain_tools_common_libs)
 #     blockchain_tools_common_libs
 #     p2p)
 # 
-# loki_add_executable(blockchain_prune "loki-blockchain-prune"
+# gyuanx_add_executable(blockchain_prune "gyuanx-blockchain-prune"
 #   blockchain_prune.cpp
 #   )
 # 
@@ -109,8 +109,8 @@ target_link_libraries(blockchain_stats PRIVATE blockchain_tools_common_libs)
 #     p2p)
 
 if (TARGET sodium_vendor OR NOT SODIUM_VERSION VERSION_LESS 1.0.17)
-    loki_add_executable(sn_key_tool "loki-sn-keys" sn_key_tool.cpp)
-    target_link_libraries(sn_key_tool PRIVATE sodium lokimq filesystem)
+    gyuanx_add_executable(sn_key_tool "gyuanx-sn-keys" sn_key_tool.cpp)
+    target_link_libraries(sn_key_tool PRIVATE sodium gyuanxmq filesystem)
 else()
-    message(STATUS "Not building loki-sn-keys tool (requires libsodium >= 1.0.17)")
+    message(STATUS "Not building gyuanx-sn-keys tool (requires libsodium >= 1.0.17)")
 endif()

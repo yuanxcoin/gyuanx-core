@@ -67,7 +67,7 @@ int TransactionInfoImpl::direction() const
 
 bool TransactionInfoImpl::isServiceNodeReward() const
 {
-    return m_reward_type == reward_type::service_node;
+    return m_reward_type == reward_type::gnode;
 }
 
 bool TransactionInfoImpl::isMinerReward() const

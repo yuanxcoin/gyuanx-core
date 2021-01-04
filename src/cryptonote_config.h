@@ -73,24 +73,136 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define UPTIME_PROOF_MAX_TIME_IN_SECONDS                (UPTIME_PROOF_FREQUENCY_IN_SECONDS * 2 + UPTIME_PROOF_BUFFER_IN_SECONDS) // How long until proofs of other network service nodes are considered expired
 
 #define STORAGE_SERVER_PING_LIFETIME                    UPTIME_PROOF_FREQUENCY_IN_SECONDS
-#define LOKINET_PING_LIFETIME                           UPTIME_PROOF_FREQUENCY_IN_SECONDS
+#define GYUANXNET_PING_LIFETIME                           UPTIME_PROOF_FREQUENCY_IN_SECONDS
 
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                 100
-#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1    20000 // NOTE(loki): For testing suite, //size of block (bytes) after which reward for block calculated using block size - before first fork
+#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1    20000 // NOTE(gyuanx): For testing suite, //size of block (bytes) after which reward for block calculated using block size - before first fork
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5    300000 //size of block (bytes) after which reward for block calculated using block size - second change, from v5
 #define CRYPTONOTE_LONG_TERM_BLOCK_WEIGHT_WINDOW_SIZE   100000 // size in blocks of the long term block weight median window
 #define CRYPTONOTE_SHORT_TERM_BLOCK_WEIGHT_SURGE_FACTOR 50
 #define CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE          600
-#define CRYPTONOTE_DISPLAY_DECIMAL_POINT                9
+#define CRYPTONOTE_DISPLAY_DECIMAL_POINT                12
 
-#define FEE_PER_KB                                      ((uint64_t)2000000000) // 2 LOKI (= 2 * pow(10, 9))
+#define FEE_PER_KB                                      ((uint64_t)2000000000000) // 2 GYUANX (= 2 * pow(10, 9))
 #define FEE_PER_BYTE                                    ((uint64_t)215)   // Fallback used in wallet if no fee is available from RPC
 #define FEE_PER_BYTE_V12                                ((uint64_t)17200) // Higher fee (and fallback) in v12 (only, v13 switches back)
-#define FEE_PER_OUTPUT                                  ((uint64_t)20000000) // 0.02 LOKI per tx output (in addition to the per-byte fee), starting in v13
+#define FEE_PER_OUTPUT                                  ((uint64_t)20000000) // 0.02 GYUANX per tx output (in addition to the per-byte fee), starting in v13
 #define DYNAMIC_FEE_PER_KB_BASE_BLOCK_REWARD            ((uint64_t)10000000000000) // 10 * pow(10,12)
 #define DYNAMIC_FEE_PER_KB_BASE_FEE_V5                  ((uint64_t)400000000)
 #define DYNAMIC_FEE_REFERENCE_TRANSACTION_WEIGHT        ((uint64_t)3000)
 #define DYNAMIC_FEE_REFERENCE_TRANSACTION_WEIGHT_V12    ((uint64_t)240000) // Only v12 (v13 switches back)
+
+// GYUANX
+#pragma once
+#include <cstdint>
+
+constexpr uint64_t COIN                       = (uint64_t)1000000000; // 1 GYUANX = pow(10, 9)
+constexpr uint64_t MONEY_SUPPLY               = ((uint64_t)(-1)); // MONEY_SUPPLY - total number coins to be generated
+constexpr uint64_t EMISSION_LINEAR_BASE       = ((uint64_t)(1) << 58);
+constexpr uint64_t EMISSION_SUPPLY_MULTIPLIER = 19;
+constexpr uint64_t EMISSION_SUPPLY_DIVISOR    = 10;
+constexpr uint64_t EMISSION_DIVISOR           = 2000000;
+
+// HF15 money supply parameters:
+constexpr uint64_t BLOCK_REWARD_HF15      = 25 * COIN;
+constexpr uint64_t MINER_REWARD_HF15      = BLOCK_REWARD_HF15 * 24 / 100; // Only until HF16
+constexpr uint64_t SN_REWARD_HF15         = BLOCK_REWARD_HF15 * 66 / 100;
+constexpr uint64_t FOUNDATION_REWARD_HF15 = BLOCK_REWARD_HF15 * 10 / 100;
+
+// HF16+ money supply parameters: same as HF15 except the miner fee goes away and is redirected to
+// LF to be used exclusively for Gyuanx Chainflip liquidity seeding and incentives.  See
+// https://github.com/yuanxcoin/gyuanx-improvement-proposals/issues/24 for more details.  This ends
+// after 6 months.
+constexpr uint64_t BLOCK_REWARD_HF16        = BLOCK_REWARD_HF15;
+constexpr uint64_t CHAINFLIP_LIQUIDITY_HF16 = BLOCK_REWARD_HF15 * 24 / 100;
+
+// HF17: at most 6 months after HF16.  This is tentative and will likely be replaced before the
+// actual HF with a new reward schedule including Chainflip rewards, but as per the LRC linked
+// above, the liquidity funds end after 6 months.  That means that until HF17 is finalized, this is
+// the fallback if we hit the 6-months-after-HF16 point:
+constexpr uint64_t BLOCK_REWARD_HF17      = 18'333'333'333;
+constexpr uint64_t FOUNDATION_REWARD_HF17 =  1'833'333'333;
+
+static_assert(MINER_REWARD_HF15        + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
+static_assert(CHAINFLIP_LIQUIDITY_HF16 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF16);
+static_assert(                           SN_REWARD_HF15 + FOUNDATION_REWARD_HF17 == BLOCK_REWARD_HF17);
+
+// -------------------------------------------------------------------------------------------------
+//
+// Blink
+//
+// -------------------------------------------------------------------------------------------------
+// Blink fees: in total the sender must pay (MINER_TX_FEE_PERCENT + BURN_TX_FEE_PERCENT) * [minimum tx fee] + BLINK_BURN_FIXED,
+// and the miner including the tx includes MINER_TX_FEE_PERCENT * [minimum tx fee]; the rest must be left unclaimed.
+constexpr uint64_t BLINK_MINER_TX_FEE_PERCENT = 100; // The blink miner tx fee (as a percentage of the minimum tx fee)
+constexpr uint64_t BLINK_BURN_FIXED           = 0;  // A fixed amount (in atomic currency units) that the sender must burn
+constexpr uint64_t BLINK_BURN_TX_FEE_PERCENT  = 150; // A percentage of the minimum miner tx fee that the sender must burn.  (Adds to BLINK_BURN_FIXED)
+
+// FIXME: can remove this post-fork 15; the burned amount only matters for mempool acceptance and
+// blink quorum signing, but isn't part of the blockchain concensus rules (so we don't actually have
+// to keep it around in the code for syncing the chain).
+constexpr uint64_t BLINK_BURN_TX_FEE_PERCENT_OLD = 400; // A percentage of the minimum miner tx fee that the sender must burn.  (Adds to BLINK_BURN_FIXED)
+
+static_assert(BLINK_MINER_TX_FEE_PERCENT >= 100, "blink miner fee cannot be smaller than the base tx fee");
+static_assert(BLINK_BURN_FIXED >= 0, "fixed blink burn amount cannot be negative");
+static_assert(BLINK_BURN_TX_FEE_PERCENT >= 0, "blink burn tx percent cannot be negative");
+
+// -------------------------------------------------------------------------------------------------
+//
+// LNS
+//
+// -------------------------------------------------------------------------------------------------
+namespace lns
+{
+enum struct mapping_type : uint16_t
+{
+  session = 0,
+  wallet = 1,
+  gyuanxnet = 2, // the type value stored in the database; counts as 1-year when used in a buy tx.
+  gyuanxnet_2years,
+  gyuanxnet_5years,
+  gyuanxnet_10years,
+  _count,
+  update_record_internal,
+};
+
+constexpr bool is_gyuanxnet_type(mapping_type t) { return t >= mapping_type::gyuanxnet && t <= mapping_type::gyuanxnet_10years; }
+
+// How many days we add per "year" of LNS gyuanxnet registration.  We slightly extend this to the 368
+// days per registration "year" to allow for some blockchain time drift + leap years.
+constexpr uint64_t REGISTRATION_YEAR_DAYS = 368;
+
+constexpr uint64_t burn_needed(uint8_t hf_version, mapping_type type)
+{
+  uint64_t result = 0;
+
+  // The base amount for session/wallet/gyuanxnet-1year:
+  const uint64_t basic_fee = (
+      hf_version >= 16 ? 15*COIN :  // cryptonote::network_version_16_pulse -- but don't want to add cryptonote_config.h include
+      20*COIN                       // cryptonote::network_version_15_lns
+  );
+  switch (type)
+  {
+    case mapping_type::update_record_internal:
+      result = 0;
+      break;
+
+    case mapping_type::gyuanxnet: /* FALLTHRU */
+    case mapping_type::session: /* FALLTHRU */
+    case mapping_type::wallet: /* FALLTHRU */
+    default:
+      result = basic_fee;
+      break;
+
+    case mapping_type::gyuanxnet_2years: result = 2 * basic_fee; break;
+    case mapping_type::gyuanxnet_5years: result = 4 * basic_fee; break;
+    case mapping_type::gyuanxnet_10years: result = 6 * basic_fee; break;
+  }
+  return result;
+}
+};
+
+
 
 constexpr auto TARGET_BLOCK_TIME           = 2min;
 constexpr uint64_t DIFFICULTY_WINDOW       = 59;
@@ -171,7 +283,7 @@ constexpr uint64_t BLOCKS_EXPECTED_IN_YEARS(int years) { return BLOCKS_EXPECTED_
 #define P2P_SUPPORT_FLAG_FLUFFY_BLOCKS                  0x01
 #define P2P_SUPPORT_FLAGS                               P2P_SUPPORT_FLAG_FLUFFY_BLOCKS
 
-#define CRYPTONOTE_NAME                         "loki"
+#define CRYPTONOTE_NAME                         "gyuanx"
 #define CRYPTONOTE_POOLDATA_FILENAME            "poolstate.bin"
 #define CRYPTONOTE_BLOCKCHAINDATA_FILENAME      "data.mdb"
 #define CRYPTONOTE_BLOCKCHAINDATA_LOCK_FILENAME "lock.mdb"
@@ -232,21 +344,21 @@ namespace config
   inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 114;
   inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 115;
   inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 116;
-  inline constexpr uint16_t P2P_DEFAULT_PORT = 22022;
-  inline constexpr uint16_t RPC_DEFAULT_PORT = 22023;
-  inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 22024;
-  inline constexpr uint16_t QNET_DEFAULT_PORT = 22025;
+  inline constexpr uint16_t P2P_DEFAULT_PORT = 11011;
+  inline constexpr uint16_t RPC_DEFAULT_PORT = 11013;
+  inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 11014;
+  inline constexpr uint16_t QNET_DEFAULT_PORT = 11015;
   inline constexpr boost::uuids::uuid const NETWORK_ID = { {
-        0x46 ,0x61, 0x72, 0x62 ,0x61, 0x75, 0x74, 0x69, 0x2a, 0x4c, 0x61, 0x75, 0x66, 0x65, 0x79
+        0x49, 0x65, 0x70, 0x65 ,0x64, 0x75, 0x72, 0x44, 0x2a, 0x4c, 0x61, 0x75, 0x58, 0x65, 0x79
     } }; // Bender's nightmare
-  inline constexpr std::string_view GENESIS_TX = "021e01ff000380808d93f5d771027c4fd4553bc9886f1f49e3f76d945bf71e8632a94e6c177b19cbc780e7e6bdb48080b4ccd4dfc60302c8b9f6461f58ef3f2107e577c7425d06af584a1c7482bf19060e84059c98b4c3808088fccdbcc32302732b53b0b0db706fcc3087074fb4b786da5ab72b2065699f9453448b0db27f892101ed71f2ce3fc70d7b2036f8a4e4b3fb75c66c12184b55a908e7d1a1d6995566cf00"sv;
-  inline constexpr uint32_t GENESIS_NONCE = 1022201;
+  inline constexpr std::string_view GENESIS_TX = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1"sv;
+  inline constexpr uint32_t GENESIS_NONCE = 70;
 
   inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = BLOCKS_EXPECTED_IN_DAYS(7);
   inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
   {
-    "LCFxT37LAogDn1jLQKf4y7aAqfi21DjovX9qyijaLYQSdrxY1U5VGcnMJMjWrD9RhjeK5Lym67wZ73uh9AujXLQ1RKmXEyL"sv, // hardfork v7-10
-    "LDBEN6Ut4NkMwyaXWZ7kBEAx8X64o6YtDhLXUP26uLHyYT4nFmcaPU2Z2fauqrhTLh4Qfr61pUUZVLaTHqAdycETKM1STrz"sv, // hardfork v11
+    "L7VQJ4982Kd68T1ydjSmn26YGBu2C8vDoATChCkSSqCmQpYajU2RGM83FtQu2gpuGH5krzHfWvsNnY8iWJt9UdF156eCbRB"sv, // hardfork v7-10
+    "L7VQJ4982Kd68T1ydjSmn26YGBu2C8vDoATChCkSSqCmQpYajU2RGM83FtQu2gpuGH5krzHfWvsNnY8iWJt9UdF156eCbRB"sv, // hardfork v11
   };
 
   // Hash domain separators
@@ -270,21 +382,21 @@ namespace config
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 156;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 157;
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 158;
-    inline constexpr uint16_t P2P_DEFAULT_PORT = 38156;
-    inline constexpr uint16_t RPC_DEFAULT_PORT = 38157;
-    inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 38158;
-    inline constexpr uint16_t QNET_DEFAULT_PORT = 38159;
+    inline constexpr uint16_t P2P_DEFAULT_PORT = 48156;
+    inline constexpr uint16_t RPC_DEFAULT_PORT = 48157;
+    inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 48158;
+    inline constexpr uint16_t QNET_DEFAULT_PORT = 48159;
     inline constexpr boost::uuids::uuid const NETWORK_ID = { {
-        0x5f, 0x3a, 0x78, 0x65, 0xe1, 0x6f, 0xca, 0xb8, 0x02, 0xa1, 0xdc, 0x17, 0x61, 0x64, 0x15, 0xbe,
+        0x70, 0x56, 0x78, 0x44, 0x59, 0x72, 0x58, 0xb8, 0x02, 0xa1, 0x44, 0x59, 0x61, 0x64, 0x15, 0xbe,
       } }; // Bender's daydream
     inline constexpr std::string_view GENESIS_TX = "03011e001e01ff00018080c9db97f4fb270259b546996f69aa71abe4238995f41d780ab1abebcac9f00e808f147bdb9e3228420112573af8c309b69a1a646f41b5212ba7d9c4590bf86e04f36c486467cfef9d3d72000000000000000000000000000000000000000000000000000000000000000000"sv;
-    inline constexpr uint32_t GENESIS_NONCE = 10001;
+    inline constexpr uint32_t GENESIS_NONCE = 70;
 
     inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = 1000;
     inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
     {
-      "T6SUprTYE5rQpep9iQFxyPcKVd91DFR1fQ1Qsyqp5eYLiFc8XuYd3reRE71qDL8c3DXioUbDEpDFdaUpetnL37NS1R3rzoKxi"sv, // hardfork v7-9
-      "T6TzkJb5EiASaCkcH7idBEi1HSrpSQJE1Zq3aL65ojBMPZvqHNYPTL56i3dncGVNEYCG5QG5zrBmRiVwcg6b1cRM1SRNqbp44"sv, // hardfork v10
+      "T6SDQWrj1G2LRT9gaekQDxKQk9Snfi7UrhtFGCVcbjJm72L5CJ4yE4BUBvWAFCeQbbXkpa82w1SPyW14i2Y54uev2cAa7YbGQ"sv, // hardfork v7-9
+      "T6SDQWrj1G2LRT9gaekQDxKQk9Snfi7UrhtFGCVcbjJm72L5CJ4yE4BUBvWAFCeQbbXkpa82w1SPyW14i2Y54uev2cAa7YbGQ"sv, // hardfork v10
     };
 
   }
@@ -296,15 +408,15 @@ namespace config
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 3930; // ~ dV1 .. dV3
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 4442; // ~ dVA .. dVC
     inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 5850; // ~dVa .. dVc
-    inline constexpr uint16_t P2P_DEFAULT_PORT = 38856;
-    inline constexpr uint16_t RPC_DEFAULT_PORT = 38857;
-    inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 38858;
-    inline constexpr uint16_t QNET_DEFAULT_PORT = 38859;
+    inline constexpr uint16_t P2P_DEFAULT_PORT = 37856;
+    inline constexpr uint16_t RPC_DEFAULT_PORT = 37857;
+    inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 37858;
+    inline constexpr uint16_t QNET_DEFAULT_PORT = 37859;
     inline constexpr boost::uuids::uuid const NETWORK_ID = { {
-        0xa9, 0xf7, 0x5c, 0x7d, 0x55, 0x17, 0xcb, 0x6b, 0x5a, 0xf4, 0x63, 0x79, 0x7a, 0x57, 0xab, 0xd3
+        0xa9, 0xf7, 0x55, 0x72, 0x55, 0x17, 0x55, 0x48, 0x50, 0xf4, 0x63, 0x78, 0x7a, 0x57, 0xab, 0xd3
       } };
     inline constexpr std::string_view GENESIS_TX = "04011e1e01ff00018080c9db97f4fb2702fa27e905f604faa4eb084ee675faca77b0cfea9adec1526da33cae5e286f31624201dae05bf3fa1662b7fd373c92426763d921cf3745e10ee43edb510f690c656f247200000000000000000000000000000000000000000000000000000000000000000000"sv;
-    inline constexpr uint32_t GENESIS_NONCE = 12345;
+    inline constexpr uint32_t GENESIS_NONCE = 70;
 
     inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = BLOCKS_EXPECTED_IN_DAYS(7);
     inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
@@ -321,10 +433,10 @@ namespace cryptonote
   {
     network_version_7 = 7,
     network_version_8,
-    network_version_9_service_nodes, // Proof Of Stake w/ Service Nodes
+    network_version_9_gnodes, // Proof Of Stake w/ Service Nodes
     network_version_10_bulletproofs, // Bulletproofs, Service Node Grace Registration Period, Batched Governance
     network_version_11_infinite_staking, // Infinite Staking, CN-Turtle
-    network_version_12_checkpointing, // Checkpointing, Relaxed Deregistration, RandomXL, Loki Storage Server
+    network_version_12_checkpointing, // Checkpointing, Relaxed Deregistration, RandomXL, Gyuanx Storage Server
     network_version_13_enforce_checkpoints,
     network_version_14_blink,
     network_version_15_lns,

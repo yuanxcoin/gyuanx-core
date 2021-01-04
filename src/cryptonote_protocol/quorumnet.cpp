@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The Loki Project
+// Copyright (c) 2019-2020, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -28,8 +28,8 @@
 
 #include "quorumnet.h"
 #include "cryptonote_core/cryptonote_core.h"
-#include "cryptonote_core/service_node_voting.h"
-#include "cryptonote_core/service_node_rules.h"
+#include "cryptonote_core/gnode_voting.h"
+#include "cryptonote_core/gnode_rules.h"
 #include "cryptonote_core/tx_blink.h"
 #include "cryptonote_core/tx_pool.h"
 #include "cryptonote_core/pulse.h"
@@ -37,27 +37,27 @@
 #include "cryptonote_config.h"
 #include "common/random.h"
 
-#include <lokimq/lokimq.h>
-#include <lokimq/hex.h>
+#include <gyuanxmq/gyuanxmq.h>
+#include <gyuanxmq/hex.h>
 #include <shared_mutex>
 #include <iterator>
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "qnet"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "qnet"
 
 namespace quorumnet {
 
 namespace {
 
-using namespace service_nodes;
-using namespace lokimq;
+using namespace gnodes;
+using namespace gyuanxmq;
 
 using blink_tx = cryptonote::blink_tx;
 
 constexpr auto NUM_BLINK_QUORUMS = tools::enum_count<blink_tx::subquorum>;
 static_assert(std::is_same<const uint8_t, decltype(NUM_BLINK_QUORUMS)>(), "unexpected underlying blink quorum count type");
 
-using quorum_array = std::array<std::shared_ptr<const service_nodes::quorum>, NUM_BLINK_QUORUMS>;
+using quorum_array = std::array<std::shared_ptr<const gnodes::quorum>, NUM_BLINK_QUORUMS>;
 
 using pending_signature = std::tuple<bool, uint8_t, int, crypto::signature>; // approval, subquorum, subquorum position, signature
 
@@ -69,7 +69,7 @@ using pending_signature_set = std::unordered_set<pending_signature, pending_sign
 
 struct QnetState {
     cryptonote::core &core;
-    LokiMQ &lmq{core.get_lmq()};
+    GyuanxMQ &lmq{core.get_lmq()};
 
     // Track submitted blink txes here; unlike the blinks stored in the mempool we store these ones
     // more liberally to track submitted blinks, even if unsigned/unacceptable, while the mempool
@@ -161,7 +161,7 @@ peer_prepare_relay_to_quorum_subset(cryptonote::core &core, It quorum_begin, It 
 
     std::vector<std::tuple<std::string, std::string, decltype(proof_info{}.version)>> remotes; // {x25519 pubkey, connect string, version}
     remotes.reserve(candidates.size());
-    core.get_service_node_list().for_each_service_node_info_and_proof(candidates.begin(), candidates.end(),
+    core.get_gnode_list().for_each_gnode_info_and_proof(candidates.begin(), candidates.end(),
         [&remotes](const auto &pubkey, const auto &info, const auto &proof) {
             if (!info.is_active()) {
                 MTRACE("Not include inactive node " << pubkey);
@@ -262,7 +262,7 @@ public:
     : lmq{qnet.lmq} {
 
         const auto& keys = qnet.core.get_service_keys();
-        assert(qnet.core.service_node());
+        assert(qnet.core.gnode());
         const auto &my_pubkey = keys.pub;
         exclude.insert(keys.pub);
 
@@ -291,7 +291,7 @@ public:
         }
 
         // Lookup the x25519 and ZMQ connection string for all peers
-        qnet.core.get_service_node_list().for_each_service_node_info_and_proof(need_remotes.begin(), need_remotes.end(),
+        qnet.core.get_gnode_list().for_each_gnode_info_and_proof(need_remotes.begin(), need_remotes.end(),
             [this](const auto &pubkey, const auto &info, const auto &proof) {
               if (info.is_active() && proof.pubkey_x25519 && proof.quorumnet_port && proof.public_ip)
                 remotes.emplace(pubkey, std::make_pair(proof.pubkey_x25519,
@@ -317,7 +317,7 @@ public:
     }
 
 private:
-    LokiMQ &lmq;
+    GyuanxMQ &lmq;
 
     /// Looks up a pubkey in known remotes and adds it to `peers`.  If strong, it is added with an
     /// address, otherwise it is added with an empty address.  If the element already exists, it
@@ -484,14 +484,14 @@ quorum_vote_t deserialize_vote(std::string_view v) {
     return vote;
 }
 
-void relay_obligation_votes(void *obj, const std::vector<service_nodes::quorum_vote_t> &votes) {
+void relay_obligation_votes(void *obj, const std::vector<gnodes::quorum_vote_t> &votes) {
     auto &qnet = QnetState::from(obj);
 
     const auto& my_keys = qnet.core.get_service_keys();
-    assert(qnet.core.service_node());
+    assert(qnet.core.gnode());
 
     MDEBUG("Starting relay of " << votes.size() << " votes");
-    std::vector<service_nodes::quorum_vote_t> relayed_votes;
+    std::vector<gnodes::quorum_vote_t> relayed_votes;
     relayed_votes.reserve(votes.size());
     for (auto &vote : votes) {
         if (vote.type != quorum_type::obligations) {
@@ -499,17 +499,17 @@ void relay_obligation_votes(void *obj, const std::vector<service_nodes::quorum_v
             continue;
         }
 
-        auto quorum = qnet.core.get_service_node_list().get_quorum(vote.type, vote.block_height);
+        auto quorum = qnet.core.get_gnode_list().get_quorum(vote.type, vote.block_height);
         if (!quorum) {
             MWARNING("Unable to relay vote: no " << vote.type << " quorum available for height " << vote.block_height);
             continue;
         }
 
         auto &quorum_voters = quorum->validators;
-        if (quorum_voters.size() < service_nodes::min_votes_for_quorum_type(vote.type)) {
+        if (quorum_voters.size() < gnodes::min_votes_for_quorum_type(vote.type)) {
             MWARNING("Invalid vote relay: " << vote.type << " quorum @ height " << vote.block_height <<
                     " does not have enough validators (" << quorum_voters.size() << ") to reach the minimum required votes ("
-                    << service_nodes::min_votes_for_quorum_type(vote.type) << ")");
+                    << gnodes::min_votes_for_quorum_type(vote.type) << ")");
             continue;
         }
 
@@ -523,7 +523,7 @@ void relay_obligation_votes(void *obj, const std::vector<service_nodes::quorum_v
         relayed_votes.push_back(vote);
     }
     MDEBUG("Relayed " << relayed_votes.size() << " votes");
-    qnet.core.set_service_node_votes_relayed(relayed_votes);
+    qnet.core.set_gnode_votes_relayed(relayed_votes);
 }
 
 void handle_obligation_vote(Message& m, QnetState& qnet) {
@@ -549,7 +549,7 @@ void handle_obligation_vote(Message& m, QnetState& qnet) {
         }
 
         cryptonote::vote_verification_context vvc{};
-        qnet.core.add_service_node_vote(vote, vvc);
+        qnet.core.add_gnode_vote(vote, vvc);
         if (vvc.m_verification_failed)
         {
             MWARNING("Vote verification failed; ignoring vote");
@@ -580,7 +580,7 @@ std::enable_if_t<std::is_integral<I>::value, I> get_or(bt_dict &d, const std::st
 // input quorum checksum matches the computed checksum for the quorums (if provided), otherwise sets
 // the given output checksum (if provided) to the calculated value.  Throws std::runtime_error on
 // failure.
-quorum_array get_blink_quorums(uint64_t blink_height, const service_node_list &snl, const uint64_t *input_checksum, uint64_t *output_checksum = nullptr) {
+quorum_array get_blink_quorums(uint64_t blink_height, const gnode_list &snl, const uint64_t *input_checksum, uint64_t *output_checksum = nullptr) {
     // We currently just use two quorums, Q and Q' in the whitepaper, but this code is designed to
     // work fine with more quorums (but don't use a single subquorum; that could only be secure or
     // reliable but not both).
@@ -750,7 +750,7 @@ void process_blink_signatures(QnetState &qnet, const std::shared_ptr<blink_tx> &
 
     peer_info::exclude_set relay_exclude;
     if (!received_from.empty()) {
-        auto pubkey = qnet.core.get_service_node_list().get_pubkey_from_x25519(x25519_from_string(received_from));
+        auto pubkey = qnet.core.get_gnode_list().get_pubkey_from_x25519(x25519_from_string(received_from));
         if (pubkey)
             relay_exclude.insert(std::move(pubkey));
     }
@@ -817,7 +817,7 @@ void process_blink_signatures(QnetState &qnet, const std::shared_ptr<blink_tx> &
 ///     "#" - precomputed tx hash.  This much match the actual hash of the transaction (the blink
 ///           submission will fail immediately if it does not).
 ///
-void handle_blink(lokimq::Message& m, QnetState& qnet) {
+void handle_blink(gyuanxmq::Message& m, QnetState& qnet) {
     // TODO: if someone sends an invalid tx (i.e. one that doesn't get to the distribution stage)
     // then put a timeout on that IP during which new submissions from them are dropped for a short
     // time.
@@ -829,8 +829,8 @@ void handle_blink(lokimq::Message& m, QnetState& qnet) {
 
     MDEBUG("Received a blink tx from " << (m.conn.sn() ? "SN " : "non-SN ") << to_hex(m.conn.pubkey()));
 
-    assert(qnet.core.service_node());
-    if (!qnet.core.service_node())
+    assert(qnet.core.gnode());
+    if (!qnet.core.gnode())
         return;
     const auto& keys = qnet.core.get_service_keys();
 
@@ -935,7 +935,7 @@ void handle_blink(lokimq::Message& m, QnetState& qnet) {
     quorum_array blink_quorums;
     uint64_t checksum = get_int<uint64_t>(data.at("q"));
     try {
-        blink_quorums = get_blink_quorums(blink_height, qnet.core.get_service_node_list(), &checksum);
+        blink_quorums = get_blink_quorums(blink_height, qnet.core.get_gnode_list(), &checksum);
     } catch (const std::runtime_error &e) {
         MINFO("Rejecting blink tx: " << e.what());
         if (tag)
@@ -944,7 +944,7 @@ void handle_blink(lokimq::Message& m, QnetState& qnet) {
     }
 
     peer_info pinfo{qnet, quorum_type::blink, blink_quorums.begin(), blink_quorums.end(), true /*opportunistic*/,
-        {qnet.core.get_service_node_list().get_pubkey_from_x25519(x25519_from_string(m.conn.pubkey()))} // exclude the peer that just sent it to us
+        {qnet.core.get_gnode_list().get_pubkey_from_x25519(x25519_from_string(m.conn.pubkey()))} // exclude the peer that just sent it to us
         };
 
     if (pinfo.my_position_count > 0)
@@ -1178,7 +1178,7 @@ void handle_blink_signature(Message& m, QnetState& qnet) {
         return convert_string_view_bytes_to_signature(l.consume_string_view());
     });
 
-    auto blink_quorums = get_blink_quorums(blink_height, qnet.core.get_service_node_list(), &checksum); // throws if bad quorum or checksum mismatch
+    auto blink_quorums = get_blink_quorums(blink_height, qnet.core.get_gnode_list(), &checksum); // throws if bad quorum or checksum mismatch
 
     uint64_t reply_tag = 0;
     ConnectionID reply_conn;
@@ -1289,7 +1289,7 @@ std::future<std::pair<cryptonote::blink_result, std::string>> send_blink(crypton
     try {
         uint64_t height = core.get_current_blockchain_height();
         uint64_t checksum;
-        auto quorums = get_blink_quorums(height, core.get_service_node_list(), nullptr, &checksum);
+        auto quorums = get_blink_quorums(height, core.get_gnode_list(), nullptr, &checksum);
 
         std::string data = bt_serialize<bt_dict>({
             {"!", blink_tag},
@@ -1449,7 +1449,7 @@ const std::string PULSE_CMD_SEND_RANDOM_VALUE_HASH = PULSE_CMD_CATEGORY + "." + 
 const std::string PULSE_CMD_SEND_RANDOM_VALUE      = PULSE_CMD_CATEGORY + "." + PULSE_CMD_RANDOM_VALUE;
 const std::string PULSE_CMD_SEND_SIGNED_BLOCK      = PULSE_CMD_CATEGORY + "." + PULSE_CMD_SIGNED_BLOCK;
 
-void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer)
+void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, gnodes::quorum const &quorum, bool block_producer)
 {
   peer_info::exclude_set relay_exclude;
 
@@ -1525,7 +1525,7 @@ void pulse_relay_message_to_quorum(void *self, pulse::message const &msg, servic
   auto &qnet = QnetState::from(self);
   if (block_producer)
   {
-    service_nodes::quorum const *quorum_ptr = &quorum;
+    gnodes::quorum const *quorum_ptr = &quorum;
     auto destinations = peer_prepare_relay_to_quorum_subset(qnet.core, &quorum_ptr, &quorum_ptr + 1, 4 /*num_peers*/);
     peer_relay_to_prepared_destinations(qnet.core, destinations, command, bt_serialize(data));
   }
@@ -1693,7 +1693,7 @@ namespace {
 void setup_endpoints(cryptonote::core& core, void* obj) {
     auto& lmq = core.get_lmq();
 
-    if (core.service_node()) {
+    if (core.gnode()) {
         if (!obj)
             throw std::logic_error{"qnet initialization failure: quorumnet_new must be called for service node operation"};
         auto& qnet = QnetState::from(obj);

@@ -35,7 +35,7 @@
 #include "serialization/binary_utils.h"
 #include "serialization/variant.h"
 #include "crypto/crypto.h"
-#include "loki_economy.h"
+#include "cryptonote_config.h"
 #include "cryptonote_basic.h"
 
 
@@ -61,7 +61,7 @@ constexpr uint8_t
   TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK        = 0x77,
   TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE  = 0x78,
   TX_EXTRA_TAG_BURN                       = 0x79,
-  TX_EXTRA_TAG_LOKI_NAME_SYSTEM           = 0x7A,
+  TX_EXTRA_TAG_GYUANX_NAME_SYSTEM           = 0x7A,
 
   TX_EXTRA_MYSTERIOUS_MINERGATE_TAG       = 0xDE;
 
@@ -158,7 +158,7 @@ namespace std {
   };
 }
 
-namespace service_nodes {
+namespace gnodes {
   enum class new_state : uint16_t
   {
     deregister,
@@ -278,33 +278,33 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
-  struct tx_extra_service_node_winner
+  struct tx_extra_gnode_winner
   {
-    crypto::public_key m_service_node_key;
+    crypto::public_key m_gnode_key;
 
     BEGIN_SERIALIZE()
-      FIELD(m_service_node_key)
+      FIELD(m_gnode_key)
     END_SERIALIZE()
   };
 
-  struct tx_extra_service_node_pubkey
+  struct tx_extra_gnode_pubkey
   {
-    crypto::public_key m_service_node_key;
+    crypto::public_key m_gnode_key;
 
     BEGIN_SERIALIZE()
-      FIELD(m_service_node_key)
+      FIELD(m_gnode_key)
     END_SERIALIZE()
   };
 
 
-  struct tx_extra_service_node_register
+  struct tx_extra_gnode_register
   {
     std::vector<crypto::public_key> m_public_spend_keys;
     std::vector<crypto::public_key> m_public_view_keys;
     uint64_t m_portions_for_operator;
     std::vector<uint64_t> m_portions;
     uint64_t m_expiration_timestamp;
-    crypto::signature m_service_node_signature;
+    crypto::signature m_gnode_signature;
 
     BEGIN_SERIALIZE()
       FIELD(m_public_spend_keys)
@@ -312,11 +312,11 @@ namespace cryptonote
       FIELD(m_portions_for_operator)
       FIELD(m_portions)
       FIELD(m_expiration_timestamp)
-      FIELD(m_service_node_signature)
+      FIELD(m_gnode_signature)
     END_SERIALIZE()
   };
 
-  struct tx_extra_service_node_contributor
+  struct tx_extra_gnode_contributor
   {
     crypto::public_key m_spend_public_key;
     crypto::public_key m_view_public_key;
@@ -327,7 +327,7 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
-  struct tx_extra_service_node_state_change
+  struct tx_extra_gnode_state_change
   {
     struct vote
     {
@@ -342,62 +342,62 @@ namespace cryptonote
       END_SERIALIZE()
     };
 
-    service_nodes::new_state state;
+    gnodes::new_state state;
     uint64_t                 block_height;
-    uint32_t                 service_node_index;
+    uint32_t                 gnode_index;
     std::vector<vote>        votes;
 
-    tx_extra_service_node_state_change() = default;
+    tx_extra_gnode_state_change() = default;
 
     template <typename... VotesArgs>
-    tx_extra_service_node_state_change(service_nodes::new_state state, uint64_t block_height, uint32_t service_node_index, VotesArgs &&...votes)
-        : state{state}, block_height{block_height}, service_node_index{service_node_index}, votes{std::forward<VotesArgs>(votes)...} {}
+    tx_extra_gnode_state_change(gnodes::new_state state, uint64_t block_height, uint32_t gnode_index, VotesArgs &&...votes)
+        : state{state}, block_height{block_height}, gnode_index{gnode_index}, votes{std::forward<VotesArgs>(votes)...} {}
 
     // Compares equal if this represents a state change of the same SN (does *not* require equality of stored votes)
-    bool operator==(const tx_extra_service_node_state_change &sc) const {
-      return state == sc.state && block_height == sc.block_height && service_node_index == sc.service_node_index;
+    bool operator==(const tx_extra_gnode_state_change &sc) const {
+      return state == sc.state && block_height == sc.block_height && gnode_index == sc.gnode_index;
     }
 
     BEGIN_SERIALIZE()
-      ENUM_FIELD(state, state < service_nodes::new_state::_count);
+      ENUM_FIELD(state, state < gnodes::new_state::_count);
       VARINT_FIELD(block_height);
-      VARINT_FIELD(service_node_index);
+      VARINT_FIELD(gnode_index);
       FIELD(votes);
     END_SERIALIZE()
   };
 
   // Pre-Heimdall service node deregistration data; it doesn't carry the state change (it is only
   // used for deregistrations), and is stored slightly less efficiently in the tx extra data.
-  struct tx_extra_service_node_deregister_old
+  struct tx_extra_gnode_deregister_old
   {
 #pragma pack(push, 4)
     struct vote { // Not simply using state_change::vote because this gets blob serialized for v11 backwards compat
       vote() = default;
-      vote(const tx_extra_service_node_state_change::vote &v) : signature{v.signature}, validator_index{v.validator_index} {}
+      vote(const tx_extra_gnode_state_change::vote &v) : signature{v.signature}, validator_index{v.validator_index} {}
       crypto::signature signature;
       uint32_t          validator_index;
 
-      operator tx_extra_service_node_state_change::vote() const { return {signature, validator_index}; }
+      operator tx_extra_gnode_state_change::vote() const { return {signature, validator_index}; }
     };
 #pragma pack(pop)
     static_assert(sizeof(vote) == sizeof(crypto::signature) + sizeof(uint32_t), "deregister_old tx extra vote size is not packed");
 
     uint64_t          block_height;
-    uint32_t          service_node_index;
+    uint32_t          gnode_index;
     std::vector<vote> votes;
 
-    tx_extra_service_node_deregister_old() = default;
-    tx_extra_service_node_deregister_old(const tx_extra_service_node_state_change &state_change)
+    tx_extra_gnode_deregister_old() = default;
+    tx_extra_gnode_deregister_old(const tx_extra_gnode_state_change &state_change)
       : block_height{state_change.block_height},
-        service_node_index{state_change.service_node_index},
+        gnode_index{state_change.gnode_index},
         votes{state_change.votes.begin(), state_change.votes.end()}
     {
-      assert(state_change.state == service_nodes::new_state::deregister);
+      assert(state_change.state == gnodes::new_state::deregister);
     }
 
     BEGIN_SERIALIZE()
       FIELD(block_height)
-      FIELD(service_node_index)
+      FIELD(gnode_index)
       FIELD(votes)
     END_SERIALIZE()
   };
@@ -452,7 +452,7 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
-  struct tx_extra_loki_name_system
+  struct tx_extra_gyuanx_name_system
   {
     uint8_t                 version = 0;
     lns::mapping_type       type;
@@ -471,13 +471,13 @@ namespace cryptonote
     bool is_updating() const { return field_is_set(lns::extra_field::signature) && field_any_set(lns::extra_field::updatable_fields); }
     // True if this is buying a new LNS record
     bool is_buying()   const { return (fields == lns::extra_field::buy || fields == lns::extra_field::buy_no_backup); }
-    // True if this is renewing an existing LNS: has no fields at all, is a renewal registration (i.e. lokinet),
+    // True if this is renewing an existing LNS: has no fields at all, is a renewal registration (i.e. gyuanxnet),
     // and has a non-null txid set (which should point to the most recent registration or update).
-    bool is_renewing() const { return fields == lns::extra_field::none && prev_txid && is_lokinet_type(type); }
+    bool is_renewing() const { return fields == lns::extra_field::none && prev_txid && is_gyuanxnet_type(type); }
 
-    static tx_extra_loki_name_system make_buy(lns::generic_owner const &owner, lns::generic_owner const *backup_owner, lns::mapping_type type, crypto::hash const &name_hash, std::string const &encrypted_value, crypto::hash const &prev_txid)
+    static tx_extra_gyuanx_name_system make_buy(lns::generic_owner const &owner, lns::generic_owner const *backup_owner, lns::mapping_type type, crypto::hash const &name_hash, std::string const &encrypted_value, crypto::hash const &prev_txid)
     {
-      tx_extra_loki_name_system result = {};
+      tx_extra_gyuanx_name_system result = {};
       result.fields                    = lns::extra_field::buy;
       result.owner                     = owner;
 
@@ -493,11 +493,11 @@ namespace cryptonote
       return result;
     }
 
-    static tx_extra_loki_name_system make_renew(lns::mapping_type type, crypto::hash const &name_hash, crypto::hash const &prev_txid)
+    static tx_extra_gyuanx_name_system make_renew(lns::mapping_type type, crypto::hash const &name_hash, crypto::hash const &prev_txid)
     {
-      assert(is_lokinet_type(type) && prev_txid);
+      assert(is_gyuanxnet_type(type) && prev_txid);
 
-      tx_extra_loki_name_system result{};
+      tx_extra_gyuanx_name_system result{};
       result.fields = lns::extra_field::none;
       result.type = type;
       result.name_hash = name_hash;
@@ -505,7 +505,7 @@ namespace cryptonote
       return result;
     }
 
-    static tx_extra_loki_name_system make_update(lns::generic_signature const &signature,
+    static tx_extra_gyuanx_name_system make_update(lns::generic_signature const &signature,
                                                  lns::mapping_type type,
                                                  crypto::hash const &name_hash,
                                                  std::string_view encrypted_value,
@@ -513,7 +513,7 @@ namespace cryptonote
                                                  lns::generic_owner const *backup_owner,
                                                  crypto::hash const &prev_txid)
     {
-      tx_extra_loki_name_system result = {};
+      tx_extra_gyuanx_name_system result = {};
       result.signature                 = signature;
       result.type                      = type;
       result.name_hash                 = name_hash;
@@ -564,16 +564,16 @@ namespace cryptonote
   // appropriate.
   using tx_extra_field = std::variant<
       tx_extra_pub_key,
-      tx_extra_service_node_winner,
+      tx_extra_gnode_winner,
       tx_extra_additional_pub_keys,
       tx_extra_nonce,
-      tx_extra_service_node_register,
-      tx_extra_service_node_deregister_old,
-      tx_extra_service_node_state_change,
-      tx_extra_service_node_contributor,
-      tx_extra_service_node_pubkey,
+      tx_extra_gnode_register,
+      tx_extra_gnode_deregister_old,
+      tx_extra_gnode_state_change,
+      tx_extra_gnode_contributor,
+      tx_extra_gnode_pubkey,
       tx_extra_tx_secret_key,
-      tx_extra_loki_name_system,
+      tx_extra_gyuanx_name_system,
       tx_extra_tx_key_image_proofs,
       tx_extra_tx_key_image_unlock,
       tx_extra_burn,
@@ -583,7 +583,7 @@ namespace cryptonote
       >;
 }
 
-BLOB_SERIALIZER(cryptonote::tx_extra_service_node_deregister_old::vote);
+BLOB_SERIALIZER(cryptonote::tx_extra_gnode_deregister_old::vote);
 BLOB_SERIALIZER(cryptonote::tx_extra_tx_key_image_proofs::proof);
 
 BINARY_VARIANT_TAG(cryptonote::tx_extra_padding,                     cryptonote::TX_EXTRA_TAG_PADDING);
@@ -592,14 +592,14 @@ BINARY_VARIANT_TAG(cryptonote::tx_extra_nonce,                       cryptonote:
 BINARY_VARIANT_TAG(cryptonote::tx_extra_merge_mining_tag,            cryptonote::TX_EXTRA_MERGE_MINING_TAG);
 BINARY_VARIANT_TAG(cryptonote::tx_extra_additional_pub_keys,         cryptonote::TX_EXTRA_TAG_ADDITIONAL_PUBKEYS);
 BINARY_VARIANT_TAG(cryptonote::tx_extra_mysterious_minergate,        cryptonote::TX_EXTRA_MYSTERIOUS_MINERGATE_TAG);
-BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_register,       cryptonote::TX_EXTRA_TAG_SERVICE_NODE_REGISTER);
-BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_state_change,   cryptonote::TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE);
-BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_deregister_old, cryptonote::TX_EXTRA_TAG_SERVICE_NODE_DEREG_OLD);
-BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_contributor,    cryptonote::TX_EXTRA_TAG_SERVICE_NODE_CONTRIBUTOR);
-BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_winner,         cryptonote::TX_EXTRA_TAG_SERVICE_NODE_WINNER);
-BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_pubkey,         cryptonote::TX_EXTRA_TAG_SERVICE_NODE_PUBKEY);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_gnode_register,       cryptonote::TX_EXTRA_TAG_SERVICE_NODE_REGISTER);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_gnode_state_change,   cryptonote::TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_gnode_deregister_old, cryptonote::TX_EXTRA_TAG_SERVICE_NODE_DEREG_OLD);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_gnode_contributor,    cryptonote::TX_EXTRA_TAG_SERVICE_NODE_CONTRIBUTOR);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_gnode_winner,         cryptonote::TX_EXTRA_TAG_SERVICE_NODE_WINNER);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_gnode_pubkey,         cryptonote::TX_EXTRA_TAG_SERVICE_NODE_PUBKEY);
 BINARY_VARIANT_TAG(cryptonote::tx_extra_tx_secret_key,               cryptonote::TX_EXTRA_TAG_TX_SECRET_KEY);
 BINARY_VARIANT_TAG(cryptonote::tx_extra_tx_key_image_proofs,         cryptonote::TX_EXTRA_TAG_TX_KEY_IMAGE_PROOFS);
 BINARY_VARIANT_TAG(cryptonote::tx_extra_tx_key_image_unlock,         cryptonote::TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK);
 BINARY_VARIANT_TAG(cryptonote::tx_extra_burn,                        cryptonote::TX_EXTRA_TAG_BURN);
-BINARY_VARIANT_TAG(cryptonote::tx_extra_loki_name_system,            cryptonote::TX_EXTRA_TAG_LOKI_NAME_SYSTEM);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_gyuanx_name_system,            cryptonote::TX_EXTRA_TAG_GYUANX_NAME_SYSTEM);

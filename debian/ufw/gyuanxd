@@ -1,0 +1,4 @@
+[gyuanxd]
+title=Gyuanx network daemon
+description=Gyuanx daemon for running a local node or service node
+ports=22022,22025,38156,38159/tcp

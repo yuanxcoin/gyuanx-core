@@ -1,5 +1,5 @@
 // Copyright (c) 2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 // 
 // All rights reserved.
 // 
@@ -35,8 +35,8 @@
 #include "ringdb.h"
 #include "cryptonote_config.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "wallet.ringdb"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "wallet.ringdb"
 
 #define V1TAG ((uint64_t)798237759845202)
 
@@ -224,7 +224,7 @@ ringdb::ringdb(fs::path fn_, const std::string &genesis) : filename_{std::move(f
 
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, ("rings-" + genesis).c_str(), MDB_CREATE, &dbi_rings);
@@ -266,7 +266,7 @@ bool ringdb::add_rings(const crypto::chacha_key &chacha_key, const cryptonote::t
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size");
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   for (const auto &in: tx.vin)
@@ -297,7 +297,7 @@ bool ringdb::remove_rings(const crypto::chacha_key &chacha_key, const std::vecto
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size");
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   for (const crypto::key_image &key_image: key_images)
@@ -351,7 +351,7 @@ bool ringdb::get_ring(const crypto::chacha_key &chacha_key, const crypto::key_im
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   MDB_val key, data;
@@ -394,7 +394,7 @@ bool ringdb::set_ring(const crypto::chacha_key &chacha_key, const crypto::key_im
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   store_relative_ring(txn, dbi_rings, key_image, relative ? outs : cryptonote::absolute_output_offsets_to_relative(outs), chacha_key);
@@ -419,7 +419,7 @@ bool ringdb::blackball_worker(const std::vector<std::pair<uint64_t, uint64_t>> &
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to set env map size: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   THROW_WALLET_EXCEPTION_IF(dbr, tools::error::wallet_internal_error, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_cursor_open(txn, dbi_blackballs, &cursor);

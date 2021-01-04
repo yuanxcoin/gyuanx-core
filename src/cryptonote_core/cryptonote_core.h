@@ -37,16 +37,16 @@
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include <lokimq/lokimq.h>
+#include <gyuanxmq/gyuanxmq.h>
 
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
 #include "epee/storages/portable_storage_template_helper.h"
 #include "common/command_line.h"
 #include "tx_pool.h"
 #include "blockchain.h"
-#include "service_node_voting.h"
-#include "service_node_list.h"
-#include "service_node_quorum_cop.h"
+#include "gnode_voting.h"
+#include "gnode_list.h"
+#include "gnode_quorum_cop.h"
 #include "pulse.h"
 #include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
@@ -56,7 +56,7 @@
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
 
-#include "common/loki_integration_test_hooks.h"
+#include "common/gyuanx_integration_test_hooks.h"
 namespace cryptonote
 {
    struct test_options {
@@ -77,7 +77,7 @@ namespace cryptonote
   // cryptonote_protocol/quorumnet.cpp's quorumnet::init_core_callbacks().  This indirection is here
   // so that core doesn't need to link against cryptonote_protocol (plus everything it depends on).
 
-  // Initializes quorumnet state (for service nodes only).  This is called after the LokiMQ object
+  // Initializes quorumnet state (for service nodes only).  This is called after the GyuanxMQ object
   // has been set up but before it starts listening.  Return an opaque pointer (void *) that gets
   // passed into all the other callbacks below so that the callbacks can recast it into whatever it
   // should be.
@@ -86,17 +86,17 @@ namespace cryptonote
   // just service nodes.  The second argument should be the `quorumnet_new` return value if a
   // service node, nullptr if not.
   using quorumnet_init_proc = void (core &core, void *self);
-  // Destroys the quorumnet state; called on shutdown *after* the LokiMQ object has been destroyed.
+  // Destroys the quorumnet state; called on shutdown *after* the GyuanxMQ object has been destroyed.
   // Should destroy the state object and set the pointer reference to nullptr.
   using quorumnet_delete_proc = void (void *&self);
   // Relays votes via quorumnet.
-  using quorumnet_relay_obligation_votes_proc = void (void *self, const std::vector<service_nodes::quorum_vote_t> &votes);
+  using quorumnet_relay_obligation_votes_proc = void (void *self, const std::vector<gnodes::quorum_vote_t> &votes);
   // Sends a blink tx to the current blink quorum, returns a future that can be used to wait for the
   // result.
   using quorumnet_send_blink_proc = std::future<std::pair<blink_result, std::string>> (core& core, const std::string& tx_blob);
 
   // Relay a Pulse message to members specified in the quorum excluding the originating message owner.
-  using quorumnet_pulse_relay_message_to_quorum_proc = void (void *, pulse::message const &msg, service_nodes::quorum const &quorum, bool block_producer);
+  using quorumnet_pulse_relay_message_to_quorum_proc = void (void *, pulse::message const &msg, gnodes::quorum const &quorum, bool block_producer);
 
   // Function pointer that we invoke when the mempool has changed; this gets set during
   // rpc/http_server.cpp's init_options().
@@ -339,7 +339,7 @@ namespace cryptonote
       */
      bool check_incoming_block_size(const blobdata& block_blob) const;
 
-     /// Called (from service_node_quorum_cop) to tell quorumnet that it need to refresh its list of
+     /// Called (from gnode_quorum_cop) to tell quorumnet that it need to refresh its list of
      /// active SNs.
      void update_lmq_sns();
 
@@ -428,7 +428,7 @@ namespace cryptonote
      /**
       * @brief performs safe shutdown steps for core and core components
       *
-      * Uninitializes the miner instance, lokimq, transaction pool, and Blockchain
+      * Uninitializes the miner instance, gyuanxmq, transaction pool, and Blockchain
       */
      void deinit();
 
@@ -673,18 +673,18 @@ namespace cryptonote
      const Blockchain& get_blockchain_storage()const{return m_blockchain_storage;}
 
      /// @brief return a reference to the service node list
-     const service_nodes::service_node_list &get_service_node_list() const { return m_service_node_list; }
+     const gnodes::gnode_list &get_gnode_list() const { return m_gnode_list; }
      /// @brief return a reference to the service node list
-     service_nodes::service_node_list &get_service_node_list() { return m_service_node_list; }
+     gnodes::gnode_list &get_gnode_list() { return m_gnode_list; }
 
      /// @brief return a reference to the tx pool
      const tx_memory_pool &get_pool() const { return m_mempool; }
      /// @brief return a reference to the service node list
      tx_memory_pool &get_pool() { return m_mempool; }
 
-     /// Returns a reference to the LokiMQ object.  Must not be called before init(), and should not
-     /// be used for any lmq communication until after start_lokimq() has been called.
-     lokimq::LokiMQ& get_lmq() { return *m_lmq; }
+     /// Returns a reference to the GyuanxMQ object.  Must not be called before init(), and should not
+     /// be used for any lmq communication until after start_gyuanxmq() has been called.
+     gyuanxmq::GyuanxMQ& get_lmq() { return *m_lmq; }
 
      /**
       * @copydoc miner::on_synchronized
@@ -873,21 +873,21 @@ namespace cryptonote
       * @param include_old whether to look in the old quorum states (does nothing unless running with --store-full-quorum-history)
       * @return Null shared ptr if quorum has not been determined yet or is not defined for height
       */
-     std::shared_ptr<const service_nodes::quorum> get_quorum(service_nodes::quorum_type type, uint64_t height, bool include_old = false, std::vector<std::shared_ptr<const service_nodes::quorum>> *alt_states = nullptr) const;
+     std::shared_ptr<const gnodes::quorum> get_quorum(gnodes::quorum_type type, uint64_t height, bool include_old = false, std::vector<std::shared_ptr<const gnodes::quorum>> *alt_states = nullptr) const;
 
      /**
       * @brief Get a non owning reference to the list of blacklisted key images
       */
-     const std::vector<service_nodes::key_image_blacklist_entry> &get_service_node_blacklisted_key_images() const;
+     const std::vector<gnodes::key_image_blacklist_entry> &get_gnode_blacklisted_key_images() const;
 
      /**
       * @brief get a snapshot of the service node list state at the time of the call.
       *
-      * @param service_node_pubkeys pubkeys to search, if empty this indicates get all the pubkeys
+      * @param gnode_pubkeys pubkeys to search, if empty this indicates get all the pubkeys
       *
       * @return all the service nodes that can be matched from pubkeys in param
       */
-     std::vector<service_nodes::service_node_pubkey_info> get_service_node_list_state(const std::vector<crypto::public_key>& service_node_pubkeys = {}) const;
+     std::vector<gnodes::gnode_pubkey_info> get_gnode_list_state(const std::vector<crypto::public_key>& gnode_pubkeys = {}) const;
 
      /**
        * @brief get whether `pubkey` is known as a service node.
@@ -898,7 +898,7 @@ namespace cryptonote
        *
        * @return whether `pubkey` is known as a (optionally active) service node
        */
-     bool is_service_node(const crypto::public_key& pubkey, bool require_active) const;
+     bool is_gnode(const crypto::public_key& pubkey, bool require_active) const;
 
      /**
       * @brief Add a service node vote
@@ -907,9 +907,9 @@ namespace cryptonote
 
       * @return
       */
-     bool add_service_node_vote(const service_nodes::quorum_vote_t& vote, vote_verification_context &vvc);
+     bool add_gnode_vote(const gnodes::quorum_vote_t& vote, vote_verification_context &vvc);
 
-     using service_keys = service_nodes::service_node_keys;
+     using service_keys = gnodes::gnode_keys;
 
      /**
       * @brief Returns true if this node is operating in service node mode.
@@ -917,7 +917,7 @@ namespace cryptonote
       * Note that this does not mean the node is currently a registered service node, only that it
       * is capable of performing service node duties if a registration hits the network.
       */
-     bool service_node() const { return m_service_node; }
+     bool gnode() const { return m_gnode; }
 
      /**
       * @brief Get the service keys for this node.
@@ -977,13 +977,13 @@ namespace cryptonote
       *
       * @return true, necessary for binding this function to a periodic invoker
       */
-     bool relay_service_node_votes();
+     bool relay_gnode_votes();
 
      /**
       * @brief sets the given votes to relayed; generally called automatically when
-      * relay_service_node_votes() is called.
+      * relay_gnode_votes() is called.
       */
-     void set_service_node_votes_relayed(const std::vector<service_nodes::quorum_vote_t> &votes);
+     void set_gnode_votes_relayed(const std::vector<gnodes::quorum_vote_t> &votes);
 
      bool has_block_weights(uint64_t height, uint64_t nblocks) const;
 
@@ -1002,8 +1002,8 @@ namespace cryptonote
       */
      bool set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value);
 
-     /// Time point at which the storage server and lokinet last pinged us
-     std::atomic<time_t> m_last_storage_server_ping, m_last_lokinet_ping;
+     /// Time point at which the storage server and gyuanxnet last pinged us
+     std::atomic<time_t> m_last_storage_server_ping, m_last_gyuanxnet_ping;
      std::atomic<uint16_t> m_storage_lmq_port;
 
      uint32_t sn_public_ip() const { return m_sn_public_ip; }
@@ -1018,7 +1018,7 @@ namespace cryptonote
      bool relay_txpool_transactions();
 
      /**
-      * @brief returns the lokid config directory
+      * @brief returns the gyuanxd config directory
       */
      const fs::path& get_config_directory() const { return m_config_folder; }
 
@@ -1123,38 +1123,38 @@ namespace cryptonote
       * Checks the given x25519 pubkey against the configured access lists and, if allowed, returns
       * the access level; otherwise returns `denied`.
       */
-     lokimq::AuthLevel lmq_check_access(const crypto::x25519_public_key& pubkey) const;
+     gyuanxmq::AuthLevel lmq_check_access(const crypto::x25519_public_key& pubkey) const;
 
      /**
-      * @brief Initializes LokiMQ object, called during init().
+      * @brief Initializes GyuanxMQ object, called during init().
       *
       * Does not start it: this gets called to initialize it, then it gets configured with endpoints
-      * and listening addresses, then finally a call to `start_lokimq()` should happen to actually
+      * and listening addresses, then finally a call to `start_gyuanxmq()` should happen to actually
       * start it.
       */
-     void init_lokimq(const boost::program_options::variables_map& vm);
+     void init_gyuanxmq(const boost::program_options::variables_map& vm);
 
  public:
      /**
-      * @brief Starts LokiMQ listening.
+      * @brief Starts GyuanxMQ listening.
       *
-      * Called after all LokiMQ initialization is done.
+      * Called after all GyuanxMQ initialization is done.
       */
-     void start_lokimq();
+     void start_gyuanxmq();
 
      /**
       * Returns whether to allow the connection and, if so, at what authentication level.
       */
-     lokimq::AuthLevel lmq_allow(std::string_view ip, std::string_view x25519_pubkey, lokimq::AuthLevel default_auth);
+     gyuanxmq::AuthLevel lmq_allow(std::string_view ip, std::string_view x25519_pubkey, gyuanxmq::AuthLevel default_auth);
 
      /**
       * @brief Internal use only!
       *
-      * This returns a mutable reference to the internal auth level map that LokiMQ uses, for
+      * This returns a mutable reference to the internal auth level map that GyuanxMQ uses, for
       * internal use only.
       */
-     std::unordered_map<crypto::x25519_public_key, lokimq::AuthLevel>& _lmq_auth_level_map() { return m_lmq_auth; }
-     lokimq::TaggedThreadID const &pulse_thread_id() const { return *m_pulse_thread_id; }
+     std::unordered_map<crypto::x25519_public_key, gyuanxmq::AuthLevel>& _lmq_auth_level_map() { return m_lmq_auth; }
+     gyuanxmq::TaggedThreadID const &pulse_thread_id() const { return *m_pulse_thread_id; }
 
  private:
 
@@ -1177,8 +1177,8 @@ namespace cryptonote
      tx_memory_pool m_mempool; //!< transaction pool instance
      Blockchain m_blockchain_storage; //!< Blockchain instance
 
-     service_nodes::service_node_list m_service_node_list;
-     service_nodes::quorum_cop        m_quorum_cop;
+     gnodes::gnode_list m_gnode_list;
+     gnodes::quorum_cop        m_quorum_cop;
 
      i_cryptonote_protocol* m_pprotocol; //!< cryptonote protocol instance
      cryptonote_protocol_stub m_protocol_stub; //!< cryptonote protocol stub instance
@@ -1198,7 +1198,7 @@ namespace cryptonote
      tools::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{UPTIME_PROOF_TIMER_SECONDS}}; //!< interval for checking our own uptime proof
      tools::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
      tools::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
-     tools::periodic_task m_service_node_vote_relayer{2min, false};
+     tools::periodic_task m_gnode_vote_relayer{2min, false};
      tools::periodic_task m_sn_proof_cleanup_interval{1h, false};
      tools::periodic_task m_systemd_notify_interval{10s};
 
@@ -1213,16 +1213,16 @@ namespace cryptonote
 
      std::atomic_flag m_checkpoints_updating; //!< set if checkpoints are currently updating to avoid multiple threads attempting to update at once
 
-     bool m_service_node; // True if running in service node mode
-     service_keys m_service_keys; // Always set, even for non-SN mode -- these can be used for public lokimq rpc
+     bool m_gnode; // True if running in service node mode
+     service_keys m_service_keys; // Always set, even for non-SN mode -- these can be used for public gyuanxmq rpc
 
-     /// Service Node's public IP and storage server port (http and lokimq)
+     /// Service Node's public IP and storage server port (http and gyuanxmq)
      uint32_t m_sn_public_ip;
      uint16_t m_storage_port;
      uint16_t m_quorumnet_port;
 
-     /// LokiMQ main object.  Gets created during init().
-     std::unique_ptr<lokimq::LokiMQ> m_lmq;
+     /// GyuanxMQ main object.  Gets created during init().
+     std::unique_ptr<gyuanxmq::GyuanxMQ> m_lmq;
 
      // Internal opaque data object managed by cryptonote_protocol/quorumnet.cpp.  void pointer to
      // avoid linking issues (protocol does not link against core).
@@ -1230,7 +1230,7 @@ namespace cryptonote
 
      /// Stores x25519 -> access level for LMQ authentication.
      /// Not to be modified after the LMQ listener starts.
-     std::unordered_map<crypto::x25519_public_key, lokimq::AuthLevel> m_lmq_auth;
+     std::unordered_map<crypto::x25519_public_key, gyuanxmq::AuthLevel> m_lmq_auth;
 
      size_t block_sync_size;
 
@@ -1250,7 +1250,7 @@ namespace cryptonote
        uint64_t height = 0, emissions = 0, fees = 0, burnt = 0;
      } m_coinbase_cache;
 
-     std::optional<lokimq::TaggedThreadID> m_pulse_thread_id;
+     std::optional<gyuanxmq::TaggedThreadID> m_pulse_thread_id;
    };
 }
 

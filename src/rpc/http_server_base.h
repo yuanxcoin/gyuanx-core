@@ -78,7 +78,7 @@ namespace cryptonote::rpc {
     // An optional required login for this HTTP RPC interface
     std::optional<tools::login> m_login;
     // Cached string we send for the Server header
-    std::string m_server_header = "Loki RPC HTTP/"s + LOKI_VERSION_STR;
+    std::string m_server_header = "Gyuanx RPC HTTP/"s + GYUANX_VERSION_STR;
     // Access-Control-Allow-Origin header values; if one of these match the incoming Origin header
     // we return it in the ACAO header; otherwise (or if this is empty) we omit the header entirely.
     std::unordered_set<std::string> m_cors;

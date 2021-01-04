@@ -1,10 +1,10 @@
-loki (8.1.4-2~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.4-2~ubuntu1804) bionic; urgency=medium
 
   * Rediff patches
 
  -- Jason Rhinelander <jason@imaginary.ca>  Fri, 27 Nov 2020 13:35:14 -0400
 
-loki (8.1.4-1~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.4-1~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
   * Fix rpc wallet default bind ip
@@ -27,22 +27,22 @@ loki (8.1.4-1~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Fri, 20 Nov 2020 00:04:19 -0400
 
-loki (8.1.3-2~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.3-2~ubuntu1804) bionic; urgency=medium
 
   * Rediff patches & fix drone conflicts
   * Print CI machine at beginning of build
-  * Fix rpc commands invoked via `lokid COMMAND`
-  * Misc fixes to `lokid status` output
+  * Fix rpc commands invoked via `gyuanxd COMMAND`
+  * Misc fixes to `gyuanxd status` output
   * Check before trying to create directory
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 12 Nov 2020 17:12:16 -0400
 
-loki (8.1.3-1~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.3-1~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
   * Remove uptime proof workaround (patch is in 8.1.2)
   * Rediff patches
-  * update required lokimq version
+  * update required gyuanxmq version
   * Remove staging repo for building debs
   * Fix key image import error
   * Fix key image import error
@@ -96,14 +96,14 @@ loki (8.1.3-1~ubuntu1804) bionic; urgency=medium
   * Merge arm/sim libs and collect headers in ios deps package
   * Allow vector cli options to have defaults
   * Overhaul http rpc cli options
-  * Run lokid test under gdb
+  * Run gyuanxd test under gdb
   * Fix segfault in rpc shutdown
   * Add tx fee estimate to wallet api
   * Bump version
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 11 Nov 2020 18:46:30 -0400
 
-loki (8.1.2-1~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.2-1~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
   * Windows build: do a generic build
@@ -130,21 +130,21 @@ loki (8.1.2-1~ubuntu1804) bionic; urgency=medium
   * Also check quorumnet_port, and show IP/ports in message
   * Add wallet rpc endpoint to record a known name
   * 8.1.2 version bump
-  * Update lokimq to 1.2.1
+  * Update gyuanxmq to 1.2.1
   * 8.1.2 release
   * macos: switch to libuv for uSockets loop
   * Don't start refresh until we have a wallet
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 20 Oct 2020 21:56:56 -0300
 
-loki (8.1.1-2~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.1-2~ubuntu1804) bionic; urgency=medium
 
   * update lib version
   * Backport PR 1326 to debs
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 18 Oct 2020 19:53:27 -0300
 
-loki (8.1.1-1~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.1-1~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
   * Disable readline in static build
@@ -197,7 +197,7 @@ loki (8.1.1-1~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 12 Oct 2020 04:21:25 -0300
 
-loki (8.1.0-2~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.0-2~ubuntu1804) bionic; urgency=medium
 
   * Remove -dev suffix for stable branch
   * Fix unneeded/unsolvable bionic dependency
@@ -206,7 +206,7 @@ loki (8.1.0-2~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Fri, 02 Oct 2020 12:46:40 -0300
 
-loki (8.1.0-1~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.0-1~ubuntu1804) bionic; urgency=medium
 
   [ Sean ]
   * CMake needs curl on ubuntu to compile
@@ -244,7 +244,7 @@ loki (8.1.0-1~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 01 Oct 2020 20:48:09 -0300
 
-loki (8.1.0~pre1-1~ubuntu1804) bionic; urgency=medium
+gyuanx (8.1.0~pre1-1~ubuntu1804) bionic; urgency=medium
 
   [ Doyle ]
   * HF16: Set min storage server version to 2.0.7
@@ -254,7 +254,7 @@ loki (8.1.0~pre1-1~ubuntu1804) bionic; urgency=medium
   * Fix config file parsing to recognize hidden options (#1293)
 
   [ Doyle ]
-  * HF16: Set min lokinet version to 0.8.0
+  * HF16: Set min gyuanxnet version to 0.8.0
   * Blink: Remove deprecated bool blink in wallet RPC interface (#1294)
 
   [ Jason Rhinelander ]
@@ -262,7 +262,7 @@ loki (8.1.0~pre1-1~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 30 Sep 2020 22:55:16 -0300
 
-loki (8.0.1-2~ubuntu1804) bionic; urgency=medium
+gyuanx (8.0.1-2~ubuntu1804) bionic; urgency=medium
 
   [ Doyle ]
   * rescan_diffic: Simplify params, update cli arg in blockchain_import
@@ -276,7 +276,7 @@ loki (8.0.1-2~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 30 Sep 2020 12:48:48 -0300
 
-loki (8.0.1-1~ubuntu1804) bionic; urgency=medium
+gyuanx (8.0.1-1~ubuntu1804) bionic; urgency=medium
 
   New dev branch build.
 
@@ -291,7 +291,7 @@ loki (8.0.1-1~ubuntu1804) bionic; urgency=medium
   * s/blockswap/chainflip/ in HF constants
   * Remove defunct rpc_connections_count from get_info rpc
   * Fix warning conditions
-  * Rewrite `lokid status` message to remove mining info
+  * Rewrite `gyuanxd status` message to remove mining info
   * Make admin-only get_info fields optional
   * Only set bootstrap info if admin
   * Fix drone build name
@@ -320,7 +320,7 @@ loki (8.0.1-1~ubuntu1804) bionic; urgency=medium
 
   [ Doyle ]
   * Pulse: Account for dust in portions payout >= HF16
-  * Pulse: Restore the +1 atomic loki in validate_miner_tx
+  * Pulse: Restore the +1 atomic gyuanx in validate_miner_tx
   * Pulse: Compared allocated reward with unpenalized reward
 
   [ Jason Rhinelander ]
@@ -330,8 +330,8 @@ loki (8.0.1-1~ubuntu1804) bionic; urgency=medium
   * Drop patch forbidding bundled miniupnpc
   * Don't build i386 on arm64 :)
   * Disable i386/arm for bionic
-  * Add loki-sn-keys and multisig generator to deb packages
-  * Fix loki-blockchain-import missing qnet callback init (#1285)
+  * Add gyuanx-sn-keys and multisig generator to deb packages
+  * Fix gyuanx-blockchain-import missing qnet callback init (#1285)
   * Fix JSON serialization of pulse block data (#1286)
   * LMQ: get config directory from core instead of arg parsing (#1284)
 
@@ -354,10 +354,10 @@ loki (8.0.1-1~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 29 Sep 2020 20:35:43 -0300
 
-loki (8.0.0-2~ubuntu1804) bionic; urgency=medium
+gyuanx (8.0.0-2~ubuntu1804) bionic; urgency=medium
 
   [ Jason Rhinelander ]
-  * First stab at debs for loki8
+  * First stab at debs for gyuanx8
   * Add equivs
   * Refresh patches
   * Update control
@@ -368,7 +368,7 @@ loki (8.0.0-2~ubuntu1804) bionic; urgency=medium
   * Fix rpc lib updates
   * Remove fake daemonizer target
   * chmod +x ci-upload.sh
-  * Fix loki-wallet-cli Suggests package name
+  * Fix gyuanx-wallet-cli Suggests package name
   * Drop bionic arm64 build
   * Don't prepend /usr/lib/ccache
   * Fix derived monero pubkey assertion (#1272)
@@ -401,14 +401,14 @@ loki (8.0.0-2~ubuntu1804) bionic; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Fri, 25 Sep 2020 22:47:07 -0300
 
-loki (8.0.0-1) unstable; urgency=medium
+gyuanx (8.0.0-1) unstable; urgency=medium
 
   * `dev` snapshot build.
   * (8.0.0 are pre-releases; 8.1.0 is the first stable release).
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 22 Sep 2020 13:06:29 -0300
 
-loki (7.1.10-1) unstable; urgency=medium
+gyuanx (7.1.10-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * remove applied patches
@@ -418,7 +418,7 @@ loki (7.1.10-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 13 Jul 2020 13:14:30 -0300
 
-loki (7.1.10-1) unstable; urgency=medium
+gyuanx (7.1.10-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Fix signed-unsigned warning
@@ -437,7 +437,7 @@ loki (7.1.10-1) unstable; urgency=medium
   * LNS: avoid segfault during destruction in unit_tests
   * Add another missing boost::placeholders
   * Add missing deps to freebsd one-liner
-  * Update LokiMQ with bsd build fix
+  * Update GyuanxMQ with bsd build fix
 
   [ Noel O'Donnell ]
   * Define _WANT_SEMUN for FreeBSD to ensure `union semun` is defined
@@ -454,19 +454,19 @@ loki (7.1.10-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 13 Jul 2020 00:39:09 -0300
 
-loki (7.1.9-2) unstable; urgency=medium
+gyuanx (7.1.9-2) unstable; urgency=medium
 
   * Fix AES compilation mode (to fix CN-pico syncing)
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 09 Jul 2020 23:01:19 -0300
 
-loki (7.1.9-1.1) unstable; urgency=medium
+gyuanx (7.1.9-1.1) unstable; urgency=medium
 
   * Rebuild for newer deps.
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 07 Jun 2020 11:41:20 -0300
 
-loki (7.1.9-1) unstable; urgency=medium
+gyuanx (7.1.9-1) unstable; urgency=medium
 
   * Add grace to required difficulty - fix 526484
   * 7.1.9 hot fix with block 526484 sync fix
@@ -474,7 +474,7 @@ loki (7.1.9-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 05 May 2020 14:39:16 -0300
 
-loki (7.1.8-1) unstable; urgency=medium
+gyuanx (7.1.8-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * drop already-applied long poll patch
@@ -488,7 +488,7 @@ loki (7.1.8-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 03 May 2020 22:41:04 -0300
 
-loki (7.1.7-1) unstable; urgency=medium
+gyuanx (7.1.7-1) unstable; urgency=medium
 
   [ Doyle ]
   * Handle long poll shutdown properly (#1136)
@@ -501,44 +501,44 @@ loki (7.1.7-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 28 Apr 2020 23:28:54 -0300
 
-loki (7.1.6-2) unstable; urgency=medium
+gyuanx (7.1.6-2) unstable; urgency=medium
 
   * Fix unbound dependency - debian sid libunbound-dev package has an
     undeclared dependency on nettle-dev
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 22 Apr 2020 13:48:18 -0300
 
-loki (7.1.6-2) unstable; urgency=medium
+gyuanx (7.1.6-2) unstable; urgency=medium
 
   * Handle long poll shutdown properly (#1136)
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 22 Apr 2020 12:23:37 -0300
 
-loki (7.1.6-1) unstable; urgency=medium
+gyuanx (7.1.6-1) unstable; urgency=medium
 
   [ Doyle ]
-  * Update LokiMQ to 1.1.2 (#1134)
+  * Update GyuanxMQ to 1.1.2 (#1134)
   * Bump version 7.1 patch to 6 (#1135)
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 22 Apr 2020 00:51:01 -0300
 
-loki (7.1.5-2) unstable; urgency=medium
+gyuanx (7.1.5-2) unstable; urgency=medium
 
-  * Rebuild for lokimq 1.1.2 update
+  * Rebuild for gyuanxmq 1.1.2 update
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 21 Apr 2020 17:19:14 -0300
 
-loki (7.1.5-1.1) unstable; urgency=medium
+gyuanx (7.1.5-1.1) unstable; urgency=medium
 
   * Fix unbound dependency - debian sid libunbound-dev package has an
     undeclared dependency on nettle-dev
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 20 Apr 2020 11:45:48 -0300
 
-loki (7.1.5-1) unstable; urgency=medium
+gyuanx (7.1.5-1) unstable; urgency=medium
 
   [ Doyle ]
-  * Update LokiMQ to v1.1.1 (#1128)
+  * Update GyuanxMQ to v1.1.1 (#1128)
 
   [ cryptonote.social ]
   * fix segfault when exiting cli wallet due to running long poll thread (#1127)
@@ -550,14 +550,14 @@ loki (7.1.5-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 20 Apr 2020 00:37:37 -0300
 
-loki (7.1.4-2) unstable; urgency=medium
+gyuanx (7.1.4-2) unstable; urgency=medium
 
   * Rebuilding against 1.1.1 prerelease
-  * update required lokimq to 1.1.0
+  * update required gyuanxmq to 1.1.0
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sat, 18 Apr 2020 15:33:04 -0300
 
-loki (7.1.4-1) unstable; urgency=medium
+gyuanx (7.1.4-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Add NO_AES option for arm
@@ -568,8 +568,8 @@ loki (7.1.4-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Warn and refuse to submit proofs if we detect duplicate ed/x25519 keys (#1121)
-  * Update for LokiMQ 1.1.0's changes (#1122)
-  * Update to latest lokimq for automatic heartbeating
+  * Update for GyuanxMQ 1.1.0's changes (#1122)
+  * Update to latest gyuanxmq for automatic heartbeating
 
   [ Doyle ]
   * get_service_node_status: Handle when SN but not staked (#1124)
@@ -577,14 +577,14 @@ loki (7.1.4-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 16 Apr 2020 11:01:58 -0300
 
-loki (7.1.3-2) unstable; urgency=medium
+gyuanx (7.1.3-2) unstable; urgency=medium
 
   * Remove systemd version patch applied upstream
-  * Rebuild against lokimq 1.0.5
+  * Rebuild against gyuanxmq 1.0.5
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 06 Apr 2020 20:34:39 -0300
 
-loki (7.1.3-1) unstable; urgency=medium
+gyuanx (7.1.3-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Add version to beginning of systemd status string (#1092)
@@ -619,7 +619,7 @@ loki (7.1.3-1) unstable; urgency=medium
   * LNS: Update DB last_process_height after reorg
 
   [ Jason Rhinelander ]
-  * Update bundled & required lokimq to 1.0.4 (#1104)
+  * Update bundled & required gyuanxmq to 1.0.4 (#1104)
   * Fix upgrade, memory leak, abstract sqlite3 interface
   * Fix compilation failure on old gcc, avoid compiler warnings
   * Review updates
@@ -628,26 +628,26 @@ loki (7.1.3-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 31 Mar 2020 21:25:00 -0300
 
-loki (7.1.2-4) unstable; urgency=medium
+gyuanx (7.1.2-4) unstable; urgency=medium
 
-  * Actually rebuild against lokimq 1.0.4
+  * Actually rebuild against gyuanxmq 1.0.4
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 30 Mar 2020 13:03:54 -0300
 
-loki (7.1.2-3) unstable; urgency=medium
+gyuanx (7.1.2-3) unstable; urgency=medium
 
-  * Rebuild against lokimq 1.0.4
+  * Rebuild against gyuanxmq 1.0.4
   * Build with ninja
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 29 Mar 2020 19:12:43 -0300
 
-loki (7.1.2-2) unstable; urgency=medium
+gyuanx (7.1.2-2) unstable; urgency=medium
 
-  * Rebuild for versioned liblokimq
+  * Rebuild for versioned libgyuanxmq
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sat, 28 Mar 2020 13:12:44 -0300
 
-loki (7.1.2-1) unstable; urgency=medium
+gyuanx (7.1.2-1) unstable; urgency=medium
 
   [ Doyle ]
   * LNS: Include prev_txid into signature hash
@@ -655,7 +655,7 @@ loki (7.1.2-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 18 Mar 2020 03:47:30 -0300
 
-loki (7.1.1-1) unstable; urgency=medium
+gyuanx (7.1.1-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Make contrib work in a xenial chroot (#1087)
@@ -668,14 +668,14 @@ loki (7.1.1-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 17 Mar 2020 23:39:50 -0300
 
-loki (7.1.0-2) unstable; urgency=medium
+gyuanx (7.1.0-2) unstable; urgency=medium
 
   * add version to systemd status string
   * update ss dep to 2.0.1
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 17 Mar 2020 14:01:00 -0300
 
-loki (7.1.0-1) unstable; urgency=medium
+gyuanx (7.1.0-1) unstable; urgency=medium
 
   [ Sean Darcy ]
   * modifies the print function so terminal bright mirrors the emphasis parameter
@@ -698,7 +698,7 @@ loki (7.1.0-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 17 Mar 2020 01:49:13 -0300
 
-loki (7.0.0-3) unstable; urgency=medium
+gyuanx (7.0.0-3) unstable; urgency=medium
 
   [ Doyle ]
   * LNS: Store wallet addresses to DB
@@ -706,7 +706,7 @@ loki (7.0.0-3) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Rediff patches
-  * Fix patch: don't install lokimq anymore
+  * Fix patch: don't install gyuanxmq anymore
 
   [ Doyle ]
   * LNS: s/owner/address, we now store wallet addresses or ed keys
@@ -715,17 +715,17 @@ loki (7.0.0-3) unstable; urgency=medium
   * LNS: Use hex_to_pod on crypto primitive instead of generic_signature
 
   [ Jason Rhinelander ]
-  * Loki zmq.hpp indirectly through lokimq.h
+  * Gyuanx zmq.hpp indirectly through gyuanxmq.h
   * libwallet needs to link to openssl
   * Add sqlite3-dev dep to -dev package
   * Rediff patches
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 15 Mar 2020 22:12:26 -0300
 
-loki (7.0.0-2) unstable; urgency=medium
+gyuanx (7.0.0-2) unstable; urgency=medium
 
   [ Sean Darcy ]
-  * Calculate total burnt loki
+  * Calculate total burnt gyuanx
   * Add burn amount to rpc get_coinbase_tx_sum
 
   [ Jason Rhinelander ]
@@ -743,13 +743,13 @@ loki (7.0.0-2) unstable; urgency=medium
   * Fix C-ism causing warning
   * Eliminate warnings from unknown warning flags on apple clang
   * Set OPENSSL_LIBRARIES hack for bundled libunbound
-  * Allow linking to a system-installed lokimq
+  * Allow linking to a system-installed gyuanxmq
   * Various linking and build fixes
-  * Add loki-mq dep
+  * Add gyuanx-mq dep
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 15 Mar 2020 16:20:59 -0300
 
-loki (7.0.0-1) unstable; urgency=medium
+gyuanx (7.0.0-1) unstable; urgency=medium
 
   [ Sean Darcy ]
   * modifies the print function so terminal bright mirrors the emphasis parameter
@@ -766,19 +766,19 @@ loki (7.0.0-1) unstable; urgency=medium
   [ Doyle ]
   * Distinguish staking transactions and revamp construct_tx
   * Add sqlite 3.30.1
-  * Add support for Loki Name Service on the backend
-  * Implement expiration/renewal of lokinet entries
+  * Add support for Gyuanx Name Service on the backend
+  * Implement expiration/renewal of gyuanxnet entries
   * Add logging macros, add IF NOT EXIST qualifier to unique index
   * Start move away from hooks, combine rescanning of lns and snl to one function
   * Update tests for rebasing on blink changes
-  * Add support for Loki Name Service on the backend
+  * Add support for Gyuanx Name Service on the backend
   * Remove edkeys from account, wallet does something funky
   * Don't check lns heights unless both begin/end requested
   * Remove block indirection in chain gen, support null lns_db for tests
   * Validate wallet addresses given in LNS txs
-  * Formatting: loki_name_system_db -> loki_name_system, cold_sign_tx arg const
+  * Formatting: gyuanx_name_system_db -> gyuanx_name_system, cold_sign_tx arg const
   * Add buy lns rpc wallet, and wallet cli commands
-  * Add lokinet domain name validation
+  * Add gyuanxnet domain name validation
   * Verify LNS burn amounts and fix up tests to use burns
   * Check duplicate LNS entries via the name not the value
   * Initialise DB from the immutable checkpoint height
@@ -789,14 +789,14 @@ loki (7.0.0-1) unstable; urgency=medium
   * LNS rpc get_lns_[owner|name]_mapping, stub get_mappings_by_user
   * Implement rpc, get_mappings_by_user
   * Add test for get_mappings_by_user
-  * Remove owner signature from loki name service tx extra
+  * Remove owner signature from gyuanx name service tx extra
   * Rebase fix, blink_lns -> blink, v15 and reserve types for protocol
   * Remove unused function rescan_starting_from_curr..
   * Add query LNS mappings to the CLI wallet
   * Improve error messaging for LNS txes
   * Force all incoming LNS txs to represent values as hex in the name->value mapping
   * Remove and undo some changes for github diffs
-  * Update LNS burn to 15 loki, add tests to check burns
+  * Update LNS burn to 15 gyuanx, add tests to check burns
   * Update unit tests using non-hex pubkeys
   * Fix travis CI complaint about mapping_type not declared
   * Send LNS values as blobs to the blockchain
@@ -804,7 +804,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * Remove subsystems selection because we don't use it anymore
   * Update txtype activation hardforks
   * Be consistent with identifier quoting in SQLite
-  * Turn plain enums into enum-struct in loki name system
+  * Turn plain enums into enum-struct in gyuanx name system
   * Robustify sql transactions, formalise LNS values maximums
   * Remove vendored SQLite, rely on system installed lib
   * Ensure lns_value has sufficient size buffer, remove unused prototype
@@ -815,7 +815,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * Expose the wallet public ed25519 key in on_get_address and address cmd
   * Add sqlite3 support for depends and dockerfile
   * Cleanup pass 2 for github
-  * Add a constructor for tx_extra_loki_name_system and use it
+  * Add a constructor for tx_extra_gyuanx_name_system and use it
   * txid and prev_txid should be returning as a string in RPC
   * Code review
   * Add register_height to the serialized members for LNS owners to name RPC
@@ -850,7 +850,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * Add various LNS tests for updating record variants
   * Generate a proper hash for signatures to prevent LNS update replays
   * Prevent blink in update_lns_mapping in CLI wallet when confirm_and_send-ing
-  * Use tx/extra print helpers in loki_name_system.cpp
+  * Use tx/extra print helpers in gyuanx_name_system.cpp
   * Use enum_field for type to use lns::mapping_type
 
   [ Jason Rhinelander ]
@@ -863,7 +863,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * Use operator<< for structs, adjust LNS wording, move command_t to lns::
   * Use libsodium to hash the contents for signatures
   * Rewrite the integration tests to use pipes (#1045)
-  * LNS: Allow multi-year registration for lokinet entries
+  * LNS: Allow multi-year registration for gyuanxnet entries
   * Move simple string view out to common/string_view.h (#1049)
 
   [ Sean ]
@@ -873,12 +873,12 @@ loki (7.0.0-1) unstable; urgency=medium
   * Revert debug testnet hardfork changes from LNS
   * blink=<bool> is not part of transfer API, set rpc long poll threads to 0 in daemon
   * Propagate error message to CLI wallet (#1047)
-  * LNS: Test all lokinet year expirations, take string by val in lowercase_string
-  * Move out economic related constants/functions to loki_economy
+  * LNS: Test all gyuanxnet year expirations, take string by val in lowercase_string
+  * Move out economic related constants/functions to gyuanx_economy
 
   [ Jason Rhinelander ]
   * cmake modernization
-  * Convert quorumnet to loki-mq
+  * Convert quorumnet to gyuanx-mq
   * Fix NO_AES definition
 
   [ Doyle ]
@@ -889,7 +889,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * Fix core tests and print out binary vals in hex
   * Unit test LNS mapping value encryption/decryption
   * Store base64 hashes into the LNS DB
-  * Update hex usage to lokimq::hex
+  * Update hex usage to gyuanxmq::hex
   * Ability to vendor libsodium 1.0.18 -D DOWNLOAD_SODIUM=[ON|OFF|FORCE]
   * Download libsodium 1.0.18 on travis if not available
 
@@ -901,7 +901,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * Move Sodium detection above external submodules (#1060)
 
   [ Jason Rhinelander ]
-  * Updated loki-mq for disconnect fixes
+  * Updated gyuanx-mq for disconnect fixes
   * Change block reward for HF15 & 16 as per LRC-6
   * Update test suite & add test for LRC-6 rewards
 
@@ -940,7 +940,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * Fix rebase bugs
 
   [ Maxim Shishmarev ]
-  * Add storage server lokimq port (#1056)
+  * Add storage server gyuanxmq port (#1056)
 
   [ Jason Rhinelander ]
   * Remove unused functions
@@ -967,7 +967,7 @@ loki (7.0.0-1) unstable; urgency=medium
   * LNS: Print name hash when requesting names to owners
 
   [ doyle ]
-  * Move operator<<(stream, tx_extra_loki_name_system) above check_condition
+  * Move operator<<(stream, tx_extra_gyuanx_name_system) above check_condition
 
   [ Doyle ]
   * Update version name and value to 7.0.0
@@ -981,10 +981,10 @@ loki (7.0.0-1) unstable; urgency=medium
   * LNS: Update client side name validation
   * LNS: Disconnect rpc query if name is invalid for type
   * LNS: Remove parse_lns_name from CLI wallet
-  * LNS: Disable localhost.loki, disallow '_'s in lokinet
+  * LNS: Disable localhost.gyuanx, disallow '_'s in gyuanxnet
   * Docker static build hacks/fixes for Valiant Vidar
   * Replace ARG NPROC with invoke $(nproc) directly, remove unbound hack
-  * Update loki-mq submodule
+  * Update gyuanx-mq submodule
   * LNS: Lowercase names at the boundary between LNS and user code
 
   [ Jason Rhinelander ]
@@ -992,19 +992,19 @@ loki (7.0.0-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Fri, 13 Mar 2020 00:58:32 -0300
 
-loki (6.1.4-3) unstable; urgency=medium
+gyuanx (6.1.4-3) unstable; urgency=medium
 
-  * Bump lokinet-router version for SN metapackage
+  * Bump gyuanxnet-router version for SN metapackage
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 20 Jan 2020 14:37:56 -0400
 
-loki (6.1.4-2) unstable; urgency=medium
+gyuanx (6.1.4-2) unstable; urgency=medium
 
   * add missing libsystem-dev dependency
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 20 Jan 2020 02:08:38 -0400
 
-loki (6.1.4-1) unstable; urgency=medium
+gyuanx (6.1.4-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Remove pre-HF14 p2p vote relaying command
@@ -1024,13 +1024,13 @@ loki (6.1.4-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 20 Jan 2020 00:02:41 -0400
 
-loki (6.1.3-2) unstable; urgency=medium
+gyuanx (6.1.3-2) unstable; urgency=medium
 
   * Add upstream patches for blink deadlock (#1021) and wallet rpc (#1020)
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 19 Jan 2020 02:35:26 -0400
 
-loki (6.1.3-1) unstable; urgency=medium
+gyuanx (6.1.3-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Rediff patches
@@ -1057,7 +1057,7 @@ loki (6.1.3-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 15 Jan 2020 22:44:54 -0400
 
-loki (6.1.2-1) unstable; urgency=medium
+gyuanx (6.1.2-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Fix 6.1.1 compilation (#1002)
@@ -1077,7 +1077,7 @@ loki (6.1.2-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 09 Jan 2020 15:21:18 -0400
 
-loki (6.1.1-1) unstable; urgency=medium
+gyuanx (6.1.1-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Add my private key; fix permissions/line endings
@@ -1101,7 +1101,7 @@ loki (6.1.1-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 07 Jan 2020 13:34:02 -0400
 
-loki (6.1.0-1) unstable; urgency=medium
+gyuanx (6.1.0-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Don't print worker_index when not an obligations vote (#987)
@@ -1160,19 +1160,19 @@ loki (6.1.0-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 26 Dec 2019 16:25:33 -0400
 
-loki (6.0.0+git20191216-3) unstable; urgency=medium
+gyuanx (6.0.0+git20191216-3) unstable; urgency=medium
 
   * Add default quorumnet ports to ufw
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 17 Dec 2019 02:17:41 -0400
 
-loki (6.0.0+git20191216-2) unstable; urgency=medium
+gyuanx (6.0.0+git20191216-2) unstable; urgency=medium
 
   * Rediff patches
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 16 Dec 2019 23:57:10 -0400
 
-loki (6.0.0+git20191216-1) unstable; urgency=medium
+gyuanx (6.0.0+git20191216-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * SNNetwork: make quorum commands tri-state
@@ -1185,7 +1185,7 @@ loki (6.0.0+git20191216-1) unstable; urgency=medium
   * register_command: switch arg order; drop std::function
   * Add `is_service_node()`
   * Add libevent-dev dependency
-  * Add lokinet dep to loki-service-node metapackage
+  * Add gyuanxnet dep to gyuanx-service-node metapackage
   * Do txn handling via TXN_BLOCK_PREFIX macro (#982)
   * Cleanup on block adding failure (#983)
   * Add ucf dependency
@@ -1194,7 +1194,7 @@ loki (6.0.0+git20191216-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 16 Dec 2019 21:02:38 -0400
 
-loki (6.0.0-1) unstable; urgency=medium
+gyuanx (6.0.0-1) unstable; urgency=medium
 
   * Rediff patches
   * Cherry-pick: Do txn handling via TXN_BLOCK_PREFIX macro
@@ -1205,7 +1205,7 @@ loki (6.0.0-1) unstable; urgency=medium
   [ Doyle ]
   * Fix "__memcpy_chk" undefined on Windows target
   * Add rpc markup for transfer_view and add no doc gen markers
-  * Disable pruning in Loki, it is not supported yet
+  * Disable pruning in Gyuanx, it is not supported yet
   * Remove check_tx_syntax unused since 2015
   * Remove unused params in check_tx_input
   * Remove hard-forking code on the boundary of 12 and 13 (#919)
@@ -1242,8 +1242,8 @@ loki (6.0.0-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Teach epee to serialize std::array & simplify template code
-  * Add ability to retrieve private keys from lokid
-  * Add lokinet ping rpc endpoint
+  * Add ability to retrieve private keys from gyuanxd
+  * Add gyuanxnet ping rpc endpoint
   * Rename fields & doc generation fixes
 
   [ Doyle ]
@@ -1274,7 +1274,7 @@ loki (6.0.0-1) unstable; urgency=medium
   * More optional handling, add keep-alive option
   * Remove iostream debug, add istream
   * Add bool operator on signatures
-  * Store loki version as std::array<u16,3> everywhere
+  * Store gyuanx version as std::array<u16,3> everywhere
   * Add tx_blink to core build files
   * Remove pointless check against already called
   * Add blink quorums
@@ -1336,7 +1336,7 @@ loki (6.0.0-1) unstable; urgency=medium
   * Make debug messages unique
   * Unbreak blink status via rpc
   * Remove unused variable
-  * Correct Loki copyright years to include 2018
+  * Correct Gyuanx copyright years to include 2018
   * Filter and clean up immutable blinks in get_blink_hashes_and_mined_heights
   * Avoid string allocation
   * Split up and DRY prune(); make Blockchain and tx_memory_pool Lockable
@@ -1349,7 +1349,7 @@ loki (6.0.0-1) unstable; urgency=medium
   * Added needed stubs/changes to appease the test suite
   * Properly support fee burning in the wallet
   * Move burn application into construct_tx_with_tx_key
-  * Fix wallet_rpc and tests for new loki_construct_tx_params usage
+  * Fix wallet_rpc and tests for new gyuanx_construct_tx_params usage
 
   [ Doyle ]
   * Check blockchain init failure before r is overwritten (#937)
@@ -1433,7 +1433,7 @@ loki (6.0.0-1) unstable; urgency=medium
   * print_sn formatting tweaks & aux pubkeys
   * Don't show +detail in not found message
   * __thread -> thread_local (#951)
-  * Add lokinet ping to RPC and `status` + status message tweaks
+  * Add gyuanxnet ping to RPC and `status` + status message tweaks
   * Remove broken timing "optimization"
   * Actually set the retrieved state change value
   * Fix variables names in .h to agree with .cpp
@@ -1480,7 +1480,7 @@ loki (6.0.0-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sat, 14 Dec 2019 12:37:58 -0400
 
-loki (5.1.5-1) unstable; urgency=medium
+gyuanx (5.1.5-1) unstable; urgency=medium
 
   [ Doyle ]
   * Add immutable_height and hash field to get_height/get_info calls (#917)
@@ -1495,7 +1495,7 @@ loki (5.1.5-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 02 Dec 2019 21:17:44 -0400
 
-loki (5.1.3-1) unstable; urgency=medium
+gyuanx (5.1.3-1) unstable; urgency=medium
 
   [ Doyle ]
   * msys2: request git in packages, update sample version in text
@@ -1504,17 +1504,17 @@ loki (5.1.3-1) unstable; urgency=medium
   * Bump v5 patch to 3
 
   [ Jason Rhinelander ]
-  * Put logs in /var/log/loki
+  * Put logs in /var/log/gyuanx
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 28 Oct 2019 01:18:29 -0300
 
-loki (5.1.2-2) unstable; urgency=medium
+gyuanx (5.1.2-2) unstable; urgency=medium
 
   * Move ucfr to happen after merging
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 22 Oct 2019 09:43:40 -0300
 
-loki (5.1.2-1) unstable; urgency=medium
+gyuanx (5.1.2-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Refresh arm patch
@@ -1530,10 +1530,10 @@ loki (5.1.2-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 16 Oct 2019 12:37:28 -0300
 
-loki (5.1.1-1) unstable; urgency=medium
+gyuanx (5.1.1-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
-  * Add version requirement for loki-storage-server
+  * Add version requirement for gyuanx-storage-server
 
   [ Howard Chu ]
   * Don't set ARCH_ID if it's already set
@@ -1565,10 +1565,10 @@ loki (5.1.1-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 10 Oct 2019 01:35:33 -0300
 
-loki (5.1.0-1) unstable; urgency=medium
+gyuanx (5.1.0-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
-  * Initial stable Loki 5 release
+  * Initial stable Gyuanx 5 release
 
   [ Doyle ]
   * Update ip to address param change for integration test
@@ -1719,7 +1719,7 @@ loki (5.1.0-1) unstable; urgency=medium
   * Remove crypto::crypto_ops
   * Use perfect forwarding to set default serialize value
   * Forward declaration updates
-  * Switch loki core to C++14
+  * Switch gyuanx core to C++14
   * Make quorum_type directly printable
   * Add --dev-allow-local-ip flag for allowing local network public-ip
   * Remove useless method.
@@ -1763,7 +1763,7 @@ loki (5.1.0-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 09 Oct 2019 01:18:56 -0300
 
-loki (4.0.5-1) unstable; urgency=medium
+gyuanx (4.0.5-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Print good/bad winners in incorrect winner error
@@ -1789,7 +1789,7 @@ loki (4.0.5-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sat, 17 Aug 2019 02:28:43 -0300
 
-loki (4.0.4-1) unstable; urgency=medium
+gyuanx (4.0.4-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Subtract buffer blocks from checkpoint quorum in vote check
@@ -1825,7 +1825,7 @@ loki (4.0.4-1) unstable; urgency=medium
   * Remove NOTIFY_NEW_DEREGISTER_VOTE code, deprecated by service node vote
   * Inline update_miner_block_template and remove from core header
   * Remove legacy P2P vote conversion methods
-  * Add missing LOKI_RPC_DOC_INTROSPECT annotations (#776)
+  * Add missing GYUANX_RPC_DOC_INTROSPECT annotations (#776)
   * Filter vote age before querying quorum (#777)
   * Add progress meter to pop_blocks (#770)
   * Use defer on scope exit to remove some repetitive code (#771)
@@ -1880,7 +1880,7 @@ loki (4.0.4-1) unstable; urgency=medium
   * remove obsolete save_graph skeleton code
 
   [ Jason Rhinelander ]
-  * Add loki docs for new banned rpc command
+  * Add gyuanx docs for new banned rpc command
 
   [ Doyle ]
   * Enforce ordering of votes in HF13
@@ -1897,34 +1897,34 @@ loki (4.0.4-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 15 Aug 2019 11:26:21 -0300
 
-loki (4.0.3-5) unstable; urgency=medium
+gyuanx (4.0.3-5) unstable; urgency=medium
 
   * lmdb download script fixes
 
  -- Jason Rhinelander <jason@imaginary.ca>  Fri, 26 Jul 2019 02:49:16 -0300
 
-loki (4.0.3-4) unstable; urgency=medium
+gyuanx (4.0.3-4) unstable; urgency=medium
 
   * removed postrm
   * Install lmdb download helper script
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 25 Jul 2019 17:25:10 -0300
 
-loki (4.0.3-3) unstable; urgency=medium
+gyuanx (4.0.3-3) unstable; urgency=medium
 
-  * Fix lokid restart
+  * Fix gyuanxd restart
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 18 Jul 2019 16:28:37 -0300
 
-loki (4.0.3-2) unstable; urgency=medium
+gyuanx (4.0.3-2) unstable; urgency=medium
 
-  * Restart loki nodes in loki-service-node postinst
+  * Restart gyuanx nodes in gyuanx-service-node postinst
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 18 Jul 2019 15:10:28 -0300
 
-loki (4.0.3-1) unstable; urgency=medium
+gyuanx (4.0.3-1) unstable; urgency=medium
 
-  * Loki 4.0.3 release
+  * Gyuanx 4.0.3 release
 
   [ Jason Rhinelander ]
   * Refreshed patches
@@ -1943,22 +1943,22 @@ loki (4.0.3-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * randomx build patch
-  * Move libdevice_trezor.so into libloki-core-wallet
+  * Move libdevice_trezor.so into libgyuanx-core-wallet
   * Version and install librandomx
   * Add bare .so symlinks to dev package
   * Add default port and public-ip debconf
-  * Switch maintainer e-mail to my loki e-mail
-  * Add ufw file for lokid
-  * Create loki-service-node metapackage
+  * Switch maintainer e-mail to my gyuanx e-mail
+  * Add ufw file for gyuanxd
+  * Create gyuanx-service-node metapackage
   * Fix dev package missing *.hpp
   * Fix testnet data-dir
   * Fix -dev package to be properly multi-arch
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 17 Jul 2019 16:08:44 -0300
 
-loki (4.0.2-1) unstable; urgency=medium
+gyuanx (4.0.2-1) unstable; urgency=medium
 
-  * Loki 4.0.2 release
+  * Gyuanx 4.0.2 release
 
   [ Gingeropolous ]
   * update readme to include blurb on decentralization
@@ -2362,11 +2362,11 @@ loki (4.0.2-1) unstable; urgency=medium
   * cryptonote_protocol_handler: add block/tx hashes in notify logs
 
   [ Sonofotis ]
-  * Add comments and clean code for loki-rpc-doc-generator. (#499)
+  * Add comments and clean code for gyuanx-rpc-doc-generator. (#499)
 
   [ Doyle ]
   * Since early_blocks is unsigned, remove checks intenteded for signed behaviour (#524)
-  * Add missing loki.h header for LOKI_RPC_DOC_INTROSPECT define (#530)
+  * Add missing gyuanx.h header for GYUANX_RPC_DOC_INTROSPECT define (#530)
 
   [ cslashm ]
   * Add application version compatibility check.
@@ -2756,7 +2756,7 @@ loki (4.0.2-1) unstable; urgency=medium
 
   [ Doyle ]
   * Add workaround for sanity checking output keys in wallet2
-  * Update MONERO #defines to LOKI
+  * Update MONERO #defines to GYUANX
   * Fix ledger re-declaration of is_change
 
   [ moneromooo-monero ]
@@ -2991,7 +2991,7 @@ loki (4.0.2-1) unstable; urgency=medium
   * Set miners to 0 to avoid verification in integration mode (#685)
   * Improve diagnostics for failed tx send (#682)
   * Set minimum miner tx version to 4 (#683)
-  * Rename monerod message to lokid (#688)
+  * Rename monerod message to gyuanxd (#688)
 
   [ Jason Rhinelander ]
   * Remove invalid FIXME (#689)
@@ -2999,7 +2999,7 @@ loki (4.0.2-1) unstable; urgency=medium
   * Fix setting relayed votes
   * Don't relay expired votes; add vote tolerance before disconnection
   * Silence unused variable warnings (#692)
-  * Change monero -> LOKI in expected mining returns (#694)
+  * Change monero -> GYUANX in expected mining returns (#694)
   * Performance fix for alt chain blocks (#695)
   * Update RandomX with upstream (#697)
   * Extend height tolerance to state_change tx "verifivation"
@@ -3016,11 +3016,11 @@ loki (4.0.2-1) unstable; urgency=medium
   * Don't do a full randomx build (#699)
   * Fix broken height rejection rule
 
-  [ michael-loki ]
+  [ michael-gyuanx ]
   * Apply additional boost fix (#701)
 
   [ Doyle ]
-  * Remove the update command in the daemon since Loki doesn't implement (#703)
+  * Remove the update command in the daemon since Gyuanx doesn't implement (#703)
   * Bump Hefty Heimdall beta patch to 1 (#704)
 
   [ Jason Rhinelander ]
@@ -3075,7 +3075,7 @@ loki (4.0.2-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Thu, 11 Jul 2019 11:54:44 -0300
 
-loki (3.0.7-1) unstable; urgency=medium
+gyuanx (3.0.7-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Remove `arch` to allow both amd64/i386 builds
@@ -3107,13 +3107,13 @@ loki (3.0.7-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Fri, 05 Jul 2019 12:19:57 -0300
 
-loki (3.0.6-3) unstable; urgency=medium
+gyuanx (3.0.6-3) unstable; urgency=medium
 
   * Fix -dev package header install location.
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 22 May 2019 17:32:06 -0300
 
-loki (3.0.6-2) unstable; urgency=medium
+gyuanx (3.0.6-2) unstable; urgency=medium
 
   * Add systemd service files for mainnet/testnet.  mainnet gets enabled by
     default.
@@ -3121,7 +3121,7 @@ loki (3.0.6-2) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 21 May 2019 15:25:40 -0300
 
-loki (3.0.6-1) unstable; urgency=medium
+gyuanx (3.0.6-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Debian package fixes
@@ -3146,7 +3146,7 @@ loki (3.0.6-1) unstable; urgency=medium
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 12 May 2019 12:41:59 -0300
 
-loki (3.0.5-1) unstable; urgency=medium
+gyuanx (3.0.5-1) unstable; urgency=medium
 
   * Initial Release.
 

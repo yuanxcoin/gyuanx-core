@@ -47,7 +47,7 @@
 #if defined(HAS_INTEL_HW) || defined(HAS_ARM_HW)
 inline bool force_software_aes()
 {
-	const char *env = getenv("LOKI_USE_SOFTWARE_AES");
+	const char *env = getenv("GYUANX_USE_SOFTWARE_AES");
 	return env && strcmp(env, "0") && strcmp(env, "no");
 }
 #endif
@@ -103,7 +103,7 @@ public:
 	}
 
 	// Disable copy/move ctors; copying, in particular, is going to be really inefficient and we
-	// don't need to move it anywhere in LOKI code anyway.
+	// don't need to move it anywhere in GYUANX code anyway.
 	cn_heavy_hash(const cn_heavy_hash& other) = delete;
 	cn_heavy_hash(cn_heavy_hash&& other) = delete;
 	cn_heavy_hash& operator= (const cn_heavy_hash& other) = delete;

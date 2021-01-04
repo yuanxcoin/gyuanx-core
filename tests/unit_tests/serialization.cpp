@@ -160,7 +160,7 @@ TEST(Serialization, Test1) {
 
   std::string blob;
   ASSERT_NO_THROW(blob = serialization::dump_binary(s1));
-  ASSERT_EQ(lokimq::to_hex(blob), "03e100000000e005000000030001003132333435363738e101000000020a001600");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "03e100000000e005000000030001003132333435363738e101000000020a001600");
   ASSERT_NO_THROW(try_parse(blob));
 
   blob[6] = '\xE1';
@@ -191,53 +191,53 @@ TEST(Serialization, serializes_vector_uint64_as_varint)
   std::string blob;
 
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "00");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "00");
 
   // +1 byte
   v.push_back(0);
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "0100");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "0100");
   //                                 ^^
 
   // +1 byte
   v.push_back(1);
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "020001");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "020001");
   //                                   ^^
 
   // +2 bytes
   v.push_back(0x80);
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "0300018001");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "0300018001");
   //                                     ^^^^
 
   // +2 bytes
   v.push_back(0xFF);
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "0400018001ff01");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "0400018001ff01");
   //                                         ^^^^
 
   // +2 bytes
   v.push_back(0x3FFF);
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "0500018001ff01ff7f");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "0500018001ff01ff7f");
   //                                             ^^^^
 
   // +3 bytes
   v.push_back(0x40FF);
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "0600018001ff01ff7fff8101");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "0600018001ff01ff7fff8101");
   //                                                 ^^^^^^
 
   // +10 bytes
   v.push_back(0xFFFF'FFFF'FFFF'FFFF);
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "0700018001ff01ff7fff8101ffffffffffffffffff01");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "0700018001ff01ff7fff8101ffffffffffffffffff01");
   //                                                       ^^^^^^^^^^^^^^^^^^^^
 
   v = {0x64, 0xcc, 0xbf04};
   ASSERT_NO_THROW(blob = serialization::dump_binary(v));
-  ASSERT_EQ(lokimq::to_hex(blob), "0364cc0184fe02");
+  ASSERT_EQ(gyuanxmq::to_hex(blob), "0364cc0184fe02");
 }
 
 TEST(Serialization, serializes_vector_int64_as_fixed_int)
@@ -445,7 +445,7 @@ TEST(Serialization, serializes_transaction_signatures_correctly)
       tx.signatures[i][j].c.data[2*i + j] = ((i+1) << 4) + 2*i + j + 1;
   tx.invalidate_hashes();
   ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
-  ASSERT_EQ(lokimq::to_hex(blob),
+  ASSERT_EQ(gyuanxmq::to_hex(blob),
       "0100020201020cfd1a42424242424242424242424242424242424242424242424242424242424242420201020cfd1a42424242424242424242424242424242424242424242424242424242424242420000"
       "11000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
       "00120000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
@@ -640,7 +640,7 @@ TEST(Serialization, serializes_ringct_types)
   ASSERT_TRUE(clsag0.D == clsag1.D);
 }
 
-// TODO(loki): These tests are broken because they rely on testnet which has
+// TODO(gyuanx): These tests are broken because they rely on testnet which has
 // since been restarted, and so the genesis block of these predefined wallets
 // are broken
 //             - 2019-02-25 Doyle
@@ -781,7 +781,7 @@ TEST(Serialization, portability_wallet)
   }
 }
 
-#define OUTPUT_EXPORT_FILE_MAGIC "Loki output export\003"
+#define OUTPUT_EXPORT_FILE_MAGIC "Gyuanx output export\003"
 TEST(Serialization, portability_outputs)
 {
   const bool restricted = false;
@@ -916,7 +916,7 @@ TEST(Serialization, portability_outputs)
   ASSERT_TRUE(td2.m_pk_index == 0);
 }
 
-#define UNSIGNED_TX_PREFIX "Loki unsigned tx set\004"
+#define UNSIGNED_TX_PREFIX "Gyuanx unsigned tx set\004"
 struct unsigned_tx_set
 {
   std::vector<tools::wallet2::tx_construction_data> txes;
@@ -930,11 +930,11 @@ inline void serialize(Archive &a, unsigned_tx_set &x, const boost::serialization
 }
 TEST(Serialization, portability_unsigned_tx)
 {
-  // TODO(loki): We updated testnet genesis, is broken
+  // TODO(gyuanx): We updated testnet genesis, is broken
   const bool restricted = false;
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
-  const fs::path filename    = unit_test::data_dir / "unsigned_loki_tx";
+  const fs::path filename    = unit_test::data_dir / "unsigned_gyuanx_tx";
   const fs::path wallet_file = unit_test::data_dir / "wallet_testnet";
   const std::string password = "test";
   w.load(wallet_file.string(), password);
@@ -1127,13 +1127,13 @@ TEST(Serialization, portability_unsigned_tx)
   ASSERT_TRUE(td2.m_pk_index == 0);
 }
 
-#define SIGNED_TX_PREFIX "Loki signed tx set\004"
+#define SIGNED_TX_PREFIX "Gyuanx signed tx set\004"
 TEST(Serialization, portability_signed_tx)
 {
   const bool restricted = false;
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
-  const fs::path filename    = unit_test::data_dir / "signed_loki_tx";
+  const fs::path filename    = unit_test::data_dir / "signed_gyuanx_tx";
   const fs::path wallet_file = unit_test::data_dir / "wallet_testnet";
   const std::string password = "test";
   w.load(wallet_file.string(), password);

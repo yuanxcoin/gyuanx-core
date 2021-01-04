@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 // 
 // All rights reserved.
 // 
@@ -54,11 +54,11 @@
 #include "rpc/rpc_args.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "daemonizer/daemonizer.h"
-#include "cryptonote_core/loki_name_system.h"
+#include "cryptonote_core/gyuanx_name_system.h"
 #include "serialization/boost_std_variant.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "wallet.rpc"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "wallet.rpc"
 
 namespace rpc = cryptonote::rpc;
 using namespace tools::wallet_rpc;
@@ -73,7 +73,7 @@ namespace
   const command_line::arg_descriptor<std::string> arg_wallet_dir = {"wallet-dir", "Directory for newly created wallets"};
   const command_line::arg_descriptor<bool> arg_prompt_for_password = {"prompt-for-password", "Prompts for password when not provided", false};
 
-  constexpr const char default_rpc_username[] = "loki";
+  constexpr const char default_rpc_username[] = "gyuanx";
 
   std::optional<tools::password_container> password_prompter(const char *prompt, bool verify)
   {
@@ -497,7 +497,7 @@ namespace tools
 
     m_restricted = command_line::get_arg(m_vm, arg_restricted);
 
-    m_server_header = "loki-wallet-rpc/"s + (m_restricted ? std::to_string(LOKI_VERSION[0]) : LOKI_VERSION_STR);
+    m_server_header = "gyuanx-wallet-rpc/"s + (m_restricted ? std::to_string(GYUANX_VERSION[0]) : GYUANX_VERSION_STR);
 
     m_cors = {rpc_config.access_control_origins.begin(), rpc_config.access_control_origins.end()};
 
@@ -543,7 +543,7 @@ namespace tools
           epee::string_encoding::base64_encode(rand_128bit.data(), rand_128bit.size())
         );
 
-        std::string temp = "loki-wallet-rpc." + std::to_string(port) + ".login";
+        std::string temp = "gyuanx-wallet-rpc." + std::to_string(port) + ".login";
         rpc_login_file = tools::private_file::create(temp);
         if (!rpc_login_file.handle())
         {
@@ -855,7 +855,7 @@ namespace tools
             if (!dnssec_valid)
               throw wallet_rpc_error{error_code::WRONG_ADDRESS, "Invalid DNSSEC for "s + std::string{url}};
             if (addresses.empty())
-              throw wallet_rpc_error{error_code::WRONG_ADDRESS, "No Loki address found at "s + std::string{url}};
+              throw wallet_rpc_error{error_code::WRONG_ADDRESS, "No Gyuanx address found at "s + std::string{url}};
             return addresses[0];
           }))
       throw wallet_rpc_error{error_code::WRONG_ADDRESS, "Invalid address: "s + std::string{addr_or_url}};
@@ -911,7 +911,7 @@ namespace tools
     {
       return "";
     }
-    return lokimq::to_hex(oss.str());
+    return gyuanxmq::to_hex(oss.str());
   }
   //------------------------------------------------------------------------------------------------------------------------------
   template<typename T> static bool is_error_value(const T &val) { return false; }
@@ -961,14 +961,14 @@ namespace tools
 
     if (m_wallet->multisig())
     {
-      multisig_txset = lokimq::to_hex(m_wallet->save_multisig_tx(ptx_vector));
+      multisig_txset = gyuanxmq::to_hex(m_wallet->save_multisig_tx(ptx_vector));
       if (multisig_txset.empty())
         throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Failed to save multisig tx set after creation"};
     }
     else
     {
       if (m_wallet->watch_only()){
-        unsigned_txset = lokimq::to_hex(m_wallet->dump_tx_to_str(ptx_vector));
+        unsigned_txset = gyuanxmq::to_hex(m_wallet->dump_tx_to_str(ptx_vector));
         if (unsigned_txset.empty())
           throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Failed to save unsigned tx set after creation"};
       }
@@ -979,7 +979,7 @@ namespace tools
       for (auto & ptx : ptx_vector)
       {
         bool r = fill(tx_hash, tools::type_to_hex(cryptonote::get_transaction_hash(ptx.tx)));
-        r = r && (!get_tx_hex || fill(tx_blob, lokimq::to_hex(tx_to_blob(ptx.tx))));
+        r = r && (!get_tx_hex || fill(tx_blob, gyuanxmq::to_hex(tx_to_blob(ptx.tx))));
         r = r && (!get_tx_metadata || fill(tx_metadata, ptx_to_string(ptx)));
         if (!r)
           throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "Failed to save tx info"};
@@ -1006,7 +1006,7 @@ namespace tools
       std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
       if (!hf_version)
         throw wallet_rpc_error{error_code::HF_QUERY_FAILED, tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED};
-      cryptonote::loki_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, cryptonote::txtype::standard, priority);
+      cryptonote::gyuanx_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, cryptonote::txtype::standard, priority);
       std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices, tx_params);
 
       if (ptx_vector.empty())
@@ -1041,7 +1041,7 @@ namespace tools
       if (!hf_version)
         throw wallet_rpc_error{error_code::HF_QUERY_FAILED, tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED};
 
-      cryptonote::loki_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, cryptonote::txtype::standard, priority);
+      cryptonote::gyuanx_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, cryptonote::txtype::standard, priority);
       LOG_PRINT_L2("on_transfer_split calling create_transactions_2");
       std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices, tx_params);
       LOG_PRINT_L2("on_transfer_split called create_transactions_2");
@@ -1079,7 +1079,7 @@ namespace tools
       if (ciphertext.empty())
         throw wallet_rpc_error{error_code::SIGN_UNSIGNED, "Failed to sign unsigned tx"};
 
-      res.signed_txset = lokimq::to_hex(ciphertext);
+      res.signed_txset = gyuanxmq::to_hex(ciphertext);
     }
 
     for (auto &ptx: ptxs)
@@ -1097,7 +1097,7 @@ namespace tools
     {
       for (auto &ptx: ptxs)
       {
-        res.tx_raw_list.push_back(lokimq::to_hex(cryptonote::tx_to_blob(ptx.tx)));
+        res.tx_raw_list.push_back(gyuanxmq::to_hex(cryptonote::tx_to_blob(ptx.tx)));
       }
     }
 
@@ -1962,12 +1962,12 @@ namespace tools
 
     for (wallet::transfer_view& entry : transfers)
     {
-      // TODO(loki): This discrepancy between having to use pay_type if type is
+      // TODO(gyuanx): This discrepancy between having to use pay_type if type is
       // empty and type if pay type is neither is super unintuitive.
       if (entry.pay_type == wallet::pay_type::in ||
           entry.pay_type == wallet::pay_type::miner ||
           entry.pay_type == wallet::pay_type::governance ||
-          entry.pay_type == wallet::pay_type::service_node)
+          entry.pay_type == wallet::pay_type::gnode)
       {
         res.in.push_back(std::move(entry));
       }
@@ -2093,7 +2093,7 @@ namespace tools
     if (m_wallet->key_on_device())
       throw wallet_rpc_error{error_code::UNKNOWN_ERROR, "command not supported by HW wallet"};
 
-    res.outputs_data_hex = lokimq::to_hex(m_wallet->export_outputs_to_str(req.all));
+    res.outputs_data_hex = gyuanxmq::to_hex(m_wallet->export_outputs_to_str(req.all));
 
     return res;
   }
@@ -2679,7 +2679,7 @@ namespace {
     cryptonote::blobdata info;
     info = m_wallet->export_multisig();
 
-    res.info = lokimq::to_hex(info);
+    res.info = gyuanxmq::to_hex(info);
 
     return res;
   }
@@ -2798,7 +2798,7 @@ namespace {
       throw wallet_rpc_error{error_code::MULTISIG_SIGNATURE, "Failed to sign multisig tx: "s + e.what()};
     }
 
-    res.tx_data_hex = lokimq::to_hex(m_wallet->save_multisig_tx(txs));
+    res.tx_data_hex = gyuanxmq::to_hex(m_wallet->save_multisig_tx(txs));
     if (!txids.empty())
     {
       for (const crypto::hash &txid: txids)
@@ -2930,7 +2930,7 @@ namespace {
   //------------------------------------------------------------------------------------------------------------------------------
 
   //
-  // Loki
+  // Gyuanx
   //
   STAKE::response wallet_rpc_server::invoke(STAKE::request&& req)
   {
@@ -2942,10 +2942,10 @@ namespace {
     if (!cryptonote::get_account_address_from_str(addr_info, m_wallet->nettype(), req.destination))
       throw wallet_rpc_error{error_code::WRONG_ADDRESS, std::string("Unparsable address given: ") + req.destination};
 
-    if (!tools::hex_to_type(req.service_node_key, snode_key))
-      throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.service_node_key};
+    if (!tools::hex_to_type(req.gnode_key, snode_key))
+      throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.gnode_key};
 
-    // NOTE(loki): Pre-emptively set subaddr_account to 0. We don't support onwards from Infinite Staking which is when this call was implemented.
+    // NOTE(gyuanx): Pre-emptively set subaddr_account to 0. We don't support onwards from Infinite Staking which is when this call was implemented.
     tools::wallet2::stake_result stake_result = m_wallet->create_stake_tx(snode_key, addr_info, req.amount, 0 /*amount_fraction*/, req.priority, 0 /*subaddr_account*/, req.subaddr_indices);
     if (stake_result.status != tools::wallet2::stake_result_status::success)
       throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, stake_result.msg};
@@ -2964,17 +2964,17 @@ namespace {
     REGISTER_SERVICE_NODE::response res{};
 
     std::vector<std::string> args;
-    boost::split(args, req.register_service_node_str, boost::is_any_of(" "));
+    boost::split(args, req.register_gnode_str, boost::is_any_of(" "));
 
     if (args.size() > 0)
     {
-      if (args[0] == "register_service_node")
+      if (args[0] == "register_gnode")
         args.erase(args.begin());
     }
 
-    // NOTE(loki): Pre-emptively set subaddr_account to 0. We don't support onwards from Infinite Staking which is when this call was implemented.
-    tools::wallet2::register_service_node_result register_result = m_wallet->create_register_service_node_tx(args, 0 /*subaddr_account*/);
-    if (register_result.status != tools::wallet2::register_service_node_result_status::success)
+    // NOTE(gyuanx): Pre-emptively set subaddr_account to 0. We don't support onwards from Infinite Staking which is when this call was implemented.
+    tools::wallet2::register_gnode_result register_result = m_wallet->create_register_gnode_tx(args, 0 /*subaddr_account*/);
+    if (register_result.status != tools::wallet2::register_gnode_result_status::success)
       throw wallet_rpc_error{error_code::TX_NOT_POSSIBLE, register_result.msg};
 
     std::vector<tools::wallet2::pending_tx> ptx_vector = {register_result.ptx};
@@ -2990,8 +2990,8 @@ namespace {
     CAN_REQUEST_STAKE_UNLOCK::response res{};
 
     crypto::public_key snode_key             = {};
-    if (!tools::hex_to_type(req.service_node_key, snode_key))
-      throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.service_node_key};
+    if (!tools::hex_to_type(req.gnode_key, snode_key))
+      throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.gnode_key};
 
     tools::wallet2::request_stake_unlock_result unlock_result = m_wallet->can_request_stake_unlock(snode_key);
     res.can_unlock = unlock_result.success;
@@ -2999,15 +2999,15 @@ namespace {
     return res;
   }
 
-  // TODO(loki): Deprecate this and make it return the TX as hex? Then just transfer it as normal? But these have no fees and or amount .. so maybe not?
+  // TODO(gyuanx): Deprecate this and make it return the TX as hex? Then just transfer it as normal? But these have no fees and or amount .. so maybe not?
   REQUEST_STAKE_UNLOCK::response wallet_rpc_server::invoke(REQUEST_STAKE_UNLOCK::request&& req)
   {
     require_open();
     REQUEST_STAKE_UNLOCK::response res{};
 
     crypto::public_key snode_key             = {};
-    if (!tools::hex_to_type(req.service_node_key, snode_key))
-      throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.service_node_key};
+    if (!tools::hex_to_type(req.gnode_key, snode_key))
+      throw wallet_rpc_error{error_code::WRONG_KEY, std::string("Unparsable service node key given: ") + req.gnode_key};
 
     tools::wallet2::request_stake_unlock_result unlock_result = m_wallet->can_request_stake_unlock(snode_key);
     if (unlock_result.success)
@@ -3222,8 +3222,8 @@ namespace {
     {
       auto& entry = res.known_names.emplace_back();
       auto& type = entry_types.emplace_back(details.type);
-      if (type > lns::mapping_type::lokinet && type <= lns::mapping_type::lokinet_10years)
-        type = lns::mapping_type::lokinet;
+      if (type > lns::mapping_type::gyuanxnet && type <= lns::mapping_type::gyuanxnet_10years)
+        type = lns::mapping_type::gyuanxnet;
       entry.type = lns::mapping_type_str(type);
       entry.hashed = details.hashed_name;
       entry.name = details.name;
@@ -3235,7 +3235,7 @@ namespace {
 
     uint64_t curr_height = req.include_expired ? m_wallet->get_blockchain_current_height() : 0;
 
-    // Query lokid for the full record info
+    // Query gyuanxd for the full record info
     for (auto it = res.known_names.begin(); it != res.known_names.end(); )
     {
       const size_t num_entries = std::distance(it, res.known_names.end());
@@ -3272,12 +3272,12 @@ namespace {
             res_e.expired = *res_e.expiration_height < curr_height;
           res_e.txid = std::move(rec.txid);
 
-          if (req.decrypt && !res_e.encrypted_value.empty() && lokimq::is_hex(res_e.encrypted_value))
+          if (req.decrypt && !res_e.encrypted_value.empty() && gyuanxmq::is_hex(res_e.encrypted_value))
           {
             lns::mapping_value value;
             const auto type = entry_types[type_offset + rec.entry_index];
             std::string errmsg;
-            if (lns::mapping_value::validate_encrypted(type, lokimq::from_hex(res_e.encrypted_value), &value, &errmsg)
+            if (lns::mapping_value::validate_encrypted(type, gyuanxmq::from_hex(res_e.encrypted_value), &value, &errmsg)
                 && value.decrypt(res_e.name, type))
               res_e.value = value.to_readable_value(nettype, type);
             else
@@ -3341,7 +3341,7 @@ namespace {
     if (req.encrypted_value.size() >= (lns::mapping_value::BUFFER_SIZE * 2))
       throw wallet_rpc_error{error_code::LNS_VALUE_TOO_LONG, "Value too long to decrypt=" + req.encrypted_value};
 
-    if (!lokimq::is_hex(req.encrypted_value))
+    if (!gyuanxmq::is_hex(req.encrypted_value))
       throw wallet_rpc_error{error_code::LNS_VALUE_NOT_HEX, "Value is not hex=" + req.encrypted_value};
 
     // ---------------------------------------------------------------------------------------------
@@ -3370,7 +3370,7 @@ namespace {
     lns::mapping_value value = {};
     value.len = req.encrypted_value.size() / 2;
     value.encrypted = true;
-    lokimq::from_hex(req.encrypted_value.begin(), req.encrypted_value.end(), value.buffer.begin());
+    gyuanxmq::from_hex(req.encrypted_value.begin(), req.encrypted_value.end(), value.buffer.begin());
 
     if (!value.decrypt(req.name, type))
       throw wallet_rpc_error{error_code::LNS_VALUE_NOT_HEX, "Value decryption failure"};
@@ -3405,7 +3405,7 @@ namespace {
     if (!value.encrypt(req.name, nullptr, old_argon2))
       throw wallet_rpc_error{error_code::LNS_VALUE_ENCRYPT_FAILED, "Value encryption failure"};
 
-    return {lokimq::to_hex(value.to_view())};
+    return {gyuanxmq::to_hex(value.to_view())};
   }
 
   std::unique_ptr<tools::wallet2> wallet_rpc_server::load_wallet()
@@ -3551,12 +3551,12 @@ int main(int argc, char **argv)
 
   auto [vm, should_terminate] = wallet_args::main(
     argc, argv,
-    "loki-wallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
-    tools::wallet_rpc_server::tr("This is the RPC loki wallet. It needs to connect to a loki\ndaemon to work correctly."),
+    "gyuanx-wallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
+    tools::wallet_rpc_server::tr("This is the RPC gyuanx wallet. It needs to connect to a gyuanx\ndaemon to work correctly."),
     desc_params, hidden_params,
     po::positional_options_description(),
     [](const std::string &s, bool emphasis){ epee::set_console_color(emphasis ? epee::console_color_white : epee::console_color_default, emphasis); std::cout << s << std::endl; if (emphasis) epee::reset_console_color(); },
-    "loki-wallet-rpc.log",
+    "gyuanx-wallet-rpc.log",
     true
   );
   if (!vm)

@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The Loki Project
+// Copyright (c) 2019, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -28,13 +28,13 @@
 
 #include "tx_blink.h"
 #include "common/util.h"
-#include "service_node_list.h"
+#include "gnode_list.h"
 #include <algorithm>
 #include "../cryptonote_basic/cryptonote_format_utils.h"
 
 namespace cryptonote {
 
-using namespace service_nodes;
+using namespace gnodes;
 
 static void check_args(blink_tx::subquorum q, int position, const char *func_name) {
     if (q < blink_tx::subquorum::base || q >= blink_tx::subquorum::_count)
@@ -43,7 +43,7 @@ static void check_args(blink_tx::subquorum q, int position, const char *func_nam
         throw std::invalid_argument("Invalid voter position passed to " + std::string(func_name));
 }
 
-crypto::public_key blink_tx::get_sn_pubkey(subquorum q, int position, const service_node_list &snl) const {
+crypto::public_key blink_tx::get_sn_pubkey(subquorum q, int position, const gnode_list &snl) const {
     check_args(q, position, __func__);
     uint64_t qheight = quorum_height(q);
     auto blink_quorum = snl.get_quorum(quorum_type::blink, qheight);
@@ -86,7 +86,7 @@ bool blink_tx::add_signature(subquorum q, int position, bool approved, const cry
 }
 
 
-bool blink_tx::add_signature(subquorum q, int position, bool approved, const crypto::signature &sig, const service_node_list &snl) {
+bool blink_tx::add_signature(subquorum q, int position, bool approved, const crypto::signature &sig, const gnode_list &snl) {
     return add_signature(q, position, approved, sig, get_sn_pubkey(q, position, snl));
 }
 
@@ -132,7 +132,7 @@ bool blink_tx::rejected() const {
 void blink_tx::fill_serialization_data(crypto::hash &tx_hash, uint64_t &height, std::vector<uint8_t> &quorum, std::vector<uint8_t> &position, std::vector<crypto::signature> &signature) const {
     tx_hash = get_txhash();
     height = this->height;
-    constexpr size_t res_size = tools::enum_count<subquorum> * service_nodes::BLINK_SUBQUORUM_SIZE;
+    constexpr size_t res_size = tools::enum_count<subquorum> * gnodes::BLINK_SUBQUORUM_SIZE;
     quorum.reserve(res_size);
     position.reserve(res_size);
     signature.reserve(res_size);

@@ -1,0 +1,8 @@
+/usr/bin/gyuanxd
+/usr/bin/gyuanx-sn-keys
+debian/gyuanx.conf /etc/gyuanx
+debian/gyuanx.conf /usr/share/gyuanxd
+debian/testnet.conf /etc/gyuanx
+debian/testnet.conf /usr/share/gyuanxd
+debian/ufw/gyuanxd /etc/ufw/applications.d
+debian/gyuanxd-download-lmdb /usr/bin

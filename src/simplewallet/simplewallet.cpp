@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c) 2018-2019, The Loki Project
+// Copyright (c) 2018-2019, The Gyuanx Project
 // 
 // All rights reserved.
 // 
@@ -36,10 +36,10 @@
  */
 
 #include "common/string_util.h"
-#include "loki_economy.h"
+#include "cryptonote_config.h"
 #include <chrono>
 #ifdef _WIN32
- #define __STDC_FORMAT_MACROS // NOTE(loki): Explicitly define the PRIu64 macro on Mingw
+ #define __STDC_FORMAT_MACROS // NOTE(gyuanx): Explicitly define the PRIu64 macro on Mingw
 #endif
 
 #include <locale.h>
@@ -53,7 +53,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
-#include <lokimq/hex.h>
+#include <gyuanxmq/hex.h>
 #include "epee/console_handler.h"
 #include "common/i18n.h"
 #include "common/command_line.h"
@@ -62,11 +62,11 @@
 #include "common/dns_utils.h"
 #include "common/base58.h"
 #include "common/scoped_message_writer.h"
-#include "common/loki_integration_test_hooks.h"
+#include "common/gyuanx_integration_test_hooks.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
-#include "cryptonote_core/service_node_voting.h"
-#include "cryptonote_core/service_node_list.h"
-#include "cryptonote_core/loki_name_system.h"
+#include "cryptonote_core/gnode_voting.h"
+#include "cryptonote_core/gnode_list.h"
+#include "cryptonote_core/gyuanx_name_system.h"
 #include "simplewallet.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -95,12 +95,12 @@ namespace po = boost::program_options;
 namespace string_tools = epee::string_tools;
 using sw = cryptonote::simple_wallet;
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
 
 #define EXTENDED_LOGS_FILE "wallet_details.log"
 
-#define OUTPUT_EXPORT_FILE_MAGIC "Loki output export\003"
+#define OUTPUT_EXPORT_FILE_MAGIC "Gyuanx output export\003"
 
 #define LOCK_IDLE_SCOPE() \
   bool auto_refresh_enabled = m_auto_refresh_enabled.load(std::memory_order_relaxed); \
@@ -109,7 +109,7 @@ using sw = cryptonote::simple_wallet;
   m_wallet->stop(); \
   std::unique_lock lock{m_idle_mutex}; \
   m_idle_cond.notify_all(); \
-  LOKI_DEFER { \
+  GYUANX_DEFER { \
       m_auto_refresh_enabled.store(auto_refresh_enabled, std::memory_order_relaxed); \
       m_idle_cond.notify_one(); \
   }
@@ -142,7 +142,7 @@ namespace
   const command_line::arg_descriptor<bool> arg_allow_mismatched_daemon_version = {"allow-mismatched-daemon-version", sw::tr("Allow communicating with a daemon that uses a different RPC version"), false};
   const command_line::arg_descriptor<uint64_t> arg_restore_height = {"restore-height", sw::tr("Restore from specific blockchain height"), 0};
   const command_line::arg_descriptor<std::string> arg_restore_date = {"restore-date", sw::tr("Restore from estimated blockchain height on specified date"), ""};
-  const command_line::arg_descriptor<bool> arg_do_not_relay = {"do-not-relay", sw::tr("The newly created transaction will not be relayed to the loki network"), false};
+  const command_line::arg_descriptor<bool> arg_do_not_relay = {"do-not-relay", sw::tr("The newly created transaction will not be relayed to the gyuan.online"), false};
   const command_line::arg_descriptor<bool> arg_create_address_file = {"create-address-file", sw::tr("Create an address file for new wallets"), false};
   const command_line::arg_descriptor<std::string> arg_subaddress_lookahead = {"subaddress-lookahead", tools::wallet2::tr("Set subaddress lookahead sizes to <major>:<minor>"), ""};
   const command_line::arg_descriptor<bool> arg_use_english_language_names = {"use-english-language-names", sw::tr("Display English language names"), false};
@@ -214,7 +214,7 @@ namespace
   const char* USAGE_MMS("mms [<subcommand> [<subcommand_parameters>]]");
   const char* USAGE_MMS_INIT("mms init <required_signers>/<authorized_signers> <own_label> <own_transport_address>");
   const char* USAGE_MMS_INFO("mms info");
-  const char* USAGE_MMS_SIGNER("mms signer [<number> <label> [<transport_address> [<loki_address>]]]");
+  const char* USAGE_MMS_SIGNER("mms signer [<number> <label> [<transport_address> [<gyuanx_address>]]]");
   const char* USAGE_MMS_LIST("mms list");
   const char* USAGE_MMS_NEXT("mms next [sync]");
   const char* USAGE_MMS_SYNC("mms sync");
@@ -247,23 +247,23 @@ namespace
   const char* USAGE_HELP("help [<command>]");
 
   //
-  // Loki
+  // Gyuanx
   //
-  const char* USAGE_REGISTER_SERVICE_NODE("register_service_node [index=<N1>[,<N2>,...]] [<priority>] <operator cut> <address1> <fraction1> [<address2> <fraction2> [...]] <expiration timestamp> <pubkey> <signature>");
+  const char* USAGE_REGISTER_SERVICE_NODE("register_gnode [index=<N1>[,<N2>,...]] [<priority>] <operator cut> <address1> <fraction1> [<address2> <fraction2> [...]] <expiration timestamp> <pubkey> <signature>");
   const char* USAGE_STAKE("stake [index=<N1>[,<N2>,...]] [<priority>] <service node pubkey> <amount|percent%>");
-  const char* USAGE_REQUEST_STAKE_UNLOCK("request_stake_unlock <service_node_pubkey>");
+  const char* USAGE_REQUEST_STAKE_UNLOCK("request_stake_unlock <gnode_pubkey>");
   const char* USAGE_PRINT_LOCKED_STAKES("print_locked_stakes");
 
-  const char* USAGE_LNS_BUY_MAPPING("lns_buy_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|lokinet|lokinet_2y|lokinet_5y|lokinet_10y] [owner=<value>] [backup_owner=<value>] <name> <value>");
-  const char* USAGE_LNS_RENEW_MAPPING("lns_renew_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=lokinet|lokinet_2y|lokinet_5y|lokinet_10y] <name>");
-  const char* USAGE_LNS_UPDATE_MAPPING("lns_update_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|lokinet] [owner=<value>] [backup_owner=<value>] [value=<lns_value>] [signature=<hex_signature>] <name>");
+  const char* USAGE_LNS_BUY_MAPPING("lns_buy_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|gyuanxnet|gyuanxnet_2y|gyuanxnet_5y|gyuanxnet_10y] [owner=<value>] [backup_owner=<value>] <name> <value>");
+  const char* USAGE_LNS_RENEW_MAPPING("lns_renew_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=gyuanxnet|gyuanxnet_2y|gyuanxnet_5y|gyuanxnet_10y] <name>");
+  const char* USAGE_LNS_UPDATE_MAPPING("lns_update_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|gyuanxnet] [owner=<value>] [backup_owner=<value>] [value=<lns_value>] [signature=<hex_signature>] <name>");
 
-  const char* USAGE_LNS_ENCRYPT("lns_encrypt [type=session|lokinet] <name> <value>");
-  const char* USAGE_LNS_MAKE_UPDATE_MAPPING_SIGNATURE("lns_make_update_mapping_signature [type=session|lokinet] [owner=<value>] [backup_owner=<value>] [value=<encrypted_lns_value>] <name>");
+  const char* USAGE_LNS_ENCRYPT("lns_encrypt [type=session|gyuanxnet] <name> <value>");
+  const char* USAGE_LNS_MAKE_UPDATE_MAPPING_SIGNATURE("lns_make_update_mapping_signature [type=session|gyuanxnet] [owner=<value>] [backup_owner=<value>] [value=<encrypted_lns_value>] <name>");
   const char* USAGE_LNS_PRINT_OWNERS_TO_NAMES("lns_print_owners_to_names [<owner> ...]");
-  const char* USAGE_LNS_PRINT_NAME_TO_OWNERS("lns_print_name_to_owners [type=session|lokinet] <name> [<name> ...]");
+  const char* USAGE_LNS_PRINT_NAME_TO_OWNERS("lns_print_name_to_owners [type=session|gyuanxnet] <name> [<name> ...]");
 
-#if defined (LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined (GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
   std::string input_line(const std::string &prompt, bool yesno = false)
   {
     if (yesno) std::cout << prompt << " (Y/Yes/N/No): ";
@@ -273,7 +273,7 @@ namespace
     epee::string_tools::trim(buf);
     return buf;
   }
-#else // LOKI_ENABLE_INTEGRATION_TEST_HOOKS
+#else // GYUANX_ENABLE_INTEGRATION_TEST_HOOKS
   std::string input_line(const std::string& prompt, bool yesno = false)
   {
     std::string buf;
@@ -293,11 +293,11 @@ namespace
     epee::string_tools::trim(buf);
     return buf;
   }
-#endif // LOKI_ENABLE_INTEGRATION_TEST_HOOKS
+#endif // GYUANX_ENABLE_INTEGRATION_TEST_HOOKS
 
   epee::wipeable_string input_secure_line(const char *prompt)
   {
-#if defined (LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined (GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
     std::cout << prompt;
     integration_test::write_buffered_stdout();
     epee::wipeable_string buf = integration_test::read_from_pipe();
@@ -320,8 +320,8 @@ namespace
 
   std::optional<tools::password_container> password_prompter(const char *prompt, bool verify)
   {
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-    std::cout << prompt << ": NOTE(loki): Passwords not supported, defaulting to empty password";
+#if defined(GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
+    std::cout << prompt << ": NOTE(gyuanx): Passwords not supported, defaulting to empty password";
     integration_test::write_buffered_stdout();
     tools::password_container pwd_container(std::string(""));
 #else
@@ -462,7 +462,7 @@ namespace
     std::stringstream prompt;
     prompt << sw::tr("For URL: ") << url
            << ", " << dnssec_str << std::endl
-           << sw::tr(" Loki Address = ") << addresses[0]
+           << sw::tr(" Gyuanx Address = ") << addresses[0]
            << std::endl
            << sw::tr("Is this OK?")
     ;
@@ -619,7 +619,7 @@ namespace
   {
     std::string_view data{k.data, sizeof(k.data)};
     std::ostream_iterator<char> osi{std::cout};
-    lokimq::to_hex(data.begin(), data.end(), osi);
+    gyuanxmq::to_hex(data.begin(), data.end(), osi);
   }
 
   bool long_payment_id_failure(bool ret)
@@ -1286,7 +1286,7 @@ bool simple_wallet::import_multisig_main(const std::vector<std::string> &args, b
   try
   {
     m_in_manual_refresh.store(true, std::memory_order_relaxed);
-    LOKI_DEFER { m_in_manual_refresh.store(false, std::memory_order_relaxed); };
+    GYUANX_DEFER { m_in_manual_refresh.store(false, std::memory_order_relaxed); };
     size_t n_outputs = m_wallet->import_multisig(info);
     // Clear line "Height xxx of xxx"
     std::cout << "\r                                                                \r";
@@ -1579,7 +1579,7 @@ bool simple_wallet::export_raw_multisig(const std::vector<std::string> &args)
     for (auto &ptx: txs.m_ptx)
     {
       const crypto::hash txid = cryptonote::get_transaction_hash(ptx.tx);
-      const fs::path fn = fs::u8path("raw_multisig_loki_tx_" + tools::type_to_hex(txid));
+      const fs::path fn = fs::u8path("raw_multisig_gyuanx_tx_" + tools::type_to_hex(txid));
       if (!filenames.empty())
         filenames += ", ";
       filenames += fn.u8string();
@@ -2115,25 +2115,25 @@ bool simple_wallet::net_stats(const std::vector<std::string> &args)
 
 bool simple_wallet::welcome(const std::vector<std::string> &args)
 {
-  message_writer() << tr("Welcome to Loki, the private cryptocurrency based on Monero");
+  message_writer() << tr("Welcome to Gyuanx, the private cryptocurrency based on Monero");
   message_writer() << "";
-  message_writer() << tr("Loki, like Bitcoin, is a cryptocurrency. That is, it is digital money.");
-  message_writer() << tr("Unlike Bitcoin, your Loki transactions and balance stay private and are not visible to the world by default.");
+  message_writer() << tr("Gyuanx, like Bitcoin, is a cryptocurrency. That is, it is digital money.");
+  message_writer() << tr("Unlike Bitcoin, your Gyuanx transactions and balance stay private and are not visible to the world by default.");
   message_writer() << tr("However, you have the option of making those available to select parties if you choose to.");
   message_writer() << "";
-  message_writer() << tr("Loki protects your privacy on the blockchain, and while Loki strives to improve all the time,");
-  message_writer() << tr("no privacy technology can be 100% perfect, Monero and consequently Loki included.");
-  message_writer() << tr("Loki cannot protect you from malware, and it may not be as effective as we hope against powerful adversaries.");
-  message_writer() << tr("Flaws in Loki may be discovered in the future, and attacks may be developed to peek under some");
-  message_writer() << tr("of the layers of privacy Loki provides. Be safe and practice defense in depth.");
+  message_writer() << tr("Gyuanx protects your privacy on the blockchain, and while Gyuanx strives to improve all the time,");
+  message_writer() << tr("no privacy technology can be 100% perfect, Monero and consequently Gyuanx included.");
+  message_writer() << tr("Gyuanx cannot protect you from malware, and it may not be as effective as we hope against powerful adversaries.");
+  message_writer() << tr("Flaws in Gyuanx may be discovered in the future, and attacks may be developed to peek under some");
+  message_writer() << tr("of the layers of privacy Gyuanx provides. Be safe and practice defense in depth.");
   message_writer() << "";
-  message_writer() << tr("Welcome to Loki and financial privacy. For more information, see https://loki.network");
+  message_writer() << tr("Welcome to Gyuanx and financial privacy. For more information, see https://gyuan.online");
   return true;
 }
 
 bool simple_wallet::version(const std::vector<std::string> &args)
 {
-  message_writer() << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")";
+  message_writer() << "Gyuanx '" << GYUANX_RELEASE_NAME << "' (v" << GYUANX_VERSION_FULL << ")";
   return true;
 }
 
@@ -2769,12 +2769,12 @@ simple_wallet::simple_wallet()
  refresh-from-block-height [n]
    Set the height before which to ignore blocks.
  segregate-pre-fork-outputs <1|0>
-   Set this if you intend to spend outputs on both Loki AND a key reusing fork.
+   Set this if you intend to spend outputs on both Gyuanx AND a key reusing fork.
  key-reuse-mitigation2 <1|0>
-   Set this if you are not sure whether you will spend on a key reusing Loki fork later.
+   Set this if you are not sure whether you will spend on a key reusing Gyuanx fork later.
  subaddress-lookahead <major>:<minor>
    Set the lookahead sizes for the subaddress hash table.
-   Set this if you are not sure whether you will spend on a key reusing Loki fork later.
+   Set this if you are not sure whether you will spend on a key reusing Gyuanx fork later.
  segregation-height <n>
    Set to the height of a key reusing fork you want to use, 0 to use default.
  ignore-outputs-above <amount>
@@ -2986,7 +2986,7 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
   m_cmd_binder.set_handler("mms signer",
                            [this](const auto& x) { return mms(x); },
                            tr(USAGE_MMS_SIGNER),
-                           tr("Set or modify authorized signer info (single-word label, transport address, Loki address), or list all signers"));
+                           tr("Set or modify authorized signer info (single-word label, transport address, Gyuanx address), or list all signers"));
   m_cmd_binder.set_handler("mms list",
                            [this](const auto& x) { return mms(x); },
                            tr(USAGE_MMS_LIST),
@@ -3116,12 +3116,12 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
   m_cmd_binder.set_cancel_handler([this] { return on_cancelled_command(); });
 
   //
-  // Loki
+  // Gyuanx
   //
-  m_cmd_binder.set_handler("register_service_node",
-                           [this](const auto& x) { return register_service_node(x); },
+  m_cmd_binder.set_handler("register_gnode",
+                           [this](const auto& x) { return register_gnode(x); },
                            tr(USAGE_REGISTER_SERVICE_NODE),
-                           tr("Send <amount> to this wallet's main account and lock it as an operator stake for a new Service Node. This command is typically generated on the Service Node via the `prepare_registration' lokid command. The optional index= and <priority> parameters work as in the `transfer' command."));
+                           tr("Send <amount> to this wallet's main account and lock it as an operator stake for a new Service Node. This command is typically generated on the Service Node via the `prepare_registration' gyuanxd command. The optional index= and <priority> parameters work as in the `transfer' command."));
   m_cmd_binder.set_handler("stake",
                            [this](const auto& x) { return stake(x); },
                            tr(USAGE_STAKE),
@@ -3158,12 +3158,12 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
   m_cmd_binder.set_handler("lns_print_owners_to_names",
                            [this](const auto& x) { return lns_print_owners_to_names(x); },
                            tr(USAGE_LNS_PRINT_OWNERS_TO_NAMES),
-                           tr("Query the Loki Name Service names that the keys have purchased. If no keys are specified, it defaults to the current wallet."));
+                           tr("Query the Gyuanx Name Service names that the keys have purchased. If no keys are specified, it defaults to the current wallet."));
 
   m_cmd_binder.set_handler("lns_print_name_to_owners",
                            [this](const auto& x) { return lns_print_name_to_owners(x); },
                            tr(USAGE_LNS_PRINT_NAME_TO_OWNERS),
-                           tr("Query the ed25519 public keys that own the Loki Name System names."));
+                           tr("Query the ed25519 public keys that own the Gyuanx Name System names."));
 
   m_cmd_binder.set_handler("lns_make_update_mapping_signature",
                            [this](const auto& x) { return lns_make_update_mapping_signature(x); },
@@ -3462,7 +3462,7 @@ static bool datestr_to_int(const std::string &heightstr, uint16_t &year, uint8_t
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::init(const boost::program_options::variables_map& vm)
 {
-  LOKI_DEFER { m_electrum_seed.wipe(); };
+  GYUANX_DEFER { m_electrum_seed.wipe(); };
 
   if (auto deprecations = tools::wallet2::has_deprecated_options(vm); !deprecations.empty())
   {
@@ -4057,7 +4057,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     bool ssl = false;
     if (m_wallet->check_connection(nullptr, &ssl) && !ssl)
       message_writer(epee::console_color_yellow, true) << tr("Using your own without SSL exposes your RPC traffic to monitoring");
-    message_writer(epee::console_color_yellow, true) << tr("You are strongly encouraged to connect to the Loki network using your own daemon");
+    message_writer(epee::console_color_yellow, true) << tr("You are strongly encouraged to connect to the Gyuanx network using your own daemon");
     message_writer(epee::console_color_yellow, true) << tr("If you or someone you trust are operating this daemon, you can use --trusted-daemon");
     message_writer();
 
@@ -4075,7 +4075,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
   m_wallet->callback(this);
 
   if (welcome)
-    message_writer(epee::console_color_yellow, true) << tr("If you are new to Loki, type \"welcome\" for a brief overview.");
+    message_writer(epee::console_color_yellow, true) << tr("If you are new to Gyuanx, type \"welcome\" for a brief overview.");
 
   m_last_activity_time = time(NULL);
   return true;
@@ -4303,7 +4303,7 @@ std::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::prog
     "To start synchronizing with the daemon, use the \"refresh\" command.\n"
     "Use the \"help\" command to see the list of available commands.\n"
     "Use \"help <command>\" to see a command's documentation.\n"
-    "Always use the \"exit\" command when closing loki-wallet-cli to save \n"
+    "Always use the \"exit\" command when closing gyuanx-wallet-cli to save \n"
     "your current session's state. Otherwise, you might need to synchronize \n"
     "your wallet again (your wallet keys are NOT at risk in any case).\n")
   ;
@@ -5000,7 +5000,7 @@ bool simple_wallet::refresh_main(uint64_t start_height, enum ResetType reset, bo
   try
   {
     m_in_manual_refresh.store(true, std::memory_order_relaxed);
-    LOKI_DEFER { m_in_manual_refresh.store(false, std::memory_order_relaxed); };
+    GYUANX_DEFER { m_in_manual_refresh.store(false, std::memory_order_relaxed); };
     m_wallet->refresh(m_wallet->is_trusted_daemon(), start_height, fetched_blocks, received_money, true /*check_pool*/);
 
     if (reset == ResetSoftKeepKI)
@@ -5627,7 +5627,7 @@ void simple_wallet::check_for_inactivity_lock(bool user)
         .
       oooo
     oooo
-  oooo   .           You Loki Wallet has been locked to
+  oooo   .           You Gyuanx Wallet has been locked to
 oooo    oooo         protect you while you were away.
   oooo    oooo
     oooo    oooo     (Use `set inactivity-lock-timeout 0`
@@ -5762,7 +5762,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
   }
   else if (m_wallet->multisig())
   {
-    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_loki_tx");
+    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_gyuanx_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
@@ -5770,7 +5770,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_gyuanx_tx";
     }
   }
   else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -5799,7 +5799,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
   }
   else if (m_wallet->watch_only())
   {
-    bool r = m_wallet->save_tx(ptx_vector, "unsigned_loki_tx");
+    bool r = m_wallet->save_tx(ptx_vector, "unsigned_gyuanx_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
@@ -5807,7 +5807,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_gyuanx_tx";
     }
   }
   else
@@ -5915,7 +5915,7 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
     }
     else
     {
-      if (boost::starts_with(local_args[i], "loki:"))
+      if (boost::starts_with(local_args[i], "gyuanx:"))
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back() << ": " << error;
       else
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back();
@@ -5993,7 +5993,7 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
       return false;
     }
 
-    loki_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
+    gyuanx_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
     ptx_vector = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices, tx_params);
 
     if (ptx_vector.empty())
@@ -6035,21 +6035,21 @@ bool simple_wallet::locked_sweep_all(const std::vector<std::string> &args_)
   return sweep_main(m_current_subaddress_account, 0, Transfer::Locked, args_);
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::register_service_node(const std::vector<std::string> &args_)
+bool simple_wallet::register_gnode(const std::vector<std::string> &args_)
 {
   if (!try_connect_to_daemon())
     return true;
 
   SCOPED_WALLET_UNLOCK()
-  tools::wallet2::register_service_node_result result = m_wallet->create_register_service_node_tx(args_, m_current_subaddress_account);
-  if (result.status != tools::wallet2::register_service_node_result_status::success)
+  tools::wallet2::register_gnode_result result = m_wallet->create_register_gnode_tx(args_, m_current_subaddress_account);
+  if (result.status != tools::wallet2::register_gnode_result_status::success)
   {
     fail_msg_writer() << result.msg;
-    if (result.status == tools::wallet2::register_service_node_result_status::insufficient_num_args ||
-        result.status == tools::wallet2::register_service_node_result_status::service_node_key_parse_fail ||
-        result.status == tools::wallet2::register_service_node_result_status::service_node_signature_parse_fail ||
-        result.status == tools::wallet2::register_service_node_result_status::subaddr_indices_parse_fail ||
-        result.status == tools::wallet2::register_service_node_result_status::convert_registration_args_failed)
+    if (result.status == tools::wallet2::register_gnode_result_status::insufficient_num_args ||
+        result.status == tools::wallet2::register_gnode_result_status::gnode_key_parse_fail ||
+        result.status == tools::wallet2::register_gnode_result_status::gnode_signature_parse_fail ||
+        result.status == tools::wallet2::register_gnode_result_status::subaddr_indices_parse_fail ||
+        result.status == tools::wallet2::register_gnode_result_status::convert_registration_args_failed)
     {
       fail_msg_writer() << USAGE_REGISTER_SERVICE_NODE;
     }
@@ -6088,7 +6088,7 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
   //
   // Parse Arguments from Args
   //
-  crypto::public_key service_node_key = {};
+  crypto::public_key gnode_key = {};
   uint32_t priority = 0;
   std::set<uint32_t> subaddr_indices = {};
   uint64_t amount = 0;
@@ -6106,7 +6106,7 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
       return true;
     }
 
-    if (!tools::hex_to_type(local_args[0], service_node_key))
+    if (!tools::hex_to_type(local_args[0], gnode_key))
     {
       fail_msg_writer() << tr("failed to parse service node pubkey");
       return true;
@@ -6155,7 +6155,7 @@ bool simple_wallet::stake(const std::vector<std::string> &args_)
 
       time_t begin_construct_time = time(nullptr);
 
-      tools::wallet2::stake_result stake_result = m_wallet->create_stake_tx(service_node_key, info, amount, amount_fraction, priority, m_current_subaddress_account, subaddr_indices);
+      tools::wallet2::stake_result stake_result = m_wallet->create_stake_tx(gnode_key, info, amount, amount_fraction, priority, m_current_subaddress_account, subaddr_indices);
       if (stake_result.status != tools::wallet2::stake_result_status::success)
       {
         fail_msg_writer() << stake_result.msg;
@@ -6237,8 +6237,8 @@ bool simple_wallet::request_stake_unlock(const std::vector<std::string> &args_)
   std::vector<tools::wallet2::pending_tx> ptx_vector = {unlock_result.ptx};
   if (m_wallet->watch_only())
   {
-    if (m_wallet->save_tx(ptx_vector, "unsigned_loki_tx"))
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+    if (m_wallet->save_tx(ptx_vector, "unsigned_gyuanx_tx"))
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_gyuanx_tx";
     else
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
 
@@ -6271,7 +6271,7 @@ bool simple_wallet::query_locked_stakes(bool print_result)
   std::string msg_buf;
   {
     using namespace cryptonote;
-    auto [success, response] = m_wallet->get_all_service_nodes();
+    auto [success, response] = m_wallet->get_all_gnodes();
     if (!success)
     {
       fail_msg_writer() << "Connection to daemon failed when requesting full service node list";
@@ -6307,11 +6307,11 @@ bool simple_wallet::query_locked_stakes(bool print_result)
           {
             only_once = false;
             msg_buf.append("Service Node: ");
-            msg_buf.append(node_info.service_node_pubkey);
+            msg_buf.append(node_info.gnode_pubkey);
             msg_buf.append("\n");
 
             msg_buf.append("Unlock Height: ");
-            if (node_info.requested_unlock_height == service_nodes::KEY_IMAGE_AWAITING_UNLOCK_HEIGHT)
+            if (node_info.requested_unlock_height == gnodes::KEY_IMAGE_AWAITING_UNLOCK_HEIGHT)
                 msg_buf.append("Unlock not requested yet");
             else
                 msg_buf.append(std::to_string(node_info.requested_unlock_height));
@@ -6343,7 +6343,7 @@ bool simple_wallet::query_locked_stakes(bool print_result)
   }
 
   {
-    auto [success, response] = m_wallet->get_service_node_blacklisted_key_images();
+    auto [success, response] = m_wallet->get_gnode_blacklisted_key_images();
     if (!success)
     {
       fail_msg_writer() << "Connection to daemon failed when retrieving blacklisted key images";
@@ -6383,7 +6383,7 @@ bool simple_wallet::query_locked_stakes(bool print_result)
       msg_buf.append(entry.key_image);
       msg_buf.append("\n");
       if (entry.amount > 0) {
-        // version >= service_nodes::key_image_blacklist_entry::version_1_serialize_amount
+        // version >= gnodes::key_image_blacklist_entry::version_1_serialize_amount
         msg_buf.append("  Total Locked: ");
         msg_buf.append(cryptonote::print_money(entry.amount));
         msg_buf.append("\n");
@@ -6442,9 +6442,9 @@ static std::optional<lns::mapping_type> guess_lns_type(tools::wallet2& wallet, s
 {
   if (typestr.empty())
   {
-    if (tools::ends_with(name, ".loki") && (tools::ends_with(value, ".loki") || value.empty()))
-      return lns::mapping_type::lokinet;
-    if (!tools::ends_with(name, ".loki") && tools::starts_with(value, "05") && value.length() == 2*lns::SESSION_PUBLIC_KEY_BINARY_LENGTH)
+    if (tools::ends_with(name, ".gyuanx") && (tools::ends_with(value, ".gyuanx") || value.empty()))
+      return lns::mapping_type::gyuanxnet;
+    if (!tools::ends_with(name, ".gyuanx") && tools::starts_with(value, "05") && value.length() == 2*lns::SESSION_PUBLIC_KEY_BINARY_LENGTH)
       return lns::mapping_type::session;
 
     fail_msg_writer() << tr("Could not infer LNS type from name/value; trying using the type= argument or see `help' for more details");
@@ -6521,16 +6521,16 @@ bool simple_wallet::lns_buy_mapping(std::vector<std::string> args)
     info.is_subaddress                  = m_current_subaddress_account != 0;
     dsts.push_back(info);
 
-    std::cout << std::endl << tr("Buying Loki Name System Record") << std::endl << std::endl;
+    std::cout << std::endl << tr("Buying Gyuanx Name System Record") << std::endl << std::endl;
     if (*type == lns::mapping_type::session)
       std::cout << boost::format(tr("Session Name: %s")) % name << std::endl;
-    else if (lns::is_lokinet_type(*type))
+    else if (lns::is_gyuanxnet_type(*type))
     {
-      std::cout << boost::format(tr("Lokinet Name: %s")) % name << std::endl;
+      std::cout << boost::format(tr("Gyuanxnet Name: %s")) % name << std::endl;
       int years = 
-          *type == lns::mapping_type::lokinet_10years ? 10 :
-          *type == lns::mapping_type::lokinet_5years ? 5 :
-          *type == lns::mapping_type::lokinet_2years ? 2 :
+          *type == lns::mapping_type::gyuanxnet_10years ? 10 :
+          *type == lns::mapping_type::gyuanxnet_5years ? 5 :
+          *type == lns::mapping_type::gyuanxnet_2years ? 2 :
           1;
       int blocks = BLOCKS_EXPECTED_IN_DAYS(years * lns::REGISTRATION_YEAR_DAYS);
       std::cout << boost::format(tr("Registration: %d years (%d blocks)")) % years % blocks << "\n";
@@ -6617,16 +6617,16 @@ bool simple_wallet::lns_renew_mapping(std::vector<std::string> args)
     info.is_subaddress                  = m_current_subaddress_account != 0;
     dsts.push_back(info);
 
-    std::cout << "\n" << tr("Renew Loki Name System Record") << "\n\n";
-    if (lns::is_lokinet_type(type))
-      std::cout << boost::format(tr("Lokinet Name:  %s")) % name << "\n";
+    std::cout << "\n" << tr("Renew Gyuanx Name System Record") << "\n\n";
+    if (lns::is_gyuanxnet_type(type))
+      std::cout << boost::format(tr("Gyuanxnet Name:  %s")) % name << "\n";
     else
       std::cout << boost::format(tr("Name:          %s")) % name << "\n";
 
     int years = 1;
-    if (type == lns::mapping_type::lokinet_2years) years = 2;
-    else if (type == lns::mapping_type::lokinet_5years) years = 5;
-    else if (type == lns::mapping_type::lokinet_10years) years = 10;
+    if (type == lns::mapping_type::gyuanxnet_2years) years = 2;
+    else if (type == lns::mapping_type::gyuanxnet_5years) years = 5;
+    else if (type == lns::mapping_type::gyuanxnet_10years) years = 10;
     int blocks = BLOCKS_EXPECTED_IN_DAYS(years * lns::REGISTRATION_YEAR_DAYS);
     std::cout << boost::format(tr("Renewal years: %d (%d blocks)")) % years % blocks << "\n";
     std::cout << boost::format(tr("New expiry:    Block %d")) % (*response[0].expiration_height + blocks) << "\n";
@@ -6697,17 +6697,17 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     }
 
     auto& enc_hex = response[0].encrypted_value;
-    if (!lokimq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
+    if (!gyuanxmq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
     {
-      LOG_ERROR("invalid LNS data returned from lokid");
-      fail_msg_writer() << tr("invalid LNS data returned from lokid");
+      LOG_ERROR("invalid LNS data returned from gyuanxd");
+      fail_msg_writer() << tr("invalid LNS data returned from gyuanxd");
       return true;
     }
 
     lns::mapping_value mval{};
     mval.len = enc_hex.size() / 2;
     mval.encrypted = true;
-    lokimq::from_hex(enc_hex.begin(), enc_hex.end(), mval.buffer.begin());
+    gyuanxmq::from_hex(enc_hex.begin(), enc_hex.end(), mval.buffer.begin());
 
     if (!mval.decrypt(tools::lowercase_ascii_string(name), type))
     {
@@ -6721,11 +6721,11 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     info.is_subaddress                  = m_current_subaddress_account != 0;
     dsts.push_back(info);
 
-    std::cout << std::endl << tr("Updating Loki Name System Record") << std::endl << std::endl;
+    std::cout << std::endl << tr("Updating Gyuanx Name System Record") << std::endl << std::endl;
     if (type == lns::mapping_type::session)
       std::cout << boost::format(tr("Session Name:     %s")) % name << std::endl;
-    else if (lns::is_lokinet_type(type))
-      std::cout << boost::format(tr("Lokinet Name:     %s")) % name << std::endl;
+    else if (lns::is_gyuanxnet_type(type))
+      std::cout << boost::format(tr("Gyuanxnet Name:     %s")) % name << std::endl;
     else
       std::cout << boost::format(tr("Name:             %s")) % name << std::endl;
 
@@ -6828,7 +6828,7 @@ bool simple_wallet::lns_encrypt(std::vector<std::string> args)
     return false;
   }
 
-  tools::success_msg_writer() << "encrypted value=" << lokimq::to_hex(mval.to_view());
+  tools::success_msg_writer() << "encrypted value=" << gyuanxmq::to_hex(mval.to_view());
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -6937,9 +6937,9 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
   for (auto const &mapping : response)
   {
     auto& enc_hex = mapping.encrypted_value;
-    if (mapping.entry_index >= args.size() || !lokimq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
+    if (mapping.entry_index >= args.size() || !gyuanxmq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
     {
-      fail_msg_writer() << "Received invalid LNS mapping data from lokid";
+      fail_msg_writer() << "Received invalid LNS mapping data from gyuanxd";
       return false;
     }
 
@@ -6952,7 +6952,7 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
     lns::mapping_value value{};
     value.len = enc_hex.size() / 2;
     value.encrypted = true;
-    lokimq::from_hex(enc_hex.begin(), enc_hex.end(), value.buffer.begin());
+    gyuanxmq::from_hex(enc_hex.begin(), enc_hex.end(), value.buffer.begin());
 
     if (!value.decrypt(name, mapping.type))
     {
@@ -7020,7 +7020,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         fail_msg_writer() << "arg too long, fails basic size sanity check max length = " << MAX_LEN << ", arg = " << arg;
         return false;
       }
-      if (!lokimq::is_hex(arg))
+      if (!gyuanxmq::is_hex(arg))
       {
         fail_msg_writer() << "arg contains non-hex characters: " << arg;
         return false;
@@ -7068,7 +7068,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
       {
         name = got->second.name;
         lns::mapping_value mv;
-        if (lns::mapping_value::validate_encrypted(entry.type, lokimq::from_hex(entry.encrypted_value), &mv)
+        if (lns::mapping_value::validate_encrypted(entry.type, gyuanxmq::from_hex(entry.encrypted_value), &mv)
             && mv.decrypt(name, entry.type))
           value = mv.to_readable_value(nettype, entry.type);
       }
@@ -7149,26 +7149,26 @@ bool simple_wallet::sweep_unmixable(const std::vector<std::string> &args_)
     // actually commit the transactions
     if (m_wallet->multisig())
     {
-      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_loki_tx");
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_gyuanx_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_loki_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_gyuanx_tx";
       }
     }
     else if (m_wallet->watch_only())
     {
-      bool r = m_wallet->save_tx(ptx_vector, "unsigned_loki_tx");
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_gyuanx_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_gyuanx_tx";
       }
     }
     else
@@ -7274,14 +7274,14 @@ bool simple_wallet::sweep_main_internal(sweep_type_t sweep_type, std::vector<too
   bool submitted_to_network = false;
   if (m_wallet->multisig())
   {
-    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_loki_tx");
+    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_gyuanx_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_gyuanx_tx";
     }
   }
   else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -7311,14 +7311,14 @@ bool simple_wallet::sweep_main_internal(sweep_type_t sweep_type, std::vector<too
   }
   else if (m_wallet->watch_only())
   {
-    bool r = m_wallet->save_tx(ptx_vector, "unsigned_loki_tx");
+    bool r = m_wallet->save_tx(ptx_vector, "unsigned_gyuanx_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_gyuanx_tx";
     }
   }
   else
@@ -7823,7 +7823,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
   std::vector<tools::wallet2::pending_tx> ptx;
   try
   {
-    bool r = m_wallet->sign_tx("unsigned_loki_tx", "signed_loki_tx", ptx, [&](const tools::wallet2::unsigned_tx_set &tx){ return accept_loaded_tx(tx); }, export_raw);
+    bool r = m_wallet->sign_tx("unsigned_gyuanx_tx", "signed_gyuanx_tx", ptx, [&](const tools::wallet2::unsigned_tx_set &tx){ return accept_loaded_tx(tx); }, export_raw);
     if (!r)
     {
       fail_msg_writer() << tr("Failed to sign transaction");
@@ -7843,7 +7843,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
       txids_as_text += (", ");
     txids_as_text += tools::type_to_hex(get_transaction_hash(t.tx));
   }
-  success_msg_writer(true) << tr("Transaction successfully signed to file ") << "signed_loki_tx" << ", txid " << txids_as_text;
+  success_msg_writer(true) << tr("Transaction successfully signed to file ") << "signed_gyuanx_tx" << ", txid " << txids_as_text;
   if (export_raw)
   {
     std::string rawfiles_as_text;
@@ -7851,7 +7851,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
     {
       if (i > 0)
         rawfiles_as_text += ", ";
-      rawfiles_as_text += "signed_loki_tx_raw" + (ptx.size() == 1 ? "" : ("_" + std::to_string(i)));
+      rawfiles_as_text += "signed_gyuanx_tx_raw" + (ptx.size() == 1 ? "" : ("_" + std::to_string(i)));
     }
     success_msg_writer(true) << tr("Transaction raw hex data exported to ") << rawfiles_as_text;
   }
@@ -7871,14 +7871,14 @@ bool simple_wallet::submit_transfer(const std::vector<std::string> &args_)
   try
   {
     std::vector<tools::wallet2::pending_tx> ptx_vector;
-    bool r = m_wallet->load_tx("signed_loki_tx", ptx_vector, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); });
+    bool r = m_wallet->load_tx("signed_gyuanx_tx", ptx_vector, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); });
     if (!r)
     {
       fail_msg_writer() << tr("Failed to load transaction from file");
       return true;
     }
 
-    // FIXME: store the blink status in the signed_loki_tx somehow?
+    // FIXME: store the blink status in the signed_gyuanx_tx somehow?
     constexpr bool FIXME_blink = false;
 
     commit_or_save(ptx_vector, false, FIXME_blink);
@@ -8024,7 +8024,7 @@ bool simple_wallet::get_tx_proof(const std::vector<std::string> &args)
   try
   {
     std::string sig_str = m_wallet->get_tx_proof(txid, info.address, info.is_subaddress, args.size() == 3 ? args[2] : "");
-    const fs::path filename{"loki_tx_proof"};
+    const fs::path filename{"gyuanx_tx_proof"};
     if (m_wallet->save_to_file(filename, sig_str, true))
       success_msg_writer() << tr("signature file saved to: ") << filename.u8string();
     else
@@ -8236,7 +8236,7 @@ bool simple_wallet::get_spend_proof(const std::vector<std::string> &args)
   try
   {
     const std::string sig_str = m_wallet->get_spend_proof(txid, args.size() == 2 ? args[1] : "");
-    const fs::path filename{"loki_spend_proof"};
+    const fs::path filename{"gyuanx_spend_proof"};
     if (m_wallet->save_to_file(filename, sig_str, true))
       success_msg_writer() << tr("signature file saved to: ") << filename.u8string();
     else
@@ -8325,7 +8325,7 @@ bool simple_wallet::get_reserve_proof(const std::vector<std::string> &args)
   try
   {
     const std::string sig_str = m_wallet->get_reserve_proof(account_minreserve, args.size() == 2 ? args[1] : "");
-    const fs::path filename{"loki_reserve_proof"};
+    const fs::path filename{"gyuanx_reserve_proof"};
     if (m_wallet->save_to_file(filename, sig_str, true))
       success_msg_writer() << tr("signature file saved to: ") << filename.u8string();
     else
@@ -8531,7 +8531,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
         case wallet::pay_type::miner:        color = epee::console_color_cyan; break;
         case wallet::pay_type::governance:   color = epee::console_color_cyan; break;
         case wallet::pay_type::stake:        color = epee::console_color_blue; break;
-        case wallet::pay_type::service_node: color = epee::console_color_cyan; break;
+        case wallet::pay_type::gnode: color = epee::console_color_cyan; break;
         default:                            color = epee::console_color_magenta; break;
       }
     }
@@ -8550,7 +8550,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
 
         if (transfer.pay_type == wallet::pay_type::in ||
             transfer.pay_type == wallet::pay_type::governance ||
-            transfer.pay_type == wallet::pay_type::service_node ||
+            transfer.pay_type == wallet::pay_type::gnode ||
             transfer.pay_type == wallet::pay_type::miner)
           destinations += output.address.substr(0, 6);
         else
@@ -8958,13 +8958,13 @@ std::string simple_wallet::get_prompt() const
 }
 //----------------------------------------------------------------------------------------------------
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
 #include <thread>
 #endif
 
 bool simple_wallet::run()
 {
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
   integration_test::use_redirected_cout();
 #endif
   // check and display warning, but go on anyway
@@ -8994,7 +8994,7 @@ bool simple_wallet::run()
 
   message_writer(epee::console_color_green, false) << "Background refresh thread started";
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(GYUANX_ENABLE_INTEGRATION_TEST_HOOKS)
   for (;;)
   {
     integration_test::write_buffered_stdout();
@@ -10181,7 +10181,7 @@ void simple_wallet::interrupt()
 void simple_wallet::commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_vector, bool do_not_relay, bool blink)
 {
   size_t i = 0;
-  std::string msg_buf; // NOTE(loki): Buffer output so integration tests read the entire output
+  std::string msg_buf; // NOTE(gyuanx): Buffer output so integration tests read the entire output
   msg_buf.reserve(128);
 
   while (!ptx_vector.empty())
@@ -10193,8 +10193,8 @@ void simple_wallet::commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_
     {
       cryptonote::blobdata blob;
       tx_to_blob(ptx.tx, blob);
-      const std::string blob_hex = lokimq::to_hex(blob);
-      fs::path filename = fs::u8path("raw_loki_tx");
+      const std::string blob_hex = gyuanxmq::to_hex(blob);
+      fs::path filename = fs::u8path("raw_gyuanx_tx");
       if (ptx_vector.size() > 1) filename += "_" + std::to_string(i++);
       bool success = m_wallet->save_to_file(filename, blob_hex, true);
 
@@ -10263,13 +10263,13 @@ int main(int argc, char* argv[])
 
   auto [vm, should_terminate] = wallet_args::main(
    argc, argv,
-   "loki-wallet-cli [--wallet-file=<filename>|--generate-new-wallet=<filename>] [<COMMAND>]",
-    sw::tr("This is the command line Loki wallet. It needs to connect to a Loki\ndaemon to work correctly.\n\nWARNING: Do not reuse your Loki keys on a contentious fork, doing so will harm your privacy.\n Only consider reusing your key on a contentious fork if the fork has key reuse mitigations built in."),
+   "gyuanx-wallet-cli [--wallet-file=<filename>|--generate-new-wallet=<filename>] [<COMMAND>]",
+    sw::tr("This is the command line Gyuanx wallet. It needs to connect to a Gyuanx\ndaemon to work correctly.\n\nWARNING: Do not reuse your Gyuanx keys on a contentious fork, doing so will harm your privacy.\n Only consider reusing your key on a contentious fork if the fork has key reuse mitigations built in."),
     desc_params,
     hidden_params,
     positional_options,
     [](const std::string &s, bool emphasis){ tools::scoped_message_writer(emphasis ? epee::console_color_white : epee::console_color_default, true) << s; },
-    "loki-wallet-cli.log"
+    "gyuanx-wallet-cli.log"
   );
 
   if (!vm)
@@ -10446,7 +10446,7 @@ void simple_wallet::list_mms_messages(const std::vector<mms::message> &messages)
 void simple_wallet::list_signers(const std::vector<mms::authorized_signer> &signers)
 {
   message_writer() << boost::format("%2s %-20s %-s") % tr("#") % tr("Label") % tr("Transport Address");
-  message_writer() << boost::format("%2s %-20s %-s") % "" % tr("Auto-Config Token") % tr("Loki Address");
+  message_writer() << boost::format("%2s %-20s %-s") % "" % tr("Auto-Config Token") % tr("Gyuanx Address");
   for (size_t i = 0; i < signers.size(); ++i)
   {
     const mms::authorized_signer &signer = signers[i];
@@ -10652,7 +10652,7 @@ void simple_wallet::mms_signer(const std::vector<std::string> &args)
   }
   if ((args.size() < 2) || (args.size() > 4))
   {
-    fail_msg_writer() << tr("mms signer [<number> <label> [<transport_address> [<loki_address>]]]");
+    fail_msg_writer() << tr("mms signer [<number> <label> [<transport_address> [<gyuanx_address>]]]");
     return;
   }
 
@@ -10671,14 +10671,14 @@ void simple_wallet::mms_signer(const std::vector<std::string> &args)
     bool ok = cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), args[3], oa_prompter);
     if (!ok)
     {
-      fail_msg_writer() << tr("Invalid Loki address");
+      fail_msg_writer() << tr("Invalid Gyuanx address");
       return;
     }
     monero_address = info.address;
     const std::vector<mms::message> &messages = ms.get_all_messages();
     if ((messages.size() > 0) || state.multisig)
     {
-      fail_msg_writer() << tr("Wallet state does not allow changing Loki addresses anymore");
+      fail_msg_writer() << tr("Wallet state does not allow changing Gyuanx addresses anymore");
       return;
     }
   }

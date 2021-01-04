@@ -131,6 +131,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(NOTIFY_REQUEST_GET_TXS::request)
   KV_SERIALIZE_CONTAINER_POD_AS_BLOB(txs)
 KV_SERIALIZE_MAP_CODE_END()
 
-// NOTIFY_NEW_SERVICE_NODE_VOTE::request implementation is in service_node_voting.cpp
+// NOTIFY_NEW_SERVICE_NODE_VOTE::request implementation is in gnode_voting.cpp
 
 }

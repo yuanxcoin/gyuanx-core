@@ -76,8 +76,8 @@ struct mdb_txn_cursors
 
   MDB_cursor *hf_versions;
 
-  MDB_cursor *service_node_data;
-  MDB_cursor *service_node_proofs;
+  MDB_cursor *gnode_data;
+  MDB_cursor *gnode_proofs;
   MDB_cursor *output_blacklist;
   MDB_cursor *properties;
 };
@@ -104,8 +104,8 @@ struct mdb_rflags
   bool m_rf_txpool_blob;
   bool m_rf_alt_blocks;
   bool m_rf_hf_versions;
-  bool m_rf_service_node_data;
-  bool m_rf_service_node_proofs;
+  bool m_rf_gnode_data;
+  bool m_rf_gnode_proofs;
   bool m_rf_properties;
 };
 
@@ -439,14 +439,14 @@ private:
   void cleanup_batch();
 
   bool get_block_checkpoint_internal(uint64_t height, checkpoint_t &checkpoint, MDB_cursor_op op) const;
-  void set_service_node_data(const std::string& data, bool long_term) override;
-  bool get_service_node_data(std::string& data, bool long_term) const override;
-  void clear_service_node_data() override;
+  void set_gnode_data(const std::string& data, bool long_term) override;
+  bool get_gnode_data(std::string& data, bool long_term) const override;
+  void clear_gnode_data() override;
 
-  bool get_service_node_proof(const crypto::public_key& pubkey, service_nodes::proof_info& proof) const override;
-  void set_service_node_proof(const crypto::public_key& pubkey, const service_nodes::proof_info& proof) override;
-  std::unordered_map<crypto::public_key, service_nodes::proof_info> get_all_service_node_proofs() const override;
-  bool remove_service_node_proof(const crypto::public_key& pubkey) override;
+  bool get_gnode_proof(const crypto::public_key& pubkey, gnodes::proof_info& proof) const override;
+  void set_gnode_proof(const crypto::public_key& pubkey, const gnodes::proof_info& proof) override;
+  std::unordered_map<crypto::public_key, gnodes::proof_info> get_all_gnode_proofs() const override;
+  bool remove_gnode_proof(const crypto::public_key& pubkey) override;
 
 private:
   template <typename T,
@@ -484,8 +484,8 @@ private:
   MDB_dbi m_hf_starting_heights;
   MDB_dbi m_hf_versions;
 
-  MDB_dbi m_service_node_data;
-  MDB_dbi m_service_node_proofs;
+  MDB_dbi m_gnode_data;
+  MDB_dbi m_gnode_proofs;
 
   MDB_dbi m_properties;
 

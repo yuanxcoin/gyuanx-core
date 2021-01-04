@@ -9,17 +9,17 @@
 
 #include "cryptonote_core.h"
 #include "cryptonote_basic/hardfork.h"
-#include "service_node_list.h"
-#include "service_node_quorum_cop.h"
-#include "service_node_rules.h"
+#include "gnode_list.h"
+#include "gnode_quorum_cop.h"
+#include "gnode_rules.h"
 
 extern "C"
 {
 #include <sodium/crypto_generichash.h>
 };
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "pulse"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "pulse"
 
 // Deliberately makes pulse communications flakey for testing purposes:
 //#define PULSE_TEST_CODE
@@ -86,7 +86,7 @@ enum struct queueing_state
 };
 
 template <typename T>
-using quorum_array = std::array<T, service_nodes::PULSE_QUORUM_NUM_VALIDATORS>;
+using quorum_array = std::array<T, gnodes::PULSE_QUORUM_NUM_VALIDATORS>;
 
 // Stores message for quorumnet per stage. Some validators may reach later
 // stages before we arrive at that stage. To properly validate messages we also
@@ -125,7 +125,7 @@ struct round_history
   uint64_t              height;
   uint8_t               round;
   crypto::hash          top_block_hash;
-  service_nodes::quorum quorum;
+  gnodes::quorum quorum;
 };
 
 struct round_context
@@ -147,7 +147,7 @@ struct round_context
   {
     bool                  queue_for_next_round; // When set to true, invoking prepare_for_round(...) will wait for (round + 1)
     uint8_t               round;                // The next round the Pulse ceremony will generate a block for
-    service_nodes::quorum quorum;               // The block producer/validator participating in the next round
+    gnodes::quorum quorum;               // The block producer/validator participating in the next round
     sn_type               participant;          // Is this daemon a block producer, validator or non participant.
     size_t                my_quorum_position;   // Position in the quorum, 0 if producer or neither, or [0, PULSE_QUORUM_NUM_VALIDATORS) if a validator
     std::string           node_name;            // Short-hand string for describing the node in logs, i.e. V[0] for validator 0 or W[0] for the producer.
@@ -341,10 +341,10 @@ std::string msg_source_string(round_context const &context, pulse::message const
   return stream.str();
 }
 
-bool msg_signature_check(pulse::message const &msg, crypto::hash const &top_block_hash, service_nodes::quorum const &quorum, std::string *error)
+bool msg_signature_check(pulse::message const &msg, crypto::hash const &top_block_hash, gnodes::quorum const &quorum, std::string *error)
 {
   std::stringstream stream;
-  LOKI_DEFER {
+  GYUANX_DEFER {
     if (error) *error = stream.str();
   };
 
@@ -402,7 +402,7 @@ bool msg_signature_check(pulse::message const &msg, crypto::hash const &top_bloc
 // NOTE: round_context Utilities
 //
 // Construct a pulse::message for sending the handshake bit or bitset.
-void relay_validator_handshake_bit_or_bitset(round_context const &context, void *quorumnet_state, service_nodes::service_node_keys const &key, bool sending_bitset)
+void relay_validator_handshake_bit_or_bitset(round_context const &context, void *quorumnet_state, gnodes::gnode_keys const &key, bool sending_bitset)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
 
@@ -448,7 +448,7 @@ void handle_messages_received_early_for(pulse_wait_stage &stage, void *quorumnet
 // all participating validators are doing their job in the stage.
 bool enforce_validator_participation_and_timeouts(round_context const &context,
                                                   pulse_wait_stage const &stage,
-                                                  service_nodes::service_node_list &node_list,
+                                                  gnodes::gnode_list &node_list,
                                                   bool timed_out,
                                                   bool all_received)
 {
@@ -488,7 +488,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     return;
   }
 
-  // TODO(loki): We don't support messages from future rounds. A round
+  // TODO(gyuanx): We don't support messages from future rounds. A round
   // mismatch will be detected in the signature as the round is included in the
   // signature hash.
 
@@ -591,7 +591,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
     }
   }
 
-  if (msg.quorum_position >= service_nodes::PULSE_QUORUM_NUM_VALIDATORS)
+  if (msg.quorum_position >= gnodes::PULSE_QUORUM_NUM_VALIDATORS)
   {
     MTRACE(log_prefix(context) << "Dropping " << msg_source_string(context, msg) << ". Message quorum position indexes oob");
     return;
@@ -726,7 +726,7 @@ void pulse::handle_message(void *quorumnet_state, pulse::message const &msg)
 bool pulse::convert_time_to_round(pulse::time_point const &time, pulse::time_point const &r0_timestamp, uint8_t *round)
 {
   auto const time_since_round_started = time <= r0_timestamp ? std::chrono::seconds(0) : (time - r0_timestamp);
-  size_t result_usize                 = time_since_round_started / service_nodes::PULSE_ROUND_TIME;
+  size_t result_usize                 = time_since_round_started / gnodes::PULSE_ROUND_TIME;
   if (round) *round = static_cast<uint8_t>(result_usize);
   return result_usize <= 255;
 }
@@ -753,13 +753,13 @@ bool pulse::get_round_timings(cryptonote::Blockchain const &blockchain, uint64_t
 
 #if 1
   times.r0_timestamp    = std::clamp(times.ideal_timestamp,
-                                  times.prev_timestamp + service_nodes::PULSE_MIN_TARGET_BLOCK_TIME,
-                                  times.prev_timestamp + service_nodes::PULSE_MAX_TARGET_BLOCK_TIME);
+                                  times.prev_timestamp + gnodes::PULSE_MIN_TARGET_BLOCK_TIME,
+                                  times.prev_timestamp + gnodes::PULSE_MAX_TARGET_BLOCK_TIME);
 #else // NOTE: Debug, make next block start relatively soon
-  times.r0_timestamp = times.prev_timestamp + service_nodes::PULSE_ROUND_TIME;
+  times.r0_timestamp = times.prev_timestamp + gnodes::PULSE_ROUND_TIME;
 #endif
 
-  times.miner_fallback_timestamp = times.r0_timestamp + (service_nodes::PULSE_ROUND_TIME * 255);
+  times.miner_fallback_timestamp = times.r0_timestamp + (gnodes::PULSE_ROUND_TIME * 255);
   return true;
 }
 
@@ -885,7 +885,7 @@ Yes +-----[Block can not be added to blockchain]
       Genesis Pulse Block for the base timestamp and the top block hash and
       height for signatures.
 
-    - // TODO(loki): After the Genesis Pulse Block is checkpointed, we can
+    - // TODO(gyuanx): After the Genesis Pulse Block is checkpointed, we can
       // remove it from the event loop. Right now we recheck every block incase
       // of (the very unlikely event) reorgs that might change the block at the
       // hardfork.
@@ -999,7 +999,7 @@ round_state goto_preparing_for_next_round(round_context &context)
 
 void clear_round_data(round_context &context)
 {
-  if (service_nodes::verify_pulse_quorum_sizes(context.prepare_for_round.quorum))
+  if (gnodes::verify_pulse_quorum_sizes(context.prepare_for_round.quorum))
   {
     // NOTE: Store the quorum into history before deleting it from memory.
     // This way we can verify late arriving messages when we may have progressed
@@ -1096,7 +1096,7 @@ round_state wait_for_next_block(uint64_t hf16_height, round_context &context, cr
   return round_state::prepare_for_round;
 }
 
-round_state prepare_for_round(round_context &context, service_nodes::service_node_keys const &key, cryptonote::Blockchain const &blockchain)
+round_state prepare_for_round(round_context &context, gnodes::gnode_keys const &key, cryptonote::Blockchain const &blockchain)
 {
   //
   // NOTE: Clear Round Data
@@ -1139,7 +1139,7 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
   {
     auto now                     = pulse::clock::now();
     auto const time_since_block  = now <= context.wait_for_next_block.round_0_start_time ? std::chrono::seconds(0) : (now - context.wait_for_next_block.round_0_start_time);
-    size_t round_usize           = time_since_block / service_nodes::PULSE_ROUND_TIME;
+    size_t round_usize           = time_since_block / gnodes::PULSE_ROUND_TIME;
 
     if (round_usize > 255) // Network stalled
     {
@@ -1153,7 +1153,7 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
   }
 
   {
-    using namespace service_nodes;
+    using namespace gnodes;
     context.prepare_for_round.start_time                          = context.wait_for_next_block.round_0_start_time                + (context.prepare_for_round.round * PULSE_ROUND_TIME);
     context.transient.send_and_wait_for_handshakes.stage.end_time = context.prepare_for_round.start_time                          + PULSE_WAIT_FOR_HANDSHAKES_DURATION;
     context.transient.wait_for_handshake_bitsets.stage.end_time   = context.transient.send_and_wait_for_handshakes.stage.end_time + PULSE_WAIT_FOR_OTHER_VALIDATOR_HANDSHAKES_DURATION;
@@ -1163,20 +1163,20 @@ round_state prepare_for_round(round_context &context, service_nodes::service_nod
     context.transient.signed_block.wait.stage.end_time            = context.transient.random_value.wait.stage.end_time            + PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION;
   }
 
-  std::vector<crypto::hash> const entropy = service_nodes::get_pulse_entropy_for_next_block(blockchain.get_db(), context.wait_for_next_block.top_hash, context.prepare_for_round.round);
-  auto const active_node_list             = blockchain.get_service_node_list().active_service_nodes_infos();
+  std::vector<crypto::hash> const entropy = gnodes::get_pulse_entropy_for_next_block(blockchain.get_db(), context.wait_for_next_block.top_hash, context.prepare_for_round.round);
+  auto const active_node_list             = blockchain.get_gnode_list().active_gnodes_infos();
   uint8_t const hf_version                = blockchain.get_current_hard_fork_version();
-  crypto::public_key const &block_leader  = blockchain.get_service_node_list().get_block_leader().key;
+  crypto::public_key const &block_leader  = blockchain.get_gnode_list().get_block_leader().key;
 
   context.prepare_for_round.quorum =
-      service_nodes::generate_pulse_quorum(blockchain.nettype(),
+      gnodes::generate_pulse_quorum(blockchain.nettype(),
                                            block_leader,
                                            hf_version,
                                            active_node_list,
                                            entropy,
                                            context.prepare_for_round.round);
 
-  if (!service_nodes::verify_pulse_quorum_sizes(context.prepare_for_round.quorum))
+  if (!gnodes::verify_pulse_quorum_sizes(context.prepare_for_round.quorum))
   {
     MINFO(log_prefix(context) << "Insufficient Service Nodes to execute Pulse on height " << context.wait_for_next_block.height << ", we require a PoW miner block. Sleeping until next block.");
     return goto_wait_for_next_block_and_clear_round_data(context);
@@ -1270,7 +1270,7 @@ round_state wait_for_round(round_context &context, cryptonote::Blockchain const 
   }
 }
 
-round_state send_and_wait_for_handshakes(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_and_wait_for_handshakes(round_context &context, void *quorumnet_state, gnodes::gnode_keys const &key)
 {
   //
   // NOTE: Send
@@ -1315,7 +1315,7 @@ round_state send_and_wait_for_handshakes(round_context &context, void *quorumnet
   }
 }
 
-round_state send_handshake_bitsets(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_handshake_bitsets(round_context &context, void *quorumnet_state, gnodes::gnode_keys const &key)
 {
   try
   {
@@ -1329,7 +1329,7 @@ round_state send_handshake_bitsets(round_context &context, void *quorumnet_state
   }
 }
 
-round_state wait_for_handshake_bitsets(round_context &context, service_nodes::service_node_list &node_list, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state wait_for_handshake_bitsets(round_context &context, gnodes::gnode_list &node_list, void *quorumnet_state, gnodes::gnode_keys const &key)
 {
   handle_messages_received_early_for(context.transient.wait_for_handshake_bitsets.stage, quorumnet_state);
   pulse_wait_stage const &stage = context.transient.wait_for_handshake_bitsets.stage;
@@ -1362,7 +1362,7 @@ round_state wait_for_handshake_bitsets(round_context &context, service_nodes::se
     if (best_bitset != 0 && context.prepare_for_round.participant == sn_type::validator)
       i_am_not_participating = ((best_bitset & (1 << context.prepare_for_round.my_quorum_position)) == 0);
 
-    if (count < service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES || best_bitset == 0 || i_am_not_participating)
+    if (count < gnodes::PULSE_BLOCK_REQUIRED_SIGNATURES || best_bitset == 0 || i_am_not_participating)
     {
       if (best_bitset == 0)
       {
@@ -1380,7 +1380,7 @@ round_state wait_for_handshake_bitsets(round_context &context, service_nodes::se
       else
       {
         // Can't come to agreement, see threshold comment above
-        MDEBUG(log_prefix(context) << "We heard back from less than " << service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES << " of the validators ("
+        MDEBUG(log_prefix(context) << "We heard back from less than " << gnodes::PULSE_BLOCK_REQUIRED_SIGNATURES << " of the validators ("
                                    << count << "/" << quorum.size() << "). Waiting until next round.");
       }
 
@@ -1404,10 +1404,10 @@ round_state wait_for_handshake_bitsets(round_context &context, service_nodes::se
   return round_state::wait_for_handshake_bitsets;
 }
 
-round_state send_block_template(round_context &context, void *quorumnet_state, service_nodes::service_node_keys const &key, cryptonote::Blockchain &blockchain)
+round_state send_block_template(round_context &context, void *quorumnet_state, gnodes::gnode_keys const &key, cryptonote::Blockchain &blockchain)
 {
   assert(context.prepare_for_round.participant == sn_type::producer);
-  std::vector<service_nodes::service_node_pubkey_info> list_state = blockchain.get_service_node_list().get_service_node_list_state({key.pub});
+  std::vector<gnodes::gnode_pubkey_info> list_state = blockchain.get_gnode_list().get_gnode_list_state({key.pub});
 
   // Invariants
   if (list_state.empty())
@@ -1416,7 +1416,7 @@ round_state send_block_template(round_context &context, void *quorumnet_state, s
     return goto_preparing_for_next_round(context);
   }
 
-  std::shared_ptr<const service_nodes::service_node_info> info = list_state[0].info;
+  std::shared_ptr<const gnodes::gnode_info> info = list_state[0].info;
   if (!info->is_active())
   {
     MWARNING(log_prefix(context) << "Block producer (us) is not an active service node, waiting until next round");
@@ -1427,7 +1427,7 @@ round_state send_block_template(round_context &context, void *quorumnet_state, s
   cryptonote::block block = {};
   {
     uint64_t height                              = 0;
-    service_nodes::payout block_producer_payouts = service_nodes::service_node_info_to_payout(key.pub, *info);
+    gnodes::payout block_producer_payouts = gnodes::gnode_info_to_payout(key.pub, *info);
     if (!blockchain.create_next_pulse_block_template(block,
                                                      block_producer_payouts,
                                                      context.prepare_for_round.round,
@@ -1457,7 +1457,7 @@ round_state send_block_template(round_context &context, void *quorumnet_state, s
   return goto_preparing_for_next_round(context);
 }
 
-round_state wait_for_block_template(round_context &context, service_nodes::service_node_list &node_list, void *quorumnet_state, service_nodes::service_node_keys const &key, cryptonote::Blockchain &blockchain)
+round_state wait_for_block_template(round_context &context, gnodes::gnode_list &node_list, void *quorumnet_state, gnodes::gnode_keys const &key, cryptonote::Blockchain &blockchain)
 {
   handle_messages_received_early_for(context.transient.wait_for_block_template.stage, quorumnet_state);
   pulse_wait_stage const &stage = context.transient.wait_for_block_template.stage;
@@ -1487,7 +1487,7 @@ round_state wait_for_block_template(round_context &context, service_nodes::servi
   return round_state::wait_for_block_template;
 }
 
-round_state send_and_wait_for_random_value_hashes(round_context &context, service_nodes::service_node_list &node_list, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_and_wait_for_random_value_hashes(round_context &context, gnodes::gnode_list &node_list, void *quorumnet_state, gnodes::gnode_keys const &key)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
 
@@ -1526,7 +1526,7 @@ round_state send_and_wait_for_random_value_hashes(round_context &context, servic
   return round_state::send_and_wait_for_random_value_hashes;
 }
 
-round_state send_and_wait_for_random_value(round_context &context, service_nodes::service_node_list &node_list, void *quorumnet_state, service_nodes::service_node_keys const &key)
+round_state send_and_wait_for_random_value(round_context &context, gnodes::gnode_list &node_list, void *quorumnet_state, gnodes::gnode_keys const &key)
 {
   //
   // NOTE: Send
@@ -1568,7 +1568,7 @@ round_state send_and_wait_for_random_value(round_context &context, service_nodes
       {
         if (auto &random_value = quorum[index]; random_value)
         {
-          epee::wipeable_string string = lokimq::to_hex(tools::view_guts(random_value->data));
+          epee::wipeable_string string = gyuanxmq::to_hex(tools::view_guts(random_value->data));
 
 #if defined(NDEBUG)
           // Mask the random value generated incase someone is snooping logs
@@ -1599,14 +1599,14 @@ round_state send_and_wait_for_random_value(round_context &context, service_nodes
     crypto::hash const &final_block_hash = cryptonote::get_block_hash(final_block);
     crypto::generate_signature(final_block_hash, key.pub, key.key, context.transient.signed_block.send.data);
 
-    MINFO(log_prefix(context) << "Block final random value " << lokimq::to_hex(tools::view_guts(final_block.pulse.random_value.data)) << " generated from validators " << bitset_view16(stage.bitset));
+    MINFO(log_prefix(context) << "Block final random value " << gyuanxmq::to_hex(tools::view_guts(final_block.pulse.random_value.data)) << " generated from validators " << bitset_view16(stage.bitset));
     return round_state::send_and_wait_for_signed_blocks;
   }
 
   return round_state::send_and_wait_for_random_value;
 }
 
-round_state send_and_wait_for_signed_blocks(round_context &context, service_nodes::service_node_list &node_list, void *quorumnet_state, service_nodes::service_node_keys const &key, cryptonote::core &core)
+round_state send_and_wait_for_signed_blocks(round_context &context, gnodes::gnode_list &node_list, void *quorumnet_state, gnodes::gnode_keys const &key, cryptonote::core &core)
 {
   assert(context.prepare_for_round.participant == sn_type::validator);
 
@@ -1641,7 +1641,7 @@ round_state send_and_wait_for_signed_blocks(round_context &context, service_node
     // Select signatures randomly so we don't always just take the first N required signatures.
     // Then sort just the first N required signatures, so signatures are added
     // to the block in sorted order, but were chosen randomly.
-    std::array<size_t, service_nodes::PULSE_QUORUM_NUM_VALIDATORS> indices = {};
+    std::array<size_t, gnodes::PULSE_QUORUM_NUM_VALIDATORS> indices = {};
     size_t indices_count = 0;
 
     // Pull out indices where we've received a signature
@@ -1650,13 +1650,13 @@ round_state send_and_wait_for_signed_blocks(round_context &context, service_node
         indices[indices_count++] = index;
 
     // Random select from first 'N' PULSE_BLOCK_REQUIRED_SIGNATURES from indices_count entries.
-    assert(indices_count >= service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
-    std::array<size_t, service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES> selected = {};
+    assert(indices_count >= gnodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
+    std::array<size_t, gnodes::PULSE_BLOCK_REQUIRED_SIGNATURES> selected = {};
     std::sample(indices.begin(), indices.begin() + indices_count, selected.begin(), selected.size(), tools::rng);
 
     // Add Signatures
     cryptonote::block &final_block = context.transient.signed_block.final_block;
-    for (size_t index = 0; index < service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES; index++)
+    for (size_t index = 0; index < gnodes::PULSE_BLOCK_REQUIRED_SIGNATURES; index++)
     {
       uint16_t validator_index = indices[index];
       auto const &signature    = quorum[validator_index];
@@ -1680,7 +1680,7 @@ round_state send_and_wait_for_signed_blocks(round_context &context, service_node
 void pulse::main(void *quorumnet_state, cryptonote::core &core)
 {
   cryptonote::Blockchain &blockchain          = core.get_blockchain_storage();
-  service_nodes::service_node_keys const &key = core.get_service_keys();
+  gnodes::gnode_keys const &key = core.get_service_keys();
 
   //
   // NOTE: Early exit if too early
@@ -1700,7 +1700,7 @@ void pulse::main(void *quorumnet_state, cryptonote::core &core)
     return;
   }
 
-  service_nodes::service_node_list &node_list = core.get_service_node_list();
+  gnodes::gnode_list &node_list = core.get_gnode_list();
   for (auto last_state = round_state::null_state;
        last_state != context.state || last_state == round_state::null_state;)
   {

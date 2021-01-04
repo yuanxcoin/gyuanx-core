@@ -21,7 +21,7 @@ chmod 600 ssh_key
 
 branch_or_tag=${DRONE_BRANCH:-${DRONE_TAG:-unknown}}
 
-upload_to="builds.lokinet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
+upload_to="builds.gyuanxnet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
 
 tmpdir=ios-deps-${DRONE_COMMIT}
 mkdir -p $tmpdir/lib
@@ -31,7 +31,7 @@ mkdir -p $tmpdir/include
 lipo -create build/{arm64,sim64}/src/wallet/api/libwallet_merged.a -o $tmpdir/lib/libwallet_merged.a
 
 # Collect all the headers
-# Loki core:
+# Gyuanx core:
 cd src
 find . \( -name '*.h' -or -name '*.hpp' \) -exec cp -v --parents {} ../$tmpdir/include \;
 cp -v daemonizer/posix_daemonizer.inl ../$tmpdir/include/daemonizer
@@ -39,9 +39,9 @@ cd ..
 # epee:
 cp -rv contrib/epee/include/epee $tmpdir/include
 # external libs:
-mkdir $tmpdir/include/lokimq
+mkdir $tmpdir/include/gyuanxmq
 cp -v external/{easylogging++/*.h,db_drivers/liblmdb/lmdb.h,randomx/src/randomx.h} $tmpdir/include
-cp -v external/loki-mq/lokimq/*.h $tmpdir/include/lokimq
+cp -v external/gyuanx-mq/gyuanxmq/*.h $tmpdir/include/gyuanxmq
 cp -rv external/{boost,cpr/include/cpr,ghc-filesystem/include/ghc,libuv/include/*,rapidjson/include/rapidjson} $tmpdir/include
 cp -rv build/arm64/external/uWebSockets/* $tmpdir/include
 # static libs:
@@ -63,7 +63,7 @@ for p in "${upload_dirs[@]}"; do
 -mkdir $dir_tmp"
 done
 
-sftp -i ssh_key -b - -o StrictHostKeyChecking=off drone@builds.lokinet.dev <<SFTP
+sftp -i ssh_key -b - -o StrictHostKeyChecking=off drone@builds.gyuanxnet.dev <<SFTP
 $mkdirs
 put $filename $upload_to
 SFTP

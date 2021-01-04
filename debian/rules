@@ -23,23 +23,23 @@ endif
 	dh $@ --buildsystem=cmake --with-systemd
 
 override_dh_auto_configure:
-	debian/gen-libloki-install.sh $(DEB_VERSION_UPSTREAM)
+	debian/gen-libgyuanx-install.sh $(DEB_VERSION_UPSTREAM)
 	dh_auto_configure -- -DCMAKE_BUILD_TYPE=Release -DSTATIC=OFF -DUSE_LTO=ON -DBUILD_SHARED_LIBS=ON \
 		-DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 \
 		$(DEB_CMAKE_ARCH_OPTIONS) \
-		-DLOKI_INSTALL_LIBDIR_SUFFIX=/$(DEB_HOST_MULTIARCH)/loki-core -DLOKI_INSTALL_INCLUDEDIR_SUFFIX=/loki-core \
-		-DCMAKE_INSTALL_RPATH=/usr/lib/$(DEB_HOST_MULTIARCH)/loki-core \
-		-DLOKI_VERSION_TAG=$(call dpkg_late_eval,LOKI_VERSION_TAG,echo '$(DEB_VERSION)' | sed -e 's/.*-//')
+		-DGYUANX_INSTALL_LIBDIR_SUFFIX=/$(DEB_HOST_MULTIARCH)/gyuanx-core -DGYUANX_INSTALL_INCLUDEDIR_SUFFIX=/gyuanx-core \
+		-DCMAKE_INSTALL_RPATH=/usr/lib/$(DEB_HOST_MULTIARCH)/gyuanx-core \
+		-DGYUANX_VERSION_TAG=$(call dpkg_late_eval,GYUANX_VERSION_TAG,echo '$(DEB_VERSION)' | sed -e 's/.*-//')
 
 override_dh_shlibdeps:
-	dh_shlibdeps -l/usr/lib/$(DEB_HOST_MULTIARCH)/loki-core
+	dh_shlibdeps -l/usr/lib/$(DEB_HOST_MULTIARCH)/gyuanx-core
 
 override_dh_strip:
 	dh_strip --no-ddebs
 
 override_dh_installsystemd:
-	dh_installsystemd --name=loki-testnet-node --no-enable --no-start
-	dh_installsystemd --name=loki-node
+	dh_installsystemd --name=gyuanx-testnet-node --no-enable --no-start
+	dh_installsystemd --name=gyuanx-node
 
 override_dh_systemd_enable:
-	dh_systemd_enable --name=loki-node
+	dh_systemd_enable --name=gyuanx-node

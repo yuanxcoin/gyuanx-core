@@ -36,7 +36,7 @@ namespace Wallet {
 
 enum class reward_type {
     unspecified,
-    service_node,
+    gnode,
     miner
 };
 

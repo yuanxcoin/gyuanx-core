@@ -49,15 +49,15 @@ NodeRPCProxy::NodeRPCProxy(rpc::http_client& http_client)
 
 void NodeRPCProxy::invalidate()
 {
-  m_service_node_blacklisted_key_images_cached_height = 0;
-  m_service_node_blacklisted_key_images.clear();
+  m_gnode_blacklisted_key_images_cached_height = 0;
+  m_gnode_blacklisted_key_images.clear();
 
-  m_all_service_nodes_cached_height = 0;
-  m_all_service_nodes.clear();
+  m_all_gnodes_cached_height = 0;
+  m_all_gnodes.clear();
 
-  m_contributed_service_nodes_cached_height = 0;
-  m_contributed_service_nodes_cached_address.clear();
-  m_contributed_service_nodes.clear();
+  m_contributed_gnodes_cached_height = 0;
+  m_contributed_gnodes_cached_address.clear();
+  m_contributed_gnodes.clear();
 
   m_height = 0;
   m_immutable_height = 0;
@@ -224,29 +224,29 @@ bool NodeRPCProxy::get_fee_quantization_mask(uint64_t &fee_quantization_mask) co
   return true;
 }
 
-std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> NodeRPCProxy::get_service_nodes(std::vector<std::string> pubkeys) const
+std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> NodeRPCProxy::get_gnodes(std::vector<std::string> pubkeys) const
 {
   rpc::GET_SERVICE_NODES::request req{};
-  req.service_node_pubkeys = std::move(pubkeys);
-  return get_result_pair<rpc::GET_SERVICE_NODES>(req, [](auto&& res) { return std::move(res.service_node_states); });
+  req.gnode_pubkeys = std::move(pubkeys);
+  return get_result_pair<rpc::GET_SERVICE_NODES>(req, [](auto&& res) { return std::move(res.gnode_states); });
 }
 
 // Updates the cache of all service nodes; the mutex lock must be already held
-bool NodeRPCProxy::update_all_service_nodes_cache(uint64_t height) const {
+bool NodeRPCProxy::update_all_gnodes_cache(uint64_t height) const {
   if (m_offline)
     return false;
 
   try {
     auto res = invoke_json_rpc<rpc::GET_SERVICE_NODES>({});
-    m_all_service_nodes_cached_height = height;
-    m_all_service_nodes = std::move(res.service_node_states);
+    m_all_gnodes_cached_height = height;
+    m_all_gnodes = std::move(res.gnode_states);
   } catch (...) { return false; }
 
   return true;
 }
 
 
-std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> NodeRPCProxy::get_all_service_nodes() const
+std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> NodeRPCProxy::get_all_gnodes() const
 {
   std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> result;
   auto& [success, sns] = result;
@@ -258,10 +258,10 @@ std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>
 
   {
     std::lock_guard lock{m_sn_cache_mutex};
-    if (m_all_service_nodes_cached_height != height && !update_all_service_nodes_cache(height))
+    if (m_all_gnodes_cached_height != height && !update_all_gnodes_cache(height))
       return result;
 
-    sns = m_all_service_nodes;
+    sns = m_all_gnodes;
   }
 
   success = true;
@@ -270,7 +270,7 @@ std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>
 
 // Filtered version of the above that caches the filtered result as long as used on the same
 // contributor at the same height (which is very common, for example, for wallet balance lookups).
-std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> NodeRPCProxy::get_contributed_service_nodes(const std::string &contributor) const
+std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> NodeRPCProxy::get_contributed_gnodes(const std::string &contributor) const
 {
   std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>> result;
   auto& [success, sns] = result;
@@ -282,30 +282,30 @@ std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry>
 
   {
     std::lock_guard lock{m_sn_cache_mutex};
-    if (m_contributed_service_nodes_cached_height != height || m_contributed_service_nodes_cached_address != contributor) {
-      if (m_all_service_nodes_cached_height != height && !update_all_service_nodes_cache(height))
+    if (m_contributed_gnodes_cached_height != height || m_contributed_gnodes_cached_address != contributor) {
+      if (m_all_gnodes_cached_height != height && !update_all_gnodes_cache(height))
         return result;
 
-      m_contributed_service_nodes.clear();
-      std::copy_if(m_all_service_nodes.begin(), m_all_service_nodes.end(), std::back_inserter(m_contributed_service_nodes),
+      m_contributed_gnodes.clear();
+      std::copy_if(m_all_gnodes.begin(), m_all_gnodes.end(), std::back_inserter(m_contributed_gnodes),
           [&contributor](const auto& sn)
           {
             return std::any_of(sn.contributors.begin(), sn.contributors.end(),
                 [&contributor](const auto& c) { return contributor == c.address; });
           }
       );
-      m_contributed_service_nodes_cached_height = height;
-      m_contributed_service_nodes_cached_address = contributor;
+      m_contributed_gnodes_cached_height = height;
+      m_contributed_gnodes_cached_address = contributor;
     }
 
-    sns = m_contributed_service_nodes;
+    sns = m_contributed_gnodes;
   }
 
   success = true;
   return result;
 }
 
-std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry>> NodeRPCProxy::get_service_node_blacklisted_key_images() const
+std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry>> NodeRPCProxy::get_gnode_blacklisted_key_images() const
 {
   std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry>> result;
   auto& [success, sns] = result;
@@ -317,18 +317,18 @@ std::pair<bool, std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IM
 
   {
     std::lock_guard lock{m_sn_cache_mutex};
-    if (m_service_node_blacklisted_key_images_cached_height != height)
+    if (m_gnode_blacklisted_key_images_cached_height != height)
     {
       try {
         auto res = invoke_json_rpc<rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES>({});
-        m_service_node_blacklisted_key_images_cached_height = height;
-        m_service_node_blacklisted_key_images               = std::move(res.blacklist);
+        m_gnode_blacklisted_key_images_cached_height = height;
+        m_gnode_blacklisted_key_images               = std::move(res.blacklist);
       } catch (...) {
         return result;
       }
     }
 
-    sns = m_service_node_blacklisted_key_images;
+    sns = m_gnode_blacklisted_key_images;
   }
 
   success = true;

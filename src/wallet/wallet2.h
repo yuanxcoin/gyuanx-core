@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 // 
 // All rights reserved.
 // 
@@ -47,7 +47,7 @@
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_tx_utils.h"
-#include "cryptonote_core/loki_name_system.h"
+#include "cryptonote_core/gyuanx_name_system.h"
 #include "common/unordered_containers_boost_serialization.h"
 #include "common/file.h"
 #include "crypto/chacha.h"
@@ -72,13 +72,13 @@
 #include "pending_tx.h"
 #include "multisig_sig.h"
 
-#include "common/loki_integration_test_hooks.h"
+#include "common/gyuanx_integration_test_hooks.h"
 #include "epee/wipeable_string.h"
 
 #include "rpc/http_client.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "wallet.wallet2"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "wallet.wallet2"
 
 #define SUBADDRESS_LOOKAHEAD_MAJOR 50
 #define SUBADDRESS_LOOKAHEAD_MINOR 200
@@ -86,7 +86,7 @@
 class Serialization_portability_wallet_Test;
 class wallet_accessor_test;
 
-LOKI_RPC_DOC_INTROSPECT
+GYUANX_RPC_DOC_INTROSPECT
 namespace tools
 {
   static const char *ERR_MSG_NETWORK_VERSION_QUERY_FAILED = tr("Could not query the current network version, try later");
@@ -328,7 +328,7 @@ private:
       bool m_unmined_blink;
       bool m_was_blink;
 
-      bool is_coinbase() const { return ((m_type == wallet::pay_type::miner) || (m_type == wallet::pay_type::service_node) || (m_type == wallet::pay_type::governance)); }
+      bool is_coinbase() const { return ((m_type == wallet::pay_type::miner) || (m_type == wallet::pay_type::gnode) || (m_type == wallet::pay_type::governance)); }
     };
 
     struct address_tx : payment_details
@@ -369,7 +369,7 @@ private:
       std::vector<cryptonote::tx_destination_entry> m_dests;
       crypto::hash m_payment_id;
       uint64_t m_timestamp;
-      uint64_t m_unlock_time; // NOTE(loki): Not used after TX v2.
+      uint64_t m_unlock_time; // NOTE(gyuanx): Not used after TX v2.
       std::vector<uint64_t> m_unlock_times;
       uint32_t m_subaddr_account;   // subaddress account of your wallet to be used in this transfer
       std::set<uint32_t> m_subaddr_indices;  // set of address indices used as inputs in this transfer
@@ -729,7 +729,7 @@ private:
     uint64_t unlocked_balance_all(bool strict, uint64_t *blocks_to_unlock = NULL, uint64_t *time_to_unlock = NULL) const;
     void transfer_selected_rct(std::vector<cryptonote::tx_destination_entry> dsts, const std::vector<size_t>& selected_transfers, size_t fake_outputs_count,
       std::vector<std::vector<tools::wallet2::get_outs_entry>> &outs,
-      uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::transaction& tx, pending_tx &ptx, const rct::RCTConfig &rct_config, const cryptonote::loki_construct_tx_params &loki_tx_params);
+      uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::transaction& tx, pending_tx &ptx, const rct::RCTConfig &rct_config, const cryptonote::gyuanx_construct_tx_params &gyuanx_tx_params);
 
     void commit_tx(pending_tx& ptx_vector, bool blink = false);
     void commit_tx(std::vector<pending_tx>& ptx_vector, bool blink = false);
@@ -751,7 +751,7 @@ private:
     bool parse_unsigned_tx_from_str(std::string_view unsigned_tx_st, unsigned_tx_set &exported_txs) const;
     bool load_tx(const fs::path& signed_filename, std::vector<pending_tx>& ptx, std::function<bool(const signed_tx_set&)> accept_func = NULL);
     bool parse_tx_from_str(std::string_view signed_tx_st, std::vector<pending_tx> &ptx, std::function<bool(const signed_tx_set &)> accept_func);
-    std::vector<pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra_base, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::loki_construct_tx_params &tx_params);
+    std::vector<pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra_base, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::gyuanx_construct_tx_params &tx_params);
 
     std::vector<pending_tx> create_transactions_all(uint64_t below, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::txtype tx_type = cryptonote::txtype::standard);
     std::vector<pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, cryptonote::txtype tx_type = cryptonote::txtype::standard);
@@ -805,10 +805,10 @@ private:
     // These return pairs where .first == true if the request was successful, and .second is a
     // vector of the requested entries.
     //
-    // NOTE(loki): get_all_service_node caches the result, get_service_nodes doesn't
-    auto get_all_service_nodes()                                    const { return m_node_rpc_proxy.get_all_service_nodes(); }
-    auto get_service_nodes(std::vector<std::string> const &pubkeys) const { return m_node_rpc_proxy.get_service_nodes(pubkeys); }
-    auto get_service_node_blacklisted_key_images()                  const { return m_node_rpc_proxy.get_service_node_blacklisted_key_images(); }
+    // NOTE(gyuanx): get_all_gnode caches the result, get_gnodes doesn't
+    auto get_all_gnodes()                                    const { return m_node_rpc_proxy.get_all_gnodes(); }
+    auto get_gnodes(std::vector<std::string> const &pubkeys) const { return m_node_rpc_proxy.get_gnodes(pubkeys); }
+    auto get_gnode_blacklisted_key_images()                  const { return m_node_rpc_proxy.get_gnode_blacklisted_key_images(); }
     auto lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request) const { return m_node_rpc_proxy.lns_owners_to_names(request); }
     auto lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request) const { return m_node_rpc_proxy.lns_names_to_owners(request); }
 
@@ -1195,7 +1195,7 @@ private:
 
     // params constructor, accumulates the burn amounts if the priority is
     // a blink and, or a lns tx. If it is a blink TX, lns_burn_type is ignored.
-    static cryptonote::loki_construct_tx_params construct_params(uint8_t hf_version, cryptonote::txtype tx_type, uint32_t priority, lns::mapping_type lns_burn_type = static_cast<lns::mapping_type>(0));
+    static cryptonote::gyuanx_construct_tx_params construct_params(uint8_t hf_version, cryptonote::txtype tx_type, uint32_t priority, lns::mapping_type lns_burn_type = static_cast<lns::mapping_type>(0));
 
     bool is_unattended() const { return m_unattended; }
 
@@ -1298,13 +1298,13 @@ private:
       payment_id_disallowed,
       subaddress_disallowed,
       address_must_be_primary,
-      service_node_list_query_failed,
-      service_node_not_registered,
+      gnode_list_query_failed,
+      gnode_not_registered,
       network_version_query_failed,
       network_height_query_failed,
-      service_node_contribution_maxed,
-      service_node_contributors_maxed,
-      service_node_insufficient_contribution,
+      gnode_contribution_maxed,
+      gnode_contributors_maxed,
+      gnode_insufficient_contribution,
       too_many_transactions_constructed,
       no_blink,
     };
@@ -1319,9 +1319,9 @@ private:
     /// Modifies the `amount` to maximum possible if too large, but rejects if insufficient.
     /// `fraction` is only used to determine the amount if specified zero.
     stake_result check_stake_allowed(const crypto::public_key& sn_key, const cryptonote::address_parse_info& addr_info, uint64_t& amount, double fraction = 0);
-    stake_result create_stake_tx    (const crypto::public_key& service_node_key, const cryptonote::address_parse_info& addr_info, uint64_t amount,
+    stake_result create_stake_tx    (const crypto::public_key& gnode_key, const cryptonote::address_parse_info& addr_info, uint64_t amount,
                                      double amount_fraction = 0, uint32_t priority = 0, uint32_t subaddr_account = 0, std::set<uint32_t> subaddr_indices = {});
-    enum struct register_service_node_result_status
+    enum struct register_gnode_result_status
     {
       invalid,
       success,
@@ -1333,12 +1333,12 @@ private:
       registration_timestamp_expired,
       registration_timestamp_parse_fail,
       validate_contributor_args_fail,
-      service_node_key_parse_fail,
-      service_node_signature_parse_fail,
-      service_node_register_serialize_to_tx_extra_fail,
+      gnode_key_parse_fail,
+      gnode_signature_parse_fail,
+      gnode_register_serialize_to_tx_extra_fail,
       first_address_must_be_primary_address,
-      service_node_list_query_failed,
-      service_node_cannot_reregister,
+      gnode_list_query_failed,
+      gnode_cannot_reregister,
       insufficient_portions,
       wallet_not_synced,
       too_many_transactions_constructed,
@@ -1346,13 +1346,13 @@ private:
       no_blink,
     };
 
-    struct register_service_node_result
+    struct register_gnode_result
     {
-      register_service_node_result_status status;
+      register_gnode_result_status status;
       std::string                         msg;
       pending_tx                          ptx;
     };
-    register_service_node_result create_register_service_node_tx(const std::vector<std::string> &args_, uint32_t subaddr_account = 0);
+    register_gnode_result create_register_gnode_tx(const std::vector<std::string> &args_, uint32_t subaddr_account = 0);
 
     struct request_stake_unlock_result
     {
@@ -1373,7 +1373,7 @@ private:
     //            The signature is derived from the hash of the previous txid blob and previous value blob of the mapping. By default this is signed using the wallet's spend key as an ed25519 keypair.
     std::vector<pending_tx> lns_create_update_mapping_tx(lns::mapping_type type, std::string name, std::string const *value, std::string const *owner, std::string const *backup_owner, std::string const *signature, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
 
-    // LNS renewal (for lokinet registrations, not for session/wallet)
+    // LNS renewal (for gyuanxnet registrations, not for session/wallet)
     std::vector<pending_tx> lns_create_renewal_tx(lns::mapping_type type, std::string name, std::string *reason, uint32_t priority = 0, uint32_t account_index = 0, std::set<uint32_t> subaddr_indices = {}, std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> *response = {});
 
     // Generate just the signature required for putting into lns_update_mapping command in the wallet
@@ -1671,13 +1671,13 @@ private:
     inline static std::string default_daemon_address;
   };
 
-  // TODO(loki): Hmm. We need this here because we make register_service_node do
+  // TODO(gyuanx): Hmm. We need this here because we make register_gnode do
   // parsing on the wallet2 side instead of simplewallet. This is so that
-  // register_service_node RPC command doesn't make it the wallet_rpc's
+  // register_gnode RPC command doesn't make it the wallet_rpc's
   // responsibility to parse out the string returned from the daemon. We're
   // purposely abstracting that complexity out to just wallet2's responsibility.
 
-  // TODO(loki): The better question is if anyone is ever going to try use
+  // TODO(gyuanx): The better question is if anyone is ever going to try use
   // register service node funded by multiple subaddresses. This is unlikely.
   constexpr std::array<const char* const, 6> allowed_priority_strings = {{"default", "unimportant", "normal", "elevated", "priority", "blink"}};
   bool parse_subaddress_indices(std::string_view arg, std::set<uint32_t>& subaddr_indices, std::string *err_msg = nullptr);

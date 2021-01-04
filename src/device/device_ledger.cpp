@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 // 
 // All rights reserved.
 // 
@@ -42,8 +42,8 @@ namespace hw {
 
   #ifdef WITH_DEVICE_LEDGER
 
-    #undef LOKI_DEFAULT_LOG_CATEGORY
-    #define LOKI_DEFAULT_LOG_CATEGORY "device.ledger"
+    #undef GYUANX_DEFAULT_LOG_CATEGORY
+    #define GYUANX_DEFAULT_LOG_CATEGORY "device.ledger"
 
     /* ===================================================================== */
     /* ===                           Debug                              ==== */
@@ -443,10 +443,10 @@ namespace hw {
     bool device_ledger::reset() {
       reset_buffer();
       int offset = set_command_header_noopt(INS_RESET);
-      const size_t verlen = strlen(LOKI_VERSION_STR);
-      ASSERT_X(offset + verlen <= BUFFER_SEND_SIZE, "LOKI_VERSION_STR is too long")
-      memmove(this->buffer_send+offset, LOKI_VERSION_STR, verlen);
-      offset += strlen(LOKI_VERSION_STR);
+      const size_t verlen = strlen(GYUANX_VERSION_STR);
+      ASSERT_X(offset + verlen <= BUFFER_SEND_SIZE, "GYUANX_VERSION_STR is too long")
+      memmove(this->buffer_send+offset, GYUANX_VERSION_STR, verlen);
+      offset += strlen(GYUANX_VERSION_STR);
       this->buffer_send[4] = offset-5;
       this->length_send = offset;
       this->exchange();
@@ -1580,7 +1580,7 @@ namespace hw {
           additional_txkey.sec = additional_tx_keys[output_index];
       }
 
-      bool &is_change = found_change; // NOTE(loki): Alias our param into theirs so we don't have to change much code.
+      bool &is_change = found_change; // NOTE(gyuanx): Alias our param into theirs so we don't have to change much code.
 
       if (change_addr && dst_entr == *change_addr && !is_change)
         is_change = true; // sending change to yourself; derivation = a*R

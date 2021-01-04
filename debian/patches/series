@@ -4,4 +4,4 @@
 0006-Add-check-for-latomic-needed-for-armhf-build.patch
 0007-dumb-ARM_ID-ARCH-logic-workaround.patch
 0006-Fix-abort-not-actually-aborting.patch
-0007-Fix-loki-sn-keys-ed25519-key-restoration.patch
+0007-Fix-gyuanx-sn-keys-ed25519-key-restoration.patch

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The Loki Project
+// Copyright (c) 2018-2020, The Gyuanx Project
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -28,7 +28,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
-#include "common/loki.h"
+#include "common/gyuanx.h"
 #include <string>
 #include <vector>
 #include "cryptonote_basic/subaddress_index.h"
@@ -44,7 +44,7 @@ enum struct pay_type
   out,
   stake,
   miner,
-  service_node,
+  gnode,
   governance
 };
 
@@ -57,13 +57,13 @@ inline const char *pay_type_string(pay_type type)
     case pay_type::out:          return "out";
     case pay_type::stake:        return "stake";
     case pay_type::miner:        return "miner";
-    case pay_type::service_node: return "snode";
+    case pay_type::gnode: return "snode";
     case pay_type::governance:   return "gov";
     default: assert(false);      return "xxxxx";
   }
 }
 
-LOKI_RPC_DOC_INTROSPECT
+GYUANX_RPC_DOC_INTROSPECT
 struct transfer_view
 {
   std::string txid;                                          // Transaction ID for this transfer.
@@ -88,10 +88,10 @@ struct transfer_view
   bool was_blink;                                            // True if we saw this as an approved blink (either in the mempool or a recent, uncheckpointed block).  Note that if we didn't see it while an active blink this won't be set.
 
   // Not serialized, for internal wallet2 use
-  wallet::pay_type pay_type;                                 // @NoLokiRPCDocGen Internal use only, not serialized
-  bool            confirmed;                                 // @NoLokiRPCDocGen Internal use only, not serialized
-  crypto::hash    hash;                                      // @NoLokiRPCDocGen Internal use only, not serialized
-  std::string     lock_msg;                                  // @NoLokiRPCDocGen Internal use only, not serialized
+  wallet::pay_type pay_type;                                 // @NoGyuanxRPCDocGen Internal use only, not serialized
+  bool            confirmed;                                 // @NoGyuanxRPCDocGen Internal use only, not serialized
+  crypto::hash    hash;                                      // @NoGyuanxRPCDocGen Internal use only, not serialized
+  std::string     lock_msg;                                  // @NoGyuanxRPCDocGen Internal use only, not serialized
 
   KV_MAP_SERIALIZABLE
 };

@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 // 
 // All rights reserved.
 // 
@@ -27,7 +27,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "cryptonote_core/service_node_rules.h"
+#include "cryptonote_core/gnode_rules.h"
 #include "checkpoints/checkpoints.h"
 #include "epee/string_tools.h"
 #include "blockchain_db.h"
@@ -38,8 +38,8 @@
 
 #include "lmdb/db_lmdb.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "blockchain.db"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "blockchain.db"
 
 namespace cryptonote
 {
@@ -100,7 +100,7 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
 
     crypto::secret_key secret_tx_key;
     cryptonote::account_public_address address;
-    if (get_tx_secret_key_from_tx_extra(tx.extra, secret_tx_key) && get_service_node_contributor_from_tx_extra(tx.extra, address))
+    if (get_tx_secret_key_from_tx_extra(tx.extra, secret_tx_key) && get_gnode_contributor_from_tx_extra(tx.extra, address))
       has_blacklisted_outputs = true;
   }
 
@@ -360,7 +360,7 @@ void BlockchainDB::fixup(cryptonote::network_type)
 
 bool BlockchainDB::get_immutable_checkpoint(checkpoint_t *immutable_checkpoint, uint64_t block_height) const
 {
-  size_t constexpr NUM_CHECKPOINTS = service_nodes::CHECKPOINT_NUM_CHECKPOINTS_FOR_CHAIN_FINALITY;
+  size_t constexpr NUM_CHECKPOINTS = gnodes::CHECKPOINT_NUM_CHECKPOINTS_FOR_CHAIN_FINALITY;
   static_assert(NUM_CHECKPOINTS == 2,
                 "Expect checkpoint finality to be 2, otherwise the immutable logic needs to check for any hardcoded "
                 "checkpoints inbetween");
@@ -371,7 +371,7 @@ bool BlockchainDB::get_immutable_checkpoint(checkpoint_t *immutable_checkpoint, 
     return false;
 
   checkpoint_t *checkpoint_ptr = nullptr;
-  if (checkpoints[0].type != checkpoint_type::service_node) // checkpoint[0] is the first closest checkpoint that is <= my height
+  if (checkpoints[0].type != checkpoint_type::gnode) // checkpoint[0] is the first closest checkpoint that is <= my height
   {
     checkpoint_ptr = &checkpoints[0]; // Must be hard-coded then, always immutable
   }

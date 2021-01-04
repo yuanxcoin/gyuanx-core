@@ -1,4 +1,4 @@
-# Copyright (c) 2018, The Loki Project
+# Copyright (c) 2018, The Gyuanx Project
 # Copyright (c) 2014-2019, The Monero Project
 #
 # All rights reserved.
@@ -37,7 +37,7 @@ add_library(common
   expect.cpp
   file.cpp
   i18n.cpp
-  loki.cpp
+  gyuanx.cpp
   notify.cpp
   password.cpp
   perf_timer.cpp
@@ -71,7 +71,7 @@ endif()
 target_link_libraries(common
   PUBLIC
     cncrypto
-    lokimq::lokimq
+    gyuanxmq::gyuanxmq
     filesystem
   PRIVATE
     libunbound

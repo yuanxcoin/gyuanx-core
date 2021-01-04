@@ -39,8 +39,8 @@
 #include "blockchain_objects.h"
 #include "version.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "bcutil"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "bcutil"
 
 #define MDB_val_set(var, val)   MDB_val var = {sizeof(val), (void *)&val}
 
@@ -156,7 +156,7 @@ static void copy_table(MDB_env *env0, MDB_env *env1, const char *table, unsigned
 
   MINFO("Copying " << table);
 
-  LOKI_DEFER {
+  GYUANX_DEFER {
     if (tx_active1) mdb_txn_abort(txn1);
     if (tx_active0) mdb_txn_abort(txn0);
   };
@@ -253,7 +253,7 @@ static void prune(MDB_env *env0, MDB_env *env1)
 
   MGINFO("Creating pruned txs_prunable");
 
-  LOKI_DEFER {
+  GYUANX_DEFER {
     if (tx_active1) mdb_txn_abort(txn1);
     if (tx_active0) mdb_txn_abort(txn0);
   };
@@ -479,12 +479,12 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
+    std::cout << "Gyuanx '" << GYUANX_RELEASE_NAME << "' (v" << GYUANX_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
 
-  mlog_configure(mlog_get_default_log_path("loki-blockchain-prune.log"), true);
+  mlog_configure(mlog_get_default_log_path("gyuanx-blockchain-prune.log"), true);
   if (!command_line::is_arg_defaulted(vm, arg_log_level))
     mlog_set_log(command_line::get_arg(vm, arg_log_level).c_str());
   else

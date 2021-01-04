@@ -43,8 +43,8 @@
 #include "net/dandelionpp.h"
 #include "p2p/net_node.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "net.p2p.tx"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "net.p2p.tx"
 
 namespace cryptonote
 {

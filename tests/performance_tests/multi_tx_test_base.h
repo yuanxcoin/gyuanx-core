@@ -55,7 +55,7 @@ public:
     {
       m_miners[i].generate();
 
-      if (!construct_miner_tx(0, 0, 0, 2, 0, m_miner_txs[1], cryptonote::loki_miner_tx_context::miner_block(cryptonote::FAKECHAIN, m_miners[i].get_keys().m_account_address)))
+      if (!construct_miner_tx(0, 0, 0, 2, 0, m_miner_txs[1], cryptonote::gyuanx_miner_tx_context::miner_block(cryptonote::FAKECHAIN, m_miners[i].get_keys().m_account_address)))
         return false;
 
       txout_to_key tx_out = var::get<txout_to_key>(m_miner_txs[i].vout[0].target);

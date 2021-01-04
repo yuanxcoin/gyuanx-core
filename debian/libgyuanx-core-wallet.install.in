@@ -1,0 +1,2 @@
+/usr/lib/*/gyuanx-core/libwallet.so.@LIBGYUANX_VER@
+/usr/lib/*/gyuanx-core/libdevice_trezor.so.@LIBGYUANX_VER@

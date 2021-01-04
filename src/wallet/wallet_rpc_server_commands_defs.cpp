@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The Loki Project
+// Copyright (c) 2018-2020, The Gyuanx Project
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -1008,7 +1008,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(STAKE::request)
   KV_SERIALIZE    (subaddr_indices);
   KV_SERIALIZE    (destination);
   KV_SERIALIZE    (amount);
-  KV_SERIALIZE    (service_node_key);
+  KV_SERIALIZE    (gnode_key);
   KV_SERIALIZE_OPT(priority,        (uint32_t)0);
   KV_SERIALIZE    (get_tx_key)
   KV_SERIALIZE_OPT(do_not_relay,    false)
@@ -1030,7 +1030,7 @@ KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(REGISTER_SERVICE_NODE::request)
-  KV_SERIALIZE(register_service_node_str);
+  KV_SERIALIZE(register_gnode_str);
   KV_SERIALIZE(get_tx_key)
   KV_SERIALIZE_OPT(do_not_relay,    false)
   KV_SERIALIZE_OPT(get_tx_hex,      false)
@@ -1051,7 +1051,7 @@ KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(REQUEST_STAKE_UNLOCK::request)
-  KV_SERIALIZE(service_node_key);
+  KV_SERIALIZE(gnode_key);
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -1062,7 +1062,7 @@ KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(CAN_REQUEST_STAKE_UNLOCK::request)
-  KV_SERIALIZE(service_node_key);
+  KV_SERIALIZE(gnode_key);
 KV_SERIALIZE_MAP_CODE_END()
 
 

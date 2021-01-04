@@ -1,4 +1,4 @@
-// Copyright (c)      2019, The Loki Project
+// Copyright (c)      2019, The Gyuanx Project
 //
 // All rights reserved.
 //

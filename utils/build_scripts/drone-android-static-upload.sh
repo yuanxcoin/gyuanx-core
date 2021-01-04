@@ -21,7 +21,7 @@ chmod 600 ssh_key
 
 branch_or_tag=${DRONE_BRANCH:-${DRONE_TAG:-unknown}}
 
-upload_to="builds.lokinet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
+upload_to="builds.gyuanxnet.dev/${DRONE_REPO// /_}/${branch_or_tag// /_}"
 
 tmpdir=android-deps-${DRONE_COMMIT}
 mkdir -p $tmpdir
@@ -47,7 +47,7 @@ for p in "${upload_dirs[@]}"; do
 -mkdir $dir_tmp"
 done
 
-sftp -i ssh_key -b - -o StrictHostKeyChecking=off drone@builds.lokinet.dev <<SFTP
+sftp -i ssh_key -b - -o StrictHostKeyChecking=off drone@builds.gyuanxnet.dev <<SFTP
 $mkdirs
 put $filename $upload_to
 SFTP

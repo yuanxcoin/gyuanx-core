@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 // 
 // All rights reserved.
 // 
@@ -55,8 +55,8 @@
 #include "common/password.h"
 #include "crypto/crypto.h"  // for definition of crypto::secret_key
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
 
 /*!
  * \namespace cryptonote
@@ -177,7 +177,7 @@ namespace cryptonote
     bool locked_sweep_all(const std::vector<std::string> &args);
 
     bool stake(const std::vector<std::string> &args_);
-    bool register_service_node(const std::vector<std::string> &args_);
+    bool register_gnode(const std::vector<std::string> &args_);
     bool request_stake_unlock(const std::vector<std::string> &args_);
     bool print_locked_stakes(const std::vector<std::string>& /*args*/);
     bool query_locked_stakes(bool print_result);
@@ -283,8 +283,8 @@ namespace cryptonote
     bool welcome(const std::vector<std::string>& args);
     bool version(const std::vector<std::string>& args);
 
-    bool register_service_node_main(
-        const std::vector<std::string>& service_node_key_as_str,
+    bool register_gnode_main(
+        const std::vector<std::string>& gnode_key_as_str,
         const cryptonote::account_public_address& address,
         uint32_t priority,
         const std::vector<uint64_t>& portions,

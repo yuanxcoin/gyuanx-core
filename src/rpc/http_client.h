@@ -73,7 +73,7 @@ public:
   {
     if (!base_url_.empty())
       set_base_url(std::move(base_url_));
-    session.SetUserAgent("loki rpc client v"s + LOKI_VERSION_STR);
+    session.SetUserAgent("gyuanx rpc client v"s + GYUANX_VERSION_STR);
   }
 
   /// Sets the base_url to the given one. Will have / appended if it doesn't already end in /.  The

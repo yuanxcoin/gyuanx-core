@@ -4004,7 +4004,7 @@ Input %llu/%llu (%s): amount=%s</source>
     </message>
     <message>
         <location filename="../src/simplewallet/simplewallet.cpp" line="5805"/>
-        <source>I locked your Loki wallet to protect you while you were away</source>
+        <source>I locked your Gyuanx wallet to protect you while you were away</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

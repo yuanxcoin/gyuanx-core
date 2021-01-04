@@ -34,7 +34,7 @@
 #include <vector>
 #include <map>
 #include "blockchain_db.h"
-#include "cryptonote_core/service_node_list.h"
+#include "cryptonote_core/gnode_list.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 
 namespace cryptonote
@@ -168,14 +168,14 @@ public:
 
   virtual void get_output_blacklist   (std::vector<uint64_t> &blacklist)       const override { }
   virtual void add_output_blacklist   (std::vector<uint64_t> const &blacklist)       override { }
-  virtual void set_service_node_data  (const std::string& data, bool long_term)      override { }
-  virtual bool get_service_node_data  (std::string& data, bool long_term)      const override { return false; }
-  virtual void clear_service_node_data()                                             override { }
+  virtual void set_gnode_data  (const std::string& data, bool long_term)      override { }
+  virtual bool get_gnode_data  (std::string& data, bool long_term)      const override { return false; }
+  virtual void clear_gnode_data()                                             override { }
 
-  bool get_service_node_proof(const crypto::public_key &pubkey, service_nodes::proof_info &proof) const override { return false; }
-  std::unordered_map<crypto::public_key, service_nodes::proof_info> get_all_service_node_proofs() const override { return {}; }
-  void set_service_node_proof(const crypto::public_key &pubkey, const service_nodes::proof_info &proof) override { }
-  bool remove_service_node_proof(const crypto::public_key &pubkey) override { return false; }
+  bool get_gnode_proof(const crypto::public_key &pubkey, gnodes::proof_info &proof) const override { return false; }
+  std::unordered_map<crypto::public_key, gnodes::proof_info> get_all_gnode_proofs() const override { return {}; }
+  void set_gnode_proof(const crypto::public_key &pubkey, const gnodes::proof_info &proof) override { }
+  bool remove_gnode_proof(const crypto::public_key &pubkey) override { return false; }
 
   virtual void add_alt_block(const crypto::hash &blkid, const cryptonote::alt_block_data_t &data, const cryptonote::blobdata &blob, const cryptonote::blobdata *checkpoint) override {}
   virtual bool get_alt_block(const crypto::hash &blkid, alt_block_data_t *data, cryptonote::blobdata *blob, cryptonote::blobdata *checkpoint) const override { return false; }

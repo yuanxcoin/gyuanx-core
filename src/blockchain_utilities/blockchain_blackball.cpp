@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -28,7 +28,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _WIN32
- #define __STDC_FORMAT_MACROS // NOTE(loki): Explicitly define the PRIu64 macro on Mingw
+ #define __STDC_FORMAT_MACROS // NOTE(gyuanx): Explicitly define the PRIu64 macro on Mingw
 #endif
 
 #include "common/unordered_containers_boost_serialization.h"
@@ -46,8 +46,8 @@
 #include "wallet/ringdb.h"
 #include "version.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "bcutil"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "bcutil"
 
 namespace po = boost::program_options;
 using namespace cryptonote;
@@ -135,7 +135,7 @@ static bool parse_db_sync_mode(std::string db_sync_mode)
 
 static fs::path get_default_db_path()
 {
-  // remove .loki, replace with .shared-ringdb
+  // remove .gyuanx, replace with .shared-ringdb
   fs::path p = tools::get_default_data_dir();
   p.replace_filename(".shared-ringdb");
   return p;
@@ -248,7 +248,7 @@ static void init(fs::path cache_filename)
 
   dbr = mdb_txn_begin(env, NULL, 0, &txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "relative_rings", MDB_CREATE | MDB_INTEGERKEY, &dbi_relative_rings);
@@ -351,7 +351,7 @@ static bool for_all_transactions(const fs::path& filename, uint64_t& start_idx, 
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "txs_pruned", MDB_INTEGERKEY, &dbi);
@@ -431,7 +431,7 @@ static bool for_all_transactions(const fs::path& filename, const uint64_t& start
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "blocks", MDB_INTEGERKEY, &dbi_blocks);
@@ -530,7 +530,7 @@ static uint64_t find_first_diverging_transaction(const fs::path& first_filename,
   MDB_val k;
   MDB_val v[2];
 
-  LOKI_DEFER {
+  GYUANX_DEFER {
     for (int i = 0; i < 2; i++)
       if (tx_active[i]) mdb_txn_abort(txn[i]);
   };
@@ -617,7 +617,7 @@ static uint64_t get_num_spent_outputs()
 
   int dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   MDB_cursor *cur;
@@ -753,7 +753,7 @@ static uint64_t get_processed_txidx(const std::string &name)
 
   int dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   uint64_t height = 0;
@@ -963,7 +963,7 @@ static void open_db(const fs::path& filename, MDB_env** env, MDB_txn** txn, MDB_
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to create LDMB environment: " + std::string(mdb_strerror(dbr)));
   dbr = mdb_env_set_maxdbs(*env, 1);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to set max env dbs: " + std::string(mdb_strerror(dbr)));
-  MINFO("Opening loki blockchain at " << filename);
+  MINFO("Opening gyuanx blockchain at " << filename);
   dbr = mdb_env_open(*env, filename.string().c_str(), flags, 0664);
   CHECK_AND_ASSERT_THROW_MES(!dbr, "Failed to open rings database file '"
       + filename.u8string() + "': " + std::string(mdb_strerror(dbr)));
@@ -1029,7 +1029,7 @@ static crypto::hash get_genesis_block_hash(const fs::path& filename)
 
   dbr = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
-  LOKI_DEFER { if (tx_active) mdb_txn_abort(txn); };
+  GYUANX_DEFER { if (tx_active) mdb_txn_abort(txn); };
   tx_active = true;
 
   dbr = mdb_dbi_open(txn, "block_info", MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED, &dbi);
@@ -1191,7 +1191,7 @@ int main(int argc, char* argv[])
   const command_line::arg_descriptor<bool> arg_rct_only  = {"rct-only", "Only work on ringCT outputs", false};
   const command_line::arg_descriptor<bool> arg_check_subsets  = {"check-subsets", "Check ring subsets (very expensive)", false};
   const command_line::arg_descriptor<bool> arg_verbose  = {"verbose", "Verbose output)", false};
-  const command_line::arg_descriptor<std::vector<std::string> > arg_inputs = {"inputs", "Path to Loki DB, and path to any fork DBs"};
+  const command_line::arg_descriptor<std::vector<std::string> > arg_inputs = {"inputs", "Path to Gyuanx DB, and path to any fork DBs"};
   const command_line::arg_descriptor<std::string> arg_db_sync_mode = {
     "db-sync-mode"
   , "Specify sync option, using format [safe|fast|fastest]:[nrecords_per_sync]." 
@@ -1234,12 +1234,12 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")\n\n";
+    std::cout << "Gyuanx '" << GYUANX_RELEASE_NAME << "' (v" << GYUANX_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
 
-  mlog_configure(mlog_get_default_log_path("loki-blockchain-mark-spent-outputs.log"), true);
+  mlog_configure(mlog_get_default_log_path("gyuanx-blockchain-mark-spent-outputs.log"), true);
   if (!command_line::is_arg_defaulted(vm, arg_log_level))
     mlog_set_log(command_line::get_arg(vm, arg_log_level).c_str());
   else

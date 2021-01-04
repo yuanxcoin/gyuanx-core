@@ -15,9 +15,9 @@ index 7d7a927..fb124fd 100644
  
  find_package(Git QUIET)
 -if (GIT_FOUND OR Git_FOUND)
-+if (LOKI_VERSION_TAG)
++if (GYUANX_VERSION_TAG)
 +  # Custom version tag (used by debian packaging)
-+  write_static_version_header("${LOKI_VERSION_TAG}")
++  write_static_version_header("${GYUANX_VERSION_TAG}")
 +elseif (GIT_FOUND OR Git_FOUND)
    message(STATUS "Found Git: ${GIT_EXECUTABLE}")
    set(VERSIONTAG "@VERSIONTAG@") # Will be replaced again by GenVersion.cmake, below.

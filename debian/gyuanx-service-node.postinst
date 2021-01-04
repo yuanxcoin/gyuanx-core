@@ -1,0 +1,66 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = configure ]; then
+    . /usr/share/debconf/confmodule
+    db_get gyuanx-service-node/ip-address
+    IP="$RET"
+
+    for conf in gyuanx.conf testnet.conf; do
+        dpkg-divert --package gyuanx-service-node --add --rename --divert /etc/gyuanx/$conf.no-service-node /etc/gyuanx/$conf
+    done
+
+    tmpdir=$(mktemp --tmpdir -d gyuanx-service-node.XXXXXXXXXX)
+    for c in gyuanx.conf testnet.conf; do
+        if [ -f "/etc/gyuanx/$c" ]; then
+            cp /etc/gyuanx/$c ${tmpdir}/$c
+        elif [ -f "/etc/gyuanx/$c.no-service-node" ]; then
+            cp /etc/gyuanx/$c.no-service-node ${tmpdir}/$c
+        elif [ -f "/usr/share/gyuanxd/$c" ]; then
+            cp /usr/share/gyuanxd/$c ${tmpdir}/$c
+        else
+            echo "Internal error: cannot find an existing $c to update!"
+            false
+        fi
+    done
+
+    sed -i '/^#\?service-node=/{h;s/.*=.*/service-node=1/};${x;/^$/{s//service-node=1/;H};x}' \
+        ${tmpdir}/gyuanx.conf ${tmpdir}/testnet.conf
+    sed -i '/^storage-server-port=/{h;s/=.*/=22021/};${x;/^$/{s//storage-server-port=22021/;H};x}' \
+        ${tmpdir}/gyuanx.conf
+    sed -i '/^storage-server-port=/{h;s/=.*/=38155/};${x;/^$/{s//storage-server-port=38155/;H};x}' \
+        ${tmpdir}/testnet.conf
+    sed -i '/^service-node-public-ip=/{h;s/=.*/='"$IP"'/};${x;/^$/{s//service-node-public-ip='"$IP"'/;H};x}' \
+        ${tmpdir}/gyuanx.conf ${tmpdir}/testnet.conf
+
+    for x in gyuanx.conf testnet.conf; do
+        if ! [ -f /etc/gyuanx/$x ]; then
+            mv ${tmpdir}/$x /etc/gyuanx/$x
+            ucfr gyuanx-service-node /etc/gyuanx/$x
+        else
+            ucf --debconf-ok ${tmpdir}/$x /etc/gyuanx/$x
+        fi
+    done
+
+    rm -rf ${tmpdir}
+
+    for conf in gyuanx.conf testnet.conf; do
+        # NB: also purge in postrm
+        ucfr gyuanx-service-node /etc/gyuanx/$conf
+    done
+fi
+
+#DEBHELPER#
+
+# Debhelper doesn't do this here because the gyuanx-service-node package doesn't contain the service files:
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+    if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || true
+        action=start
+        if [ -n "$2" ]; then action=restart; fi
+        for s in gyuanx-node gyuanx-testnet-node; do
+            deb-systemd-invoke $action $s.service >/dev/null || true
+        done
+    fi
+fi

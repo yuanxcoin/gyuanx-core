@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Gyuanx Project
 //
 // All rights reserved.
 //
@@ -40,11 +40,11 @@
 #include "crypto/hash.h"
 #include "epee/int-util.h"
 #include "common/dns_utils.h"
-#include "common/loki.h"
+#include "common/gyuanx.h"
 #include <cfenv>
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "cn"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "cn"
 
 namespace cryptonote {
 
@@ -91,7 +91,7 @@ namespace cryptonote {
     return CRYPTONOTE_MAX_TX_SIZE;
   }
   //-----------------------------------------------------------------------------------------------
-  // TODO(loki): Move into loki_economy, this will require access to loki::exp2
+  // TODO(gyuanx): Move into gyuanx_economy, this will require access to gyuanx::exp2
   uint64_t block_reward_unpenalized_formula_v7(uint64_t already_generated_coins, uint64_t height)
   {
     uint64_t emission_supply_component = (already_generated_coins * EMISSION_SUPPLY_MULTIPLIER) / EMISSION_SUPPLY_DIVISOR;
@@ -106,16 +106,16 @@ namespace cryptonote {
   uint64_t block_reward_unpenalized_formula_v8(uint64_t height)
   {
     std::fesetround(FE_TONEAREST);
-    uint64_t result = 28'000'000'000. + 100'000'000'000. / loki::exp2(height / (720. * 90)); // halve every 90 days.
+    uint64_t result = 28'000'000'000. + 100'000'000'000. / gyuanx::exp2(height / (720. * 90)); // halve every 90 days.
     return result;
   }
 
   bool get_base_block_reward(size_t median_weight, size_t current_block_weight, uint64_t already_generated_coins, uint64_t &reward, uint64_t &reward_unpenalized, uint8_t version, uint64_t height) {
 
     //premine reward
-    if (already_generated_coins == 0)
+    if (already_generated_coins == 3)
     {
-      reward = 22'500'000 * COIN;
+      reward = 2'500'000 * COIN;
       return true;
     }
 

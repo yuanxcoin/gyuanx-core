@@ -1,4 +1,4 @@
-# Copyright (c) 2018, The Loki Project
+# Copyright (c) 2018, The Gyuanx Project
 # Copyright (c) 2014-2019, The Monero Project
 #
 # All rights reserved.
@@ -30,13 +30,13 @@
 add_library(cryptonote_core
   blockchain.cpp
   cryptonote_core.cpp
-  service_node_rules.cpp
-  service_node_list.cpp
-  service_node_voting.cpp
-  service_node_quorum_cop.cpp
-  service_node_swarm.cpp
+  gnode_rules.cpp
+  gnode_list.cpp
+  gnode_voting.cpp
+  gnode_quorum_cop.cpp
+  gnode_swarm.cpp
   tx_blink.cpp
-  loki_name_system.cpp
+  gyuanx_name_system.cpp
   tx_pool.cpp
   tx_sanity_check.cpp
   cryptonote_tx_utils.cpp

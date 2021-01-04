@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The Loki Project
+// Copyright (c) 2018-2020, The Gyuanx Project
 // Copyright (c) 2014-2019, The Monero Project
 //
 // All rights reserved.
@@ -38,16 +38,16 @@
 #include <iterator>
 #include <type_traits>
 #include <variant>
-#include <lokimq/base64.h>
+#include <gyuanxmq/base64.h>
 #include "crypto/crypto.h"
 #include "cryptonote_basic/tx_extra.h"
-#include "cryptonote_core/loki_name_system.h"
+#include "cryptonote_core/gyuanx_name_system.h"
 #include "cryptonote_core/pulse.h"
-#include "loki_economy.h"
+#include "cryptonote_config.h"
 #include "epee/string_tools.h"
 #include "core_rpc_server.h"
 #include "common/command_line.h"
-#include "common/loki.h"
+#include "common/gyuanx.h"
 #include "common/sha256sum.h"
 #include "common/perf_timer.h"
 #include "common/random.h"
@@ -65,8 +65,8 @@
 #include "p2p/net_node.h"
 #include "version.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "daemon.rpc"
+#undef GYUANX_DEFAULT_LOG_CATEGORY
+#define GYUANX_DEFAULT_LOG_CATEGORY "daemon.rpc"
 
 
 namespace cryptonote { namespace rpc {
@@ -418,10 +418,10 @@ namespace cryptonote { namespace rpc {
     res.block_size_median = res.block_weight_median = m_core.get_blockchain_storage().get_current_cumulative_block_weight_median();
     if (context.admin)
     {
-      res.service_node = m_core.service_node();
+      res.gnode = m_core.gnode();
       res.start_time = (uint64_t)m_core.get_start_time();
       res.last_storage_server_ping = (uint64_t)m_core.m_last_storage_server_ping;
-      res.last_lokinet_ping = (uint64_t)m_core.m_last_lokinet_ping;
+      res.last_gyuanxnet_ping = (uint64_t)m_core.m_last_gyuanxnet_ping;
       res.free_space = m_core.get_free_space();
       res.height_without_bootstrap = res.height;
       std::shared_lock lock{m_bootstrap_daemon_mutex};
@@ -436,9 +436,9 @@ namespace cryptonote { namespace rpc {
     res.database_size = m_core.get_blockchain_storage().get_db().get_database_size();
     if (!context.admin)
       res.database_size = round_up(res.database_size, 1'000'000'000);
-    res.version = context.admin ? LOKI_VERSION_FULL : std::to_string(LOKI_VERSION[0]);
+    res.version = context.admin ? GYUANX_VERSION_FULL : std::to_string(GYUANX_VERSION[0]);
     res.status_line = context.admin ? m_core.get_status_string() :
-      "v" + std::to_string(LOKI_VERSION[0]) + "; Height: " + std::to_string(res.height);
+      "v" + std::to_string(GYUANX_VERSION[0]) + "; Height: " + std::to_string(res.height);
 
     res.status = STATUS_OK;
     return res;
@@ -712,16 +712,16 @@ namespace cryptonote { namespace rpc {
       void operator()(const tx_extra_nonce& x) {
         if ((x.nonce.size() == sizeof(crypto::hash) + 1 && x.nonce[0] == TX_EXTRA_NONCE_PAYMENT_ID)
             || (x.nonce.size() == sizeof(crypto::hash8) + 1 && x.nonce[0] == TX_EXTRA_NONCE_ENCRYPTED_PAYMENT_ID))
-          entry.payment_id = lokimq::to_hex(x.nonce.begin() + 1, x.nonce.end());
+          entry.payment_id = gyuanxmq::to_hex(x.nonce.begin() + 1, x.nonce.end());
         else
-          entry.extra_nonce = lokimq::to_hex(x.nonce);
+          entry.extra_nonce = gyuanxmq::to_hex(x.nonce);
       }
       void operator()(const tx_extra_merge_mining_tag& x) { entry.mm_depth = x.depth; entry.mm_root = tools::type_to_hex(x.merkle_root); }
       void operator()(const tx_extra_additional_pub_keys& x) { entry.additional_pubkeys = hexify(x.data); }
       void operator()(const tx_extra_burn& x) { entry.burn_amount = x.amount; }
-      void operator()(const tx_extra_service_node_winner& x) { entry.sn_winner = tools::type_to_hex(x.m_service_node_key); }
-      void operator()(const tx_extra_service_node_pubkey& x) { entry.sn_pubkey = tools::type_to_hex(x.m_service_node_key); }
-      void operator()(const tx_extra_service_node_register& x) {
+      void operator()(const tx_extra_gnode_winner& x) { entry.sn_winner = tools::type_to_hex(x.m_gnode_key); }
+      void operator()(const tx_extra_gnode_pubkey& x) { entry.sn_pubkey = tools::type_to_hex(x.m_gnode_key); }
+      void operator()(const tx_extra_gnode_register& x) {
         auto& reg = entry.sn_registration.emplace();
         reg.fee = microportion(x.m_portions_for_operator);
         reg.expiry = x.m_expiration_timestamp;
@@ -731,7 +731,7 @@ namespace cryptonote { namespace rpc {
           portion = microportion(x.m_portions[i]);
         }
       }
-      void operator()(const tx_extra_service_node_contributor& x) {
+      void operator()(const tx_extra_gnode_contributor& x) {
         entry.sn_contributor = get_account_address_as_str(nettype, false, {x.m_spend_public_key, x.m_view_public_key});
       }
       template <typename T>
@@ -739,26 +739,26 @@ namespace cryptonote { namespace rpc {
         // Common loading code for nearly-identical state_change and deregister_old variables:
         auto& sc = entry.sn_state_change.emplace();
         sc.height = x.block_height;
-        sc.index = x.service_node_index;
+        sc.index = x.gnode_index;
         sc.voters.reserve(x.votes.size());
         for (auto& v : x.votes)
           sc.voters.push_back(v.validator_index);
         return sc;
       }
-      void operator()(const tx_extra_service_node_deregister_old& x) {
+      void operator()(const tx_extra_gnode_deregister_old& x) {
         auto& sc = _state_change(x);
         sc.old_dereg = true;
         sc.type = "dereg";
       }
-      void operator()(const tx_extra_service_node_state_change& x) {
+      void operator()(const tx_extra_gnode_state_change& x) {
         auto& sc = _state_change(x);
         switch (x.state)
         {
-          case service_nodes::new_state::decommission: sc.type = "decom"; break;
-          case service_nodes::new_state::recommission: sc.type = "recom"; break;
-          case service_nodes::new_state::deregister: sc.type = "dereg"; break;
-          case service_nodes::new_state::ip_change_penalty: sc.type = "ip"; break;
-          case service_nodes::new_state::_count: /*leave blank*/ break;
+          case gnodes::new_state::decommission: sc.type = "decom"; break;
+          case gnodes::new_state::recommission: sc.type = "recom"; break;
+          case gnodes::new_state::deregister: sc.type = "dereg"; break;
+          case gnodes::new_state::ip_change_penalty: sc.type = "ip"; break;
+          case gnodes::new_state::_count: /*leave blank*/ break;
         }
       }
       void operator()(const tx_extra_tx_secret_key& x) { entry.tx_secret_key = tools::type_to_hex(x.key); }
@@ -775,15 +775,15 @@ namespace cryptonote { namespace rpc {
         else if (owner.type == lns::generic_owner_sig_type::ed25519)
           entry = tools::type_to_hex(owner.ed25519);
       }
-      void operator()(const tx_extra_loki_name_system& x) {
+      void operator()(const tx_extra_gyuanx_name_system& x) {
         auto& lns = entry.lns.emplace();
         lns.blocks = lns::expiry_blocks(nettype, x.type);
         switch (x.type)
         {
-          case lns::mapping_type::lokinet: [[fallthrough]];
-          case lns::mapping_type::lokinet_2years: [[fallthrough]];
-          case lns::mapping_type::lokinet_5years: [[fallthrough]];
-          case lns::mapping_type::lokinet_10years: lns.type = "lokinet"; break;
+          case lns::mapping_type::gyuanxnet: [[fallthrough]];
+          case lns::mapping_type::gyuanxnet_2years: [[fallthrough]];
+          case lns::mapping_type::gyuanxnet_5years: [[fallthrough]];
+          case lns::mapping_type::gyuanxnet_10years: lns.type = "gyuanxnet"; break;
 
           case lns::mapping_type::session: lns.type = "session"; break;
           case lns::mapping_type::wallet:  lns.type = "wallet"; break;
@@ -800,7 +800,7 @@ namespace cryptonote { namespace rpc {
           lns.renew = true;
         lns.name_hash = tools::type_to_hex(x.name_hash);
         if (!x.encrypted_value.empty())
-          lns.value = lokimq::to_hex(x.encrypted_value);
+          lns.value = gyuanxmq::to_hex(x.encrypted_value);
         _load_owner(lns.owner, x.owner);
         _load_owner(lns.backup_owner, x.backup_owner);
       }
@@ -948,9 +948,9 @@ namespace cryptonote { namespace rpc {
         }
         else
         {
-          e.pruned_as_hex = lokimq::to_hex(unprunable_data);
+          e.pruned_as_hex = gyuanxmq::to_hex(unprunable_data);
           if (!req.prune && prunable && !pruned)
-            e.prunable_as_hex = lokimq::to_hex(prunable_data);
+            e.prunable_as_hex = gyuanxmq::to_hex(prunable_data);
         }
       }
       else
@@ -959,7 +959,7 @@ namespace cryptonote { namespace rpc {
         tx_data = unprunable_data;
         tx_data += prunable_data;
         if (!req.decode_as_json)
-          e.as_hex = lokimq::to_hex(tx_data);
+          e.as_hex = gyuanxmq::to_hex(tx_data);
       }
 
       if (req.decode_as_json || req.tx_extra)
@@ -1293,7 +1293,7 @@ namespace cryptonote { namespace rpc {
     const uint8_t major_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
 
     res.pow_algorithm =
-        major_version >= network_version_12_checkpointing    ? "RandomX (LOKI variant)"               :
+        major_version >= network_version_12_checkpointing    ? "RandomX (GYUANX variant)"               :
         major_version == network_version_11_infinite_staking ? "Cryptonight Turtle Light (Variant 2)" :
                                                                "Cryptonight Heavy (Variant 2)";
 
@@ -1448,7 +1448,7 @@ namespace cryptonote { namespace rpc {
 
     m_core.get_pool().get_transactions_and_spent_keys_info(res.transactions, res.spent_key_images, load_extra, context.admin);
     for (tx_info& txi : res.transactions)
-      txi.tx_blob = lokimq::to_hex(txi.tx_blob);
+      txi.tx_blob = gyuanxmq::to_hex(txi.tx_blob);
     res.status = STATUS_OK;
     return res;
   }
@@ -1523,7 +1523,7 @@ namespace cryptonote { namespace rpc {
   //------------------------------------------------------------------------------------------------------------------------------
 
   //
-  // Loki
+  // Gyuanx
   //
   GET_OUTPUT_BLACKLIST::response core_rpc_server::invoke(GET_OUTPUT_BLACKLIST::request&& req, rpc_context context)
   {
@@ -1678,8 +1678,8 @@ namespace cryptonote { namespace rpc {
     }
     blobdata hashing_blob = get_block_hashing_blob(b);
     res.prev_hash = tools::type_to_hex(b.prev_id);
-    res.blocktemplate_blob = lokimq::to_hex(block_blob);
-    res.blockhashing_blob =  lokimq::to_hex(hashing_blob);
+    res.blocktemplate_blob = gyuanxmq::to_hex(block_blob);
+    res.blockhashing_blob =  gyuanxmq::to_hex(hashing_blob);
     res.status = STATUS_OK;
     return res;
   }
@@ -1761,7 +1761,7 @@ namespace cryptonote { namespace rpc {
         return true;
       }, b, template_res.difficulty, template_res.height);
 
-      submit_req.blob[0] = lokimq::to_hex(block_to_blob(b));
+      submit_req.blob[0] = gyuanxmq::to_hex(block_to_blob(b));
       auto submit_res = invoke(std::move(submit_req), context);
       res.status = submit_res.status;
 
@@ -1805,7 +1805,7 @@ namespace cryptonote { namespace rpc {
       response.pow_hash = tools::type_to_hex(get_block_longhash_w_blockchain(m_core.get_nettype(), &(m_core.get_blockchain_storage()), blk, height, 0));
     response.long_term_weight = m_core.get_blockchain_storage().get_db().get_block_long_term_weight(height);
     response.miner_tx_hash = tools::type_to_hex(cryptonote::get_transaction_hash(blk.miner_tx));
-    response.service_node_winner = tools::type_to_hex(cryptonote::get_service_node_winner_from_tx_extra(blk.miner_tx.extra));
+    response.gnode_winner = tools::type_to_hex(cryptonote::get_gnode_winner_from_tx_extra(blk.miner_tx.extra));
     if (get_tx_hashes)
     {
       response.tx_hashes.reserve(blk.tx_hashes.size());
@@ -2043,7 +2043,7 @@ namespace cryptonote { namespace rpc {
     res.tx_hashes.reserve(blk.tx_hashes.size());
     for (const auto& tx_hash : blk.tx_hashes)
         res.tx_hashes.push_back(tools::type_to_hex(tx_hash));
-    res.blob = lokimq::to_hex(t_serializable_object_to_blob(blk));
+    res.blob = gyuanxmq::to_hex(t_serializable_object_to_blob(blk));
     res.json = obj_to_json_str(blk);
     res.status = STATUS_OK;
     return res;
@@ -2290,36 +2290,36 @@ namespace cryptonote { namespace rpc {
   {
     GET_SERVICE_NODE_STATUS::response res{};
 
-    PERF_TIMER(on_get_service_node_status);
-    auto get_service_node_key_res = invoke(GET_SERVICE_KEYS::request{}, context);
+    PERF_TIMER(on_get_gnode_status);
+    auto get_gnode_key_res = invoke(GET_SERVICE_KEYS::request{}, context);
 
-    GET_SERVICE_NODES::request get_service_nodes_req{};
-    get_service_nodes_req.include_json = req.include_json;
-    get_service_nodes_req.service_node_pubkeys.push_back(std::move(get_service_node_key_res.service_node_pubkey));
+    GET_SERVICE_NODES::request get_gnodes_req{};
+    get_gnodes_req.include_json = req.include_json;
+    get_gnodes_req.gnode_pubkeys.push_back(std::move(get_gnode_key_res.gnode_pubkey));
 
-    auto get_service_nodes_res = invoke(std::move(get_service_nodes_req), context);
-    res.status = get_service_nodes_res.status;
+    auto get_gnodes_res = invoke(std::move(get_gnodes_req), context);
+    res.status = get_gnodes_res.status;
 
-    if (get_service_nodes_res.service_node_states.empty()) // Started in service node but not staked, no information on the blockchain yet
+    if (get_gnodes_res.gnode_states.empty()) // Started in service node but not staked, no information on the blockchain yet
     {
-      res.service_node_state.service_node_pubkey  = std::move(get_service_node_key_res.service_node_pubkey);
-      res.service_node_state.public_ip            = epee::string_tools::get_ip_string_from_int32(m_core.sn_public_ip());
-      res.service_node_state.storage_port         = m_core.storage_port();
-      res.service_node_state.storage_lmq_port     = m_core.m_storage_lmq_port;
-      res.service_node_state.quorumnet_port       = m_core.quorumnet_port();
-      res.service_node_state.pubkey_ed25519       = std::move(get_service_node_key_res.service_node_ed25519_pubkey);
-      res.service_node_state.pubkey_x25519        = std::move(get_service_node_key_res.service_node_x25519_pubkey);
-      res.service_node_state.service_node_version = LOKI_VERSION;
+      res.gnode_state.gnode_pubkey  = std::move(get_gnode_key_res.gnode_pubkey);
+      res.gnode_state.public_ip            = epee::string_tools::get_ip_string_from_int32(m_core.sn_public_ip());
+      res.gnode_state.storage_port         = m_core.storage_port();
+      res.gnode_state.storage_lmq_port     = m_core.m_storage_lmq_port;
+      res.gnode_state.quorumnet_port       = m_core.quorumnet_port();
+      res.gnode_state.pubkey_ed25519       = std::move(get_gnode_key_res.gnode_ed25519_pubkey);
+      res.gnode_state.pubkey_x25519        = std::move(get_gnode_key_res.gnode_x25519_pubkey);
+      res.gnode_state.gnode_version = GYUANX_VERSION;
     }
     else
     {
-      res.service_node_state = std::move(get_service_nodes_res.service_node_states[0]);
+      res.gnode_state = std::move(get_gnodes_res.gnode_states[0]);
     }
 
-    res.height = get_service_nodes_res.height;
-    res.block_hash = get_service_nodes_res.block_hash;
-    res.status = get_service_nodes_res.status;
-    res.as_json = get_service_nodes_res.as_json;
+    res.height = get_gnodes_res.height;
+    res.block_hash = get_gnodes_res.block_hash;
+    res.status = get_gnodes_res.status;
+    res.as_json = get_gnodes_res.as_json;
 
     return res;
   }
@@ -2636,12 +2636,12 @@ namespace cryptonote { namespace rpc {
 
     PERF_TIMER(on_get_quorum_state);
 
-    if (req.quorum_type >= tools::enum_count<service_nodes::quorum_type> &&
+    if (req.quorum_type >= tools::enum_count<gnodes::quorum_type> &&
         req.quorum_type != GET_QUORUM_STATE::ALL_QUORUMS_SENTINEL_VALUE)
       throw rpc_error{ERROR_WRONG_PARAM,
         "Quorum type specifies an invalid value: " + std::to_string(req.quorum_type)};
 
-    auto requested_type = [&req](service_nodes::quorum_type type) {
+    auto requested_type = [&req](gnodes::quorum_type type) {
       return req.quorum_type == GET_QUORUM_STATE::ALL_QUORUMS_SENTINEL_VALUE ||
         req.quorum_type == static_cast<uint8_t>(type);
     };
@@ -2661,11 +2661,11 @@ namespace cryptonote { namespace rpc {
       // pulse: current height (i.e. top block height + 1)
       uint64_t top_height = curr_height - 1;
       latest_ob = top_height;
-      latest_cp = std::min(start, top_height - top_height % service_nodes::CHECKPOINT_INTERVAL);
-      latest_bl = std::min(start, top_height - top_height % service_nodes::BLINK_QUORUM_INTERVAL);
-      if (requested_type(service_nodes::quorum_type::checkpointing))
+      latest_cp = std::min(start, top_height - top_height % gnodes::CHECKPOINT_INTERVAL);
+      latest_bl = std::min(start, top_height - top_height % gnodes::BLINK_QUORUM_INTERVAL);
+      if (requested_type(gnodes::quorum_type::checkpointing))
         start = std::min(start, latest_cp);
-      if (requested_type(service_nodes::quorum_type::blink))
+      if (requested_type(gnodes::quorum_type::blink))
         start = std::min(start, latest_bl);
       end = curr_height;
     }
@@ -2687,7 +2687,7 @@ namespace cryptonote { namespace rpc {
     start                = std::min(curr_height, start);
     // We can also provide the pulse quorum for the current block being produced, so if asked for
     // that make a note.
-    bool add_curr_pulse = (latest || end > curr_height) && requested_type(service_nodes::quorum_type::pulse);
+    bool add_curr_pulse = (latest || end > curr_height) && requested_type(gnodes::quorum_type::pulse);
     end = std::min(curr_height, end);
 
     uint64_t count       = (start > end) ? start - end : end - start;
@@ -2704,26 +2704,26 @@ namespace cryptonote { namespace rpc {
       uint8_t hf_version = m_core.get_hard_fork_version(height);
       if (hf_version != HardFork::INVALID_HF_VERSION)
       {
-        auto start_quorum_iterator = static_cast<service_nodes::quorum_type>(0);
-        auto end_quorum_iterator   = service_nodes::max_quorum_type_for_hf(hf_version);
+        auto start_quorum_iterator = static_cast<gnodes::quorum_type>(0);
+        auto end_quorum_iterator   = gnodes::max_quorum_type_for_hf(hf_version);
 
         if (req.quorum_type != GET_QUORUM_STATE::ALL_QUORUMS_SENTINEL_VALUE)
         {
-          start_quorum_iterator = static_cast<service_nodes::quorum_type>(req.quorum_type);
+          start_quorum_iterator = static_cast<gnodes::quorum_type>(req.quorum_type);
           end_quorum_iterator   = start_quorum_iterator;
         }
 
         for (int quorum_int = (int)start_quorum_iterator; quorum_int <= (int)end_quorum_iterator; quorum_int++)
         {
-          auto type = static_cast<service_nodes::quorum_type>(quorum_int);
+          auto type = static_cast<gnodes::quorum_type>(quorum_int);
           if (latest)
           { // Latest quorum requested, so skip if this is isn't the latest height for *this* quorum type
-            if (type == service_nodes::quorum_type::obligations && height != latest_ob) continue;
-            if (type == service_nodes::quorum_type::checkpointing && height != latest_cp) continue;
-            if (type == service_nodes::quorum_type::blink && height != latest_bl) continue;
-            if (type == service_nodes::quorum_type::pulse) continue;
+            if (type == gnodes::quorum_type::obligations && height != latest_ob) continue;
+            if (type == gnodes::quorum_type::checkpointing && height != latest_cp) continue;
+            if (type == gnodes::quorum_type::blink && height != latest_bl) continue;
+            if (type == gnodes::quorum_type::pulse) continue;
           }
-          if (std::shared_ptr<const service_nodes::quorum> quorum = m_core.get_quorum(type, height, true /*include_old*/))
+          if (std::shared_ptr<const gnodes::quorum> quorum = m_core.get_quorum(type, height, true /*include_old*/))
           {
             auto& entry = res.quorums.emplace_back();
             entry.height                                          = height;
@@ -2751,14 +2751,14 @@ namespace cryptonote { namespace rpc {
       if (pulse::get_round_timings(blockchain, curr_height, top_header.timestamp, next_timings) &&
           pulse::convert_time_to_round(pulse::clock::now(), next_timings.r0_timestamp, &pulse_round))
       {
-        auto entropy = service_nodes::get_pulse_entropy_for_next_block(blockchain.get_db(), pulse_round);
-        auto& sn_list = m_core.get_service_node_list();
-        auto quorum = generate_pulse_quorum(m_core.get_nettype(), sn_list.get_block_leader().key, hf_version, sn_list.active_service_nodes_infos(), entropy, pulse_round);
+        auto entropy = gnodes::get_pulse_entropy_for_next_block(blockchain.get_db(), pulse_round);
+        auto& sn_list = m_core.get_gnode_list();
+        auto quorum = generate_pulse_quorum(m_core.get_nettype(), sn_list.get_block_leader().key, hf_version, sn_list.active_gnodes_infos(), entropy, pulse_round);
         if (verify_pulse_quorum_sizes(quorum))
         {
           auto& entry = res.quorums.emplace_back();
           entry.height = curr_height;
-          entry.quorum_type = static_cast<uint8_t>(service_nodes::quorum_type::pulse);
+          entry.quorum_type = static_cast<uint8_t>(gnodes::quorum_type::pulse);
 
           entry.quorum.validators = hexify(quorum.validators);
           entry.quorum.workers = hexify(quorum.workers);
@@ -2790,13 +2790,13 @@ namespace cryptonote { namespace rpc {
   {
     GET_SERVICE_NODE_REGISTRATION_CMD_RAW::response res{};
 
-    PERF_TIMER(on_get_service_node_registration_cmd_raw);
+    PERF_TIMER(on_get_gnode_registration_cmd_raw);
 
-    if (!m_core.service_node())
+    if (!m_core.gnode())
       throw rpc_error{ERROR_WRONG_PARAM, "Daemon has not been started in service node mode, please relaunch with --service-node flag."};
 
     uint8_t hf_version = m_core.get_hard_fork_version(m_core.get_current_blockchain_height());
-    if (!service_nodes::make_registration_cmd(m_core.get_nettype(), hf_version, req.staking_requirement, req.args, m_core.get_service_keys(), res.registration_cmd, req.make_friendly))
+    if (!gnodes::make_registration_cmd(m_core.get_nettype(), hf_version, req.staking_requirement, req.args, m_core.get_service_keys(), res.registration_cmd, req.make_friendly))
       throw rpc_error{ERROR_INTERNAL, "Failed to make registration command"};
 
     res.status = STATUS_OK;
@@ -2807,16 +2807,16 @@ namespace cryptonote { namespace rpc {
   {
     GET_SERVICE_NODE_REGISTRATION_CMD::response res{};
 
-    PERF_TIMER(on_get_service_node_registration_cmd);
+    PERF_TIMER(on_get_gnode_registration_cmd);
 
     std::vector<std::string> args;
 
     uint64_t const curr_height   = m_core.get_current_blockchain_height();
-    uint64_t staking_requirement = service_nodes::get_staking_requirement(m_core.get_nettype(), curr_height, m_core.get_hard_fork_version(curr_height));
+    uint64_t staking_requirement = gnodes::get_staking_requirement(m_core.get_nettype(), curr_height, m_core.get_hard_fork_version(curr_height));
 
     {
       uint64_t portions_cut;
-      if (!service_nodes::get_portions_from_percent_str(req.operator_cut, portions_cut))
+      if (!gnodes::get_portions_from_percent_str(req.operator_cut, portions_cut))
       {
         res.status = "Invalid value: " + req.operator_cut + ". Should be between [0-100]";
         MERROR(res.status);
@@ -2828,7 +2828,7 @@ namespace cryptonote { namespace rpc {
 
     for (const auto& [address, amount] : req.contributions)
     {
-        uint64_t num_portions = service_nodes::get_portions_to_make_amount(staking_requirement, amount);
+        uint64_t num_portions = gnodes::get_portions_to_make_amount(staking_requirement, amount);
         args.push_back(address);
         args.push_back(std::to_string(num_portions));
     }
@@ -2845,12 +2845,12 @@ namespace cryptonote { namespace rpc {
   {
     GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::response res{};
 
-    PERF_TIMER(on_get_service_node_blacklisted_key_images);
-    auto &blacklist = m_core.get_service_node_blacklisted_key_images();
+    PERF_TIMER(on_get_gnode_blacklisted_key_images);
+    auto &blacklist = m_core.get_gnode_blacklisted_key_images();
 
     res.status = STATUS_OK;
     res.blacklist.reserve(blacklist.size());
-    for (const service_nodes::key_image_blacklist_entry &entry : blacklist)
+    for (const gnodes::key_image_blacklist_entry &entry : blacklist)
     {
       res.blacklist.emplace_back();
       auto &new_entry = res.blacklist.back();
@@ -2865,13 +2865,13 @@ namespace cryptonote { namespace rpc {
   {
     GET_SERVICE_KEYS::response res{};
 
-    PERF_TIMER(on_get_service_node_key);
+    PERF_TIMER(on_get_gnode_key);
 
     const auto& keys = m_core.get_service_keys();
     if (keys.pub)
-      res.service_node_pubkey = tools::type_to_hex(keys.pub);
-    res.service_node_ed25519_pubkey = tools::type_to_hex(keys.pub_ed25519);
-    res.service_node_x25519_pubkey = tools::type_to_hex(keys.pub_x25519);
+      res.gnode_pubkey = tools::type_to_hex(keys.pub);
+    res.gnode_ed25519_pubkey = tools::type_to_hex(keys.pub_ed25519);
+    res.gnode_x25519_pubkey = tools::type_to_hex(keys.pub_x25519);
     res.status = STATUS_OK;
     return res;
   }
@@ -2880,21 +2880,21 @@ namespace cryptonote { namespace rpc {
   {
     GET_SERVICE_PRIVKEYS::response res{};
 
-    PERF_TIMER(on_get_service_node_key);
+    PERF_TIMER(on_get_gnode_key);
 
     const auto& keys = m_core.get_service_keys();
     if (keys.key != crypto::null_skey)
-      res.service_node_privkey = tools::type_to_hex(keys.key.data);
-    res.service_node_ed25519_privkey = tools::type_to_hex(keys.key_ed25519.data);
-    res.service_node_x25519_privkey = tools::type_to_hex(keys.key_x25519.data);
+      res.gnode_privkey = tools::type_to_hex(keys.key.data);
+    res.gnode_ed25519_privkey = tools::type_to_hex(keys.key_ed25519.data);
+    res.gnode_x25519_privkey = tools::type_to_hex(keys.key_x25519.data);
     res.status = STATUS_OK;
     return res;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  void core_rpc_server::fill_sn_response_entry(GET_SERVICE_NODES::response::entry& entry, const service_nodes::service_node_pubkey_info &sn_info, uint64_t current_height) {
+  void core_rpc_server::fill_sn_response_entry(GET_SERVICE_NODES::response::entry& entry, const gnodes::gnode_pubkey_info &sn_info, uint64_t current_height) {
 
     const auto &info = *sn_info.info;
-    entry.service_node_pubkey           = tools::type_to_hex(sn_info.pubkey);
+    entry.gnode_pubkey           = tools::type_to_hex(sn_info.pubkey);
     entry.registration_height           = info.registration_height;
     entry.requested_unlock_height       = info.requested_unlock_height;
     entry.last_reward_block_height      = info.last_reward_block_height;
@@ -2903,11 +2903,11 @@ namespace cryptonote { namespace rpc {
     entry.funded                        = info.is_fully_funded();
     entry.state_height                  = info.is_fully_funded()
         ? (info.is_decommissioned() ? info.last_decommission_height : info.active_since_height) : info.last_reward_block_height;
-    entry.earned_downtime_blocks        = service_nodes::quorum_cop::calculate_decommission_credit(info, current_height);
+    entry.earned_downtime_blocks        = gnodes::quorum_cop::calculate_decommission_credit(info, current_height);
     entry.decommission_count            = info.decommission_count;
 
-    m_core.get_service_node_list().access_proof(sn_info.pubkey, [&entry](const auto &proof) {
-        entry.service_node_version     = proof.version;
+    m_core.get_gnode_list().access_proof(sn_info.pubkey, [&entry](const auto &proof) {
+        entry.gnode_version     = proof.version;
         entry.public_ip                = epee::string_tools::get_ip_string_from_int32(proof.public_ip);
         entry.storage_port             = proof.storage_port;
         entry.storage_lmq_port         = proof.storage_lmq_port;
@@ -2921,16 +2921,16 @@ namespace cryptonote { namespace rpc {
         entry.storage_server_reachable           = proof.storage_server_reachable;
         entry.storage_server_reachable_timestamp = proof.storage_server_reachable_timestamp;
 
-        service_nodes::participation_history const &checkpoint_participation = proof.checkpoint_participation;
-        service_nodes::participation_history const &pulse_participation      = proof.pulse_participation;
-        entry.checkpoint_participation = std::vector<service_nodes::participation_entry>(checkpoint_participation.begin(), checkpoint_participation.end());
-        entry.pulse_participation      = std::vector<service_nodes::participation_entry>(pulse_participation.begin(),      pulse_participation.end());
+        gnodes::participation_history const &checkpoint_participation = proof.checkpoint_participation;
+        gnodes::participation_history const &pulse_participation      = proof.pulse_participation;
+        entry.checkpoint_participation = std::vector<gnodes::participation_entry>(checkpoint_participation.begin(), checkpoint_participation.end());
+        entry.pulse_participation      = std::vector<gnodes::participation_entry>(pulse_participation.begin(),      pulse_participation.end());
     });
 
     entry.contributors.reserve(info.contributors.size());
 
-    using namespace service_nodes;
-    for (service_node_info::contributor_t const &contributor : info.contributors)
+    using namespace gnodes;
+    for (gnode_info::contributor_t const &contributor : info.contributors)
     {
       entry.contributors.push_back({});
       auto &new_contributor = entry.contributors.back();
@@ -2939,7 +2939,7 @@ namespace cryptonote { namespace rpc {
       new_contributor.address  = cryptonote::get_account_address_as_str(m_core.get_nettype(), false/*is_subaddress*/, contributor.address);
 
       new_contributor.locked_contributions.reserve(contributor.locked_contributions.size());
-      for (service_node_info::contribution_t const &src : contributor.locked_contributions)
+      for (gnode_info::contribution_t const &src : contributor.locked_contributions)
       {
         new_contributor.locked_contributions.push_back({});
         auto &dest = new_contributor.locked_contributions.back();
@@ -2980,20 +2980,20 @@ namespace cryptonote { namespace rpc {
       }
     }
 
-    std::vector<crypto::public_key> pubkeys(req.service_node_pubkeys.size());
-    for (size_t i = 0; i < req.service_node_pubkeys.size(); i++)
+    std::vector<crypto::public_key> pubkeys(req.gnode_pubkeys.size());
+    for (size_t i = 0; i < req.gnode_pubkeys.size(); i++)
     {
-      if (!tools::hex_to_type(req.service_node_pubkeys[i], pubkeys[i]))
+      if (!tools::hex_to_type(req.gnode_pubkeys[i], pubkeys[i]))
         throw rpc_error{ERROR_WRONG_PARAM,
           "Could not convert to a public key, arg: " + std::to_string(i)
-            + " which is pubkey: " + req.service_node_pubkeys[i]};
+            + " which is pubkey: " + req.gnode_pubkeys[i]};
     }
 
-    auto sn_infos = m_core.get_service_node_list_state(pubkeys);
+    auto sn_infos = m_core.get_gnode_list_state(pubkeys);
 
     if (req.active_only) {
       const auto end =
-        std::remove_if(sn_infos.begin(), sn_infos.end(), [](const service_nodes::service_node_pubkey_info& snpk_info) {
+        std::remove_if(sn_infos.begin(), sn_infos.end(), [](const gnodes::gnode_pubkey_info& snpk_info) {
           return !snpk_info.info->is_active();
         });
 
@@ -3023,7 +3023,7 @@ namespace cryptonote { namespace rpc {
       sn_infos.resize(limit);
     }
 
-    res.service_node_states.reserve(sn_infos.size());
+    res.gnode_states.reserve(sn_infos.size());
     res.fields = req.fields.value_or(all_fields);
 
     if (req.include_json)
@@ -3035,8 +3035,8 @@ namespace cryptonote { namespace rpc {
     }
 
     for (auto &pubkey_info : sn_infos) {
-      res.service_node_states.emplace_back();
-      fill_sn_response_entry(res.service_node_states.back(), pubkey_info, res.height);
+      res.gnode_states.emplace_back();
+      fill_sn_response_entry(res.gnode_states.back(), pubkey_info, res.height);
     }
 
     return res;
@@ -3167,7 +3167,7 @@ namespace cryptonote { namespace rpc {
   STORAGE_SERVER_PING::response core_rpc_server::invoke(STORAGE_SERVER_PING::request&& req, rpc_context context)
   {
     return handle_ping<STORAGE_SERVER_PING>(
-      {req.version_major, req.version_minor, req.version_patch}, service_nodes::MIN_STORAGE_SERVER_VERSION,
+      {req.version_major, req.version_minor, req.version_patch}, gnodes::MIN_STORAGE_SERVER_VERSION,
       "Storage Server", m_core.m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME,
       [this, &req](bool significant) {
         m_core.m_storage_lmq_port = req.storage_lmq_port;
@@ -3176,11 +3176,11 @@ namespace cryptonote { namespace rpc {
       });
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  LOKINET_PING::response core_rpc_server::invoke(LOKINET_PING::request&& req, rpc_context context)
+  GYUANXNET_PING::response core_rpc_server::invoke(GYUANXNET_PING::request&& req, rpc_context context)
   {
-    return handle_ping<LOKINET_PING>(
-        req.version, service_nodes::MIN_LOKINET_VERSION,
-        "Lokinet", m_core.m_last_lokinet_ping, LOKINET_PING_LIFETIME,
+    return handle_ping<GYUANXNET_PING>(
+        req.version, gnodes::MIN_GYUANXNET_VERSION,
+        "Gyuanxnet", m_core.m_last_gyuanxnet_ping, GYUANXNET_PING_LIFETIME,
         [this](bool significant) { if (significant) m_core.reset_proof_interval(); });
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -3191,7 +3191,7 @@ namespace cryptonote { namespace rpc {
     PERF_TIMER(on_get_staking_requirement);
     res.height = req.height > 0 ? req.height : m_core.get_current_blockchain_height();
 
-    res.staking_requirement = service_nodes::get_staking_requirement(m_core.get_nettype(), res.height, m_core.get_hard_fork_version(res.height));
+    res.staking_requirement = gnodes::get_staking_requirement(m_core.get_nettype(), res.height, m_core.get_hard_fork_version(res.height));
     res.status = STATUS_OK;
     return res;
   }
@@ -3298,32 +3298,32 @@ namespace cryptonote { namespace rpc {
         }
         if (tx.type == cryptonote::txtype::state_change)
         {
-          cryptonote::tx_extra_service_node_state_change state_change;
-          if (!cryptonote::get_service_node_state_change_from_tx_extra(tx.extra, state_change, hard_fork_version))
+          cryptonote::tx_extra_gnode_state_change state_change;
+          if (!cryptonote::get_gnode_state_change_from_tx_extra(tx.extra, state_change, hard_fork_version))
           {
             LOG_ERROR("Could not get state change from tx, possibly corrupt tx, hf_version "<< std::to_string(hard_fork_version));
             continue;
           }
 
           switch(state_change.state) {
-            case service_nodes::new_state::deregister:
+            case gnodes::new_state::deregister:
               res.total_deregister++;
               break;
 
-            case service_nodes::new_state::decommission:
+            case gnodes::new_state::decommission:
               res.total_decommission++;
               break;
 
-            case service_nodes::new_state::recommission:
+            case gnodes::new_state::recommission:
               res.total_recommission++;
               break;
 
-            case service_nodes::new_state::ip_change_penalty:
+            case gnodes::new_state::ip_change_penalty:
               res.total_ip_change_penalty++;
               break;
 
             default:
-              MERROR("Unhandled state in on_get_service_nodes_state_changes");
+              MERROR("Unhandled state in on_get_gnodes_state_changes");
               break;
           }
         }
@@ -3404,7 +3404,7 @@ namespace cryptonote { namespace rpc {
       {
         types.push_back(static_cast<lns::mapping_type>(type));
         if (!lns::mapping_type_allowed(hf_version, types.back()))
-          throw rpc_error{ERROR_WRONG_PARAM, "Invalid lokinet type '" + std::to_string(type) + "'"};
+          throw rpc_error{ERROR_WRONG_PARAM, "Invalid gyuanxnet type '" + std::to_string(type) + "'"};
       }
 
       // This also takes 32 raw bytes, but that is undocumented (because it is painful to pass
@@ -3422,7 +3422,7 @@ namespace cryptonote { namespace rpc {
         entry.name_hash                                        = record.name_hash;
         entry.owner                                            = record.owner.to_string(nettype());
         if (record.backup_owner) entry.backup_owner            = record.backup_owner.to_string(nettype());
-        entry.encrypted_value                                  = lokimq::to_hex(record.encrypted_value.to_view());
+        entry.encrypted_value                                  = gyuanxmq::to_hex(record.encrypted_value.to_view());
         entry.expiration_height                                = record.expiration_height;
         entry.update_height                                    = record.update_height;
         entry.txid                                             = tools::type_to_hex(record.txid);
@@ -3452,7 +3452,7 @@ namespace cryptonote { namespace rpc {
       if (!lns::parse_owner_to_generic_owner(m_core.get_nettype(), owner, lns_owner, &errmsg))
         throw rpc_error{ERROR_WRONG_PARAM, std::move(errmsg)};
 
-      // TODO(loki): We now serialize both owner and backup_owner, since if
+      // TODO(gyuanx): We now serialize both owner and backup_owner, since if
       // we specify an owner that is backup owner, we don't show the (other)
       // owner. For RPC compatibility we keep the request_index around until the
       // next hard fork (16)
@@ -3479,7 +3479,7 @@ namespace cryptonote { namespace rpc {
       entry.name_hash       = std::move(record.name_hash);
       if (record.owner) entry.owner = record.owner.to_string(nettype());
       if (record.backup_owner) entry.backup_owner = record.backup_owner.to_string(nettype());
-      entry.encrypted_value = lokimq::to_hex(record.encrypted_value.to_view());
+      entry.encrypted_value = gyuanxmq::to_hex(record.encrypted_value.to_view());
       entry.update_height   = record.update_height;
       entry.expiration_height = record.expiration_height;
       entry.txid            = tools::type_to_hex(record.txid);
@@ -3504,15 +3504,15 @@ namespace cryptonote { namespace rpc {
     uint8_t hf_version = m_core.get_hard_fork_version(m_core.get_current_blockchain_height());
     auto type = static_cast<lns::mapping_type>(req.type);
     if (!lns::mapping_type_allowed(hf_version, type))
-      throw rpc_error{ERROR_WRONG_PARAM, "Invalid lokinet type '" + std::to_string(req.type) + "'"};
+      throw rpc_error{ERROR_WRONG_PARAM, "Invalid gyuanxnet type '" + std::to_string(req.type) + "'"};
 
     if (auto mapping = m_core.get_blockchain_storage().name_system_db().resolve(
         type, *name_hash, m_core.get_current_blockchain_height()))
     {
       auto [val, nonce] = mapping->value_nonce(type);
-      res.encrypted_value = lokimq::to_hex(val);
+      res.encrypted_value = gyuanxmq::to_hex(val);
       if (val.size() < mapping->to_view().size())
-        res.nonce = lokimq::to_hex(nonce);
+        res.nonce = gyuanxmq::to_hex(nonce);
     }
     return res;
   }
