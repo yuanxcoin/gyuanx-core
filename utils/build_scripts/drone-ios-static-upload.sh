@@ -39,9 +39,9 @@ cd ..
 # epee:
 cp -rv contrib/epee/include/epee $tmpdir/include
 # external libs:
-mkdir $tmpdir/include/gyuanxmq
+mkdir $tmpdir/include/lokimq
 cp -v external/{easylogging++/*.h,db_drivers/liblmdb/lmdb.h,randomx/src/randomx.h} $tmpdir/include
-cp -v external/gyuanx-mq/gyuanxmq/*.h $tmpdir/include/gyuanxmq
+cp -v external/gyuanx-mq/lokimq/*.h $tmpdir/include/lokimq
 cp -rv external/{boost,cpr/include/cpr,ghc-filesystem/include/ghc,libuv/include/*,rapidjson/include/rapidjson} $tmpdir/include
 cp -rv build/arm64/external/uWebSockets/* $tmpdir/include
 # static libs:

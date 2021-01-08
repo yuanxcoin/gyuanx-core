@@ -96,12 +96,12 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #pragma once
 #include <cstdint>
 
-constexpr uint64_t COIN                       = (uint64_t)1000000000; // 1 GYUANX = pow(10, 9)
+constexpr uint64_t COIN                       = (uint64_t)1000000000000; // 1 GYUANX = pow(10, 12)
 constexpr uint64_t MONEY_SUPPLY               = ((uint64_t)(-1)); // MONEY_SUPPLY - total number coins to be generated
 constexpr uint64_t EMISSION_LINEAR_BASE       = ((uint64_t)(1) << 58);
 constexpr uint64_t EMISSION_SUPPLY_MULTIPLIER = 19;
 constexpr uint64_t EMISSION_SUPPLY_DIVISOR    = 10;
-constexpr uint64_t EMISSION_DIVISOR           = 2000000;
+constexpr uint64_t EMISSION_DIVISOR           = 2000;
 
 // HF15 money supply parameters:
 constexpr uint64_t BLOCK_REWARD_HF15      = 25 * COIN;
@@ -120,12 +120,8 @@ constexpr uint64_t CHAINFLIP_LIQUIDITY_HF16 = BLOCK_REWARD_HF15 * 24 / 100;
 // actual HF with a new reward schedule including Chainflip rewards, but as per the LRC linked
 // above, the liquidity funds end after 6 months.  That means that until HF17 is finalized, this is
 // the fallback if we hit the 6-months-after-HF16 point:
-constexpr uint64_t BLOCK_REWARD_HF17      = 18'333'333'333;
-constexpr uint64_t FOUNDATION_REWARD_HF17 =  1'833'333'333;
-
-static_assert(MINER_REWARD_HF15        + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
-static_assert(CHAINFLIP_LIQUIDITY_HF16 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF16);
-static_assert(                           SN_REWARD_HF15 + FOUNDATION_REWARD_HF17 == BLOCK_REWARD_HF17);
+constexpr uint64_t BLOCK_REWARD_HF17      = 18'333'333'333'333;
+constexpr uint64_t FOUNDATION_REWARD_HF17 =  2'833'333'333'333;
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -134,17 +130,17 @@ static_assert(                           SN_REWARD_HF15 + FOUNDATION_REWARD_HF17
 // -------------------------------------------------------------------------------------------------
 // Blink fees: in total the sender must pay (MINER_TX_FEE_PERCENT + BURN_TX_FEE_PERCENT) * [minimum tx fee] + BLINK_BURN_FIXED,
 // and the miner including the tx includes MINER_TX_FEE_PERCENT * [minimum tx fee]; the rest must be left unclaimed.
-constexpr uint64_t BLINK_MINER_TX_FEE_PERCENT = 100; // The blink miner tx fee (as a percentage of the minimum tx fee)
-constexpr uint64_t BLINK_BURN_FIXED           = 0;  // A fixed amount (in atomic currency units) that the sender must burn
-constexpr uint64_t BLINK_BURN_TX_FEE_PERCENT  = 150; // A percentage of the minimum miner tx fee that the sender must burn.  (Adds to BLINK_BURN_FIXED)
+constexpr uint64_t BLINK_MINER_TX_FEE_PERCENT = 1; // The blink miner tx fee (as a percentage of the minimum tx fee)
+constexpr uint64_t BLINK_BURN_FIXED           = 1;  // A fixed amount (in atomic currency units) that the sender must burn
+constexpr uint64_t BLINK_BURN_TX_FEE_PERCENT  = 0; // A percentage of the minimum miner tx fee that the sender must burn.  (Adds to BLINK_BURN_FIXED)
 
 // FIXME: can remove this post-fork 15; the burned amount only matters for mempool acceptance and
 // blink quorum signing, but isn't part of the blockchain concensus rules (so we don't actually have
 // to keep it around in the code for syncing the chain).
-constexpr uint64_t BLINK_BURN_TX_FEE_PERCENT_OLD = 400; // A percentage of the minimum miner tx fee that the sender must burn.  (Adds to BLINK_BURN_FIXED)
+constexpr uint64_t BLINK_BURN_TX_FEE_PERCENT_OLD = 0.001; // A percentage of the minimum miner tx fee that the sender must burn.  (Adds to BLINK_BURN_FIXED)
 
-static_assert(BLINK_MINER_TX_FEE_PERCENT >= 100, "blink miner fee cannot be smaller than the base tx fee");
-static_assert(BLINK_BURN_FIXED >= 0, "fixed blink burn amount cannot be negative");
+static_assert(BLINK_MINER_TX_FEE_PERCENT >= 1, "blink miner fee cannot be smaller than the base tx fee");
+static_assert(BLINK_BURN_FIXED >= 1, "fixed blink burn amount cannot be negative");
 static_assert(BLINK_BURN_TX_FEE_PERCENT >= 0, "blink burn tx percent cannot be negative");
 
 // -------------------------------------------------------------------------------------------------

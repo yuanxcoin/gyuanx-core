@@ -33,7 +33,7 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_config.h"
 #include "cryptonote_core/gyuanx_name_system.h"
-#include "cryptonote_core/service_node_list.h"
+#include "cryptonote_core/gnode_list.h"
 #include "common/random.h"
 
 extern "C"
@@ -41,7 +41,7 @@ extern "C"
 #include <sodium.h>
 };
 
-static void add_service_nodes(gyuanx_chain_generator &gen, size_t count)
+static void add_gnodes(gyuanx_chain_generator &gen, size_t count)
 {
   std::vector<cryptonote::transaction> registration_txs(count);
   for (auto i = 0u; i < count; ++i)
@@ -71,14 +71,14 @@ bool gyuanx_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vect
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
+  add_gnodes(gen, gnodes::CHECKPOINT_QUORUM_SIZE);
 
   // NOTE: Create next block on checkpoint boundary and add checkpoiont
 
   gyuanx_chain_generator fork = gen;
   gen.add_blocks_until_next_checkpointable_height();
   fork.add_blocks_until_next_checkpointable_height();
-  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  fork.add_gnode_checkpoint(fork.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   // NOTE: Though we receive a checkpoint via votes, the alt block is still in
   // the alt db because we don't trigger a chain switch until we receive a 2nd
@@ -103,7 +103,7 @@ bool gyuanx_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vect
   // now same difficulty but more checkpoints, causing a chain switch at this point.
   gen.add_blocks_until_next_checkpointable_height();
   fork.add_blocks_until_next_checkpointable_height();
-  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  fork.add_gnode_checkpoint(fork.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
@@ -123,7 +123,7 @@ bool gyuanx_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vect
 }
 
 // NOTE: - Checks that a chain with a checkpoint but less PoW is preferred over a chain that is longer with more PoW but no checkpoints
-bool gyuanx_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtakes::generate(std::vector<test_event_entry>& events)
+bool gyuanx_checkpointing_alt_chain_more_gnode_checkpoints_less_pow_overtakes::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table();
   gyuanx_chain_generator gen(events, hard_forks);
@@ -131,7 +131,7 @@ bool gyuanx_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overt
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
 
-  int constexpr NUM_SERVICE_NODES = service_nodes::CHECKPOINT_QUORUM_SIZE;
+  int constexpr NUM_SERVICE_NODES = gnodes::CHECKPOINT_QUORUM_SIZE;
   std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
   for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
     registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
@@ -141,7 +141,7 @@ bool gyuanx_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overt
   gyuanx_chain_generator fork_with_more_checkpoints = gen;
   gen.add_n_blocks(60); // Add blocks so that this chain has more PoW
 
-  cryptonote::checkpoint_t checkpoint = fork_with_more_checkpoints.create_service_node_checkpoint(fork_with_more_checkpoints.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  cryptonote::checkpoint_t checkpoint = fork_with_more_checkpoints.create_gnode_checkpoint(fork_with_more_checkpoints.height(), gnodes::CHECKPOINT_MIN_VOTES);
   fork_with_more_checkpoints.create_and_add_next_block({}, &checkpoint);
   uint64_t const fork_top_height   = cryptonote::get_block_height(fork_with_more_checkpoints.top().block);
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork_with_more_checkpoints.top().block);
@@ -168,7 +168,7 @@ bool gyuanx_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
 
-  int constexpr NUM_SERVICE_NODES = service_nodes::CHECKPOINT_QUORUM_SIZE;
+  int constexpr NUM_SERVICE_NODES = gnodes::CHECKPOINT_QUORUM_SIZE;
   std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
   for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
     registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
@@ -179,7 +179,7 @@ bool gyuanx_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::
 
   gen.add_event_msg("Diverge the two chains in tandem, so they have the same PoW and generate alt service node states, but still remain on the mainchain due to PoW");
   gyuanx_chain_generator fork = gen;
-  for (size_t i = 0; i < service_nodes::CHECKPOINT_INTERVAL; i++)
+  for (size_t i = 0; i < gnodes::CHECKPOINT_INTERVAL; i++)
   {
     gen.create_and_add_next_block();
     fork.create_and_add_next_block();
@@ -189,9 +189,9 @@ bool gyuanx_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::
   uint64_t first_checkpointed_height    = fork.height();
   uint64_t first_checkpointed_height_hf = fork.top().block.major_version;
   crypto::hash first_checkpointed_hash  = cryptonote::get_block_hash(fork.top().block);
-  std::shared_ptr<const service_nodes::quorum> first_quorum = fork.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
+  std::shared_ptr<const gnodes::quorum> first_quorum = fork.get_quorum(gnodes::quorum_type::checkpointing, gen.height());
 
-  for (size_t i = 0; i < service_nodes::CHECKPOINT_INTERVAL; i++)
+  for (size_t i = 0; i < gnodes::CHECKPOINT_INTERVAL; i++)
   {
     gen.create_and_add_next_block();
     fork.create_and_add_next_block();
@@ -205,11 +205,11 @@ bool gyuanx_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::
   gen.add_event_msg(
       "Then we send the votes for the 2nd newest checkpoint. We don't reorg back until we receive a block confirming "
       "this checkpoint.");
-  for (size_t i = 0; i < service_nodes::CHECKPOINT_MIN_VOTES; i++)
+  for (size_t i = 0; i < gnodes::CHECKPOINT_MIN_VOTES; i++)
   {
     auto keys = gen.get_cached_keys(first_quorum->validators[i]);
-    service_nodes::quorum_vote_t fork_vote = service_nodes::make_checkpointing_vote(first_checkpointed_height_hf, first_checkpointed_hash, first_checkpointed_height, i, keys);
-    events.push_back(gyuanx_blockchain_addable<service_nodes::quorum_vote_t>(fork_vote, true/*can_be_added_to_blockchain*/, "A first_checkpoint vote from the forked chain should be accepted since we should be storing alternative service node states and quorums"));
+    gnodes::quorum_vote_t fork_vote = gnodes::make_checkpointing_vote(first_checkpointed_height_hf, first_checkpointed_hash, first_checkpointed_height, i, keys);
+    events.push_back(gyuanx_blockchain_addable<gnodes::quorum_vote_t>(fork_vote, true/*can_be_added_to_blockchain*/, "A first_checkpoint vote from the forked chain should be accepted since we should be storing alternative service node states and quorums"));
   }
 
   gen.add_event_msg("Upon adding the last block, we should now switch to our forked chain");
@@ -234,7 +234,7 @@ bool gyuanx_checkpointing_alt_chain_too_old_should_be_dropped::generate(std::vec
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
 
-  int constexpr NUM_SERVICE_NODES = service_nodes::CHECKPOINT_QUORUM_SIZE;
+  int constexpr NUM_SERVICE_NODES = gnodes::CHECKPOINT_QUORUM_SIZE;
   std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
   for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
     registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
@@ -243,14 +243,14 @@ bool gyuanx_checkpointing_alt_chain_too_old_should_be_dropped::generate(std::vec
   gyuanx_chain_generator fork = gen;
   gen.add_blocks_until_next_checkpointable_height();
   fork.add_blocks_until_next_checkpointable_height();
-  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.add_gnode_checkpoint(gen.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   gen.add_blocks_until_next_checkpointable_height();
   fork.add_blocks_until_next_checkpointable_height();
-  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.add_gnode_checkpoint(gen.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   gen.add_blocks_until_next_checkpointable_height();
-  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.add_gnode_checkpoint(gen.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   // NOTE: We now have 3 checkpoints. Extending this alt-chain is no longer
   // possible because this alt-chain starts before the immutable height, it
@@ -262,14 +262,14 @@ bool gyuanx_checkpointing_alt_chain_too_old_should_be_dropped::generate(std::vec
 // NOTE: - Checks that an alt chain eventually takes over the main chain with
 // only 1 checkpoint, by progressively adding 2 more checkpoints at the next
 // available checkpoint heights whilst maintaining equal heights with the main chain
-bool gyuanx_checkpointing_alt_chain_with_increasing_service_node_checkpoints::generate(std::vector<test_event_entry>& events)
+bool gyuanx_checkpointing_alt_chain_with_increasing_gnode_checkpoints::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table();
   gyuanx_chain_generator gen(events, hard_forks);
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
+  add_gnodes(gen, gnodes::CHECKPOINT_QUORUM_SIZE);
 
   gen.add_blocks_until_next_checkpointable_height();
 
@@ -280,11 +280,11 @@ bool gyuanx_checkpointing_alt_chain_with_increasing_service_node_checkpoints::ge
   // Fork chain   B B B B C
 
   gyuanx_chain_generator fork = gen;
-  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.add_gnode_checkpoint(gen.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   gen.add_blocks_until_next_checkpointable_height();
   fork.add_blocks_until_next_checkpointable_height();
-  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  fork.add_gnode_checkpoint(fork.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   crypto::hash const gen_top_hash = cryptonote::get_block_hash(gen.top().block);
   gyuanx_register_callback(events, "check_still_on_main_chain", [gen_top_hash](cryptonote::core &c, size_t ev_index)
@@ -304,7 +304,7 @@ bool gyuanx_checkpointing_alt_chain_with_increasing_service_node_checkpoints::ge
   gen.create_and_add_next_block();
 
   fork.add_blocks_until_next_checkpointable_height();
-  cryptonote::checkpoint_t fork_second_checkpoint = fork.create_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  cryptonote::checkpoint_t fork_second_checkpoint = fork.create_gnode_checkpoint(fork.height(), gnodes::CHECKPOINT_MIN_VOTES);
   fork.create_and_add_next_block({}, &fork_second_checkpoint);
 
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
@@ -322,35 +322,35 @@ bool gyuanx_checkpointing_alt_chain_with_increasing_service_node_checkpoints::ge
 
 // NOTE: - Checks checkpoints aren't generated until there are enough votes sitting in the vote pool
 //       - Checks invalid vote (signature or key) is not accepted due to not being part of the quorum
-bool gyuanx_checkpointing_service_node_checkpoint_from_votes::generate(std::vector<test_event_entry>& events)
+bool gyuanx_checkpointing_gnode_checkpoint_from_votes::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table();
   gyuanx_chain_generator gen(events, hard_forks);
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
+  add_gnodes(gen, gnodes::CHECKPOINT_QUORUM_SIZE);
 
   // NOTE: Generate service node votes
   gen.add_blocks_until_next_checkpointable_height();
   uint64_t checkpointed_height                                = gen.height();
   crypto::hash checkpointed_hash                              = cryptonote::get_block_hash(gen.top().block);
-  std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
-  std::vector<service_nodes::quorum_vote_t> checkpoint_votes(service_nodes::CHECKPOINT_MIN_VOTES);
-  for (size_t i = 0; i < service_nodes::CHECKPOINT_MIN_VOTES; i++)
+  std::shared_ptr<const gnodes::quorum> quorum = gen.get_quorum(gnodes::quorum_type::checkpointing, gen.height());
+  std::vector<gnodes::quorum_vote_t> checkpoint_votes(gnodes::CHECKPOINT_MIN_VOTES);
+  for (size_t i = 0; i < gnodes::CHECKPOINT_MIN_VOTES; i++)
   {
     auto keys = gen.get_cached_keys(quorum->validators[i]);
-    checkpoint_votes[i] = service_nodes::make_checkpointing_vote(gen.top().block.major_version, checkpointed_hash, checkpointed_height, i, keys);
+    checkpoint_votes[i] = gnodes::make_checkpointing_vote(gen.top().block.major_version, checkpointed_hash, checkpointed_height, i, keys);
   }
 
   // NOTE: Submit invalid vote using service node keys not in the quorum
   {
     const cryptonote::keypair invalid_kp = cryptonote::keypair::generate(hw::get_device("default"));
-    service_nodes::service_node_keys invalid_keys;
+    gnodes::gnode_keys invalid_keys;
     invalid_keys.pub = invalid_kp.pub;
     invalid_keys.key = invalid_kp.sec;
 
-    service_nodes::quorum_vote_t invalid_vote = service_nodes::make_checkpointing_vote(gen.top().block.major_version, checkpointed_hash, checkpointed_height, 0, invalid_keys);
+    gnodes::quorum_vote_t invalid_vote = gnodes::make_checkpointing_vote(gen.top().block.major_version, checkpointed_hash, checkpointed_height, 0, invalid_keys);
     gen.events_.push_back(gyuanx_blockchain_addable<decltype(invalid_vote)>(
         invalid_vote,
         false /*can_be_added_to_blockchain*/,
@@ -358,12 +358,12 @@ bool gyuanx_checkpointing_service_node_checkpoint_from_votes::generate(std::vect
   }
 
   // NOTE: Add insufficient service node votes and check that no checkpoint is generated yet
-  for (size_t i = 0; i < service_nodes::CHECKPOINT_MIN_VOTES - 1; i++)
-    gen.events_.push_back(gyuanx_blockchain_addable<service_nodes::quorum_vote_t>(checkpoint_votes[i]));
+  for (size_t i = 0; i < gnodes::CHECKPOINT_MIN_VOTES - 1; i++)
+    gen.events_.push_back(gyuanx_blockchain_addable<gnodes::quorum_vote_t>(checkpoint_votes[i]));
 
-  gyuanx_register_callback(events, "check_service_node_checkpoint_rejected_insufficient_votes", [checkpointed_height](cryptonote::core &c, size_t ev_index)
+  gyuanx_register_callback(events, "check_gnode_checkpoint_rejected_insufficient_votes", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
-    DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_rejected_insufficient_votes");
+    DEFINE_TESTS_ERROR_CONTEXT("check_gnode_checkpoint_rejected_insufficient_votes");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
     cryptonote::checkpoint_t real_checkpoint;
     CHECK_TEST_CONDITION(blockchain.get_checkpoint(checkpointed_height, real_checkpoint) == false);
@@ -372,9 +372,9 @@ bool gyuanx_checkpointing_service_node_checkpoint_from_votes::generate(std::vect
 
   // NOTE: Add last vote and check checkpoint has been generated
   gen.events_.push_back(checkpoint_votes.back());
-  gyuanx_register_callback(events, "check_service_node_checkpoint_accepted", [checkpointed_height](cryptonote::core &c, size_t ev_index)
+  gyuanx_register_callback(events, "check_gnode_checkpoint_accepted", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
-    DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_accepted");
+    DEFINE_TESTS_ERROR_CONTEXT("check_gnode_checkpoint_accepted");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
     cryptonote::checkpoint_t real_checkpoint;
     CHECK_TEST_CONDITION(blockchain.get_checkpoint(checkpointed_height, real_checkpoint));
@@ -386,14 +386,14 @@ bool gyuanx_checkpointing_service_node_checkpoint_from_votes::generate(std::vect
 
 // NOTE: - Checks you can't add blocks before the first 2 checkpoints
 //       - Checks you can add a block after the 1st checkpoint out of 2 checkpoints.
-bool gyuanx_checkpointing_service_node_checkpoints_check_reorg_windows::generate(std::vector<test_event_entry>& events)
+bool gyuanx_checkpointing_gnode_checkpoints_check_reorg_windows::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table();
   gyuanx_chain_generator gen(events, hard_forks);
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE);
+  add_gnodes(gen, gnodes::CHECKPOINT_QUORUM_SIZE);
 
   // NOTE: Add blocks until we get to the first height that has a checkpointing quorum AND there are service nodes in the quorum.
   int const MAX_TRIES = 16;
@@ -401,26 +401,26 @@ bool gyuanx_checkpointing_service_node_checkpoints_check_reorg_windows::generate
   for (; tries < MAX_TRIES; tries++)
   {
     gen.add_blocks_until_next_checkpointable_height();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
+    std::shared_ptr<const gnodes::quorum> quorum = gen.get_quorum(gnodes::quorum_type::checkpointing, gen.height());
     if (quorum && quorum->validators.size()) break;
   }
   assert(tries != MAX_TRIES);
 
   gen.add_event_msg("Mine up until 1 block before the next checkpointable height, fork the chain.");
-  gen.add_n_blocks(service_nodes::CHECKPOINT_INTERVAL - 1);
+  gen.add_n_blocks(gnodes::CHECKPOINT_INTERVAL - 1);
   gyuanx_chain_generator fork_1_block_before_checkpoint = gen;
 
   gen.add_event_msg("Mine one block and fork the chain before we add the checkpoint.");
   gen.create_and_add_next_block();
-  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.add_gnode_checkpoint(gen.height(), gnodes::CHECKPOINT_MIN_VOTES);
   gyuanx_chain_generator fork_1_block_after_checkpoint = gen;
 
   gen.add_event_msg("Add the next service node checkpoints on the main chain to lock in the chain preceeding the first checkpoint");
-  gen.add_n_blocks(service_nodes::CHECKPOINT_INTERVAL - 1);
+  gen.add_n_blocks(gnodes::CHECKPOINT_INTERVAL - 1);
   gyuanx_chain_generator fork_1_block_before_second_checkpoint = gen;
 
   gen.create_and_add_next_block();
-  gen.add_service_node_checkpoint(gen.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  gen.add_gnode_checkpoint(gen.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   gen.add_event_msg("Try add a block before first checkpoint, should fail because we are already 2 checkpoints deep.");
   fork_1_block_before_checkpoint.create_and_add_next_block({}, nullptr /*checkpoint*/, false /*can_be_added_to_blockchain*/, "Can NOT add a block if the height would equal the immutable height");
@@ -452,9 +452,9 @@ bool gyuanx_core_block_reward_unpenalized_pre_pulse::generate(std::vector<test_e
 
   gen.create_and_add_next_block(txs);
   uint64_t unpenalized_block_reward     = cryptonote::block_reward_unpenalized_formula_v8(gen.height());
-  uint64_t expected_service_node_reward = cryptonote::service_node_reward_formula(unpenalized_block_reward, newest_hf);
+  uint64_t expected_gnode_reward = cryptonote::gnode_reward_formula(unpenalized_block_reward, newest_hf);
 
-  gyuanx_register_callback(events, "check_block_rewards", [unpenalized_block_reward, expected_service_node_reward](cryptonote::core &c, size_t ev_index)
+  gyuanx_register_callback(events, "check_block_rewards", [unpenalized_block_reward, expected_gnode_reward](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_block_rewards");
     uint64_t top_height;
@@ -466,7 +466,7 @@ bool gyuanx_core_block_reward_unpenalized_pre_pulse::generate(std::vector<test_e
     CHECK_TEST_CONDITION(c.get_block_by_hash(top_hash, top_block, &orphan));
     CHECK_TEST_CONDITION(orphan == false);
     CHECK_TEST_CONDITION_MSG(top_block.miner_tx.vout[0].amount < unpenalized_block_reward, "We should add enough transactions that the penalty is realised on the base block reward");
-    CHECK_EQ(top_block.miner_tx.vout[1].amount, expected_service_node_reward);
+    CHECK_EQ(top_block.miner_tx.vout[1].amount, expected_gnode_reward);
     return true;
   });
   return true;
@@ -489,10 +489,10 @@ bool gyuanx_core_block_reward_unpenalized_post_pulse::generate(std::vector<test_
   std::vector<cryptonote::transaction> txs(150);
   for (size_t i = 0; i < txs.size(); i++)
   {
-    std::array<gyuanx_service_node_contribution, 3> contributions = {};
+    std::array<gyuanx_gnode_contribution, 3> contributions = {};
     for (size_t i = 0; i < contributions.size(); i++)
     {
-      gyuanx_service_node_contribution &entry = contributions[i];
+      gyuanx_gnode_contribution &entry = contributions[i];
       entry.contributor                     = gen.add_account().get_keys().m_account_address;
       entry.portions                        = STAKING_PORTIONS / 4;
     }
@@ -508,7 +508,7 @@ bool gyuanx_core_block_reward_unpenalized_post_pulse::generate(std::vector<test_
   }
   gen.create_and_add_next_block(txs);
 
-  uint64_t unpenalized_reward = cryptonote::service_node_reward_formula(BLOCK_REWARD_HF17, newest_hf);
+  uint64_t unpenalized_reward = cryptonote::gnode_reward_formula(BLOCK_REWARD_HF17, newest_hf);
   gyuanx_register_callback(events, "check_block_rewards", [unpenalized_reward, tx_fee](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_block_rewards");
@@ -648,7 +648,7 @@ bool gyuanx_core_governance_batched_reward::generate(std::vector<test_event_entr
     std::vector<std::pair<uint8_t, uint64_t>> other_hard_forks = {
         std::make_pair(cryptonote::network_version_7, 0),
         std::make_pair(cryptonote::network_version_8, 1),
-        std::make_pair(cryptonote::network_version_9_service_nodes, hf10_height)};
+        std::make_pair(cryptonote::network_version_9_gnodes, hf10_height)};
 
     std::vector<test_event_entry> unused_events;
     gyuanx_chain_generator no_batched_governance_generator(unused_events, other_hard_forks);
@@ -778,7 +778,7 @@ bool gyuanx_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& eve
 
 bool gyuanx_core_test_deregister_preferred::generate(std::vector<test_event_entry> &events)
 {
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_service_nodes);
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_gnodes);
   gyuanx_chain_generator gen(events, hard_forks);
   const auto miner                 = gen.first_miner();
   const auto alice                 = gen.add_account();
@@ -786,7 +786,7 @@ bool gyuanx_core_test_deregister_preferred::generate(std::vector<test_event_entr
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_n_blocks(60); /// give miner some outputs to spend and unlock them
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, 12);
+  add_gnodes(gen, 12);
 
   /// generate transactions to fill up txpool entirely
   for (auto i = 0u; i < 45; ++i) {
@@ -796,8 +796,8 @@ bool gyuanx_core_test_deregister_preferred::generate(std::vector<test_event_entr
   /// generate two deregisters
   const auto deregister_pub_key_1 = gen.top_quorum().obligations->workers[0];
   const auto deregister_pub_key_2 = gen.top_quorum().obligations->workers[1];
-  gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key_1);
-  gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key_2);
+  gen.create_and_add_state_change_tx(gnodes::new_state::deregister, deregister_pub_key_1);
+  gen.create_and_add_state_change_tx(gnodes::new_state::deregister, deregister_pub_key_2);
 
   gyuanx_register_callback(events, "check_prefer_deregisters", [&events, miner](cryptonote::core &c, size_t ev_index)
   {
@@ -835,14 +835,14 @@ bool gyuanx_core_test_deregister_preferred::generate(std::vector<test_event_entr
 // to test), they don't get deregistered.
 bool gyuanx_core_test_deregister_safety_buffer::generate(std::vector<test_event_entry> &events)
 {
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_service_nodes);
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_gnodes);
   gyuanx_chain_generator gen(events, hard_forks);
   const auto miner = gen.first_miner();
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_n_blocks(40); /// give miner some outputs to spend and unlock them
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, service_nodes::STATE_CHANGE_QUORUM_SIZE * 2 + 1);
+  add_gnodes(gen, gnodes::STATE_CHANGE_QUORUM_SIZE * 2 + 1);
 
   const auto height_a                      = gen.height();
   std::vector<crypto::public_key> quorum_a = gen.quorum(height_a).obligations->workers;
@@ -861,7 +861,7 @@ bool gyuanx_core_test_deregister_safety_buffer::generate(std::vector<test_event_
 
   const auto deregister_pub_key = quorum_intersection[0];
   {
-    const auto dereg_tx = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key, height_a);
+    const auto dereg_tx = gen.create_and_add_state_change_tx(gnodes::new_state::deregister, deregister_pub_key, height_a);
     gen.create_and_add_next_block({dereg_tx});
   }
 
@@ -874,7 +874,7 @@ bool gyuanx_core_test_deregister_safety_buffer::generate(std::vector<test_event_
   }
 
   /// Try to deregister the node again for heightB (should fail)
-  const auto dereg_tx = gen.create_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key, height_b);
+  const auto dereg_tx = gen.create_state_change_tx(gnodes::new_state::deregister, deregister_pub_key, height_b);
   gen.add_tx(dereg_tx, false /*can_be_added_to_blockchain*/, "After a Service Node has deregistered, it can NOT be deregistered from the result of a quorum preceeding the height that the Service Node re-registered as.");
   return true;
 
@@ -884,18 +884,18 @@ bool gyuanx_core_test_deregister_safety_buffer::generate(std::vector<test_event_
 // Daemon A accepts the block without X. Now X is too old and should not be added in future blocks.
 bool gyuanx_core_test_deregister_too_old::generate(std::vector<test_event_entry>& events)
 {
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_service_nodes);
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_gnodes);
   gyuanx_chain_generator gen(events, hard_forks);
   gen.add_blocks_until_version(hard_forks.back().first);
 
   /// generate some outputs and unlock them
   gen.add_n_blocks(20);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, 11);
+  add_gnodes(gen, 11);
 
   const auto pk       = gen.top_quorum().obligations->workers[0];
-  const auto dereg_tx = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk);
-  gen.add_n_blocks(service_nodes::STATE_CHANGE_TX_LIFETIME_IN_BLOCKS); /// create enough blocks to make deregistrations invalid (60 blocks)
+  const auto dereg_tx = gen.create_and_add_state_change_tx(gnodes::new_state::deregister, pk);
+  gen.add_n_blocks(gnodes::STATE_CHANGE_TX_LIFETIME_IN_BLOCKS); /// create enough blocks to make deregistrations invalid (60 blocks)
 
   /// In the real world, this transaction should not make it into a block, but in this case we do try to add it (as in
   /// tests we must add specify transactions manually), which should exercise the same validation code and reject the
@@ -923,7 +923,7 @@ bool gyuanx_core_test_deregister_zero_fee::generate(std::vector<test_event_entry
   gen.create_and_add_next_block(reg_txs);
   const auto deregister_pub_key = gen.top_quorum().obligations->workers[0];
   cryptonote::transaction const invalid_deregister =
-      gen.create_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key, -1 /*height*/, {} /*voters*/, MK_COINS(1) /*fee*/);
+      gen.create_state_change_tx(gnodes::new_state::deregister, deregister_pub_key, -1 /*height*/, {} /*voters*/, MK_COINS(1) /*fee*/);
   gen.add_tx(invalid_deregister, false /*can_be_added_to_blockchain*/, "Deregister transactions with non-zero fee can NOT be added to the blockchain");
   return true;
 }
@@ -940,7 +940,7 @@ bool gyuanx_core_test_deregister_on_split::generate(std::vector<test_event_entry
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
  
-  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE + 1);
+  add_gnodes(gen, gnodes::CHECKPOINT_QUORUM_SIZE + 1);
   gen.create_and_add_next_block(); // Can't change service node state on the same height it was registered in
   auto fork = gen;
 
@@ -950,11 +950,11 @@ bool gyuanx_core_test_deregister_on_split::generate(std::vector<test_event_entry
 
   gen.add_event_msg("create deregistration A");
   std::vector<uint64_t> const quorum_indexes = {1, 2, 3, 4, 5, 6, 7};
-  const auto dereg_a                         = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk, split_height, quorum_indexes);
+  const auto dereg_a                         = gen.create_and_add_state_change_tx(gnodes::new_state::deregister, pk, split_height, quorum_indexes);
 
   gen.add_event_msg("create deregistration on alt chain (B)");
   std::vector<uint64_t> const fork_quorum_indexes = {1, 3, 4, 5, 6, 7, 8};
-  const auto dereg_b            = fork.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk, split_height, fork_quorum_indexes, 0 /*fee*/, true /*kept_by_block*/);
+  const auto dereg_b            = fork.create_and_add_state_change_tx(gnodes::new_state::deregister, pk, split_height, fork_quorum_indexes, 0 /*fee*/, true /*kept_by_block*/);
   crypto::hash expected_tx_hash = cryptonote::get_transaction_hash(dereg_b);
   size_t dereg_index            = gen.event_index();
 
@@ -967,10 +967,10 @@ bool gyuanx_core_test_deregister_on_split::generate(std::vector<test_event_entry
 
   fork.add_event_msg("add 2 consecutive check points to switch over");
   fork.add_blocks_until_next_checkpointable_height();
-  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  fork.add_gnode_checkpoint(fork.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   fork.add_blocks_until_next_checkpointable_height();
-  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  fork.add_gnode_checkpoint(fork.height(), gnodes::CHECKPOINT_MIN_VOTES);
 
   gyuanx_register_callback(events, "test_on_split", [expected_tx_hash, expected_block_hash](cryptonote::core &c, size_t ev_index)
   {
@@ -1000,17 +1000,17 @@ bool gyuanx_core_test_state_change_ip_penalty_disallow_dupes::generate(std::vect
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
 
-  add_service_nodes(gen, service_nodes::STATE_CHANGE_QUORUM_SIZE + 1);
+  add_gnodes(gen, gnodes::STATE_CHANGE_QUORUM_SIZE + 1);
   gen.create_and_add_next_block(); // Can't change service node state on the same height it was registered in
 
   const auto pub_key                         = gen.top_quorum().obligations->workers[0];
   std::vector<uint64_t> const quorum_indexes = {1, 2, 3, 4, 5, 6, 7};
-  const auto state_change_1                  = gen.create_and_add_state_change_tx(service_nodes::new_state::ip_change_penalty, pub_key, gen.height(), quorum_indexes);
+  const auto state_change_1                  = gen.create_and_add_state_change_tx(gnodes::new_state::ip_change_penalty, pub_key, gen.height(), quorum_indexes);
 
   // NOTE: Try duplicate state change with different quorum indexes
   {
     std::vector<uint64_t> const alt_quorum_indexes = {1, 3, 4, 5, 6, 7, 8};
-    const auto state_change_2 = gen.create_state_change_tx(service_nodes::new_state::ip_change_penalty, pub_key, gen.height(), alt_quorum_indexes);
+    const auto state_change_2 = gen.create_state_change_tx(gnodes::new_state::ip_change_penalty, pub_key, gen.height(), alt_quorum_indexes);
     gen.add_tx(state_change_2, false /*can_be_added_to_blockchain*/, "Can't add a state change with different permutation of votes than previously submitted");
 
     // NOTE: Try same duplicate state change on a new height
@@ -2576,31 +2576,31 @@ bool gyuanx_name_system_wrong_version::generate(std::vector<test_event_entry> &e
 }
 
 // NOTE: Generate forked block, check that alternative quorums are generated and accessible
-bool gyuanx_service_nodes_alt_quorums::generate(std::vector<test_event_entry>& events)
+bool gyuanx_gnodes_alt_quorums::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table();
   gyuanx_chain_generator gen(events, hard_forks);
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, service_nodes::STATE_CHANGE_QUORUM_SIZE + 3);
+  add_gnodes(gen, gnodes::STATE_CHANGE_QUORUM_SIZE + 3);
 
   gyuanx_chain_generator fork = gen;
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
   uint64_t height_with_fork = gen.height();
 
-  service_nodes::quorum_manager fork_quorums = fork.top_quorum();
+  gnodes::quorum_manager fork_quorums = fork.top_quorum();
   gyuanx_register_callback(events, "check_alt_quorums_exist", [fork_quorums, height_with_fork](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_alt_quorums_exist");
 
-    std::vector<std::shared_ptr<const service_nodes::quorum>> alt_quorums;
-    c.get_quorum(service_nodes::quorum_type::obligations, height_with_fork, false /*include_old*/, &alt_quorums);
+    std::vector<std::shared_ptr<const gnodes::quorum>> alt_quorums;
+    c.get_quorum(gnodes::quorum_type::obligations, height_with_fork, false /*include_old*/, &alt_quorums);
     CHECK_TEST_CONDITION_MSG(alt_quorums.size() == 1, "alt_quorums.size(): " << alt_quorums.size());
 
-    service_nodes::quorum const &fork_obligation_quorum = *fork_quorums.obligations;
-    service_nodes::quorum const &real_obligation_quorum = *(alt_quorums[0]);
+    gnodes::quorum const &fork_obligation_quorum = *fork_quorums.obligations;
+    gnodes::quorum const &real_obligation_quorum = *(alt_quorums[0]);
     CHECK_TEST_CONDITION(fork_obligation_quorum.validators.size() == real_obligation_quorum.validators.size());
     CHECK_TEST_CONDITION(fork_obligation_quorum.workers.size() == real_obligation_quorum.workers.size());
 
@@ -2624,26 +2624,26 @@ bool gyuanx_service_nodes_alt_quorums::generate(std::vector<test_event_entry>& e
   return true;
 }
 
-bool gyuanx_service_nodes_checkpoint_quorum_size::generate(std::vector<test_event_entry>& events)
+bool gyuanx_gnodes_checkpoint_quorum_size::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table();
   gyuanx_chain_generator gen(events, hard_forks);
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, service_nodes::CHECKPOINT_QUORUM_SIZE - 1);
+  add_gnodes(gen, gnodes::CHECKPOINT_QUORUM_SIZE - 1);
 
   for (int i = 0; i < 16; i++)
   {
     gen.create_and_add_next_block();
-    std::shared_ptr<const service_nodes::quorum> quorum = gen.get_quorum(service_nodes::quorum_type::checkpointing, gen.height());
+    std::shared_ptr<const gnodes::quorum> quorum = gen.get_quorum(gnodes::quorum_type::checkpointing, gen.height());
     if (quorum) break;
   }
 
   gyuanx_register_callback(events, "check_checkpoint_quorum_should_be_empty", [check_height_1 = gen.height()](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_empty");
-    std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_1);
+    std::shared_ptr<const gnodes::quorum> quorum = c.get_quorum(gnodes::quorum_type::checkpointing, check_height_1);
     CHECK_TEST_CONDITION(quorum != nullptr);
     CHECK_TEST_CONDITION(quorum->validators.size() == 0);
     return true;
@@ -2655,7 +2655,7 @@ bool gyuanx_service_nodes_checkpoint_quorum_size::generate(std::vector<test_even
   gyuanx_register_callback(events, "check_checkpoint_quorum_should_be_populated", [check_height_2 = gen.height()](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_populated");
-    std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_2);
+    std::shared_ptr<const gnodes::quorum> quorum = c.get_quorum(gnodes::quorum_type::checkpointing, check_height_2);
     CHECK_TEST_CONDITION(quorum != nullptr);
     CHECK_TEST_CONDITION(quorum->validators.size() > 0);
     return true;
@@ -2664,9 +2664,9 @@ bool gyuanx_service_nodes_checkpoint_quorum_size::generate(std::vector<test_even
   return true;
 }
 
-bool gyuanx_service_nodes_gen_nodes::generate(std::vector<test_event_entry> &events)
+bool gyuanx_gnodes_gen_nodes::generate(std::vector<test_event_entry> &events)
 {
-  const std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_service_nodes);
+  const std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_gnodes);
   gyuanx_chain_generator gen(events, hard_forks);
   const auto miner                      = gen.first_miner();
   const auto alice                      = gen.add_account();
@@ -2685,7 +2685,7 @@ bool gyuanx_service_nodes_gen_nodes::generate(std::vector<test_event_entry> &eve
 
   gyuanx_register_callback(events, "check_registered", [&events, alice](cryptonote::core &c, size_t ev_index)
   {
-    DEFINE_TESTS_ERROR_CONTEXT("gen_service_nodes::check_registered");
+    DEFINE_TESTS_ERROR_CONTEXT("gen_gnodes::check_registered");
     std::vector<cryptonote::block> blocks;
     size_t count = 15 + (2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
     bool r       = c.get_blocks((uint64_t)0, count, blocks);
@@ -2703,18 +2703,18 @@ bool gyuanx_service_nodes_gen_nodes::generate(std::vector<test_event_entry> &eve
     CHECK_EQ(MK_COINS(101) - TESTS_DEFAULT_FEE - staking_requirement, unlocked_balance);
 
     /// check that alice is registered
-    const auto info_v = c.get_service_node_list_state({});
+    const auto info_v = c.get_gnode_list_state({});
     CHECK_EQ(info_v.empty(), false);
     return true;
   });
 
-  for (auto i = 0u; i < service_nodes::staking_num_lock_blocks(cryptonote::FAKECHAIN); ++i)
+  for (auto i = 0u; i < gnodes::staking_num_lock_blocks(cryptonote::FAKECHAIN); ++i)
     gen.create_and_add_next_block();
 
   gyuanx_register_callback(events, "check_expired", [&events, alice](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_expired");
-    const auto stake_lock_time = service_nodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
+    const auto stake_lock_time = gnodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
 
     std::vector<cryptonote::block> blocks;
     size_t count = 15 + (2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW) + stake_lock_time;
@@ -2726,7 +2726,7 @@ bool gyuanx_service_nodes_gen_nodes::generate(std::vector<test_event_entry> &eve
     CHECK_TEST_CONDITION(r);
 
     /// check that alice's registration expired
-    const auto info_v = c.get_service_node_list_state({});
+    const auto info_v = c.get_gnode_list_state({});
     CHECK_EQ(info_v.empty(), true);
 
     /// check that alice received some service node rewards (TODO: check the balance precisely)
@@ -2736,7 +2736,7 @@ bool gyuanx_service_nodes_gen_nodes::generate(std::vector<test_event_entry> &eve
   return true;
 }
 
-using sn_info_t = service_nodes::service_node_pubkey_info;
+using sn_info_t = gnodes::gnode_pubkey_info;
 static bool contains(const std::vector<sn_info_t>& infos, const crypto::public_key& key)
 {
   const auto it =
@@ -2744,21 +2744,21 @@ static bool contains(const std::vector<sn_info_t>& infos, const crypto::public_k
   return it != infos.end();
 }
 
-bool gyuanx_service_nodes_test_rollback::generate(std::vector<test_event_entry>& events)
+bool gyuanx_gnodes_test_rollback::generate(std::vector<test_event_entry>& events)
 {
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_service_nodes);
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table(cryptonote::network_version_9_gnodes);
   gyuanx_chain_generator gen(events, hard_forks);
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_n_blocks(20); /// generate some outputs and unlock them
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, 11);
+  add_gnodes(gen, 11);
 
   gen.add_n_blocks(5);   /// create a few blocks with active service nodes
   auto fork = gen;       /// chain split here
 
   // deregister some node (A) on main
   const auto pk           = gen.top_quorum().obligations->workers[0];
-  const auto dereg_tx     = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk);
+  const auto dereg_tx     = gen.create_and_add_state_change_tx(gnodes::new_state::deregister, pk);
   size_t deregister_index = gen.event_index();
   gen.create_and_add_next_block({dereg_tx});
 
@@ -2773,7 +2773,7 @@ bool gyuanx_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
   gyuanx_register_callback(events, "test_registrations", [&events, deregister_index](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_registrations");
-    const auto sn_list = c.get_service_node_list_state({});
+    const auto sn_list = c.get_gnode_list_state({});
     /// Test that node A is still registered
     {
       /// obtain public key of node A
@@ -2782,13 +2782,13 @@ bool gyuanx_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
       const auto dereg_tx = var::get<gyuanx_blockchain_addable<gyuanx_transaction>>(event_a);
       CHECK_TEST_CONDITION(dereg_tx.data.tx.type == cryptonote::txtype::state_change);
 
-      cryptonote::tx_extra_service_node_state_change deregistration;
-      cryptonote::get_service_node_state_change_from_tx_extra(
+      cryptonote::tx_extra_gnode_state_change deregistration;
+      cryptonote::get_gnode_state_change_from_tx_extra(
           dereg_tx.data.tx.extra, deregistration, c.get_blockchain_storage().get_current_hard_fork_version());
 
-      const auto uptime_quorum = c.get_quorum(service_nodes::quorum_type::obligations, deregistration.block_height);
+      const auto uptime_quorum = c.get_quorum(gnodes::quorum_type::obligations, deregistration.block_height);
       CHECK_TEST_CONDITION(uptime_quorum);
-      const auto pk_a = uptime_quorum->workers.at(deregistration.service_node_index);
+      const auto pk_a = uptime_quorum->workers.at(deregistration.gnode_index);
 
       /// Check present
       const bool found_a = contains(sn_list, pk_a);
@@ -2804,7 +2804,7 @@ bool gyuanx_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
       const auto reg_tx = var::get<gyuanx_blockchain_addable<gyuanx_transaction>>(event_b);
 
       crypto::public_key pk_b;
-      if (!cryptonote::get_service_node_pubkey_from_tx_extra(reg_tx.data.tx.extra, pk_b)) {
+      if (!cryptonote::get_gnode_pubkey_from_tx_extra(reg_tx.data.tx.extra, pk_b)) {
         MERROR("Could not get service node key from tx extra");
         return false;
       }
@@ -2819,7 +2819,7 @@ bool gyuanx_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
   return true;
 }
 
-bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_entry>& events)
+bool gyuanx_gnodes_test_swarms_basic::generate(std::vector<test_event_entry>& events)
 {
   const std::vector<std::pair<uint8_t, uint64_t>> hard_forks = {
       std::make_pair(7, 0), std::make_pair(8, 1), std::make_pair(9, 2), std::make_pair(10, 150)};
@@ -2834,18 +2834,18 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   gen.add_mined_money_unlock_blocks();
 
   /// register some service nodes
-  add_service_nodes(gen, INIT_SN_COUNT);
+  add_gnodes(gen, INIT_SN_COUNT);
 
   /// create a few blocks with active service nodes
   gen.add_n_blocks(5);
-  assert(gen.hf_version_ == cryptonote::network_version_9_service_nodes);
+  assert(gen.hf_version_ == cryptonote::network_version_9_gnodes);
 
   gen.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
   gyuanx_register_callback(events, "test_initial_swarms", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_swarms_basic::test_initial_swarms");
-    const auto sn_list = c.get_service_node_list_state({}); /// Check that there is one active swarm and the swarm queue is not empty
-    std::map<service_nodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
+    const auto sn_list = c.get_gnode_list_state({}); /// Check that there is one active swarm and the swarm queue is not empty
+    std::map<gnodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
     for (const auto& entry : sn_list)
     {
       const auto id = entry.info->swarm_id;
@@ -2866,8 +2866,8 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   gyuanx_register_callback(events, "test_with_one_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_one_more_sn");
-    const auto sn_list = c.get_service_node_list_state({});
-    std::map<service_nodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
+    const auto sn_list = c.get_gnode_list_state({});
+    std::map<gnodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
     for (const auto& entry : sn_list)
     {
       const auto id = entry.info->swarm_id;
@@ -2886,8 +2886,8 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   gyuanx_register_callback(events, "test_with_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_more_sn");
-    const auto sn_list = c.get_service_node_list_state({});
-    std::map<service_nodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
+    const auto sn_list = c.get_gnode_list_state({});
+    std::map<gnodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
     for (const auto& entry : sn_list)
     {
       const auto id = entry.info->swarm_id;
@@ -2898,12 +2898,12 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   });
 
   std::vector<cryptonote::transaction> dereg_txs; /// deregister enough snode to bring all 3 swarm to the min size
-  const size_t excess = TOTAL_SN_COUNT - 3 * service_nodes::EXCESS_BASE;
-  service_nodes::quorum_manager top_quorum = gen.top_quorum();
+  const size_t excess = TOTAL_SN_COUNT - 3 * gnodes::EXCESS_BASE;
+  gnodes::quorum_manager top_quorum = gen.top_quorum();
   for (size_t i = 0; i < excess; ++i)
   {
     const auto pk = top_quorum.obligations->workers[i];
-    const auto tx = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk, cryptonote::get_block_height(gen.top().block));
+    const auto tx = gen.create_and_add_state_change_tx(gnodes::new_state::deregister, pk, cryptonote::get_block_height(gen.top().block));
     dereg_txs.push_back(tx);
   }
 
@@ -2911,8 +2911,8 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   gyuanx_register_callback(events, "test_after_first_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
-    const auto sn_list = c.get_service_node_list_state({});
-    std::map<service_nodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
+    const auto sn_list = c.get_gnode_list_state({});
+    std::map<gnodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
     for (const auto& entry : sn_list)
     {
       const auto id = entry.info->swarm_id;
@@ -2926,7 +2926,7 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   dereg_txs.clear();
   {
     const auto pk = gen.top_quorum().obligations->workers[0];
-    const auto tx = gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, pk);
+    const auto tx = gen.create_and_add_state_change_tx(gnodes::new_state::deregister, pk);
     dereg_txs.push_back(tx);
   }
   gen.create_and_add_next_block(dereg_txs);
@@ -2934,8 +2934,8 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   gyuanx_register_callback(events, "test_after_final_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
-    const auto sn_list = c.get_service_node_list_state({});
-    std::map<service_nodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
+    const auto sn_list = c.get_gnode_list_state({});
+    std::map<gnodes::swarm_id_t, std::vector<crypto::public_key>> swarms;
     for (const auto &entry : sn_list)
     {
       const auto id = entry.info->swarm_id;
@@ -2950,7 +2950,7 @@ bool gyuanx_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   return true;
 }
 
-bool gyuanx_service_nodes_insufficient_contribution::generate(std::vector<test_event_entry> &events)
+bool gyuanx_gnodes_insufficient_contribution::generate(std::vector<test_event_entry> &events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = gyuanx_generate_sequential_hard_fork_table();
   gyuanx_chain_generator gen(events, hard_forks);
@@ -2971,10 +2971,10 @@ bool gyuanx_service_nodes_insufficient_contribution::generate(std::vector<test_e
   gyuanx_register_callback(events, "test_insufficient_stake_does_not_get_accepted", [sn_keys](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_insufficient_stake_does_not_get_accepted");
-    const auto sn_list = c.get_service_node_list_state({sn_keys.pub});
+    const auto sn_list = c.get_gnode_list_state({sn_keys.pub});
     CHECK_TEST_CONDITION(sn_list.size() == 1);
 
-    service_nodes::service_node_pubkey_info const &pubkey_info = sn_list[0];
+    gnodes::gnode_pubkey_info const &pubkey_info = sn_list[0];
     CHECK_EQ(pubkey_info.info->total_contributed, MK_COINS(50));
     return true;
   });
@@ -2990,8 +2990,8 @@ static gyuanx_chain_generator setup_pulse_tests(std::vector<test_event_entry> &e
   result.add_blocks_until_version(hard_forks.back().first);
   result.add_mined_money_unlock_blocks();
 
-  std::vector<cryptonote::transaction> registration_txs(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN));
-  for (auto i = 0u; i < service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN); ++i)
+  std::vector<cryptonote::transaction> registration_txs(gnodes::pulse_min_gnodes(cryptonote::FAKECHAIN));
+  for (auto i = 0u; i < gnodes::pulse_min_gnodes(cryptonote::FAKECHAIN); ++i)
     registration_txs[i] = result.create_and_add_registration_tx(result.first_miner());
 
   // NOTE: Generate Valid Blocks
@@ -3009,7 +3009,7 @@ bool gyuanx_pulse_invalid_validator_bitset::generate(std::vector<test_event_entr
   gen.block_begin(entry, params, {} /*tx_list*/);
 
   // NOTE: Overwrite valiadator bitset to be wrong
-  entry.block.pulse.validator_bitset = ~service_nodes::pulse_validator_bit_mask();
+  entry.block.pulse.validator_bitset = ~gnodes::pulse_validator_bit_mask();
 
   gen.block_end(entry, params);
   gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
@@ -3042,7 +3042,7 @@ bool gyuanx_pulse_oob_voter_index::generate(std::vector<test_event_entry> &event
   gen.block_begin(entry, params, {} /*tx_list*/);
 
   // NOTE: Overwrite oob voter index
-  entry.block.signatures.back().voter_index = service_nodes::PULSE_QUORUM_NUM_VALIDATORS + 1;
+  entry.block.signatures.back().voter_index = gnodes::PULSE_QUORUM_NUM_VALIDATORS + 1;
   gen.block_end(entry, params);
   gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
 
@@ -3068,29 +3068,29 @@ bool gyuanx_pulse_non_participating_validator::generate(std::vector<test_event_e
         entry.block.pulse.random_value.data[i] = static_cast<char>(tools::uniform_distribution_portable(tools::rng, 256));
     }
 
-    service_nodes::quorum quorum = {};
+    gnodes::quorum quorum = {};
     {
-      std::vector<service_nodes::pubkey_and_sninfo> active_snode_list = params.prev.service_node_state.active_service_nodes_infos();
-      std::vector<crypto::hash> entropy = service_nodes::get_pulse_entropy_for_next_block(gen.db_, params.prev.block, entry.block.pulse.round);
+      std::vector<gnodes::pubkey_and_sninfo> active_snode_list = params.prev.gnode_state.active_gnodes_infos();
+      std::vector<crypto::hash> entropy = gnodes::get_pulse_entropy_for_next_block(gen.db_, params.prev.block, entry.block.pulse.round);
       quorum = generate_pulse_quorum(cryptonote::FAKECHAIN, params.block_leader.key, entry.block.major_version, active_snode_list, entropy, entry.block.pulse.round);
-      assert(quorum.validators.size() == service_nodes::PULSE_QUORUM_NUM_VALIDATORS);
+      assert(quorum.validators.size() == gnodes::PULSE_QUORUM_NUM_VALIDATORS);
       assert(quorum.workers.size() == 1);
     }
 
     // NOTE: First 7 validators are locked in. We received signatures from the
     // first 6 in the quorum, then the 8th validator in the quorum (who is not
     // meant to be participating).
-    static_assert(service_nodes::PULSE_QUORUM_NUM_VALIDATORS > service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
+    static_assert(gnodes::PULSE_QUORUM_NUM_VALIDATORS > gnodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
     entry.block.pulse.validator_bitset = 0b0000'000'0111'1111;
     size_t const voter_indexes[]       = {0, 1, 2, 3, 4, 5, 7};
 
     crypto::hash block_hash = cryptonote::get_block_hash(entry.block);
     for (size_t index : voter_indexes)
     {
-      service_nodes::service_node_keys validator_keys = gen.get_cached_keys(quorum.validators[index]);
+      gnodes::gnode_keys validator_keys = gen.get_cached_keys(quorum.validators[index]);
       assert(validator_keys.pub == quorum.validators[index]);
 
-      service_nodes::quorum_signature signature = {};
+      gnodes::quorum_signature signature = {};
       signature.voter_index                     = index;
       crypto::generate_signature(block_hash, validator_keys.pub, validator_keys.key, signature.signature);
       entry.block.signatures.push_back(signature);
@@ -3162,7 +3162,7 @@ bool gyuanx_pulse_generate_blocks::generate(std::vector<test_event_entry> &event
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
 
-  add_service_nodes(gen, service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN));
+  add_gnodes(gen, gnodes::pulse_min_gnodes(cryptonote::FAKECHAIN));
   gen.add_n_blocks(40); // Chain genereator will generate blocks via Pulse quorums
 
   gyuanx_register_callback(events, "check_pulse_blocks", [](cryptonote::core &c, size_t ev_index)
@@ -3186,14 +3186,14 @@ bool gyuanx_pulse_fallback_to_pow_and_back::generate(std::vector<test_event_entr
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
 
-  add_service_nodes(gen, service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN));
+  add_gnodes(gen, gnodes::pulse_min_gnodes(cryptonote::FAKECHAIN));
   gen.create_and_add_next_block();
 
   gen.add_event_msg("Deregister 1 node, we now have insufficient nodes for Pulse");
   {
     const auto deregister_pub_key_1 = gen.top_quorum().obligations->workers[0];
     cryptonote::transaction tx =
-        gen.create_and_add_state_change_tx(service_nodes::new_state::deregister, deregister_pub_key_1);
+        gen.create_and_add_state_change_tx(gnodes::new_state::deregister, deregister_pub_key_1);
     gen.create_and_add_next_block({tx});
   }
 
@@ -3211,7 +3211,7 @@ bool gyuanx_pulse_fallback_to_pow_and_back::generate(std::vector<test_event_entr
   gyuanx_register_callback(events, "check_no_pulse_quorum_exists", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_no_pulse_quorum_exists");
-    const auto quorum = c.get_quorum(service_nodes::quorum_type::pulse, c.get_current_blockchain_height() - 1, false, nullptr);
+    const auto quorum = c.get_quorum(gnodes::quorum_type::pulse, c.get_current_blockchain_height() - 1, false, nullptr);
     CHECK_TEST_CONDITION(quorum.get() == nullptr);
     return true;
   });
@@ -3233,7 +3233,7 @@ bool gyuanx_pulse_chain_split::generate(std::vector<test_event_entry> &events)
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, std::max(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN), service_nodes::CHECKPOINT_QUORUM_SIZE));
+  add_gnodes(gen, std::max(gnodes::pulse_min_gnodes(cryptonote::FAKECHAIN), gnodes::CHECKPOINT_QUORUM_SIZE));
 
   gen.create_and_add_next_block();
 
@@ -3249,10 +3249,10 @@ bool gyuanx_pulse_chain_split::generate(std::vector<test_event_entry> &events)
   {
     gen.create_and_add_next_block();
     fork.create_and_add_next_block();
-    std::shared_ptr<const service_nodes::quorum> fork_quorum = fork.get_quorum(service_nodes::quorum_type::checkpointing, fork.height());
+    std::shared_ptr<const gnodes::quorum> fork_quorum = fork.get_quorum(gnodes::quorum_type::checkpointing, fork.height());
     if (fork_quorum && fork_quorum->validators.size()) break;
   }
-  fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
+  fork.add_gnode_checkpoint(fork.height(), gnodes::CHECKPOINT_MIN_VOTES);
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
 
@@ -3278,7 +3278,7 @@ bool gyuanx_pulse_chain_split_with_no_checkpoints::generate(std::vector<test_eve
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_mined_money_unlock_blocks();
-  add_service_nodes(gen, std::max(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN), service_nodes::CHECKPOINT_QUORUM_SIZE));
+  add_gnodes(gen, std::max(gnodes::pulse_min_gnodes(cryptonote::FAKECHAIN), gnodes::CHECKPOINT_QUORUM_SIZE));
 
   gen.create_and_add_next_block();
 

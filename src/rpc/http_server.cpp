@@ -2,9 +2,9 @@
 #include "http_server.h"
 #include <chrono>
 #include <exception>
-#include <gyuanxmq/base64.h>
+#include <lokimq/base64.h>
 #include <boost/endian/conversion.hpp>
-#include <gyuanxmq/variant.h>
+#include <lokimq/variant.h>
 #include "common/command_line.h"
 #include "common/string_util.h"
 #include "cryptonote_config.h"
@@ -283,7 +283,7 @@ namespace cryptonote::rpc {
 
   void invoke_txpool_hashes_bin(std::shared_ptr<call_data> data);
 
-  // Invokes the actual RPC request; this is called (via gyuanxmq) from some random LMQ worker thread,
+  // Invokes the actual RPC request; this is called (via lokimq) from some random LMQ worker thread,
   // which means we can't just write our reply; instead we have to post it to the uWS loop.
   void invoke_rpc(std::shared_ptr<call_data> dataptr)
   {
@@ -573,7 +573,7 @@ namespace cryptonote::rpc {
     });
   }
 
-  static std::unordered_set<gyuanxmq::GyuanxMQ*> timer_started;
+  static std::unordered_set<lokimq::LokiMQ*> timer_started;
 
   void http_server::start()
   {

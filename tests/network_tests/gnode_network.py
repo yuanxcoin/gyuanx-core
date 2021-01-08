@@ -64,7 +64,7 @@ class SNNetwork:
 
         nodeopts = dict(gyuanxd=self.binpath+'/gyuanxd', datadir=datadir)
 
-        self.sns = [Daemon(service_node=True, **nodeopts) for _ in range(sns)]
+        self.sns = [Daemon(gnode=True, **nodeopts) for _ in range(sns)]
         self.nodes = [Daemon(**nodeopts) for _ in range(nodes)]
 
         self.all_nodes = self.sns + self.nodes
@@ -152,12 +152,12 @@ class SNNetwork:
         for sn in self.sns:
             sn.ping()
 
-        all_service_nodes_proofed = lambda sn: all(x['quorumnet_port'] > 0 for x in
-                sn.json_rpc("get_n_service_nodes", {"fields":{"quorumnet_port":True}}).json()['result']['service_node_states'])
+        all_gnodes_proofed = lambda sn: all(x['quorumnet_port'] > 0 for x in
+                sn.json_rpc("get_n_gnodes", {"fields":{"quorumnet_port":True}}).json()['result']['gnode_states'])
 
         vprint("Waiting for proofs to propagate: ", end="", flush=True)
         for sn in self.sns:
-            wait_for(lambda: all_service_nodes_proofed(sn), timeout=120)
+            wait_for(lambda: all_gnodes_proofed(sn), timeout=120)
             vprint(".", end="", flush=True, timestamp=False)
         vprint(timestamp=False)
         vprint("Done.")

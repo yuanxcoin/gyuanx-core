@@ -18,10 +18,10 @@ index 6597bd6..c1172c1 100644
      std::array<unsigned char, crypto_sign_PUBLICKEYBYTES> pubkey;
 +    std::array<unsigned char, crypto_sign_SEEDBYTES> seed;
      std::optional<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>> pubkey_expected;
--    gyuanxmq::from_hex(skey_hex.begin(), skey_hex.begin() + 64, skey.begin());
-+    gyuanxmq::from_hex(skey_hex.begin(), skey_hex.begin() + 64, seed.begin());
+-    lokimq::from_hex(skey_hex.begin(), skey_hex.begin() + 64, skey.begin());
++    lokimq::from_hex(skey_hex.begin(), skey_hex.begin() + 64, seed.begin());
      if (skey_hex.size() == 128)
-         gyuanxmq::from_hex(skey_hex.begin() + 64, skey_hex.end(), pubkey_expected.emplace().begin());
+         lokimq::from_hex(skey_hex.begin() + 64, skey_hex.end(), pubkey_expected.emplace().begin());
  
      if (ed25519) {
 -        crypto_sign_seed_keypair(pubkey.data(), skey.data(), skey.data());
@@ -31,7 +31,7 @@ index 6597bd6..c1172c1 100644
 +        pubkey = pubkey_from_privkey(seed);
      }
  
-     std::cout << "\nPublic key:      " << gyuanxmq::to_hex(pubkey.begin(), pubkey.end()) << "\n";
+     std::cout << "\nPublic key:      " << lokimq::to_hex(pubkey.begin(), pubkey.end()) << "\n";
 @@ -326,7 +327,7 @@ int restore(bool ed25519, std::list<std::string_view> args) {
      if (ed25519)
          out.write(reinterpret_cast<const char*>(skey.data()), skey.size());

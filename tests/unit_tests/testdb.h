@@ -152,9 +152,9 @@ public:
 
   virtual void get_output_blacklist   (std::vector<uint64_t> &blacklist)       const override { }
   virtual void add_output_blacklist   (std::vector<uint64_t> const &blacklist)       override { }
-  virtual void set_service_node_data  (const std::string& data, bool long_term)      override { }
-  virtual bool get_service_node_data  (std::string& data, bool long_term)            override { return false; }
-  virtual void clear_service_node_data()                                             override { }
+  virtual void set_gnode_data  (const std::string& data, bool long_term)      override { }
+  virtual bool get_gnode_data  (std::string& data, bool long_term)            override { return false; }
+  virtual void clear_gnode_data()                                             override { }
 
   virtual cryptonote::transaction get_pruned_tx(const crypto::hash& h) const override { return {}; };
   virtual bool get_tx(const crypto::hash& h, cryptonote::transaction &tx) const override { return false; }

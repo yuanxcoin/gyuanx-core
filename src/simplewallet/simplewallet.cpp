@@ -53,7 +53,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
-#include <gyuanxmq/hex.h>
+#include <lokimq/hex.h>
 #include "epee/console_handler.h"
 #include "common/i18n.h"
 #include "common/command_line.h"
@@ -619,7 +619,7 @@ namespace
   {
     std::string_view data{k.data, sizeof(k.data)};
     std::ostream_iterator<char> osi{std::cout};
-    gyuanxmq::to_hex(data.begin(), data.end(), osi);
+    lokimq::to_hex(data.begin(), data.end(), osi);
   }
 
   bool long_payment_id_failure(bool ret)
@@ -6697,7 +6697,7 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     }
 
     auto& enc_hex = response[0].encrypted_value;
-    if (!gyuanxmq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
+    if (!lokimq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
     {
       LOG_ERROR("invalid LNS data returned from gyuanxd");
       fail_msg_writer() << tr("invalid LNS data returned from gyuanxd");
@@ -6707,7 +6707,7 @@ bool simple_wallet::lns_update_mapping(std::vector<std::string> args)
     lns::mapping_value mval{};
     mval.len = enc_hex.size() / 2;
     mval.encrypted = true;
-    gyuanxmq::from_hex(enc_hex.begin(), enc_hex.end(), mval.buffer.begin());
+    lokimq::from_hex(enc_hex.begin(), enc_hex.end(), mval.buffer.begin());
 
     if (!mval.decrypt(tools::lowercase_ascii_string(name), type))
     {
@@ -6828,7 +6828,7 @@ bool simple_wallet::lns_encrypt(std::vector<std::string> args)
     return false;
   }
 
-  tools::success_msg_writer() << "encrypted value=" << gyuanxmq::to_hex(mval.to_view());
+  tools::success_msg_writer() << "encrypted value=" << lokimq::to_hex(mval.to_view());
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -6937,7 +6937,7 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
   for (auto const &mapping : response)
   {
     auto& enc_hex = mapping.encrypted_value;
-    if (mapping.entry_index >= args.size() || !gyuanxmq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
+    if (mapping.entry_index >= args.size() || !lokimq::is_hex(enc_hex) || enc_hex.size() % 2 != 0 || enc_hex.size() > 2*lns::mapping_value::BUFFER_SIZE)
     {
       fail_msg_writer() << "Received invalid LNS mapping data from gyuanxd";
       return false;
@@ -6952,7 +6952,7 @@ bool simple_wallet::lns_print_name_to_owners(std::vector<std::string> args)
     lns::mapping_value value{};
     value.len = enc_hex.size() / 2;
     value.encrypted = true;
-    gyuanxmq::from_hex(enc_hex.begin(), enc_hex.end(), value.buffer.begin());
+    lokimq::from_hex(enc_hex.begin(), enc_hex.end(), value.buffer.begin());
 
     if (!value.decrypt(name, mapping.type))
     {
@@ -7020,7 +7020,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         fail_msg_writer() << "arg too long, fails basic size sanity check max length = " << MAX_LEN << ", arg = " << arg;
         return false;
       }
-      if (!gyuanxmq::is_hex(arg))
+      if (!lokimq::is_hex(arg))
       {
         fail_msg_writer() << "arg contains non-hex characters: " << arg;
         return false;
@@ -7068,7 +7068,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
       {
         name = got->second.name;
         lns::mapping_value mv;
-        if (lns::mapping_value::validate_encrypted(entry.type, gyuanxmq::from_hex(entry.encrypted_value), &mv)
+        if (lns::mapping_value::validate_encrypted(entry.type, lokimq::from_hex(entry.encrypted_value), &mv)
             && mv.decrypt(name, entry.type))
           value = mv.to_readable_value(nettype, entry.type);
       }
@@ -10193,7 +10193,7 @@ void simple_wallet::commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_
     {
       cryptonote::blobdata blob;
       tx_to_blob(ptx.tx, blob);
-      const std::string blob_hex = gyuanxmq::to_hex(blob);
+      const std::string blob_hex = lokimq::to_hex(blob);
       fs::path filename = fs::u8path("raw_gyuanx_tx");
       if (ptx_vector.size() > 1) filename += "_" + std::to_string(i++);
       bool success = m_wallet->save_to_file(filename, blob_hex, true);

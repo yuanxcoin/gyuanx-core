@@ -65,16 +65,15 @@ static uint8_t get_block_version(const cryptonote::block &b)
 static constexpr HardFork::Params mainnet_hard_forks[] =
 {
   { network_version_7,                      1,  0, 1503046577 },
-  { network_version_8,                      6,  0, 1533006000 },
-  { network_version_9_gnodes,               10, 0, 1537444800 },
-  { network_version_10_bulletproofs,        16, 0, 1544743800 }, // 2018-12-13 23:30UTC
-  { network_version_11_infinite_staking,    23, 0, 1554170400 }, // 2019-03-26 13:00AEDT
-  { network_version_12_checkpointing,       32, 0, 1563940800 }, // 2019-07-24 14:00AEDT
-  { network_version_13_enforce_checkpoints, 38, 0, 1571850000 }, // 2019-10-23 19:00AEDT
-  { network_version_14_blink,               44, 0, 1578528000 }, // 2020-01-09 00:00UTC
-  { network_version_15_lns,                 49, 0, 1585105200 }, // 2020-03-25 14:00AEDT (03:00UTC)
-  { network_version_16_pulse,               64, 0, 1602464400 }, // 2020-10-12 12:00AEDT (01:00UTC)
-  { network_version_17,                     70 + BLOCKS_EXPECTED_IN_DAYS(180), 0, 1602464400 + 180*24*60*60 }, // HF16 + 180 days
+  { network_version_8,                      60,  0, 1533006000 },
+  { network_version_9_gnodes,               61, 0, 1537444800 },
+  { network_version_10_bulletproofs,        62, 0, 1544743800 }, // 2018-12-13 23:30UTC
+  { network_version_11_infinite_staking,    63, 0, 1554170400 }, // 2019-03-26 13:00AEDT
+  { network_version_12_checkpointing,       150, 0, 1563940800 }, // 2019-07-24 14:00AEDT
+  { network_version_13_enforce_checkpoints, 152, 0, 1571850000 }, // 2019-10-23 19:00AEDT
+  { network_version_14_blink,               153, 0, 1578528000 }, // 2020-01-09 00:00UTC
+  { network_version_15_lns,                 154, 0, 1585105200 }, // 2020-03-25 14:00AEDT (03:00UTC)
+  { network_version_16_pulse,               200, 0, 1602464400 }, // 2020-10-12 12:00AEDT (01:00UTC)
 };
 
 static constexpr HardFork::Params testnet_hard_forks[] =

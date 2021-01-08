@@ -855,11 +855,11 @@ bool rpc_command_executor::print_transaction(const crypto::hash& transaction_has
     std::optional<cryptonote::transaction> t;
     if (include_metadata || include_json)
     {
-      if (gyuanxmq::is_hex(pruned_as_hex) && (!tx.prunable_as_hex || gyuanxmq::is_hex(*tx.prunable_as_hex)))
+      if (lokimq::is_hex(pruned_as_hex) && (!tx.prunable_as_hex || lokimq::is_hex(*tx.prunable_as_hex)))
       {
-        std::string blob = gyuanxmq::from_hex(pruned_as_hex);
+        std::string blob = lokimq::from_hex(pruned_as_hex);
         if (tx.prunable_as_hex)
-          blob += gyuanxmq::from_hex(*tx.prunable_as_hex);
+          blob += lokimq::from_hex(*tx.prunable_as_hex);
 
         bool parsed = pruned
           ? cryptonote::parse_and_validate_tx_base_from_blob(blob, t.emplace())

@@ -1242,7 +1242,7 @@ namespace gnodes
     std::bitset<8 * sizeof(block.pulse.validator_bitset)> const validator_bitset = block.pulse.validator_bitset;
     stream << "Block(" << cryptonote::get_block_height(block) << "): " << cryptonote::get_block_hash(block) << "\n";
     stream << "Leader: ";
-    if (quorum) stream << (quorum->workers.empty() ? "(invalid leader)" : gyuanxmq::to_hex(tools::view_guts(quorum->workers[0]))) << "\n";
+    if (quorum) stream << (quorum->workers.empty() ? "(invalid leader)" : lokimq::to_hex(tools::view_guts(quorum->workers[0]))) << "\n";
     else        stream << "(invalid quorum)\n";
     stream << "Round: " << +block.pulse.round << "\n";
     stream << "Validator Bitset: " << validator_bitset << "\n";
@@ -1256,8 +1256,8 @@ namespace gnodes
       stream << "  [" << +entry.voter_index << "] validator: ";
       if (quorum)
       {
-        stream << ((entry.voter_index >= quorum->validators.size()) ? "(invalid quorum index)" : gyuanxmq::to_hex(tools::view_guts(quorum->validators[entry.voter_index])));
-        stream << ", signature: " << gyuanxmq::to_hex(tools::view_guts(entry.signature));
+        stream << ((entry.voter_index >= quorum->validators.size()) ? "(invalid quorum index)" : lokimq::to_hex(tools::view_guts(quorum->validators[entry.voter_index])));
+        stream << ", signature: " << lokimq::to_hex(tools::view_guts(entry.signature));
       }
       else stream << "(invalid quorum)";
     }
@@ -1464,12 +1464,12 @@ namespace gnodes
       std::vector<std::shared_ptr<const gnodes::quorum>> alt_quorums;
       std::shared_ptr<const quorum> quorum = get_quorum(quorum_type::checkpointing, checkpoint->height, false, alt_block ? &alt_quorums : nullptr);
 
-      if (!quorum)
+   /*   if (!quorum)
       {
         MGINFO("Failed to get testing quorum checkpoint for " << block_type << cryptonote::get_block_hash(block));
         return false;
       }
-
+    */
       bool failed_checkpoint_verify = !gnodes::verify_checkpoint(block.major_version, *checkpoint, *quorum);
       if (alt_block && failed_checkpoint_verify)
       {

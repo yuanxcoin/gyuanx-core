@@ -36,12 +36,12 @@
 /************************************************************************/
 
 struct gyuanx_checkpointing_alt_chain_handle_alt_blocks_at_tip                         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtakes : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_checkpointing_alt_chain_more_gnode_checkpoints_less_pow_overtakes : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back       : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_checkpointing_alt_chain_too_old_should_be_dropped                        : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_checkpointing_alt_chain_with_increasing_service_node_checkpoints         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_checkpointing_service_node_checkpoint_from_votes                         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_checkpointing_service_node_checkpoints_check_reorg_windows               : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_checkpointing_alt_chain_with_increasing_gnode_checkpoints         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_checkpointing_gnode_checkpoint_from_votes                         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_checkpointing_gnode_checkpoints_check_reorg_windows               : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_core_block_reward_unpenalized_pre_pulse                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_core_block_reward_unpenalized_post_pulse                                 : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_core_fee_burning                                                         : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
@@ -73,12 +73,12 @@ struct gyuanx_name_system_update_mapping_invalid_signature                      
 struct gyuanx_name_system_update_mapping_replay                                        : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_name_system_wrong_burn                                                   : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_name_system_wrong_version                                                : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_service_nodes_alt_quorums                                                : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_service_nodes_checkpoint_quorum_size                                     : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_service_nodes_gen_nodes                                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_service_nodes_insufficient_contribution                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_service_nodes_test_rollback                                              : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
-struct gyuanx_service_nodes_test_swarms_basic                                          : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_gnodes_alt_quorums                                                : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_gnodes_checkpoint_quorum_size                                     : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_gnodes_gen_nodes                                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_gnodes_insufficient_contribution                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_gnodes_test_rollback                                              : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct gyuanx_gnodes_test_swarms_basic                                          : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_pulse_invalid_validator_bitset                                           : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_pulse_invalid_signature                                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct gyuanx_pulse_oob_voter_index                                                    : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };

@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include <gyuanxmq/variant.h>
+#include <lokimq/variant.h>
 #include <array>
 #include <typeinfo>
 #ifdef __GNUG__

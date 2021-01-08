@@ -46,7 +46,7 @@ if(NOT STATIC AND NOT BUILD_STATIC_DEPS)
     pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
   endif()
   pkg_check_modules(UNBOUND libunbound)
-  pkg_check_modules(GYUANXMQ libgyuanxmq>=1.2)
+  pkg_check_modules(GYUANXMQ liblokimq>=1.2)
 endif()
 
 if(NOT WITH_MINIUPNPC)
@@ -73,7 +73,7 @@ endif()
 
 
 if(NOT GYUANXMQ_FOUND)
-  message(STATUS "Using in-tree gyuanxmq")
+  message(STATUS "Using in-tree lokimq")
   if (DEPENDS)
     # The depends system builds a static libzmq so set up a target gyuanx-mq can use to avoid building
     add_library(libzmq STATIC IMPORTED GLOBAL)
@@ -84,18 +84,18 @@ if(NOT GYUANXMQ_FOUND)
   endif()
   add_subdirectory(gyuanx-mq)
 else()
-  add_library(gyuanxmq INTERFACE)
-  link_dep_libs(gyuanxmq INTERFACE "${GYUANXMQ_LIBRARY_DIRS}" ${GYUANXMQ_LIBRARIES})
-  target_include_directories(gyuanxmq INTERFACE ${GYUANXMQ_INCLUDE_DIRS})
-  add_library(gyuanxmq::gyuanxmq ALIAS gyuanxmq)
-  message(STATUS "Found libgyuanxmq ${GYUANXMQ_VERSION}")
+  add_library(lokimq INTERFACE)
+  link_dep_libs(lokimq INTERFACE "${GYUANXMQ_LIBRARY_DIRS}" ${GYUANXMQ_LIBRARIES})
+  target_include_directories(lokimq INTERFACE ${GYUANXMQ_INCLUDE_DIRS})
+  add_library(lokimq::lokimq ALIAS lokimq)
+  message(STATUS "Found liblokimq ${GYUANXMQ_VERSION}")
 
   # TODO: Temporary fix for also linking libzmq; this can go when the direct zmq code (for zmq
-  # server) gets replaced with gyuanxmq.
+  # server) gets replaced with lokimq.
   pkg_check_modules(LIBZMQ libzmq)
   if (LIBZMQ_FOUND)
-    link_dep_libs(gyuanxmq INTERFACE "${LIBZMQ_LIBRARY_DIRS}" ${LIBZMQ_LIBRARIES})
-    target_include_directories(gyuanxmq INTERFACE ${LIBZMQ_INCLUDE_DIRS})
+    link_dep_libs(lokimq INTERFACE "${LIBZMQ_LIBRARY_DIRS}" ${LIBZMQ_LIBRARIES})
+    target_include_directories(lokimq INTERFACE ${LIBZMQ_INCLUDE_DIRS})
   endif()
 endif()
 

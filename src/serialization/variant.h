@@ -36,7 +36,7 @@
  */
 #pragma once
 
-#include <gyuanxmq/variant.h>
+#include <lokimq/variant.h>
 #include "serialization.h"
 #include "common/meta.h"
 

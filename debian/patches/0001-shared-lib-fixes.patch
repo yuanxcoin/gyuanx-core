@@ -74,8 +74,8 @@ index 7a90f57..366f42d 100644
  
  
  if(NOT GYUANXMQ_FOUND)
--  message(STATUS "Using in-tree gyuanxmq")
-+  message(FATAL_ERROR "Using in-tree gyuanxmq")
+-  message(STATUS "Using in-tree lokimq")
++  message(FATAL_ERROR "Using in-tree lokimq")
    if (DEPENDS)
      # The depends system builds a static libzmq so set up a target gyuanx-mq can use to avoid building
      add_library(libzmq STATIC IMPORTED GLOBAL)

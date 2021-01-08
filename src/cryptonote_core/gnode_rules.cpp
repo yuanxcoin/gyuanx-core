@@ -23,7 +23,7 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
       return get_staking_requirement(cryptonote::MAINNET, 600000 + height, hf_version) / 10;
 
   if (hf_version >= cryptonote::network_version_16_pulse)
-    return 15000'000000000;
+    return 1000'000000000000;
 
   if (hf_version >= cryptonote::network_version_13_enforce_checkpoints)
   {
@@ -31,35 +31,15 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
     // than the HF16 fork height, but can delete everything above that (which probably will mean
     // removing 688244 and above).
     constexpr int64_t heights[] = {
-        385824,
-        429024,
-        472224,
-        515424,
-        558624,
-        601824,
-        645024,
-        688224,
-        731424,
-        774624,
-        817824,
-        861024,
-        1000000,
+        85,
+        90,
+        95,
     };
 
     constexpr int64_t lsr[] = {
-        20458'380815527,
-        19332'319724305,
-        18438'564443912,
-        17729'190407764,
-        17166'159862153,
-        16719'282221956,
-        16364'595203882,
-        16083'079931076,
-        15859'641110978,
-        15682'297601941,
-        15541'539965538,
-        15429'820555489,
-        15000'000000000,
+        204'380815527,
+        193'319724305,
+        200'564443912,
     };
 
     assert(static_cast<int64_t>(height) >= heights[0]);
@@ -83,7 +63,7 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
     return static_cast<uint64_t>(result);
   }
 
-  uint64_t hardfork_height = 101250;
+  uint64_t hardfork_height = 101;
   if (height < hardfork_height) height = hardfork_height;
 
   uint64_t height_adjusted = height - hardfork_height;

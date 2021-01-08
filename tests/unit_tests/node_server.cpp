@@ -93,8 +93,8 @@ public:
   void stop() {}
 
   // TODO(gyuanx): Write tests
-  bool add_service_node_vote(const service_nodes::quorum_vote_t& vote, cryptonote::vote_verification_context &vvc) { return false; }
-  void set_service_node_votes_relayed(const std::vector<service_nodes::quorum_vote_t> &votes) {}
+  bool add_gnode_vote(const gnodes::quorum_vote_t& vote, cryptonote::vote_verification_context &vvc) { return false; }
+  void set_gnode_votes_relayed(const std::vector<gnodes::quorum_vote_t> &votes) {}
 
   bool handle_incoming_blinks(const std::vector<cryptonote::serializable_blink_metadata> &blinks, std::vector<crypto::hash> *bad_blinks = nullptr, std::vector<crypto::hash> *missing_txs = nullptr) { return true; }
 

@@ -32,7 +32,7 @@
 #include <boost/asio/ip/address.hpp>
 #include <memory>
 #include <stdexcept>
-#include <gyuanxmq/gyuanxmq.h>
+#include <lokimq/lokimq.h>
 #include <utility>
 
 #include "cryptonote_config.h"
@@ -309,7 +309,7 @@ bool daemon::run(bool interactive)
 
     MGINFO("Starting GyuanxMQ");
     lmq_rpc = std::make_unique<cryptonote::rpc::lmq_rpc>(*core, *rpc, vm);
-    core->start_gyuanxmq();
+    core->start_lokimq();
 
     if (http_rpc_admin) {
       MGINFO("Starting admin HTTP RPC server");

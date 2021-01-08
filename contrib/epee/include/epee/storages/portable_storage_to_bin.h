@@ -32,7 +32,7 @@
 #include "../misc_language.h"
 #include "portable_storage_base.h"
 #include <boost/endian/conversion.hpp>
-#include <gyuanxmq/variant.h>
+#include <lokimq/variant.h>
 
 namespace epee
 {

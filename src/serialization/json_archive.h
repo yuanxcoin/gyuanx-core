@@ -42,7 +42,7 @@
 #include <iostream>
 #include <iomanip>
 #include <exception>
-#include <gyuanxmq/hex.h>
+#include <lokimq/hex.h>
 
 namespace serialization {
 
@@ -115,7 +115,7 @@ struct json_archiver : public serializer
   void serialize_blob(void *buf, size_t len, std::string_view delimiter="\""sv) {
     stream_ << delimiter;
     auto* begin = static_cast<unsigned char*>(buf);
-    gyuanxmq::to_hex(begin, begin + len, std::ostreambuf_iterator{stream_});
+    lokimq::to_hex(begin, begin + len, std::ostreambuf_iterator{stream_});
     stream_ << delimiter;
   }
 

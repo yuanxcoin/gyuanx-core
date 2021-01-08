@@ -5,7 +5,7 @@
 // interchangeable).
 //
 
-#include <gyuanxmq/variant.h>
+#include <lokimq/variant.h>
 
 #include <boost/archive/archive_exception.hpp>
 

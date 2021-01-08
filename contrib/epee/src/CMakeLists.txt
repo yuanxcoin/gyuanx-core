@@ -64,9 +64,9 @@ endif()
 target_link_libraries(epee
   PUBLIC
     easylogging
-    gyuanxmq::gyuanxmq
+    lokimq::lokimq
   PRIVATE
-    gyuanxmq::gyuanxmq
+    lokimq::lokimq
     filesystem
     Boost::thread
     extra)

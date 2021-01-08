@@ -130,7 +130,7 @@ class Daemon(RPCDaemon):
             listen_ip=None, p2p_port=None, rpc_port=None, zmq_port=None, qnet_port=None, ss_port=None,
             name=None,
             datadir=None,
-            service_node=False,
+            gnode=False,
             log_level=2,
             peers=()):
         self.rpc_port = rpc_port or next_port()
@@ -161,7 +161,7 @@ class Daemon(RPCDaemon):
         for d in peers:
             self.add_peer(d)
 
-        if service_node:
+        if gnode:
             self.args += (
                     '--service-node',
                     '--service-node-public-ip={}'.format(self.listen_ip),
@@ -342,7 +342,7 @@ class Wallet(RPCDaemon):
 
 
     def register_sn(self, sn):
-        r = sn.json_rpc("get_service_node_registration_cmd", {
+        r = sn.json_rpc("get_gnode_registration_cmd", {
             "operator_cut": "100",
             "contributions": [{"address": self.address(), "amount": 100000000000}],
             "staking_requirement": 100000000000
@@ -350,6 +350,6 @@ class Wallet(RPCDaemon):
         if 'error' in r:
             raise RuntimeError("Registration cmd generation failed: {}".format(r['error']['message']))
         cmd = r['result']['registration_cmd']
-        r = self.json_rpc("register_service_node", {"register_service_node_str": cmd}).json()
+        r = self.json_rpc("register_gnode", {"register_gnode_str": cmd}).json()
         if 'error' in r:
             raise RuntimeError("Failed to submit service node registration tx: {}".format(r['error']['message']))

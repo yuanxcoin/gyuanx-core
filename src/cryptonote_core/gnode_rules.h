@@ -17,7 +17,7 @@ namespace gnodes {
   constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 5s;
 
   constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 7;
-  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 6;  // A block must have exactly N signatures to be considered properly
+  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 2;  // A block must have exactly N signatures to be considered properly
 #else
   constexpr auto PULSE_ROUND_TIME                                   = 60s;
   constexpr auto PULSE_WAIT_FOR_HANDSHAKES_DURATION                 = 10s;
@@ -28,7 +28,7 @@ namespace gnodes {
   constexpr auto PULSE_WAIT_FOR_SIGNED_BLOCK_DURATION               = 10s;
 
   constexpr size_t PULSE_QUORUM_NUM_VALIDATORS     = 11;
-  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 7;  // A block must have exactly N signatures to be considered properly
+  constexpr size_t PULSE_BLOCK_REQUIRED_SIGNATURES = 2;  // A block must have exactly N signatures to be considered properly
 #endif
 
   constexpr auto PULSE_MIN_TARGET_BLOCK_TIME = TARGET_BLOCK_TIME - 30s;
@@ -155,18 +155,18 @@ namespace gnodes {
   constexpr size_t STATE_CHANGE_QUORUM_SIZE               = 5;
   constexpr size_t STATE_CHANGE_MIN_VOTES_TO_CHANGE_STATE = 1;
   constexpr int    MIN_TIME_IN_S_BEFORE_VOTING            = 0;
-  constexpr size_t CHECKPOINT_QUORUM_SIZE                 = 5;
-  constexpr size_t CHECKPOINT_MIN_VOTES                   = 1;
+  constexpr size_t CHECKPOINT_QUORUM_SIZE                 = 8;
+  constexpr size_t CHECKPOINT_MIN_VOTES                   = 2;
   constexpr int    BLINK_SUBQUORUM_SIZE                   = 5;
-  constexpr int    BLINK_MIN_VOTES                        = 1;
+  constexpr int    BLINK_MIN_VOTES                        = 4;
 #else
   constexpr size_t STATE_CHANGE_MIN_VOTES_TO_CHANGE_STATE = 7;
   constexpr size_t STATE_CHANGE_QUORUM_SIZE               = 10;
   constexpr int    MIN_TIME_IN_S_BEFORE_VOTING            = UPTIME_PROOF_MAX_TIME_IN_SECONDS;
-  constexpr size_t CHECKPOINT_QUORUM_SIZE                 = 20;
-  constexpr size_t CHECKPOINT_MIN_VOTES                   = 13;
-  constexpr int    BLINK_SUBQUORUM_SIZE                   = 10;
-  constexpr int    BLINK_MIN_VOTES                        = 7;
+  constexpr size_t CHECKPOINT_QUORUM_SIZE                 = 10;
+  constexpr size_t CHECKPOINT_MIN_VOTES                   = 4;
+  constexpr int    BLINK_SUBQUORUM_SIZE                   = 4;
+  constexpr int    BLINK_MIN_VOTES                        = 3;
 #endif
 
   static_assert(STATE_CHANGE_MIN_VOTES_TO_CHANGE_STATE <= STATE_CHANGE_QUORUM_SIZE, "The number of votes required to kick can't exceed the actual quorum size, otherwise we never kick.");
@@ -223,10 +223,10 @@ namespace gnodes {
 
   constexpr proof_version MIN_UPTIME_PROOF_VERSIONS[] = {
     {cryptonote::network_version_16_pulse,                {8,1,0}},
-    {cryptonote::network_version_15_lns,                  {7,1,2}},
-    {cryptonote::network_version_14_blink,                {6,1,0}},
-    {cryptonote::network_version_13_enforce_checkpoints,  {5,1,0}},
-    {cryptonote::network_version_12_checkpointing,        {4,0,3}},
+    {cryptonote::network_version_15_lns,                  {8,1,0}},
+    {cryptonote::network_version_14_blink,                {8,1,0}},
+    {cryptonote::network_version_13_enforce_checkpoints,  {8,1,0}},
+    {cryptonote::network_version_12_checkpointing,        {8,1,0}},
   };
 
   using swarm_id_t                         = uint64_t;

@@ -110,7 +110,7 @@ target_link_libraries(blockchain_stats PRIVATE blockchain_tools_common_libs)
 
 if (TARGET sodium_vendor OR NOT SODIUM_VERSION VERSION_LESS 1.0.17)
     gyuanx_add_executable(sn_key_tool "gyuanx-sn-keys" sn_key_tool.cpp)
-    target_link_libraries(sn_key_tool PRIVATE sodium gyuanxmq filesystem)
+    target_link_libraries(sn_key_tool PRIVATE sodium lokimq filesystem)
 else()
     message(STATUS "Not building gyuanx-sn-keys tool (requires libsodium >= 1.0.17)")
 endif()

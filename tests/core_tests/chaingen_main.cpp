@@ -113,12 +113,12 @@ int main(int argc, char* argv[])
 
     // NOTE: Gyuanx Tests
     GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_handle_alt_blocks_at_tip);
-    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtakes);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_more_gnode_checkpoints_less_pow_overtakes);
     GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back);
     GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_too_old_should_be_dropped);
-    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_with_increasing_service_node_checkpoints);
-    GENERATE_AND_PLAY(gyuanx_checkpointing_service_node_checkpoint_from_votes);
-    GENERATE_AND_PLAY(gyuanx_checkpointing_service_node_checkpoints_check_reorg_windows);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_alt_chain_with_increasing_gnode_checkpoints);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_gnode_checkpoint_from_votes);
+    GENERATE_AND_PLAY(gyuanx_checkpointing_gnode_checkpoints_check_reorg_windows);
     GENERATE_AND_PLAY(gyuanx_core_block_reward_unpenalized_pre_pulse);
     GENERATE_AND_PLAY(gyuanx_core_block_reward_unpenalized_post_pulse);
     GENERATE_AND_PLAY(gyuanx_core_block_rewards_lrc6);
@@ -150,12 +150,12 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gyuanx_name_system_update_mapping_replay);
     GENERATE_AND_PLAY(gyuanx_name_system_wrong_burn);
     GENERATE_AND_PLAY(gyuanx_name_system_wrong_version);
-    GENERATE_AND_PLAY(gyuanx_service_nodes_alt_quorums);
-    GENERATE_AND_PLAY(gyuanx_service_nodes_checkpoint_quorum_size);
-    GENERATE_AND_PLAY(gyuanx_service_nodes_gen_nodes);
-    GENERATE_AND_PLAY(gyuanx_service_nodes_insufficient_contribution);
-    GENERATE_AND_PLAY(gyuanx_service_nodes_test_rollback);
-    GENERATE_AND_PLAY(gyuanx_service_nodes_test_swarms_basic);
+    GENERATE_AND_PLAY(gyuanx_gnodes_alt_quorums);
+    GENERATE_AND_PLAY(gyuanx_gnodes_checkpoint_quorum_size);
+    GENERATE_AND_PLAY(gyuanx_gnodes_gen_nodes);
+    GENERATE_AND_PLAY(gyuanx_gnodes_insufficient_contribution);
+    GENERATE_AND_PLAY(gyuanx_gnodes_test_rollback);
+    GENERATE_AND_PLAY(gyuanx_gnodes_test_swarms_basic);
     GENERATE_AND_PLAY(gyuanx_pulse_invalid_validator_bitset);
     GENERATE_AND_PLAY(gyuanx_pulse_invalid_signature);
     GENERATE_AND_PLAY(gyuanx_pulse_oob_voter_index);

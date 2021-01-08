@@ -42,7 +42,7 @@ gyuanx (8.1.3-1~ubuntu1804) bionic; urgency=medium
   [ Jason Rhinelander ]
   * Remove uptime proof workaround (patch is in 8.1.2)
   * Rediff patches
-  * update required gyuanxmq version
+  * update required lokimq version
   * Remove staging repo for building debs
   * Fix key image import error
   * Fix key image import error
@@ -130,7 +130,7 @@ gyuanx (8.1.2-1~ubuntu1804) bionic; urgency=medium
   * Also check quorumnet_port, and show IP/ports in message
   * Add wallet rpc endpoint to record a known name
   * 8.1.2 version bump
-  * Update gyuanxmq to 1.2.1
+  * Update lokimq to 1.2.1
   * 8.1.2 release
   * macos: switch to libuv for uSockets loop
   * Don't start refresh until we have a wallet
@@ -437,7 +437,7 @@ gyuanx (7.1.10-1) unstable; urgency=medium
   * LNS: avoid segfault during destruction in unit_tests
   * Add another missing boost::placeholders
   * Add missing deps to freebsd one-liner
-  * Update GyuanxMQ with bsd build fix
+  * Update LokiMQ with bsd build fix
 
   [ Noel O'Donnell ]
   * Define _WANT_SEMUN for FreeBSD to ensure `union semun` is defined
@@ -517,14 +517,14 @@ gyuanx (7.1.6-2) unstable; urgency=medium
 gyuanx (7.1.6-1) unstable; urgency=medium
 
   [ Doyle ]
-  * Update GyuanxMQ to 1.1.2 (#1134)
+  * Update LokiMQ to 1.1.2 (#1134)
   * Bump version 7.1 patch to 6 (#1135)
 
  -- Jason Rhinelander <jason@imaginary.ca>  Wed, 22 Apr 2020 00:51:01 -0300
 
 gyuanx (7.1.5-2) unstable; urgency=medium
 
-  * Rebuild for gyuanxmq 1.1.2 update
+  * Rebuild for lokimq 1.1.2 update
 
  -- Jason Rhinelander <jason@imaginary.ca>  Tue, 21 Apr 2020 17:19:14 -0300
 
@@ -538,7 +538,7 @@ gyuanx (7.1.5-1.1) unstable; urgency=medium
 gyuanx (7.1.5-1) unstable; urgency=medium
 
   [ Doyle ]
-  * Update GyuanxMQ to v1.1.1 (#1128)
+  * Update LokiMQ to v1.1.1 (#1128)
 
   [ cryptonote.social ]
   * fix segfault when exiting cli wallet due to running long poll thread (#1127)
@@ -553,7 +553,7 @@ gyuanx (7.1.5-1) unstable; urgency=medium
 gyuanx (7.1.4-2) unstable; urgency=medium
 
   * Rebuilding against 1.1.1 prerelease
-  * update required gyuanxmq to 1.1.0
+  * update required lokimq to 1.1.0
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sat, 18 Apr 2020 15:33:04 -0300
 
@@ -568,8 +568,8 @@ gyuanx (7.1.4-1) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Warn and refuse to submit proofs if we detect duplicate ed/x25519 keys (#1121)
-  * Update for GyuanxMQ 1.1.0's changes (#1122)
-  * Update to latest gyuanxmq for automatic heartbeating
+  * Update for LokiMQ 1.1.0's changes (#1122)
+  * Update to latest lokimq for automatic heartbeating
 
   [ Doyle ]
   * get_service_node_status: Handle when SN but not staked (#1124)
@@ -580,7 +580,7 @@ gyuanx (7.1.4-1) unstable; urgency=medium
 gyuanx (7.1.3-2) unstable; urgency=medium
 
   * Remove systemd version patch applied upstream
-  * Rebuild against gyuanxmq 1.0.5
+  * Rebuild against lokimq 1.0.5
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 06 Apr 2020 20:34:39 -0300
 
@@ -619,7 +619,7 @@ gyuanx (7.1.3-1) unstable; urgency=medium
   * LNS: Update DB last_process_height after reorg
 
   [ Jason Rhinelander ]
-  * Update bundled & required gyuanxmq to 1.0.4 (#1104)
+  * Update bundled & required lokimq to 1.0.4 (#1104)
   * Fix upgrade, memory leak, abstract sqlite3 interface
   * Fix compilation failure on old gcc, avoid compiler warnings
   * Review updates
@@ -630,20 +630,20 @@ gyuanx (7.1.3-1) unstable; urgency=medium
 
 gyuanx (7.1.2-4) unstable; urgency=medium
 
-  * Actually rebuild against gyuanxmq 1.0.4
+  * Actually rebuild against lokimq 1.0.4
 
  -- Jason Rhinelander <jason@imaginary.ca>  Mon, 30 Mar 2020 13:03:54 -0300
 
 gyuanx (7.1.2-3) unstable; urgency=medium
 
-  * Rebuild against gyuanxmq 1.0.4
+  * Rebuild against lokimq 1.0.4
   * Build with ninja
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sun, 29 Mar 2020 19:12:43 -0300
 
 gyuanx (7.1.2-2) unstable; urgency=medium
 
-  * Rebuild for versioned libgyuanxmq
+  * Rebuild for versioned liblokimq
 
  -- Jason Rhinelander <jason@imaginary.ca>  Sat, 28 Mar 2020 13:12:44 -0300
 
@@ -706,7 +706,7 @@ gyuanx (7.0.0-3) unstable; urgency=medium
 
   [ Jason Rhinelander ]
   * Rediff patches
-  * Fix patch: don't install gyuanxmq anymore
+  * Fix patch: don't install lokimq anymore
 
   [ Doyle ]
   * LNS: s/owner/address, we now store wallet addresses or ed keys
@@ -715,7 +715,7 @@ gyuanx (7.0.0-3) unstable; urgency=medium
   * LNS: Use hex_to_pod on crypto primitive instead of generic_signature
 
   [ Jason Rhinelander ]
-  * Gyuanx zmq.hpp indirectly through gyuanxmq.h
+  * Gyuanx zmq.hpp indirectly through lokimq.h
   * libwallet needs to link to openssl
   * Add sqlite3-dev dep to -dev package
   * Rediff patches
@@ -743,7 +743,7 @@ gyuanx (7.0.0-2) unstable; urgency=medium
   * Fix C-ism causing warning
   * Eliminate warnings from unknown warning flags on apple clang
   * Set OPENSSL_LIBRARIES hack for bundled libunbound
-  * Allow linking to a system-installed gyuanxmq
+  * Allow linking to a system-installed lokimq
   * Various linking and build fixes
   * Add gyuanx-mq dep
 
@@ -889,7 +889,7 @@ gyuanx (7.0.0-1) unstable; urgency=medium
   * Fix core tests and print out binary vals in hex
   * Unit test LNS mapping value encryption/decryption
   * Store base64 hashes into the LNS DB
-  * Update hex usage to gyuanxmq::hex
+  * Update hex usage to lokimq::hex
   * Ability to vendor libsodium 1.0.18 -D DOWNLOAD_SODIUM=[ON|OFF|FORCE]
   * Download libsodium 1.0.18 on travis if not available
 
@@ -940,7 +940,7 @@ gyuanx (7.0.0-1) unstable; urgency=medium
   * Fix rebase bugs
 
   [ Maxim Shishmarev ]
-  * Add storage server gyuanxmq port (#1056)
+  * Add storage server lokimq port (#1056)
 
   [ Jason Rhinelander ]
   * Remove unused functions

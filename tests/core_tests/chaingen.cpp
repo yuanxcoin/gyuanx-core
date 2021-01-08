@@ -108,12 +108,12 @@ cryptonote::block_header gyuanx_chain_generator_db::get_block_header_from_height
   return get_block_from_height(height);
 }
 
-service_nodes::service_node_keys gyuanx_chain_generator::get_cached_keys(const crypto::public_key &pubkey) const {
-  service_nodes::service_node_keys keys;
+gnodes::gnode_keys gyuanx_chain_generator::get_cached_keys(const crypto::public_key &pubkey) const {
+  gnodes::gnode_keys keys;
   keys.pub = pubkey;
-  auto it = service_node_keys_.find(keys.pub);
-  assert(it != service_node_keys_.end());
-  if (it != service_node_keys_.end())
+  auto it = gnode_keys_.find(keys.pub);
+  assert(it != gnode_keys_.end());
+  if (it != gnode_keys_.end())
     keys.key = it->second;
   return keys;
 }
@@ -183,31 +183,31 @@ gyuanx_chain_generator::gyuanx_chain_generator(std::vector<test_event_entry> &ev
   events_.push_back(settings);
 }
 
-service_nodes::quorum_manager gyuanx_chain_generator::top_quorum() const
+gnodes::quorum_manager gyuanx_chain_generator::top_quorum() const
 {
-  service_nodes::quorum_manager result = top().service_node_state.quorums;
+  gnodes::quorum_manager result = top().gnode_state.quorums;
   return result;
 }
 
-service_nodes::quorum_manager gyuanx_chain_generator::quorum(uint64_t height) const
+gnodes::quorum_manager gyuanx_chain_generator::quorum(uint64_t height) const
 {
   assert(height > 0 && height < db_.blocks.size());
-  service_nodes::quorum_manager result = db_.blocks[height].service_node_state.quorums;
+  gnodes::quorum_manager result = db_.blocks[height].gnode_state.quorums;
   return result;
 }
 
-std::shared_ptr<const service_nodes::quorum> gyuanx_chain_generator::get_quorum(service_nodes::quorum_type type, uint64_t height) const
+std::shared_ptr<const gnodes::quorum> gyuanx_chain_generator::get_quorum(gnodes::quorum_type type, uint64_t height) const
 {
   // TODO(gyuanx): Bad copy pasta from get_quorum, if it ever changes at the source this will break :<
-  if (type == service_nodes::quorum_type::checkpointing)
+  if (type == gnodes::quorum_type::checkpointing)
   {
-    assert(height >= service_nodes::REORG_SAFETY_BUFFER_BLOCKS_POST_HF12);
-    height -= service_nodes::REORG_SAFETY_BUFFER_BLOCKS_POST_HF12;
+    assert(height >= gnodes::REORG_SAFETY_BUFFER_BLOCKS_POST_HF12);
+    height -= gnodes::REORG_SAFETY_BUFFER_BLOCKS_POST_HF12;
   }
 
   assert(height > 0 && height < db_.blocks.size());
-  service_nodes::quorum_manager manager = db_.blocks[height].service_node_state.quorums;
-  std::shared_ptr<const service_nodes::quorum> result = manager.get(type);
+  gnodes::quorum_manager manager = db_.blocks[height].gnode_state.quorums;
+  std::shared_ptr<const gnodes::quorum> result = manager.get(type);
   return result;
 }
 
@@ -240,7 +240,7 @@ gyuanx_blockchain_entry &gyuanx_chain_generator::add_block(gyuanx_blockchain_ent
   }
 
   // TODO(gyuanx): State history culling and alt states
-  state_history_.emplace_hint(state_history_.end(), result.service_node_state);
+  state_history_.emplace_hint(state_history_.end(), result.gnode_state);
 
   if (result.checkpointed)
   {
@@ -287,7 +287,7 @@ void gyuanx_chain_generator::add_n_blocks(int n)
 
 bool gyuanx_chain_generator::add_blocks_until_next_checkpointable_height()
 {
-  if (top().service_node_state.active_service_nodes_infos().size() < service_nodes::CHECKPOINT_QUORUM_SIZE)
+  if (top().gnode_state.active_gnodes_infos().size() < gnodes::CHECKPOINT_QUORUM_SIZE)
     return false;
 
   // NOTE: Add blocks until we get to the first height that has a checkpointing
@@ -296,18 +296,18 @@ bool gyuanx_chain_generator::add_blocks_until_next_checkpointable_height()
   for (;;)
   {
     create_and_add_next_block();
-    std::shared_ptr<const service_nodes::quorum> quorum = get_quorum(service_nodes::quorum_type::checkpointing, height());
+    std::shared_ptr<const gnodes::quorum> quorum = get_quorum(gnodes::quorum_type::checkpointing, height());
     if (quorum && quorum->validators.size()) break;
   }
 
   return true;
 }
 
-void gyuanx_chain_generator::add_service_node_checkpoint(uint64_t block_height, size_t num_votes)
+void gyuanx_chain_generator::add_gnode_checkpoint(uint64_t block_height, size_t num_votes)
 {
   gyuanx_blockchain_entry &entry = db_.blocks[block_height];
   entry.checkpointed           = true;
-  entry.checkpoint             = create_service_node_checkpoint(block_height, num_votes);
+  entry.checkpoint             = create_gnode_checkpoint(block_height, num_votes);
   events_.push_back(entry.checkpoint);
 }
 
@@ -384,7 +384,7 @@ cryptonote::transaction gyuanx_chain_generator::create_and_add_tx(const cryptono
   return t;
 }
 
-cryptonote::transaction gyuanx_chain_generator::create_and_add_state_change_tx(service_nodes::new_state state, const crypto::public_key &pub_key, uint64_t height, const std::vector<uint64_t> &voters, uint64_t fee, bool kept_by_block)
+cryptonote::transaction gyuanx_chain_generator::create_and_add_state_change_tx(gnodes::new_state state, const crypto::public_key &pub_key, uint64_t height, const std::vector<uint64_t> &voters, uint64_t fee, bool kept_by_block)
 {
   cryptonote::transaction result = create_state_change_tx(state, pub_key, height, voters, fee);
   add_tx(result, true /*can_be_added_to_blockchain*/, "" /*fail_msg*/, kept_by_block);
@@ -424,10 +424,10 @@ cryptonote::transaction gyuanx_chain_generator::create_tx(const cryptonote::acco
 
 cryptonote::transaction
 gyuanx_chain_generator::create_registration_tx(const cryptonote::account_base &src,
-                                             const cryptonote::keypair &service_node_keys,
+                                             const cryptonote::keypair &gnode_keys,
                                              uint64_t src_portions,
                                              uint64_t src_operator_cut,
-                                             std::array<gyuanx_service_node_contribution, 3> const &contributions,
+                                             std::array<gyuanx_gnode_contribution, 3> const &contributions,
                                              int num_contributors) const
 {
   cryptonote::transaction result = {};
@@ -442,22 +442,22 @@ gyuanx_chain_generator::create_registration_tx(const cryptonote::account_base &s
     portions.push_back(src_portions);
     for (int i = 0; i < num_contributors; i++)
     {
-      gyuanx_service_node_contribution const &entry = contributions[i];
+      gyuanx_gnode_contribution const &entry = contributions[i];
       contributors.push_back(entry.contributor);
       portions.push_back    (entry.portions);
     }
 
     uint64_t new_height    = get_block_height(top().block) + 1;
     uint8_t new_hf_version = get_hf_version_at(new_height);
-    const auto staking_requirement = service_nodes::get_staking_requirement(cryptonote::FAKECHAIN, new_height, new_hf_version);
-    uint64_t amount                = service_nodes::portions_to_amount(portions[0], staking_requirement);
+    const auto staking_requirement = gnodes::get_staking_requirement(cryptonote::FAKECHAIN, new_height, new_hf_version);
+    uint64_t amount                = gnodes::portions_to_amount(portions[0], staking_requirement);
 
     uint64_t unlock_time = 0;
     if (new_hf_version < cryptonote::network_version_11_infinite_staking)
-      unlock_time = new_height + service_nodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
+      unlock_time = new_height + gnodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
 
     std::vector<uint8_t> extra;
-    cryptonote::add_service_node_pubkey_to_tx_extra(extra, service_node_keys.pub);
+    cryptonote::add_gnode_pubkey_to_tx_extra(extra, gnode_keys.pub);
     const uint64_t exp_timestamp = time(nullptr) + STAKING_AUTHORIZATION_EXPIRATION_WINDOW;
 
     crypto::hash hash;
@@ -468,9 +468,9 @@ gyuanx_chain_generator::create_registration_tx(const cryptonote::account_base &s
     }
 
     crypto::signature signature;
-    crypto::generate_signature(hash, service_node_keys.pub, service_node_keys.sec, signature);
-    add_service_node_register_to_tx_extra(extra, contributors, src_operator_cut, portions, exp_timestamp, signature);
-    add_service_node_contributor_to_tx_extra(extra, contributors.at(0));
+    crypto::generate_signature(hash, gnode_keys.pub, gnode_keys.sec, signature);
+    add_gnode_register_to_tx_extra(extra, contributors, src_operator_cut, portions, exp_timestamp, signature);
+    add_gnode_contributor_to_tx_extra(extra, contributors.at(0));
     gyuanx_tx_builder(events_, result, top().block, src /*from*/, src.get_keys().m_account_address /*to*/, amount, new_hf_version)
         .with_tx_type(cryptonote::txtype::stake)
         .with_unlock_time(unlock_time)
@@ -478,7 +478,7 @@ gyuanx_chain_generator::create_registration_tx(const cryptonote::account_base &s
         .build();
   }
 
-  service_node_keys_[service_node_keys.pub] = service_node_keys.sec; // NOTE: Save generated key for reuse later if we need to interact with the node again
+  gnode_keys_[gnode_keys.pub] = gnode_keys.sec; // NOTE: Save generated key for reuse later if we need to interact with the node again
   return result;
 }
 
@@ -486,15 +486,15 @@ cryptonote::transaction gyuanx_chain_generator::create_staking_tx(const crypto::
 {
   cryptonote::transaction result = {};
   std::vector<uint8_t> extra;
-  cryptonote::add_service_node_pubkey_to_tx_extra(extra, pub_key);
-  cryptonote::add_service_node_contributor_to_tx_extra(extra, src.get_keys().m_account_address);
+  cryptonote::add_gnode_pubkey_to_tx_extra(extra, pub_key);
+  cryptonote::add_gnode_contributor_to_tx_extra(extra, src.get_keys().m_account_address);
 
   uint64_t new_height    = get_block_height(top().block) + 1;
   uint8_t new_hf_version = get_hf_version_at(new_height);
 
   uint64_t unlock_time = 0;
   if (new_hf_version < cryptonote::network_version_11_infinite_staking)
-    unlock_time = new_height + service_nodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
+    unlock_time = new_height + gnodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
 
   gyuanx_tx_builder(events_, result, top().block, src /*from*/, src.get_keys().m_account_address /*to*/, amount, new_hf_version)
       .with_tx_type(cryptonote::txtype::stake)
@@ -504,40 +504,40 @@ cryptonote::transaction gyuanx_chain_generator::create_staking_tx(const crypto::
   return result;
 }
 
-cryptonote::transaction gyuanx_chain_generator::create_state_change_tx(service_nodes::new_state state, const crypto::public_key &pub_key, uint64_t height, const std::vector<uint64_t>& voters, uint64_t fee) const
+cryptonote::transaction gyuanx_chain_generator::create_state_change_tx(gnodes::new_state state, const crypto::public_key &pub_key, uint64_t height, const std::vector<uint64_t>& voters, uint64_t fee) const
 {
   if (height == UINT64_MAX)
     height = this->height();
 
-  service_nodes::quorum_manager const &quorums                   = quorum(height);
-  std::vector<crypto::public_key> const &validator_service_nodes = quorums.obligations->validators;
-  std::vector<crypto::public_key> const &worker_service_nodes    = quorums.obligations->workers;
+  gnodes::quorum_manager const &quorums                   = quorum(height);
+  std::vector<crypto::public_key> const &validator_gnodes = quorums.obligations->validators;
+  std::vector<crypto::public_key> const &worker_gnodes    = quorums.obligations->workers;
 
   size_t worker_index = std::numeric_limits<size_t>::max();
-  for (size_t i = 0; i < worker_service_nodes.size(); i++)
+  for (size_t i = 0; i < worker_gnodes.size(); i++)
   {
-    crypto::public_key const &check_key = worker_service_nodes[i];
+    crypto::public_key const &check_key = worker_gnodes[i];
     if (pub_key == check_key) worker_index = i;
   }
-  assert(worker_index < worker_service_nodes.size());
+  assert(worker_index < worker_gnodes.size());
 
-  cryptonote::tx_extra_service_node_state_change state_change_extra(state, height, worker_index);
+  cryptonote::tx_extra_gnode_state_change state_change_extra(state, height, worker_index);
   if (voters.size())
   {
     for (const auto voter_index : voters)
     {
-      auto voter_keys = get_cached_keys(validator_service_nodes[voter_index]);
-      service_nodes::quorum_vote_t vote = service_nodes::make_state_change_vote(state_change_extra.block_height, voter_index, state_change_extra.service_node_index, state, voter_keys);
+      auto voter_keys = get_cached_keys(validator_gnodes[voter_index]);
+      gnodes::quorum_vote_t vote = gnodes::make_state_change_vote(state_change_extra.block_height, voter_index, state_change_extra.gnode_index, state, voter_keys);
       state_change_extra.votes.push_back({vote.signature, (uint32_t)voter_index});
     }
   }
   else
   {
-    for (size_t i = 0; i < service_nodes::STATE_CHANGE_MIN_VOTES_TO_CHANGE_STATE; i++)
+    for (size_t i = 0; i < gnodes::STATE_CHANGE_MIN_VOTES_TO_CHANGE_STATE; i++)
     {
-      auto voter_keys = get_cached_keys(validator_service_nodes[i]);
+      auto voter_keys = get_cached_keys(validator_gnodes[i]);
 
-      service_nodes::quorum_vote_t vote = service_nodes::make_state_change_vote(state_change_extra.block_height, i, state_change_extra.service_node_index, state, voter_keys);
+      gnodes::quorum_vote_t vote = gnodes::make_state_change_vote(state_change_extra.block_height, i, state_change_extra.gnode_index, state, voter_keys);
       state_change_extra.votes.push_back({vote.signature, (uint32_t)i});
     }
   }
@@ -545,7 +545,7 @@ cryptonote::transaction gyuanx_chain_generator::create_state_change_tx(service_n
   cryptonote::transaction result;
   {
     std::vector<uint8_t> extra;
-    const bool full_tx_made = cryptonote::add_service_node_state_change_to_tx_extra(result.extra, state_change_extra, get_hf_version_at(height + 1));
+    const bool full_tx_made = cryptonote::add_gnode_state_change_to_tx_extra(result.extra, state_change_extra, get_hf_version_at(height + 1));
     assert(full_tx_made);
     if (fee) gyuanx_tx_builder(events_, result, top().block, first_miner_, first_miner_.get_keys().m_account_address, 0 /*amount*/, get_hf_version_at(height + 1)).with_tx_type(cryptonote::txtype::state_change).with_fee(fee).with_extra(extra).build();
     else
@@ -558,20 +558,20 @@ cryptonote::transaction gyuanx_chain_generator::create_state_change_tx(service_n
   return result;
 }
 
-cryptonote::checkpoint_t gyuanx_chain_generator::create_service_node_checkpoint(uint64_t block_height, size_t num_votes) const
+cryptonote::checkpoint_t gyuanx_chain_generator::create_gnode_checkpoint(uint64_t block_height, size_t num_votes) const
 {
-  service_nodes::quorum const &quorum = *get_quorum(service_nodes::quorum_type::checkpointing, block_height);
+  gnodes::quorum const &quorum = *get_quorum(gnodes::quorum_type::checkpointing, block_height);
   assert(num_votes < quorum.validators.size());
 
   gyuanx_blockchain_entry const &entry = db_.blocks[block_height];
   crypto::hash const block_hash      = cryptonote::get_block_hash(entry.block);
-  cryptonote::checkpoint_t result    = service_nodes::make_empty_service_node_checkpoint(block_hash, block_height);
+  cryptonote::checkpoint_t result    = gnodes::make_empty_gnode_checkpoint(block_hash, block_height);
   result.signatures.reserve(num_votes);
   for (size_t i = 0; i < num_votes; i++)
   {
     auto keys = get_cached_keys(quorum.validators[i]);
-    service_nodes::quorum_vote_t vote = service_nodes::make_checkpointing_vote(entry.block.major_version, result.block_hash, block_height, i, keys);
-    result.signatures.push_back(service_nodes::quorum_signature(vote.index_in_group, vote.signature));
+    gnodes::quorum_vote_t vote = gnodes::make_checkpointing_vote(entry.block.major_version, result.block_hash, block_height, i, keys);
+    result.signatures.push_back(gnodes::quorum_signature(vote.index_in_group, vote.signature));
   }
 
   return result;
@@ -884,28 +884,28 @@ bool gyuanx_chain_generator::block_begin(gyuanx_blockchain_entry &entry, gyuanx_
 
   // NOTE: Calculate governance
   cryptonote::gyuanx_miner_tx_context miner_tx_context = {};
-  service_nodes::quorum pulse_quorum                 = {};
-  std::vector<service_nodes::pubkey_and_sninfo> active_snode_list =
-      params.prev.service_node_state.active_service_nodes_infos();
+  gnodes::quorum pulse_quorum                 = {};
+  std::vector<gnodes::pubkey_and_sninfo> active_snode_list =
+      params.prev.gnode_state.active_gnodes_infos();
 
-  bool pulse_block_is_possible = blk.major_version >= cryptonote::network_version_16_pulse && active_snode_list.size() >= service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN);
+  bool pulse_block_is_possible = blk.major_version >= cryptonote::network_version_16_pulse && active_snode_list.size() >= gnodes::pulse_min_gnodes(cryptonote::FAKECHAIN);
   bool make_pulse_block        = (params.type == gyuanx_create_block_type::automatic && pulse_block_is_possible) || params.type == gyuanx_create_block_type::pulse;
 
   if (make_pulse_block)
   {
     // NOTE: Set up Pulse Header
-    blk.pulse.validator_bitset = service_nodes::pulse_validator_bit_mask(); // NOTE: Everyone participates
+    blk.pulse.validator_bitset = gnodes::pulse_validator_bit_mask(); // NOTE: Everyone participates
     blk.pulse.round = params.pulse_round;
     for (size_t i = 0; i < sizeof(blk.pulse.random_value.data); i++)
       blk.pulse.random_value.data[i] = static_cast<char>(tools::uniform_distribution_portable(tools::rng, 256));
 
     // NOTE: Get Pulse Quorum necessary for this block
-    std::vector<crypto::hash> entropy = service_nodes::get_pulse_entropy_for_next_block(db_, params.prev.block, blk.pulse.round);
-    pulse_quorum = service_nodes::generate_pulse_quorum(cryptonote::FAKECHAIN, params.block_leader.key, blk.major_version, active_snode_list, entropy, blk.pulse.round);
-    assert(pulse_quorum.validators.size() == service_nodes::PULSE_QUORUM_NUM_VALIDATORS);
+    std::vector<crypto::hash> entropy = gnodes::get_pulse_entropy_for_next_block(db_, params.prev.block, blk.pulse.round);
+    pulse_quorum = gnodes::generate_pulse_quorum(cryptonote::FAKECHAIN, params.block_leader.key, blk.major_version, active_snode_list, entropy, blk.pulse.round);
+    assert(pulse_quorum.validators.size() == gnodes::PULSE_QUORUM_NUM_VALIDATORS);
     assert(pulse_quorum.workers.size() == 1);
 
-    service_nodes::payout block_producer = {};
+    gnodes::payout block_producer = {};
     if (pulse_quorum.workers[0] == params.block_leader.key)
     {
       block_producer = params.block_leader;
@@ -913,9 +913,9 @@ bool gyuanx_chain_generator::block_begin(gyuanx_blockchain_entry &entry, gyuanx_
     else
     {
       crypto::public_key block_producer_key = pulse_quorum.workers[0];
-      auto it = params.prev.service_node_state.service_nodes_infos.find(block_producer_key);
-      assert(it != params.prev.service_node_state.service_nodes_infos.end());
-      block_producer = service_nodes::service_node_info_to_payout(block_producer_key, *(it->second));
+      auto it = params.prev.gnode_state.gnodes_infos.find(block_producer_key);
+      assert(it != params.prev.gnode_state.gnodes_infos.end());
+      block_producer = gnodes::gnode_info_to_payout(block_producer_key, *(it->second));
     }
 
     miner_tx_context = cryptonote::gyuanx_miner_tx_context::pulse_block(cryptonote::FAKECHAIN, block_producer, params.block_leader);
@@ -1015,12 +1015,12 @@ bool gyuanx_chain_generator::block_begin(gyuanx_blockchain_entry &entry, gyuanx_
     assert(blk.signatures.empty());
 
     // NOTE: Fill Pulse Signature Data
-    for (size_t i = 0; i < service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES; i++)
+    for (size_t i = 0; i < gnodes::PULSE_BLOCK_REQUIRED_SIGNATURES; i++)
     {
-      service_nodes::service_node_keys validator_keys = get_cached_keys(pulse_quorum.validators[i]);
+      gnodes::gnode_keys validator_keys = get_cached_keys(pulse_quorum.validators[i]);
       assert(validator_keys.pub == pulse_quorum.validators[i]);
 
-      service_nodes::quorum_signature signature = {};
+      gnodes::quorum_signature signature = {};
       signature.voter_index                     = i;
       crypto::generate_signature(block_hash, validator_keys.pub, validator_keys.key, signature.signature);
       blk.signatures.push_back(signature);
@@ -1032,8 +1032,8 @@ bool gyuanx_chain_generator::block_begin(gyuanx_blockchain_entry &entry, gyuanx_
 
 void gyuanx_chain_generator::block_end(gyuanx_blockchain_entry &entry, gyuanx_create_block_params const &params) const
 {
-  entry.service_node_state = params.prev.service_node_state;
-  entry.service_node_state.update_from_block(db_, cryptonote::FAKECHAIN, state_history_, {} /*state_archive*/, {} /*alt_states*/, entry.block, entry.txs, nullptr);
+  entry.gnode_state = params.prev.gnode_state;
+  entry.gnode_state.update_from_block(db_, cryptonote::FAKECHAIN, state_history_, {} /*state_archive*/, {} /*alt_states*/, entry.block, entry.txs, nullptr);
 }
 
 bool gyuanx_chain_generator::create_block(gyuanx_blockchain_entry &entry,
@@ -1061,7 +1061,7 @@ gyuanx_create_block_params gyuanx_chain_generator::next_block_params() const
   result.timestamp                = prev.block.timestamp + tools::to_seconds(TARGET_BLOCK_TIME);
   result.block_weights            = last_n_block_weights(height(), CRYPTONOTE_REWARD_BLOCKS_WINDOW);
   result.hf_version               = get_hf_version_at(next_height);
-  result.block_leader             = prev.service_node_state.get_block_leader();
+  result.block_leader             = prev.gnode_state.get_block_leader();
   result.total_fee                = 0; // Request chain generator to calculate the fee
   return result;
 }
@@ -1233,7 +1233,7 @@ bool test_generator::construct_block(cryptonote::block &blk,
                                      uint64_t already_generated_coins,
                                      std::vector<uint64_t> &block_weights,
                                      const std::list<cryptonote::transaction> &tx_list,
-                                     const service_nodes::payout &block_leader)
+                                     const gnodes::payout &block_leader)
 {
   /// a temporary workaround
   blk.major_version = m_hf_version;
@@ -1337,7 +1337,7 @@ bool test_generator::construct_block(cryptonote::block &blk,
                                      const cryptonote::block &blk_prev,
                                      const cryptonote::account_base &miner_acc,
                                      const std::list<cryptonote::transaction> &tx_list /* = {}*/,
-                                     const service_nodes::payout &block_leader)
+                                     const gnodes::payout &block_leader)
 {
   uint64_t height = var::get<cryptonote::txin_gen>(blk_prev.miner_tx.vin.front()).height + 1;
   crypto::hash prev_id = get_block_hash(blk_prev);
@@ -1410,7 +1410,7 @@ bool test_generator::construct_block_manually_tx(cryptonote::block& blk, const c
 
 cryptonote::transaction make_registration_tx(std::vector<test_event_entry>& events,
                                              const cryptonote::account_base& account,
-                                             const cryptonote::keypair& service_node_keys,
+                                             const cryptonote::keypair& gnode_keys,
                                              uint64_t operator_cut,
                                              const std::vector<cryptonote::account_public_address>& contributors,
                                              const std::vector<uint64_t>& portions,
@@ -1418,16 +1418,16 @@ cryptonote::transaction make_registration_tx(std::vector<test_event_entry>& even
                                              uint8_t hf_version)
 {
   const auto new_height          = cryptonote::get_block_height(head) + 1;
-  const auto staking_requirement = service_nodes::get_staking_requirement(cryptonote::FAKECHAIN, new_height, hf_version);
-  uint64_t amount                = service_nodes::portions_to_amount(portions[0], staking_requirement);
+  const auto staking_requirement = gnodes::get_staking_requirement(cryptonote::FAKECHAIN, new_height, hf_version);
+  uint64_t amount                = gnodes::portions_to_amount(portions[0], staking_requirement);
 
   cryptonote::transaction tx;
   uint64_t unlock_time = 0;
   if (hf_version < cryptonote::network_version_11_infinite_staking)
-    unlock_time = new_height + service_nodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
+    unlock_time = new_height + gnodes::staking_num_lock_blocks(cryptonote::FAKECHAIN);
 
   std::vector<uint8_t> extra;
-  cryptonote::add_service_node_pubkey_to_tx_extra(extra, service_node_keys.pub);
+  cryptonote::add_gnode_pubkey_to_tx_extra(extra, gnode_keys.pub);
   const uint64_t exp_timestamp = time(nullptr) + STAKING_AUTHORIZATION_EXPIRATION_WINDOW;
 
   crypto::hash hash;
@@ -1438,9 +1438,9 @@ cryptonote::transaction make_registration_tx(std::vector<test_event_entry>& even
   }
 
   crypto::signature signature;
-  crypto::generate_signature(hash, service_node_keys.pub, service_node_keys.sec, signature);
-  add_service_node_register_to_tx_extra(extra, contributors, operator_cut, portions, exp_timestamp, signature);
-  add_service_node_contributor_to_tx_extra(extra, contributors.at(0));
+  crypto::generate_signature(hash, gnode_keys.pub, gnode_keys.sec, signature);
+  add_gnode_register_to_tx_extra(extra, contributors, operator_cut, portions, exp_timestamp, signature);
+  add_gnode_contributor_to_tx_extra(extra, contributors.at(0));
 
   cryptonote::txtype tx_type = cryptonote::txtype::standard;
   if (hf_version >= cryptonote::network_version_15_lns) tx_type = cryptonote::txtype::stake; // NOTE: txtype stake was not introduced until HF14

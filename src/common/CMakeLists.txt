@@ -71,7 +71,7 @@ endif()
 target_link_libraries(common
   PUBLIC
     cncrypto
-    gyuanxmq::gyuanxmq
+    lokimq::lokimq
     filesystem
   PRIVATE
     libunbound

@@ -71,8 +71,8 @@ add_executable(unit_tests
   random.cpp
   rolling_median.cpp
   serialization.cpp
-  service_nodes.cpp
-  service_nodes_swarm.cpp
+  gnodes.cpp
+  gnodes_swarm.cpp
   sha256.cpp
   string_util.cpp
   subaddress.cpp

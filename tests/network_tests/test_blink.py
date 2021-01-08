@@ -1,7 +1,7 @@
 import pytest
 import time
 
-from service_node_network import coins, vprint
+from gnode_network import coins, vprint
 
 def test_init(net):
     """Tests that the service node test network got initialized properly.  (This isn't really a test
@@ -12,10 +12,10 @@ def test_init(net):
     assert heights == [max(heights)] * len(net.all_nodes)
 
     # All nodes should have sent proofs to each other
-    active_sns = net.nodes[0].json_rpc("get_n_service_nodes", dict(
+    active_sns = net.nodes[0].json_rpc("get_n_gnodes", dict(
         fields=dict(quorumnet_port=True, pubkey_ed25519=True),
         active_only=True)
-        ).json()['result']['service_node_states']
+        ).json()['result']['gnode_states']
     assert len(net.sns) == sum(x['pubkey_ed25519'] != "" and x['quorumnet_port'] > 0 for x in active_sns)
 
     # We should have active blink quorums for the current height (minus blink quorum lag), and all

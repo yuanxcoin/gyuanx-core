@@ -363,7 +363,7 @@ gyuanxd:
 gyuanx-storage-server:
 - data directory: $BOLD$ss_data$RESET (=> $BOLD/var/lib/gyuanx/storage$RESET)
 - public IP: $BOLD$ip_public$RESET
-- HTTP/GyuanxMQ ports: $BOLD$ss_http/$ss_lmq$RESET
+- HTTP/LokiMQ ports: $BOLD$ss_http/$ss_lmq$RESET
 
 gyuanxnet:
 - data directory: $BOLD$gyuanxnet_data$RESET (=> $BOLD/var/lib/gyuanxnet$RESET)

@@ -127,7 +127,7 @@ if (STATIC AND BUILD_STATIC_DEPS)
             sodium
             libzmq
             CURL::libcurl
-            gyuanxmq::gyuanxmq
+            lokimq::lokimq
             lmdb
             easylogging
             randomx

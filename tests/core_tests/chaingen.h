@@ -66,7 +66,7 @@
 #define TEST_DEFAULT_DIFFICULTY 1
 
 #if defined(__GNUG__) && !defined(__clang__) && __GNUC__ < 6
-namespace service_nodes {
+namespace gnodes {
   const std::vector<payout_entry> dummy; // help GCC 5 realize it needs to generate a default constructor
 }
 #endif
@@ -177,7 +177,7 @@ struct event_visitor_settings
 {
   int valid_mask;
   bool txs_keeped_by_block;
-  crypto::secret_key service_node_key;
+  crypto::secret_key gnode_key;
 
   enum settings
   {
@@ -198,7 +198,7 @@ private:
   {
     ar & valid_mask;
     ar & txs_keeped_by_block;
-    ar & service_node_key;
+    ar & gnode_key;
   }
 };
 
@@ -241,7 +241,7 @@ typedef   std::variant<cryptonote::block,
                        gyuanx_blockchain_addable<gyuanx_block_with_checkpoint>,
                        gyuanx_blockchain_addable<cryptonote::block>,
                        gyuanx_blockchain_addable<gyuanx_transaction>,
-                       gyuanx_blockchain_addable<service_nodes::quorum_vote_t>,
+                       gyuanx_blockchain_addable<gnodes::quorum_vote_t>,
                        gyuanx_blockchain_addable<serialized_block>,
                        gyuanx_blockchain_addable<cryptonote::checkpoint_t>
                        > test_event_entry;
@@ -325,10 +325,10 @@ public:
   void add_block(const cryptonote::block& blk, size_t tsx_size, std::vector<uint64_t>& block_weights, uint64_t already_generated_coins);
   bool construct_block(cryptonote::block& blk, uint64_t height, const crypto::hash& prev_id,
     const cryptonote::account_base& miner_acc, uint64_t timestamp, uint64_t already_generated_coins,
-    std::vector<uint64_t>& block_weights, const std::list<cryptonote::transaction>& tx_list, const service_nodes::payout &block_leader = {});
+    std::vector<uint64_t>& block_weights, const std::list<cryptonote::transaction>& tx_list, const gnodes::payout &block_leader = {});
   bool construct_block(cryptonote::block& blk, const cryptonote::account_base& miner_acc, uint64_t timestamp);
   bool construct_block(cryptonote::block& blk, const cryptonote::block& blk_prev, const cryptonote::account_base& miner_acc,
-    const std::list<cryptonote::transaction>& tx_list = std::list<cryptonote::transaction>(), const service_nodes::payout &block_leader = {});
+    const std::list<cryptonote::transaction>& tx_list = std::list<cryptonote::transaction>(), const gnodes::payout &block_leader = {});
 
   bool construct_block_manually(cryptonote::block& blk, const cryptonote::block& prev_block,
     const cryptonote::account_base& miner_acc, int actual_params = bf_none, uint8_t major_ver = 0,
@@ -765,11 +765,11 @@ public:
     return true;
   }
 
-  bool operator()(const gyuanx_blockchain_addable<service_nodes::quorum_vote_t> &entry) const
+  bool operator()(const gyuanx_blockchain_addable<gnodes::quorum_vote_t> &entry) const
   {
-    log_event("gyuanx_blockchain_addable<service_nodes::quorum_vote_t>");
+    log_event("gyuanx_blockchain_addable<gnodes::quorum_vote_t>");
     cryptonote::vote_verification_context vvc = {};
-    bool added                                = m_c.add_service_node_vote(entry.data, vvc);
+    bool added                                = m_c.add_gnode_vote(entry.data, vvc);
     CHECK_AND_NO_ASSERT_MES(added == entry.can_be_added_to_blockchain, false, (entry.fail_msg.size() ? entry.fail_msg : "Failed to add service node vote (no reason given)"));
     return true;
   }
@@ -1366,7 +1366,7 @@ struct gyuanx_blockchain_entry
   std::vector<cryptonote::transaction>       txs;
   uint64_t                                   block_weight;
   uint64_t                                   already_generated_coins;
-  service_nodes::service_node_list::state_t  service_node_state{nullptr};
+  gnodes::gnode_list::state_t  gnode_state{nullptr};
   bool                                       checkpointed;
   cryptonote::checkpoint_t                   checkpoint;
 };
@@ -1386,7 +1386,7 @@ struct gyuanx_chain_generator_db : public cryptonote::BaseTestDB
   uint64_t height() const override { return blocks.size(); }
 };
 
-struct gyuanx_service_node_contribution
+struct gyuanx_gnode_contribution
 {
     cryptonote::account_public_address contributor;
     uint64_t                           portions;
@@ -1408,7 +1408,7 @@ struct gyuanx_create_block_params
   uint64_t                             timestamp;
   std::vector<uint64_t>                block_weights;
   std::vector<cryptonote::transaction> tx_list;
-  service_nodes::payout                block_leader;
+  gnodes::payout                block_leader;
   uint64_t                             total_fee;
   uint8_t                              pulse_round;
 };
@@ -1418,8 +1418,8 @@ struct gyuanx_chain_generator
   // TODO(gyuanx): I want to store pointers to transactions but I get some memory corruption somewhere. Pls fix.
   // We already store blockchain_entries in block_ vector which stores the actual backing transaction entries.
   std::unordered_map<crypto::hash, cryptonote::transaction>          tx_table_;
-  mutable std::unordered_map<crypto::public_key, crypto::secret_key> service_node_keys_;
-  service_nodes::service_node_list::state_set                        state_history_;
+  mutable std::unordered_map<crypto::public_key, crypto::secret_key> gnode_keys_;
+  gnodes::gnode_list::state_set                        state_history_;
   uint64_t                                                           last_cull_height_ = 0;
   std::shared_ptr<lns::name_system_db>                               lns_db_ = std::make_shared<lns::name_system_db>();
   gyuanx_chain_generator_db                                            db_;
@@ -1437,17 +1437,17 @@ struct gyuanx_chain_generator
   uint8_t                                              hardfork()     const { return get_hf_version_at(height()); }
 
   const gyuanx_blockchain_entry&                         top() const { return db_.blocks.back(); }
-  service_nodes::quorum_manager                        top_quorum() const;
-  service_nodes::quorum_manager                        quorum(uint64_t height) const;
-  std::shared_ptr<const service_nodes::quorum>         get_quorum(service_nodes::quorum_type type, uint64_t height) const;
-  service_nodes::service_node_keys                     get_cached_keys(const crypto::public_key &pubkey) const;
+  gnodes::quorum_manager                        top_quorum() const;
+  gnodes::quorum_manager                        quorum(uint64_t height) const;
+  std::shared_ptr<const gnodes::quorum>         get_quorum(gnodes::quorum_type type, uint64_t height) const;
+  gnodes::gnode_keys                     get_cached_keys(const crypto::public_key &pubkey) const;
 
   cryptonote::account_base                             add_account();
   gyuanx_blockchain_entry                               &add_block(gyuanx_blockchain_entry const &entry, bool can_be_added_to_blockchain = true, std::string const &fail_msg = {});
   void                                                 add_blocks_until_version(uint8_t hf_version);
   void                                                 add_n_blocks(int n);
   bool                                                 add_blocks_until_next_checkpointable_height();
-  void                                                 add_service_node_checkpoint(uint64_t block_height, size_t num_votes);
+  void                                                 add_gnode_checkpoint(uint64_t block_height, size_t num_votes);
   void                                                 add_mined_money_unlock_blocks(); // NOTE: Unlock all Gyuanx generated from mining prior to this call i.e. CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW
   void                                                 add_transfer_unlock_blocks(); // Unlock funds from (standard) transfers prior to this call, i.e. CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE
 
@@ -1463,7 +1463,7 @@ struct gyuanx_chain_generator
   cryptonote::transaction                              create_and_add_gyuanx_name_system_tx_update(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, lns::mapping_value const *value, lns::generic_owner const *owner = nullptr, lns::generic_owner const *backup_owner = nullptr, lns::generic_signature *signature = nullptr, bool kept_by_block = false);
   cryptonote::transaction                              create_and_add_gyuanx_name_system_tx_renew(cryptonote::account_base const &src, uint8_t hf_version, lns::mapping_type type, std::string const &name, bool kept_by_block = false);
   cryptonote::transaction                              create_and_add_tx                 (const cryptonote::account_base& src, const cryptonote::account_public_address& dest, uint64_t amount, uint64_t fee = TESTS_DEFAULT_FEE, bool kept_by_block = false);
-  cryptonote::transaction                              create_and_add_state_change_tx(service_nodes::new_state state, const crypto::public_key& pub_key, uint64_t height = -1, const std::vector<uint64_t>& voters = {}, uint64_t fee = 0, bool kept_by_block = false);
+  cryptonote::transaction                              create_and_add_state_change_tx(gnodes::new_state state, const crypto::public_key& pub_key, uint64_t height = -1, const std::vector<uint64_t>& voters = {}, uint64_t fee = 0, bool kept_by_block = false);
   cryptonote::transaction                              create_and_add_registration_tx(const cryptonote::account_base& src, const cryptonote::keypair& sn_keys = cryptonote::keypair::generate(hw::get_device("default")), bool kept_by_block = false);
   cryptonote::transaction                              create_and_add_staking_tx     (const crypto::public_key &pub_key, const cryptonote::account_base &src, uint64_t amount, bool kept_by_block = false);
   gyuanx_blockchain_entry                               &create_and_add_next_block     (const std::vector<cryptonote::transaction>& txs = {}, cryptonote::checkpoint_t const *checkpoint = nullptr, bool can_be_added_to_blockchain = true, std::string const &fail_msg = {});
@@ -1471,14 +1471,14 @@ struct gyuanx_chain_generator
   // NOTE: Create transactions but don't add to events_
   cryptonote::transaction                              create_tx(const cryptonote::account_base &src, const cryptonote::account_public_address &dest, uint64_t amount, uint64_t fee) const;
   cryptonote::transaction                              create_registration_tx(const cryptonote::account_base &src,
-                                                                              const cryptonote::keypair &service_node_keys = cryptonote::keypair::generate(hw::get_device("default")),
+                                                                              const cryptonote::keypair &gnode_keys = cryptonote::keypair::generate(hw::get_device("default")),
                                                                               uint64_t src_portions = STAKING_PORTIONS,
                                                                               uint64_t src_operator_cut = 0,
-                                                                              std::array<gyuanx_service_node_contribution, 3> const &contributors = {},
+                                                                              std::array<gyuanx_gnode_contribution, 3> const &contributors = {},
                                                                               int num_contributors = 0) const;
   cryptonote::transaction                              create_staking_tx     (const crypto::public_key& pub_key, const cryptonote::account_base &src, uint64_t amount) const;
-  cryptonote::transaction                              create_state_change_tx(service_nodes::new_state state, const crypto::public_key& pub_key, uint64_t height = -1, const std::vector<uint64_t>& voters = {}, uint64_t fee = 0) const;
-  cryptonote::checkpoint_t                             create_service_node_checkpoint(uint64_t block_height, size_t num_votes) const;
+  cryptonote::transaction                              create_state_change_tx(gnodes::new_state state, const crypto::public_key& pub_key, uint64_t height = -1, const std::vector<uint64_t>& voters = {}, uint64_t fee = 0) const;
+  cryptonote::checkpoint_t                             create_gnode_checkpoint(uint64_t block_height, size_t num_votes) const;
 
   // value: Takes the binary value NOT the human readable version, of the name->value mapping
   static const uint64_t LNS_AUTO_BURN = static_cast<uint64_t>(-1);
