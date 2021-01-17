@@ -4,7 +4,8 @@
     <a href="https://github.com/yuanxcoin/gyuanx/commits/dev"><img alt="pipeline status" src="https://gitlab.com/gyuanxproject/gyuanx/badges/dev/pipeline.svg" /></a>
 </p>
 
-Copyright (c) 2018 The Gyuanx Project.   
+Copyright (c) 2021 The Gyuanx Project.   
+Copyright (c) 2018 The Oxen Project.  
 Portions Copyright (c) 2014-2019 The Monero Project.   
 Portions Copyright (c) 2012-2013 The Cryptonote developers.
 
@@ -22,9 +23,7 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
 
 ## Information
 
-Gyuanx is a private cryptocurrency based on Monero. Gyuanx currently offers an incentivised full node layer, over the coming months we will be looking to support a secondary p2p network (Gyuanxnet) and a messenger that offers private communications based on the Signal protocol (Gyuanx Messenger).
-
-More information on the project can be found on the website and in the whitepaper.
+Gyuanx coin is a fork of Monero project and The rebranded Oxen projects. Gyuanx gives a better privacy and makes user to gain complete anonymity during blockchain transactions, this makes both the gyuanx users to stay completely anonymous with vast ranges iof privacy. What are hidden are the wallet addresses as well as balances. Though it is a fork of both oxen and monero, gyuanx has its different variants and functionalities.
 
 Gyuanx is an open source project, and we encourage contributions from anyone with something to offer. For more information on contributing, please contact team@gyuanx.network
 
