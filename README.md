@@ -12,7 +12,7 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
 ## Development resources
 
 - Web: [gyuanx.network](https://gyuanx.network)
-- Telegram: [t.me/GyuanxCommunity](https://t.me/GyuanxCommunity)
+- Telegram: [t.me/GyuanxCommunity](https://t.me/gyuanx)
 - Mail: [team@gyuanx.network](mailto:team@gyuanx.network)
 - GitHub: [https://github.com/yuanxcoin/gyuanx-core](https://github.com/yuanxcoin/gyuanx-core)
 - Discord: [https://discord.gg/r7WbhGb5UK](https://discord.gg/r7WbhGb5UK)
