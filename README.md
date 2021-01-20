@@ -1,7 +1,7 @@
 # Gyuanx
 
 <p align="center">
-    <a href="https://github.com/yuanxcoin/gyuanx/commits/dev"><img alt="pipeline status" src="https://gitlab.com/gyuanxproject/gyuanx/badges/dev/pipeline.svg" /></a>
+<a href="https://cloud.drone.io/yuanxcoin/gyuanx-core"><img src="https://cloud.drone.io/api/badges/yuanxcoin/gyuanx-core/status.svg" /></a>
 </p>
 
 Copyright (c) 2021 The Gyuanx Project.   
