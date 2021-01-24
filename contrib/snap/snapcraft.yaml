@@ -1,31 +1,31 @@
-name: monero
-version: 0.11.1.0-1
-summary: "Monero: the secure, private, untraceable cryptocurrency https://getmonero.org"
+name: gyuanx
+version: 8.1.4
+base: core18
+summary: "Gyuanx: the secure, private, untraceable cryptocurrency https://gyuan.online"
 description: |
-    Monero is a private, secure, untraceable, decentralised digital currency.
-    You are your bank, you control your funds, and nobody can trace your transfers
-    unless you allow them to do so.
+    Gyuanx gives a better privacy and makes user to gain complete anonymity during blockchain transactions.
+    Gyuanx uses cryptography to shield sending and receiving addresses, as well as transacted amounts.
 grade: devel
 confinement: strict
 
 apps:
-    monerod:
+    gyuanxd:
         daemon: forking
         command: |
-          monerod-wrapper --detach --data-dir ${SNAP_COMMON} --config-file ${SNAP_USER_DATA}/etc/monerod.conf
+          gyuanxd-wrapper --detach --data-dir ${SNAP_COMMON} --config-file ${SNAP_USER_DATA}/etc/gyuanxd.conf
         plugs:
             - network
             - network-bind
-    monero-wallet-rpc:
+    gyuanx-wallet-rpc:
         command: |
-          monero-wallet-rpc --log-file ${SNAP_USER_DATA}
+          gyuanx-wallet-rpc --log-file ${SNAP_USER_DATA}
         plugs:
             - home
             - network
             - network-bind
-    monero-wallet-cli:
+    gyuanx-wallet-cli:
         command: |
-          monero-wallet-cli --log-file ${SNAP_USER_DATA}
+          gyuanx-wallet-cli --log-file ${SNAP_USER_DATA}
         plugs:
             - home
             - network
@@ -35,32 +35,41 @@ parts:
         plugin: cmake
         configflags:
             - -DBDB_STATIC=1
+            - -DBUILD_STATIC_DEPS=ON
+            - -DSTATIC=ON
+            - -DCMAKE_C_COMPILER=gcc-8
+            - -DCMAKE_CXX_COMPILER=g++-8
+            - -DARCH=x86-64
             - -DBoost_USE_STATIC_LIBS=1
             - -DBoost_USE_STATIC_RUNTIME=1
             - -DARCH=default
         source: .
         build-packages:
-            - gcc
+            - gcc-8
             - pkg-config
+            - libsystemd-dev
+            - libboost-thread-dev
+            - libgtest-dev
+            - libboost-serialization-dev
+            - libboost-program-options-dev
             - libunbound-dev
             - libevent-dev
-            - libboost-all-dev
-            - libzmqpp-dev
-            - libzmq3-dev
-            - libsodium-dev
-            - libdb-dev
-            - libunwind-dev
             - libminiupnpc-dev
-            - libldns-dev
-            - libexpat1-dev
-            - libreadline6-dev
-            - bison
-            - doxygen
-            - graphviz
+            - libunwind8-dev
+            - libsodium-dev
+            - libssl-dev
+            - libreadline-dev
+            - libhidapi-dev
+            - libusb-1.0-0-dev
+            - python3
+            - libsqlite3-dev
+            - qttools5-dev
+            - libcurl4-openssl-dev
         stage-packages:
             - libminiupnpc10
             - libunbound2
             - libunwind8
+            - liblzma5 
         prime:
             - bin
             - usr/lib/
@@ -71,8 +80,8 @@ parts:
         plugin: dump
         source: .
         organize:
-            contrib/snap/monerod.conf: etc/monerod.conf
-            contrib/snap/monerod-wrapper: bin/monerod-wrapper
+            contrib/snap/gyuanxd.conf: etc/gyuanxd.conf
+            contrib/snap/gyuanxd-wrapper: bin/gyuanxd-wrapper
         prime:
             - etc
             - bin
