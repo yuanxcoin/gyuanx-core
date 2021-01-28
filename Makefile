@@ -66,23 +66,23 @@ integration:
 
 debug-test-asan:
 	mkdir -p $(builddir)/debug
-	cd $(builddir)/debug && cmake -D BUILD_TESTS=ON -D SANITIZE=ON -D CMAKE_BUILD_TYPE=Debug $(topdir) &&  $(MAKE) && $(MAKE) ARGS="-E libwallet_api_tests" test
+	cd $(builddir)/debug && cmake -D BUILD_TESTS=OFF -D SANITIZE=ON -D CMAKE_BUILD_TYPE=Debug $(topdir) &&  $(MAKE) && $(MAKE) ARGS="-E libwallet_api_tests" test
 
 debug-test-trezor:
 	mkdir -p $(builddir)/debug
-	cd $(builddir)/debug && cmake -D BUILD_TESTS=ON -D TREZOR_DEBUG=ON -D CMAKE_BUILD_TYPE=Debug $(topdir) &&  $(MAKE) && $(MAKE) ARGS="-E libwallet_api_tests" test
+	cd $(builddir)/debug && cmake -D BUILD_TESTS=OFF -D TREZOR_DEBUG=ON -D CMAKE_BUILD_TYPE=Debug $(topdir) &&  $(MAKE) && $(MAKE) ARGS="-E libwallet_api_tests" test
 
 debug-all:
 	mkdir -p $(builddir)/debug
-	cd $(builddir)/debug && cmake -D BUILD_TESTS=ON -D BUILD_SHARED_LIBS=OFF -D CMAKE_BUILD_TYPE=Debug $(topdir) && $(MAKE)
+	cd $(builddir)/debug && cmake -D BUILD_TESTS=OFF -D BUILD_SHARED_LIBS=OFF -D CMAKE_BUILD_TYPE=Debug $(topdir) && $(MAKE)
 
 debug-static-all:
 	mkdir -p $(builddir)/debug
-	cd $(builddir)/debug && cmake -D BUILD_TESTS=ON -D STATIC=ON -D CMAKE_BUILD_TYPE=Debug $(topdir) && $(MAKE)
+	cd $(builddir)/debug && cmake -D BUILD_TESTS=OFF -D STATIC=ON -D CMAKE_BUILD_TYPE=Debug $(topdir) && $(MAKE)
 
 debug-static-win64:
 	mkdir -p $(builddir)/debug
-	cd $(builddir)/debug && cmake -G "MSYS Makefiles" -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Debug -D BUILD_TAG="win-x64" -D CMAKE_TOOLCHAIN_FILE=$(topdir)/cmake/64-bit-toolchain.cmake -D MSYS2_FOLDER=$(shell cd ${MINGW_PREFIX}/.. && pwd -W) $(topdir) && $(MAKE)
+	cd $(builddir)/debug && cmake -G "MSYS Makefiles" -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=Debug -D BUILD_TAG="win-x64" -D CMAKE_TOOLCHAIN_FILE=$(topdir)/cmake/64-bit-toolchain.cmake -D MSYS2_FOLDER=$(shell cd ${MINGW_PREFIX}/.. && pwd -W) $(topdir) && $(MAKE)
  
 debug-static-win32:
 	mkdir -p $(builddir)/debug
@@ -97,11 +97,11 @@ release: cmake-release
 
 release-test:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE) && $(MAKE) test
+	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE) && $(MAKE) test
 
 release-all:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D CMAKE_BUILD_TYPE=Release $(topdir) && $(MAKE)
 
 release-static:
 	mkdir -p $(builddir)/release
